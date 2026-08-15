@@ -26,6 +26,9 @@ struct OperandStack {
   var depth: Int { storage.depth }
 
   func peekAs<R: ObjectValue>(at position: Int = 0, as: R.Type = R.self) throws -> R {
+    guard position >= 0 else {
+      throw Error.rangeCheck
+    }
     let index = storage.index(storage.startIndex, offsetBy: position)
     guard index < storage.endIndex else {
       throw Error.stackUnderflow
@@ -69,6 +72,9 @@ struct OperandStack {
   }
 
   func peek(at position: Int) throws -> Object {
+    guard position >= 0 else {
+      throw Error.rangeCheck
+    }
     let index = storage.index(storage.startIndex, offsetBy: position)
     guard index < storage.endIndex else {
       throw Error.stackUnderflow
@@ -77,15 +83,21 @@ struct OperandStack {
   }
 
   func peek(count: Int) throws -> some Collection<Object> {
+    guard count >= 0 else {
+      throw Error.rangeCheck
+    }
     return try peek(bounds: 0..<count)
   }
 
   func peek(bounds: Range<Int>) throws -> some Collection<Object> {
-    let startIndex = storage.index(storage.startIndex, offsetBy: bounds.lowerBound)
-    let endIndex = storage.index(storage.startIndex, offsetBy: bounds.upperBound)
-    guard startIndex <= endIndex && endIndex <= storage.endIndex else {
+    guard bounds.lowerBound >= 0, bounds.upperBound >= bounds.lowerBound else {
+      throw Error.rangeCheck
+    }
+    guard bounds.upperBound <= depth else {
       throw Error.stackUnderflow
     }
+    let startIndex = storage.index(storage.startIndex, offsetBy: bounds.lowerBound)
+    let endIndex = storage.index(storage.startIndex, offsetBy: bounds.upperBound)
     return storage[startIndex..<endIndex]
   }
 
@@ -135,6 +147,9 @@ struct OperandStack {
   }
 
   mutating func pop(count: Int) throws -> [Object] {
+    guard count >= 0 else {
+      throw Error.rangeCheck
+    }
     guard depth >= count else {
       throw Error.stackUnderflow
     }

@@ -96,8 +96,8 @@ struct ScannerTests {
     expectEqual(
       try scan(
         """
-        (These\\
-        two strings\\
+        (These \\
+        two strings \\
         are the same.)
         (These two strings are the same.)
         """
@@ -138,8 +138,12 @@ struct ScannerTests {
 
     expectEqual(
       try scan("(CRLF: 1\r\n2\\\r\n3)"),
-      [.string(Data("CRLF: 1\n2 3".utf8))]
+      [.string(Data("CRLF: 1\n23".utf8))]
     )
+
+    #expect(try scan("(a\\\nb)") == [.string(Data("ab".utf8))])
+    #expect(try scan("(a\\\rb)") == [.string(Data("ab".utf8))])
+    #expect(try scan("(a\\\r\nb)") == [.string(Data("ab".utf8))])
   }
 
   @Test
@@ -215,6 +219,28 @@ struct ScannerTests {
       ),
       [.string(Data(base64Encoded: "Dwu+cPHenFxQsMuL6e3V8YwZhEA=").neverNil())]
     )
+
+    #expect(try scan("<~~>") == [.string(Data())])
+    #expect(try scan("<~!!~>") == [.string(Data([0]))])
+    #expect(try scan("<~!!!~>") == [.string(Data([0, 0]))])
+    #expect(try scan("<~!!!!~>") == [.string(Data([0, 0, 0]))])
+    #expect(try scan("<~ z\t\r\n\u{0C}\u{0}~>") == [.string(Data(repeating: 0, count: 4))])
+    #expect(try scan("<~>!!!!~>") == [.string(try Ascii85.decode(">!!!!"))])
+
+    for malformed in ["<~!~>", "<~!z~>", "<~uuuuu~>", "<~!!>", "<~!!~x>", "<~!!"] {
+      #expect(throws: Error.syntaxError) {
+        try scan(malformed)
+      }
+    }
+  }
+
+  @Test
+  func testMalformedAscii85UsesErrorDictionaryAndStopped() async throws {
+    let results = try await Interpreter.results(
+      content: "(<~!~>) cvx stopped $error /errorname get"
+    )
+    #expect(results.contains { ($0.value as? NameValue)?.value == "syntaxerror" })
+    #expect(results.contains { ($0.value as? BooleanValue)?.value == true })
   }
 
   @Test

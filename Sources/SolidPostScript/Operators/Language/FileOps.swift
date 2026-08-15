@@ -42,6 +42,9 @@ extension Operators {
 
       let (mode, fileName) = try context.operands.popAs((StringValue, StringValue).self)
 
+      try mode.access.check(.read)
+      try fileName.access.check(.read)
+
       let file = try context.fileDevices.open(name: fileName.string, mode: mode.string)
 
       context.operands.push(.init(value: FileValue(file: file, vm: context.allocationMode), kind: .literal))
@@ -76,6 +79,8 @@ extension Operators {
 
       let file: FileValue = try context.operands.popAs()
 
+      try file.access.check(.read)
+
       if let byte = try file.file.read(max: 1)?.first {
         context.operands.push(.integer(Int32(byte)), .boolean(true))
       } else {
@@ -95,10 +100,16 @@ extension Operators {
     public func execute(context: isolated Context) throws {
 
       let (stringObj, fileObj) = try context.operands.pop2()
-      let file = try fileObj.value(as: FileValue.self).file
+      let fileValue = try fileObj.value(as: FileValue.self)
       let string = try stringObj.value(as: StringValue.self)
 
-      let bytes = try file.read(max: Int(string.count)) ?? Data()
+      try fileValue.access.check(.read)
+      try string.access.check(.write)
+      guard string.count > 0 else {
+        throw Error.rangeCheck
+      }
+
+      let bytes = try fileValue.file.read(max: Int(string.count)) ?? Data()
 
       try string.updateCharacters(bytes, startingAt: 0)
       let subRange = 0..<UInt(bytes.count)
@@ -120,10 +131,13 @@ extension Operators {
     public func execute(context: isolated Context) throws {
 
       let (stringObj, fileObj) = try context.operands.pop2()
-      let file = try fileObj.value(as: FileValue.self).file
+      let fileValue = try fileObj.value(as: FileValue.self)
       let string = try stringObj.value(as: StringValue.self)
 
-      let (bytes, eof) = try file.readHex(max: Int(string.count))
+      try fileValue.access.check(.read)
+      try string.access.check(.write)
+
+      let (bytes, eof) = try fileValue.file.readHex(max: Int(string.count))
 
       try string.updateCharacters(bytes, startingAt: 0)
       let subRange = 0..<UInt(bytes.count)
@@ -143,10 +157,13 @@ extension Operators {
     public func execute(context: isolated Context) throws {
 
       let (stringObj, fileObj) = try context.operands.pop2()
-      let file = try fileObj.value(as: FileValue.self).file
+      let fileValue = try fileObj.value(as: FileValue.self)
       let string = try stringObj.value(as: StringValue.self)
 
-      let (line, eof) = try file.readLine()
+      try fileValue.access.check(.read)
+      try string.access.check(.write)
+
+      let (line, eof) = try fileValue.file.readLine()
       guard line.count <= string.count else {
         throw Error.rangeCheck
       }
@@ -170,7 +187,9 @@ extension Operators {
 
       let (int, file) = try context.operands.popAs((IntegerValue, FileValue).self)
 
-      let byte = UInt8(clamping: int.value)
+      try file.access.check(.write)
+
+      let byte = UInt8(truncatingIfNeeded: int.value)
 
       try file.file.write(contentsOf: Data([byte]))
     }
@@ -188,6 +207,9 @@ extension Operators {
 
       let (string, file) = try context.operands.popAs((StringValue, FileValue).self)
 
+      try file.access.check(.write)
+      try string.access.check(.read)
+
       try file.file.write(contentsOf: string.characters(in: string.range))
     }
   }
@@ -204,6 +226,9 @@ extension Operators {
 
       let (string, file) = try context.operands.popAs((StringValue, FileValue).self)
 
+      try file.access.check(.write)
+      try string.access.check(.read)
+
       try file.file.writeHex(contentsOf: string.characters(in: string.range))
     }
   }
@@ -219,6 +244,8 @@ extension Operators {
     public func execute(context: isolated Context) throws {
 
       let file: FileValue = try context.operands.popAs()
+
+      try file.access.check(.read)
 
       context.operands.push(try NumericSemantics.integer(validating: file.file.available))
     }
@@ -267,7 +294,11 @@ extension Operators {
 
       let file: FileValue = try context.operands.popAs()
 
-      try file.file.reset()
+      do {
+        try file.file.reset()
+      } catch Error.ioError {
+        // resetfile is best-effort and never reports an I/O error.
+      }
     }
   }
 
@@ -282,6 +313,8 @@ extension Operators {
     public func execute(context: isolated Context) throws {
 
       let file: FileValue = try context.operands.popAs()
+
+      try file.access.check(.read)
 
       context.operands.push(.boolean(!file.file.isClosed))
     }
@@ -314,6 +347,10 @@ extension Operators {
     public func execute(context: isolated Context) throws {
 
       let (int, file) = try context.operands.popAs((IntegerValue, FileValue).self)
+
+      guard int.value >= 0 else {
+        throw Error.rangeCheck
+      }
 
       try file.file.setOffset(Int(int.value))
     }

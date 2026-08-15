@@ -93,7 +93,10 @@ extension Operators {
       case (let dictionary as DictionaryValue, _, _):
         try dictionary.updateObject(value, forKey: indexOrKey)
       case (let string as StringValue, let index as IntegerValue, let char as IntegerValue):
-        try string.updateCharacter(UInt8(truncatingIfNeeded: char.value), at: index.value.unsigned)
+        guard let byte = UInt8(exactly: char.value) else {
+          throw Error.rangeCheck
+        }
+        try string.updateCharacter(byte, at: index.value.unsigned)
       default:
         throw Error.typeCheck
       }

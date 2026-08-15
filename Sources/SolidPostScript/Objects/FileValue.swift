@@ -11,13 +11,13 @@ extension Object {
 
   /// Performs the ``file`` operation.
   public static func file(_ file: File, access: ObjectAccess, vm: VM, kind: ObjectKind) -> Object {
-    Self(value: FileValue(file: file, vm: vm), kind: kind)
+    Self(value: FileValue(file: file, access: access, vm: vm), kind: kind)
   }
 
   /// Performs the ``dataFile`` operation.
   public static func dataFile(content: Data, access: ObjectAccess, vm: VM, kind: ObjectKind) -> Object {
     let mode: File.Mode = access == .unlimited ? .readWrite : .read
-    return Self(value: FileValue(file: DataFile(data: content, mode: mode), vm: vm), kind: kind)
+    return Self(value: FileValue(file: DataFile(data: content, mode: mode), access: access, vm: vm), kind: kind)
   }
 
 }
@@ -49,6 +49,12 @@ public struct FileValue: CompositeValue, ObjectSource {
     self.vm = vm
   }
 
+  init(file: File, access: ObjectAccess, vm: VM) {
+    self.file = file
+    self.access = access
+    self.vm = vm
+  }
+
   init(sharing: FileValue, access: ObjectAccess) {
     self.file = sharing.file
     self.access = access
@@ -65,8 +71,15 @@ public struct FileValue: CompositeValue, ObjectSource {
     self.access = access
   }
 
+  /// Reduces this file object's access without changing aliases of the same file.
+  public mutating func reduceAccess(to reducedAccess: ObjectAccess) throws {
+    try access.canReduce(to: reducedAccess)
+    try setAccess(to: reducedAccess)
+  }
+
   /// Executes this value in the supplied interpreter context.
   public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
+    try access.check(.execute)
     try context.execution.push(source: Object(value: self, kind: kind), in: context)
   }
 

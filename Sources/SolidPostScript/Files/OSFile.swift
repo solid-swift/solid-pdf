@@ -82,6 +82,9 @@ public final class OSFile: File, Sendable {
 
   /// Performs the ``setOffset`` operation.
   public func setOffset(_ offset: Int) throws {
+    guard offset >= 0 else {
+      throw Error.rangeCheck
+    }
     try access { state in
       do {
         try state.seek(toOffset: UInt64(offset))
@@ -177,10 +180,7 @@ public final class OSFile: File, Sendable {
 
   /// Performs the ``reset`` operation.
   public func reset() throws {
-    try access { handle in
-      let offset = try handle.offset()
-      try handle.seek(toOffset: offset)
-    }
+    // FileHandle exposes no read-ahead or write-behind buffer to discard.
   }
 
   private func read(max: Int, state: inout FileHandle?) throws -> Data? {

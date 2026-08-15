@@ -182,26 +182,44 @@ public class Scanner {
 
     func encodedString() throws -> Token {
 
+      if try peek() == Self.ascii85Marker {
+        try skip()
+
+        var chars: [Char] = []
+        while let char = try next() {
+          if char == Self.ascii85Marker {
+            guard try next() == Self.angleDelims.close else {
+              throw Error.syntaxError
+            }
+
+            do {
+              let encoded = try String(bytes: chars, encoding: .ascii).unwrap(or: Error.syntaxError)
+              return .string(try Ascii85.decode(encoded))
+            } catch is Ascii85.DecodingError {
+              throw Error.syntaxError
+            }
+          }
+
+          chars.append(char)
+        }
+
+        throw Error.syntaxError
+      }
+
       let chars = try take { $0 != Self.angleDelims.close }
 
       guard try next() == Self.angleDelims.close else {
         throw Error.syntaxError
       }
 
-      let data: Data
-      if chars.first == Self.ascii85Marker {
-        let ascii85Chars = chars[chars.index(after: chars.startIndex)..<chars.index(before: chars.endIndex)]
-        data = try Ascii85.decode(String(bytes: ascii85Chars, encoding: .ascii).neverNil())
-      } else {
-        let nowsChars = chars.filter { !Self.whitespace.contains($0) }
-        let hexChars = nowsChars.count.isMultiple(of: 2) ? nowsChars : nowsChars + [Self.zero]
+      let nowsChars = chars.filter { !Self.whitespace.contains($0) }
+      let hexChars = nowsChars.count.isMultiple(of: 2) ? nowsChars : nowsChars + [Self.zero]
 
-        data = try Data(
-          baseEncodedString: String(bytes: hexChars, encoding: .ascii).neverNil(),
-          encoding: .base16
-        )
-        .unwrap(or: Error.syntaxError)
-      }
+      let data = try Data(
+        baseEncodedString: String(bytes: hexChars, encoding: .ascii).neverNil(),
+        encoding: .base16
+      )
+      .unwrap(or: Error.syntaxError)
 
       return .string(data)
     }
@@ -230,7 +248,9 @@ public class Scanner {
           }
 
         case Self.escapeMarker:
-          chars.append(try escapeLiteralChar())
+          if let escaped = try escapeLiteralChar() {
+            chars.append(escaped)
+          }
 
         case Self.carriageReturn:
           if try peek() == Self.lineFeed {
@@ -245,21 +265,29 @@ public class Scanner {
       }
     }
 
-    func escapeLiteralChar() throws -> Char {
+    func escapeLiteralChar() throws -> Char? {
 
       let escaped = try next().unwrap(or: Error.syntaxError)
 
-      return switch escaped {
-      case Self.escapes.lineFeed: Self.lineFeed
-      case Self.escapes.carriageReturn: Self.carriageReturn
-      case Self.escapes.tab: Self.tab
-      case Self.escapes.backSpace: Self.backSpace
-      case Self.escapes.formFeed: Self.formFeed
-      case Self.lineFeed, Self.carriageReturn: try newlineEscape(escaped)
-      case Self.octalDigits: try octalEscape(escaped)
+      switch escaped {
+      case Self.escapes.lineFeed:
+        return Self.lineFeed
+      case Self.escapes.carriageReturn:
+        return Self.carriageReturn
+      case Self.escapes.tab:
+        return Self.tab
+      case Self.escapes.backSpace:
+        return Self.backSpace
+      case Self.escapes.formFeed:
+        return Self.formFeed
+      case Self.lineFeed, Self.carriageReturn:
+        try newlineEscape(escaped)
+        return nil
+      case Self.octalDigits:
+        return try octalEscape(escaped)
       default:
         // Ignore slash
-        escaped
+        return escaped
       }
     }
 
@@ -284,11 +312,10 @@ public class Scanner {
       return code
     }
 
-    func newlineEscape(_ char: Char) throws -> Char {
+    func newlineEscape(_ char: Char) throws {
       if try char == Self.carriageReturn && peek() == Self.lineFeed {
         try skip()
       }
-      return Self.space
     }
   }
 

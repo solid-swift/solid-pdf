@@ -89,6 +89,10 @@ public final class DataFile: File, Sendable {
   public func read(max: Int) throws -> Data? {
     try access { state in
 
+      guard max >= 0 else {
+        throw Error.rangeCheck
+      }
+
       let currentIndex =
         state.data.index(state.currentIndex, offsetBy: max, limitedBy: state.data.endIndex)
         ?? state.data.endIndex
@@ -134,7 +138,7 @@ public final class DataFile: File, Sendable {
   public func setOffset(_ offset: Int) throws {
     try access { state in
 
-      guard offset <= state.data.count else {
+      guard offset >= 0, offset <= state.data.count else {
         throw Error.rangeCheck
       }
 
@@ -162,11 +166,15 @@ public final class DataFile: File, Sendable {
 
   /// Performs the ``flush`` operation.
   public func flush() throws {
-    try access { _ in }
+    try access { state in
+      if mode == .read {
+        state.currentIndex = state.data.endIndex
+      }
+    }
   }
 
   /// Performs the ``reset`` operation.
   public func reset() throws {
-    try access { _ in }
+    // DataFile has no read-ahead or write-behind buffer to discard.
   }
 }
