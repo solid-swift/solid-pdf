@@ -88,6 +88,9 @@ public struct PackedArrayValue: CollectionValue, CompositeValue {
 
   /// Records restorable state in a snapshot builder.
   public func save(to snapshot: Snapshot.Builder) {
+    for element in elements {
+      element.save(to: snapshot)
+    }
   }
 
   /// Executes this value in the supplied interpreter context.

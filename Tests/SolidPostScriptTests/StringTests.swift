@@ -40,14 +40,34 @@ struct StringTests {
 
   @Test
   func testGetInterval() async throws {
-    let char: StringValue = try await Interpreter.result(content: "(abcdef) 2 3 getinterval")
-    expectEqual(char.string, "cde")
+    let results = try await Interpreter.results(content: "(abcdef) 2 3 getinterval")
+    #expect(results.count == 1)
+    let string = try #require(results.first?.value as? StringValue)
+    expectEqual(string.string, "cde")
+  }
+
+  @Test
+  func testGetIntervalSharesCharacters() async throws {
+    let (interval, string) = try await Interpreter.result(
+      content: "/s (abcdef) def /i s 2 3 getinterval def i 0 88 put s i",
+      as: (StringValue, StringValue).self
+    )
+    expectEqual(interval.string, "Xde")
+    expectEqual(string.string, "abXdef")
   }
 
   @Test
   func testPutInterval() async throws {
     let char: StringValue = try await Interpreter.result(content: "(abcdef) dup 3 (ghi) putinterval")
     expectEqual(char.string, "abcghi")
+  }
+
+  @Test
+  func testOverlappingPutInterval() async throws {
+    let string: StringValue = try await Interpreter.result(
+      content: "/s (abcde) def s 1 s 0 4 getinterval putinterval s"
+    )
+    expectEqual(string.string, "aabcd")
   }
 
   @Test

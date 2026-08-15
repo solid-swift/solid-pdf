@@ -78,6 +78,11 @@ public struct Object: Equatable, Hashable, Sendable {
       hasher.combine(numeric.real)
       return
     }
+    if let nameString = value as? NameStringConvertible {
+      hasher.combine(ObjectType.name)
+      hasher.combine(nameString.nameString)
+      return
+    }
     hasher.combine(type)
     value.hash(into: &hasher)
   }

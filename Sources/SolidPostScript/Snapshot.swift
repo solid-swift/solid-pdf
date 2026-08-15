@@ -15,7 +15,7 @@ public final class Snapshot: Sendable {
   public typealias RestoreOperation = @Sendable () throws -> Void
 
   private struct Payload: Sendable {
-    let objects: Set<Object>
+    let retainedObjects: [Object]
     let operations: [RestoreOperation]
   }
 
@@ -35,6 +35,8 @@ public final class Snapshot: Sendable {
     public private(set) var objects: Set<Object> = []
     /// The ``operations`` value.
     public private(set) var operations: [RestoreOperation] = []
+    private var savedCompositeIdentities: Set<ObjectIdentifier> = []
+    private var retainedObjects: [Object] = []
 
     fileprivate init(packingMode: Context.PackingMode, allocationMode: VM) {
       self.packingMode = packingMode
@@ -43,14 +45,20 @@ public final class Snapshot: Sendable {
 
     /// Records restorable state in a snapshot builder.
     public func save(_ object: Object) {
-      guard
-        let composite = object.value as? CompositeValue,
-        composite.vm == .local,
-        objects.insert(object).inserted
-      else {
+      guard let composite = object.value as? CompositeValue, composite.vm == .local else {
         return
       }
 
+      if let identifiable = composite as? SnapshotIdentifiableValue {
+        guard savedCompositeIdentities.insert(identifiable.snapshotIdentity).inserted else {
+          return
+        }
+      }
+
+      retainedObjects.append(object)
+      if !(composite is StringValue) && !(composite is PackedArrayValue) {
+        objects.insert(object)
+      }
       composite.save(to: self)
     }
 
@@ -61,7 +69,7 @@ public final class Snapshot: Sendable {
 
     internal func build() -> Snapshot {
       return Snapshot(
-        objects: objects,
+        retainedObjects: retainedObjects,
         operations: operations,
         packingMode: packingMode,
         allocationMode: allocationMode
@@ -84,13 +92,13 @@ public final class Snapshot: Sendable {
   private let allocationMode: VM
 
   private init(
-    objects: Set<Object>,
+    retainedObjects: [Object],
     operations: [RestoreOperation],
     packingMode: Context.PackingMode,
     allocationMode: VM
   ) {
     self.timestamp = Date.now
-    self.state = Mutex(.ready(Payload(objects: objects, operations: operations)))
+    self.state = Mutex(.ready(Payload(retainedObjects: retainedObjects, operations: operations)))
     self.packingMode = packingMode
     self.allocationMode = allocationMode
   }
@@ -100,7 +108,7 @@ public final class Snapshot: Sendable {
     try check(context: context)
 
     let operations = try state.withLock { state in
-      guard case .ready(let payload) = state, !payload.objects.isEmpty else {
+      guard case .ready(let payload) = state, !payload.retainedObjects.isEmpty else {
         throw Error.invalidRestore
       }
 
@@ -118,13 +126,14 @@ public final class Snapshot: Sendable {
 
   private func check(context: isolated Context) throws {
 
-    var checked: Set<Object> = []
+    var checkedCompositeIdentities: Set<ObjectIdentifier> = []
 
     func check(_ object: Object) throws {
-      guard !checked.contains(object) else {
-        return
+      if let identifiable = object.value as? SnapshotIdentifiableValue {
+        guard checkedCompositeIdentities.insert(identifiable.snapshotIdentity).inserted else {
+          return
+        }
       }
-      checked.insert(object)
 
       switch object.value {
       case let save as SaveValue:

@@ -102,20 +102,17 @@ struct PackedArrayTests {
 
   @Test
   func testGetInterval() async throws {
-    let (arr2, arr1) = try await Interpreter.result(
-      content: "true setpacking {(a)(b)(c)(d)(e)} 1 3 getinterval",
-      as: (ArrayValue, PackedArrayValue).self
+    let results = try await Interpreter.results(
+      content: "true setglobal true setpacking {(a)(b)(c)(d)(e)} 1 3 getinterval"
     )
+    #expect(results.count == 1)
+    let arr2 = try #require(results.first?.value as? PackedArrayValue)
     expectEqual(arr2.count, 3)
+    expectEqual(arr2.vm, .global)
+    expectEqual(results.first?.kind, .executable)
     expectEqual(try arr2.object(at: 0).value(as: StringValue.self).string, "b")
     expectEqual(try arr2.object(at: 1).value(as: StringValue.self).string, "c")
     expectEqual(try arr2.object(at: 2).value(as: StringValue.self).string, "d")
-    expectEqual(arr1.count, 5)
-    expectEqual(try arr1.object(at: 0).value(as: StringValue.self).string, "a")
-    expectEqual(try arr1.object(at: 1).value(as: StringValue.self).string, "b")
-    expectEqual(try arr1.object(at: 2).value(as: StringValue.self).string, "c")
-    expectEqual(try arr1.object(at: 3).value(as: StringValue.self).string, "d")
-    expectEqual(try arr1.object(at: 4).value(as: StringValue.self).string, "e")
   }
 
   @Test

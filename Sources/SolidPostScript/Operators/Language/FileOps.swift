@@ -26,6 +26,7 @@ extension Operators {
     Status.instance,
     GetPosition.instance,
     SetPosition.instance,
+    CurrentFile.instance,
     Run.instance,
   ]
 
@@ -330,12 +331,18 @@ extension Operators {
 
       let file: Object =
         if let fileIndex = context.execution.firstIndex(where: { $0.source.type == .file }) {
-          context.execution[fileIndex].source
+          .init(value: context.execution[fileIndex].source.value, kind: .literal)
         } else {
-          .dataFile(content: Data(), access: .readOnly, vm: .local, kind: .executable)
+          try invalidFile()
         }
 
       context.operands.push(file)
+    }
+
+    private func invalidFile() throws -> Object {
+      let file = DataFile(data: Data(), mode: .read)
+      try file.close()
+      return .file(file, access: .readOnly, vm: .local, kind: .literal)
     }
   }
 

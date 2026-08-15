@@ -25,6 +25,12 @@ extension Object {
   }
 }
 
+extension ArrayValue: SnapshotIdentifiableValue {
+
+  var snapshotIdentity: ObjectIdentifier { ObjectIdentifier(ref) }
+
+}
+
 /// An PostScript array value.
 public struct ArrayValue: CollectionValue {
 

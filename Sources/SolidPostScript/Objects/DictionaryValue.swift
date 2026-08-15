@@ -12,9 +12,8 @@ extension Object: ExpressibleByDictionaryLiteral {
 
   /// Creates an instance.
   public init(dictionaryLiteral elements: (Object, Object)...) {
-    let dict = Dictionary(elements) { $1 }
     self.init(
-      value: neverThrow(try DictionaryValue(value: dict, access: .unlimited, vm: .local)),
+      value: neverThrow(try DictionaryValue(entries: elements, access: .unlimited, vm: .local)),
       kind: .literal
     )
   }
@@ -34,7 +33,7 @@ extension Object: ExpressibleByDictionaryLiteral {
     kind: ObjectKind
   ) throws -> Self {
     Self(
-      value: try DictionaryValue(value: Dictionary(uniqueKeysWithValues: uniqueKeysWithValues), access: access, vm: vm),
+      value: try DictionaryValue(entries: uniqueKeysWithValues, access: access, vm: vm),
       kind: kind
     )
   }
@@ -62,12 +61,28 @@ public struct DictionaryValue: CompositeValue {
 
   /// Creates an instance.
   public init(value: Storage, access: ObjectAccess, vm: VM) throws {
-    try value.checkStorage(in: vm)
+    let value = try Self.normalizedStorage(
+      value.map { ($0.key, $0.value) },
+      minimumCapacity: value.capacity,
+      in: vm
+    )
+    self.ref = Shared(value: value, access: access, vm: vm)
+  }
+
+  init<S: Sequence>(entries: S, access: ObjectAccess, vm: VM) throws where S.Element == (Object, Object) {
+    let value = try Self.normalizedStorage(entries, minimumCapacity: entries.underestimatedCount, in: vm)
     self.ref = Shared(value: value, access: access, vm: vm)
   }
 
   // The system dictionary is the sole global container permitted to retain named local dictionaries.
   init(systemDictionaryValue value: Storage, localDictionaryKeys: Set<Object>) throws {
+    let value = try Self.normalizedStorage(
+      value.map { ($0.key, $0.value) },
+      minimumCapacity: value.capacity,
+      in: .local
+    )
+    let localDictionaryKeys = try Set(localDictionaryKeys.map { try $0.dictionaryKey })
+
     for (key, object) in value {
       try key.checkStorage(in: .global)
 
@@ -124,6 +139,7 @@ public struct DictionaryValue: CompositeValue {
 
   /// Performs the ``object`` operation.
   public func object(forKey key: Object) throws -> Object {
+    let key = try key.dictionaryKey
     guard let value = try ref.read({ $0.value[key] }) else {
       throw Error.undefined
     }
@@ -135,6 +151,7 @@ public struct DictionaryValue: CompositeValue {
 
   /// Performs the ``object`` operation.
   public func object(forKeyIfExists key: Object) throws -> Object? {
+    let key = try key.dictionaryKey
     return try ref.read { $0.value[key] }
   }
 
@@ -147,6 +164,7 @@ public struct DictionaryValue: CompositeValue {
   /// Performs the ``setObject`` operation.
   @discardableResult
   public func setObject(_ value: Object, forKey key: Object) throws -> Object? {
+    let key = try key.dictionaryKey
     try key.checkStorage(in: ref.vm)
     try value.checkStorage(in: ref.vm)
     return try ref.write { $0.value.updateValue(value, forKey: key) }
@@ -155,13 +173,14 @@ public struct DictionaryValue: CompositeValue {
   /// Performs the ``updateObjects`` operation.
   public func updateObjects(forKeysIn dict: DictionaryValue) throws {
     let source = try dict.ref.read { $0.value }
-    for (key, value) in source {
-      try key.checkStorage(in: ref.vm)
-      try value.checkStorage(in: ref.vm)
-    }
+    let normalizedSource = try Self.normalizedStorage(
+      source.map { ($0.key, $0.value) },
+      minimumCapacity: source.capacity,
+      in: ref.vm
+    )
 
     try ref.write { destination in
-      for (key, value) in source {
+      for (key, value) in normalizedSource {
         destination.value[key] = value
       }
     }
@@ -169,6 +188,7 @@ public struct DictionaryValue: CompositeValue {
 
   /// Performs the ``removeObject`` operation.
   public func removeObject(forKey key: Object) throws -> Object? {
+    let key = try key.dictionaryKey
     return try ref.write { $0.value.removeValue(forKey: key) }
   }
 
@@ -224,17 +244,42 @@ public struct DictionaryValue: CompositeValue {
       return "<< \(tokens.joined(separator: " ")) >>"
     }
   }
+
+  private static func normalizedStorage<S: Sequence>(
+    _ entries: S,
+    minimumCapacity: Int,
+    in vm: VM
+  ) throws -> Storage where S.Element == (Object, Object) {
+    var normalized = Storage(minimumCapacity: minimumCapacity)
+    for (key, value) in entries {
+      let key = try key.dictionaryKey
+      try key.checkStorage(in: vm)
+      try value.checkStorage(in: vm)
+      normalized[key] = value
+    }
+    return normalized
+  }
+}
+
+extension DictionaryValue: SnapshotIdentifiableValue {
+
+  var snapshotIdentity: ObjectIdentifier { ObjectIdentifier(ref) }
+
 }
 
 extension Object {
 
-  fileprivate var key: Object {
+  fileprivate var dictionaryKey: Object {
     get throws {
-      if type == .string {
-        let string = try value(as: StringValue.self)
+      switch value {
+      case is NullValue:
+        throw Error.typeCheck
+      case let string as StringValue:
+        try string.access.check(.read)
         return .literalName(string.string)
+      default:
+        return self
       }
-      return self
     }
   }
 

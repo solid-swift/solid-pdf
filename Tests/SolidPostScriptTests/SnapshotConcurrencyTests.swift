@@ -40,6 +40,37 @@ struct SnapshotConcurrencyTests {
     #expect(try global.object(at: 0).value(as: IntegerValue.self).value == 2)
   }
 
+  @Test func restoresDistinctEqualStringStorage() async throws {
+    let first = StringValue(string: "same", access: .unlimited, vm: .local)
+    let second = StringValue(string: "same", access: .unlimited, vm: .local)
+    let dictionary = try DictionaryValue(
+      value: ["first": Object(value: first), "second": Object(value: second)],
+      access: .unlimited,
+      vm: .local
+    )
+    let context = Context()
+    let snapshot = await context.snapshot(of: Object(value: dictionary))
+
+    try first.updateCharacter(65, at: 0)
+    try second.updateCharacter(66, at: 0)
+    try await snapshot.restore(to: context)
+
+    #expect(first.string == "same")
+    #expect(second.string == "same")
+  }
+
+  @Test func restoresStringsReachableThroughPackedArrays() async throws {
+    let string = StringValue(string: "value", access: .unlimited, vm: .local)
+    let packedArray = PackedArrayValue(elements: [Object(value: string)])
+    let context = Context()
+    let snapshot = await context.snapshot(of: Object(value: packedArray))
+
+    try string.updateCharacter(88, at: 0)
+    try await snapshot.restore(to: context)
+
+    #expect(string.string == "value")
+  }
+
   @Test func failedValidationDoesNotConsumeSnapshot() async throws {
     let originalContext = try await Interpreter.execute(content: "save")
     let originalObject = try await originalContext.peekOperand()

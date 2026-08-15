@@ -105,24 +105,30 @@ struct DictionaryTests {
   func testGet() async throws {
     let int1: IntegerValue = try await Interpreter.result(content: "/a 123 def currentdict /a get")
     expectEqual(int1.value, 123)
+
+    let int2: IntegerValue = try await Interpreter.result(content: "<< /a 456 >> (a) get")
+    expectEqual(int2.value, 456)
   }
 
   @Test
   func testPut() async throws {
     let dict1: DictionaryValue = try await Interpreter.result(content: "10 dict dup /a 123 put")
     expectEqual(try dict1.objectValue(forKeyIfExists: "a", as: IntegerValue.self)?.value, 123)
+
+    let dict2: DictionaryValue = try await Interpreter.result(content: "10 dict dup (a) 456 put")
+    expectEqual(try dict2.objectValue(forKeyIfExists: "a", as: IntegerValue.self)?.value, 456)
   }
 
   @Test
   func testUndefine() async throws {
-    let dict1: DictionaryValue = try await Interpreter.result(content: "<< /a 123 /b 456 >> dup /a undef")
+    let dict1: DictionaryValue = try await Interpreter.result(content: "<< /a 123 /b 456 >> dup (a) undef")
     expectNil(try dict1.objectValue(forKeyIfExists: "a"))
     expectEqual(try dict1.objectValue(forKeyIfExists: "b", as: IntegerValue.self)?.value, 456)
   }
 
   @Test
   func testKnown() async throws {
-    let bool1: BooleanValue = try await Interpreter.result(content: "<< /a 123 /b 456 >> /a known")
+    let bool1: BooleanValue = try await Interpreter.result(content: "<< /a 123 /b 456 >> (a) known")
     expectEqual(bool1.value, true)
 
     let bool2: BooleanValue = try await Interpreter.result(content: "<< /a 123 /b 456 >> /d known")
@@ -131,7 +137,7 @@ struct DictionaryTests {
 
   @Test
   func testWhere() async throws {
-    let ops1 = try await Interpreter.results(content: "<< /a 123 /b 456 >> begin /a where")
+    let ops1 = try await Interpreter.results(content: "<< /a 123 /b 456 >> begin (a) where")
     expectEqual(ops1.count, 2)
     let bool1 = try requireValue(ops1[0].value as? BooleanValue, "Expected BooleanValue")
     expectEqual(bool1.value, true)
@@ -152,6 +158,60 @@ struct DictionaryTests {
     let dict2 = try requireValue(ops3[1].value as? DictionaryValue, "Expected DictionaryValue")
     expectEqual(dict2.count, 1)
     expectEqual(try dict2.objectValue(forKeyIfExists: "c", as: IntegerValue.self)?.value, 789)
+  }
+
+  @Test
+  func stringKeysWorkWithDefinitionOperators() async throws {
+    let loaded: IntegerValue = try await Interpreter.result(content: "(a) 123 def (a) load")
+    expectEqual(loaded.value, 123)
+
+    let stored: IntegerValue = try await Interpreter.result(content: "(a) 123 store (a) load")
+    expectEqual(stored.value, 123)
+  }
+
+  @Test
+  func stringAndNameKeysCollapseToOneEntry() async throws {
+    let (value, length) = try await Interpreter.result(
+      content: "<< /a 1 (a) 2 >> dup length exch /a get",
+      as: (IntegerValue, IntegerValue).self
+    )
+    expectEqual(value.value, 2)
+    expectEqual(length.value, 1)
+  }
+
+  @Test
+  func globalDictionaryAcceptsLocalStringKeyAfterNormalization() async throws {
+    let value: IntegerValue = try await Interpreter.result(
+      content: "true setglobal 1 dict /d exch def false setglobal d (a) 123 put d /a get"
+    )
+    expectEqual(value.value, 123)
+  }
+
+  @Test
+  func invalidDictionaryKeysUseLanguageErrors() async throws {
+    await #expect(throws: Error.typeCheck) {
+      try await Interpreter.execute(content: "1 dict null 1 put")
+    }
+    await #expect(throws: Error.invalidAccess) {
+      try await Interpreter.execute(content: "1 dict (a) noaccess 1 put")
+    }
+  }
+
+  @Test
+  func publicDictionaryAPIsNormalizeKeys() throws {
+    let dictionary = try DictionaryValue(value: [:], access: .unlimited, vm: .global)
+    let localString = Object.string("a", access: .unlimited, vm: .local, kind: .literal)
+
+    try dictionary.setObject(123, forKey: localString)
+    #expect(try dictionary.objectValue(forKey: "a", as: IntegerValue.self).value == 123)
+    #expect(try dictionary.removeObject(forKey: localString) != nil)
+    #expect(dictionary.count == 0)
+
+    #expect(Object.literalName("same") == Object.string("same", access: .unlimited, vm: .local, kind: .literal))
+    #expect(
+      Object.literalName("same").hashValue
+        == Object.string("same", access: .unlimited, vm: .local, kind: .literal).hashValue
+    )
   }
 
   @Test

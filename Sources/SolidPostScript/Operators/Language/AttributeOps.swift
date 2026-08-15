@@ -31,10 +31,10 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
 
-      let op = try context.operands.peek()
+      let op = try context.operands.pop()
       let typeName = op.type.name
 
-      context.operands.push(.string(typeName, access: .unlimited, vm: context.allocationMode, kind: .literal))
+      context.operands.push(.executableName(typeName))
     }
   }
 

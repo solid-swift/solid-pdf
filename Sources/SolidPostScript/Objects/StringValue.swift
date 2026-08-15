@@ -160,7 +160,10 @@ public struct StringValue: CompositeValue, ObjectSource {
 
   /// Records restorable state in a snapshot builder.
   public func save(to snapshot: Snapshot.Builder) {
-    // Strings are not saved
+    let capturedValue = ref.value.withLock { $0 }
+    snapshot.save {
+      ref.value.withLock { $0 = capturedValue }
+    }
   }
 
   /// Executes this value in the supplied interpreter context.
@@ -182,7 +185,7 @@ public struct StringValue: CompositeValue, ObjectSource {
   public func equals(_ other: any ObjectValue) -> Bool {
     switch other {
     case let otherString as StringValue:
-      valueSnapshot == otherString.valueSnapshot
+      rangedValueSnapshot == otherString.rangedValueSnapshot
     case let otherName as NameValue:
       string == otherName.value
     default:
@@ -192,7 +195,7 @@ public struct StringValue: CompositeValue, ObjectSource {
 
   /// Hashes the value into the supplied hasher.
   public func hash(into hasher: inout Hasher) {
-    hasher.combine(valueSnapshot)
+    hasher.combine(rangedValueSnapshot)
   }
 
   /// A debug representation of this value.
@@ -217,4 +220,10 @@ public struct StringValue: CompositeValue, ObjectSource {
   private var rangedValueSnapshot: Storage {
     ref.value.withLock { $0[refRange] }
   }
+}
+
+extension StringValue: SnapshotIdentifiableValue {
+
+  var snapshotIdentity: ObjectIdentifier { ObjectIdentifier(ref) }
+
 }

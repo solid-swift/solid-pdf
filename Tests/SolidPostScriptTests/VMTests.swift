@@ -226,6 +226,48 @@ struct VMTests {
   }
 
   @Test
+  func restoreRevertsLocalStringContentsAndAliases() async throws {
+    let (interval, string) = try await Interpreter.result(
+      content:
+        """
+        /s (abcdef) def
+        /i s 2 3 getinterval def
+        save i 0 88 put restore
+        s i
+        """,
+      as: (StringValue, StringValue).self
+    )
+
+    #expect(string.string == "abcdef")
+    #expect(interval.string == "cde")
+  }
+
+  @Test
+  func restoreRevertsDistinctEqualStringsIndependently() async throws {
+    let (second, first) = try await Interpreter.result(
+      content:
+        """
+        /a (same) def
+        /b (same) def
+        save a 0 65 put b 0 66 put restore
+        a b
+        """,
+      as: (StringValue, StringValue).self
+    )
+
+    #expect(first.string == "same")
+    #expect(second.string == "same")
+  }
+
+  @Test
+  func restoreDoesNotRevertGlobalStringContents() async throws {
+    let string: StringValue = try await Interpreter.result(
+      content: "true setglobal /s (abc) def false setglobal save s 0 120 put restore s"
+    )
+    #expect(string.string == "xbc")
+  }
+
+  @Test
   func testStoreLocalInGlobalError() async throws {
     let ps = "true setglobal /a 10 dict false setglobal begin /a (abc) def"
     do {

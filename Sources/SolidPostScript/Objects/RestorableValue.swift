@@ -13,3 +13,9 @@ public protocol RestorableValue {
   func save(to snapshot: Snapshot.Builder)
 
 }
+
+protocol SnapshotIdentifiableValue {
+
+  var snapshotIdentity: ObjectIdentifier { get }
+
+}

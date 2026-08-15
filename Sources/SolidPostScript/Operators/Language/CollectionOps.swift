@@ -110,8 +110,7 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
 
-      let (count, index) = try context.operands.pop2()
-      let source = try context.operands.peek()
+      let (count, index, source) = try context.operands.pop3()
 
       switch (source.value, index.value, count.value) {
       case (let array as ArrayValue, let index as IntegerValue, let count as IntegerValue):
@@ -123,7 +122,7 @@ extension Operators {
         let startIndex = try index.value.unsigned
         let endIndex = try startIndex + count.value.unsigned
         let elements = try array.objects(in: startIndex..<endIndex)
-        context.operands.push(try .array(elements, access: .unlimited, vm: context.allocationMode, kind: source.kind))
+        context.operands.push(try .packedArray(elements, vm: array.vm, kind: source.kind))
 
       case (let string as StringValue, let index as IntegerValue, let count as IntegerValue):
         let startIndex = try index.value.unsigned
@@ -146,12 +145,12 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
 
-      let (source, index) = try context.operands.pop2()
-      let target = try context.operands.peek()
+      let (source, index, target) = try context.operands.pop3()
 
       switch (source.value, index.value, target.value) {
       case (let arr1 as CollectionValue, let index as IntegerValue, let arr2 as ArrayValue):
-        try arr2.updateObjects(arr1.objects(in: arr1.range), startingAt: index.value.unsigned)
+        let objects = try Array(arr1.objects(in: arr1.range))
+        try arr2.updateObjects(objects, startingAt: index.value.unsigned)
 
       case (let str1 as StringValue, let index as IntegerValue, let str2 as StringValue):
         try str2.updateCharacters(str1.characters(in: str1.range), startingAt: index.value.unsigned)

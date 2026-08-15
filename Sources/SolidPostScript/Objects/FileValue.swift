@@ -22,6 +22,12 @@ extension Object {
 
 }
 
+extension FileValue: SnapshotIdentifiableValue {
+
+  var snapshotIdentity: ObjectIdentifier { ObjectIdentifier(file) }
+
+}
+
 /// A PostScript file value.
 public struct FileValue: CompositeValue, ObjectSource {
 
