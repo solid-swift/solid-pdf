@@ -30,7 +30,7 @@ extension Operators {
 
       let array: Object =
         try context.packingMode == .packed
-        ? .packedArray(deferred, kind: .executable)
+        ? .packedArray(deferred, vm: context.allocationMode, kind: .executable)
         : .array(deferred, access: .unlimited, vm: context.allocationMode, kind: .executable)
 
       context.operands.push(array)
@@ -76,7 +76,7 @@ extension Operators {
         }
       }
 
-      return .packedArray(elements, kind: .executable)
+      return try .packedArray(elements, vm: array.vm, kind: .executable)
     }
 
   }

@@ -66,6 +66,23 @@ public struct DictionaryValue: CompositeValue {
     self.ref = Shared(value: value, access: access, vm: vm)
   }
 
+  // The system dictionary is the sole global container permitted to retain named local dictionaries.
+  init(systemDictionaryValue value: Storage, localDictionaryKeys: Set<Object>) throws {
+    for (key, object) in value {
+      try key.checkStorage(in: .global)
+
+      if localDictionaryKeys.contains(key) {
+        guard let dictionary = object.value as? DictionaryValue, dictionary.vm == .local else {
+          throw Error.invalidAccess
+        }
+      } else {
+        try object.checkStorage(in: .global)
+      }
+    }
+
+    self.ref = Shared(value: value, access: .unlimited, vm: .global)
+  }
+
   /// Creates an instance.
   public init(sharing: Self) {
     self.ref = sharing.ref
@@ -124,15 +141,15 @@ public struct DictionaryValue: CompositeValue {
   /// Performs the ``updateObject`` operation.
   @discardableResult
   public func updateObject(_ value: Object, forKey key: Object) throws -> Object? {
-    try key.checkStorage(in: ref.vm)
-    try value.checkStorage(in: ref.vm)
     return try setObject(value, forKey: key)
   }
 
   /// Performs the ``setObject`` operation.
   @discardableResult
   public func setObject(_ value: Object, forKey key: Object) throws -> Object? {
-    try ref.write { $0.value.updateValue(value, forKey: key) }
+    try key.checkStorage(in: ref.vm)
+    try value.checkStorage(in: ref.vm)
+    return try ref.write { $0.value.updateValue(value, forKey: key) }
   }
 
   /// Performs the ``updateObjects`` operation.

@@ -61,6 +61,16 @@ public actor Context {
   ]
   .flatMap { $0 }
 
+  nonisolated static let targetLanguageLevel: Int32 = 3
+
+  // These are the PLRM-defined local roots that a global system dictionary may retain.
+  nonisolated static let localSystemDictionaryNames: Set<Object> = [
+    "$error",
+    "errordict",
+    "statusdict",
+    "userdict",
+  ]
+
   internal func run(untilExecutionDepth targetDepth: Int) throws {
 
     try Task<Never, Never>.checkCancellation()
@@ -268,6 +278,11 @@ public actor Context {
   internal func snapshot() throws -> Snapshot {
     let builder = Snapshot.builder(for: self)
 
+    let systemDictionary = try systemDictionary()
+    for name in Self.localSystemDictionaryNames {
+      try systemDictionary.object(forKey: name).save(to: builder)
+    }
+
     for op in try operands.peek(count: operands.depth) {
       op.save(to: builder)
     }
@@ -311,6 +326,10 @@ public actor Context {
 
     let errorDictionary = defaultErrorDictionary()
     let errorState = defaultErrorState()
+    let statusDictionary = neverThrow(
+      try Object.dictionary([:], access: .unlimited, vm: .local, kind: .literal)
+    )
+
     var dict: [Object: Object] = [
 
       // Constants
@@ -323,19 +342,18 @@ public actor Context {
       "errordict": errorDictionary,
       "globaldict": globalDict,
       "userdict": userDict,
-      "statusdict": [:],
+      "statusdict": statusDictionary,
 
-      // Required to be correct
-      "languagelevel": 2,
+      // Aspirational target; unavailable language features remain undefined.
+      "languagelevel": .integer(targetLanguageLevel),
 
       // Product & version strings
-      // TODO: load from package/framework
-      "product": "SolidPostScript",
-      "version": "1",
-      "revision": "0",
+      "product": .string("SolidPostScript", access: .readOnly, vm: .global, kind: .literal),
+      "version": .string("1", access: .readOnly, vm: .global, kind: .literal),
+      "revision": 0,
 
-      // User identifiable properties (obscurred)
-      "serialnumber": .literalName(UUID().uuidString),
+      // Deterministic and privacy-preserving.
+      "serialnumber": 0,
     ]
 
     for op in Operators.all {
@@ -344,7 +362,12 @@ public actor Context {
       }
     }
 
-    let dictValue = neverThrow(try DictionaryValue(value: dict, access: .unlimited, vm: .local))
+    let dictValue = neverThrow(
+      try DictionaryValue(
+        systemDictionaryValue: dict,
+        localDictionaryKeys: localSystemDictionaryNames
+      )
+    )
     _ = neverThrow(try dictValue.setObject(.dictionary(sharing: dictValue, kind: .literal), forKey: "systemdict"))
     neverThrow(try dictValue.setAccess(to: .readOnly))
     return .dictionary(sharing: dictValue, kind: .literal)

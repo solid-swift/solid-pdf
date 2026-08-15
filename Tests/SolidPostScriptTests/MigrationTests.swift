@@ -29,9 +29,25 @@ struct MigrationTests {
   }
 
   @Test
-  func systemDictionaryUsesSolidPostScriptProductName() async throws {
-    let product: NameValue = try await Interpreter.result(content: "product")
+  func systemDictionaryPublishesTargetAndTypedMetadata() async throws {
+    let languageLevel: IntegerValue = try await Interpreter.result(content: "languagelevel")
+    let product: StringValue = try await Interpreter.result(content: "product")
+    let version: StringValue = try await Interpreter.result(content: "version")
+    let revision: IntegerValue = try await Interpreter.result(content: "revision")
+    let serialNumber: IntegerValue = try await Interpreter.result(content: "serialnumber")
 
-    #expect(product.value == "SolidPostScript")
+    #expect(languageLevel.value == 3)
+    #expect(product.valueString == "SolidPostScript")
+    #expect(product.access == .readOnly)
+    #expect(product.vm == .global)
+    #expect(version.valueString == "1")
+    #expect(version.access == .readOnly)
+    #expect(version.vm == .global)
+    #expect(revision.value == 0)
+    #expect(serialNumber.value == 0)
+
+    await #expect(throws: Error.invalidAccess) {
+      try await Interpreter.execute(content: "product 0 88 put")
+    }
   }
 }

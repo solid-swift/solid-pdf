@@ -29,7 +29,7 @@ extension Operators {
         throw Error.rangeCheck
       }
       let ops = try context.operands.pop(count: Int(count.value)).reversed()
-      context.operands.push(.packedArray(ops, kind: .literal))
+      context.operands.push(try .packedArray(ops, vm: context.allocationMode, kind: .literal))
     }
   }
 

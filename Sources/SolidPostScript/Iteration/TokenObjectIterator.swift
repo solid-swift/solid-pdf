@@ -28,7 +28,7 @@ public class TokenObjectIterator: ObjectIterator {
     case .integer(let int): int.numericObject
     case .real(let real): try real.numericObject
     case .string(let string):
-      .string(string, access: .unlimited, vm: .local, kind: .literal)
+      .string(string, access: .unlimited, vm: context.allocationMode, kind: .literal)
     case .name(let name, kind: let kind):
       if name.starts(with: "/") {
         try NameValue(value: String(name.dropFirst())).lookup(in: context)

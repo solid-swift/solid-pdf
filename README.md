@@ -46,6 +46,12 @@ public API and execution behavior while replacing shared TPPackages utilities wi
 This baseline is not a claim of complete PostScript conformance. Scanner hardening, ASCII85 edge cases,
 file-reset semantics, and further language-conformance work remain follow-up work.
 
+## LanguageLevel target
+
+`languagelevel` reports 3 as the implementation target. This is aspirational roadmap metadata, not a
+claim of complete LanguageLevel 3 conformance. Unsupported operators are not represented by stubs and
+continue to resolve as `undefined` until they are implemented.
+
 ## Numeric implementation profile
 
 `SolidPostScript` uses signed 32-bit PostScript integers and finite IEEE-754 binary64 real numbers.

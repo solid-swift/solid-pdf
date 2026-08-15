@@ -15,6 +15,11 @@ extension Object {
     Self(value: PackedArrayValue(elements: Array(items)), kind: kind)
   }
 
+  /// Creates a packed array in the specified virtual-memory domain.
+  public static func packedArray(_ items: some Collection<Object>, vm: VM, kind: ObjectKind) throws -> Self {
+    Self(value: try PackedArrayValue(elements: Array(items), vm: vm), kind: kind)
+  }
+
   /// Performs the ``packedArray`` operation.
   public static func packedArray(_ array: PackedArrayValue, kind: ObjectKind) -> Self {
     Self(value: array, kind: kind)
@@ -34,7 +39,7 @@ public struct PackedArrayValue: CollectionValue, CompositeValue {
   /// The ``access`` value.
   public private(set) var access: ObjectAccess = Self.maxAccess
   /// The ``vm`` value.
-  public var vm: VM = .local
+  public let vm: VM
 
   /// The ``elements`` value.
   public let elements: [Object]
@@ -42,6 +47,14 @@ public struct PackedArrayValue: CollectionValue, CompositeValue {
   /// Creates an instance.
   public init(elements: [Object]) {
     self.elements = elements
+    self.vm = .local
+  }
+
+  /// Creates an instance in the specified virtual-memory domain.
+  public init(elements: [Object], vm: VM) throws {
+    try elements.checkStorage(in: vm)
+    self.elements = elements
+    self.vm = vm
   }
 
   /// Performs the ``setAccess`` operation.

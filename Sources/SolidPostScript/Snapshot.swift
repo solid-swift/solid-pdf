@@ -111,6 +111,9 @@ public final class Snapshot: Sendable {
     for operation in operations {
       try operation()
     }
+
+    context.packingMode = packingMode
+    context.allocationMode = allocationMode
   }
 
   private func check(context: isolated Context) throws {
