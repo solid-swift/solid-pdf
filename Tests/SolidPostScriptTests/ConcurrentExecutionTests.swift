@@ -23,7 +23,7 @@ struct ConcurrentExecutionTests {
       ("1 2 add 3 mul", 9),
     ]
 
-    try await withThrowingTaskGroup(of: (Int, Int).self) { group in
+    try await withThrowingTaskGroup(of: (Int, Int32).self) { group in
       for (index, (program, _)) in programs.enumerated() {
         group.addTask {
           let result: IntegerValue = try await Interpreter.result(content: program)
@@ -31,14 +31,14 @@ struct ConcurrentExecutionTests {
         }
       }
 
-      var results: [(Int, Int)] = []
+      var results: [(Int, Int32)] = []
       for try await result in group {
         results.append(result)
       }
 
       let sorted = results.sorted { $0.0 < $1.0 }
       for (index, value) in sorted {
-        #expect(value == programs[index].1, "VM \(index): expected \(programs[index].1), got \(value)")
+        #expect(value == Int32(programs[index].1), "VM \(index): expected \(programs[index].1), got \(value)")
       }
     }
   }
@@ -75,7 +75,7 @@ struct ConcurrentExecutionTests {
       count: count
     )
 
-    #expect(results.map(\.value) == Array((0..<count).reversed()))
+    #expect(results.map(\.value) == Array((0..<Int32(count)).reversed()))
   }
 
   @Test func resultExtractionHandlesEdgeCases() async {

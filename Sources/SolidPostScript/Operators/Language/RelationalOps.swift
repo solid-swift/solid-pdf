@@ -74,7 +74,7 @@ extension Operators {
         context.operands.push(.boolean(num1.value >= num2.value))
 
       case (let num1 as NumericConvertible, let num2 as NumericConvertible):
-        context.operands.push(try .boolean(num1.real >= num2.real))
+        context.operands.push(.boolean(num1.real >= num2.real))
 
       default:
         throw Error.typeCheck
@@ -105,7 +105,7 @@ extension Operators {
         context.operands.push(.boolean(num1.value > num2.value))
 
       case (let num1 as NumericConvertible, let num2 as NumericConvertible):
-        context.operands.push(try .boolean(num1.real > num2.real))
+        context.operands.push(.boolean(num1.real > num2.real))
 
       default:
         throw Error.typeCheck
@@ -137,7 +137,7 @@ extension Operators {
         context.operands.push(.boolean(num1.value <= num2.value))
 
       case (let num1 as NumericConvertible, let num2 as NumericConvertible):
-        context.operands.push(try .boolean(num1.real <= num2.real))
+        context.operands.push(.boolean(num1.real <= num2.real))
 
       default:
         throw Error.typeCheck
@@ -168,7 +168,7 @@ extension Operators {
         context.operands.push(.boolean(num1.value < num2.value))
 
       case (let num1 as NumericConvertible, let num2 as NumericConvertible):
-        context.operands.push(try .boolean(num1.real < num2.real))
+        context.operands.push(.boolean(num1.real < num2.real))
 
       default:
         throw Error.typeCheck

@@ -76,7 +76,7 @@ extension Operators {
       let file: FileValue = try context.operands.popAs()
 
       if let byte = try file.file.read(max: 1)?.first {
-        context.operands.push(.integer(Int(byte)), .boolean(true))
+        context.operands.push(.integer(Int32(byte)), .boolean(true))
       } else {
         context.operands.push(.boolean(false))
       }
@@ -219,7 +219,7 @@ extension Operators {
 
       let file: FileValue = try context.operands.popAs()
 
-      context.operands.push(.integer(try file.file.available))
+      context.operands.push(try NumericSemantics.integer(validating: file.file.available))
     }
   }
 
@@ -298,7 +298,7 @@ extension Operators {
 
       let file: FileValue = try context.operands.popAs()
 
-      context.operands.push(.integer(try file.file.offset))
+      context.operands.push(try NumericSemantics.integer(validating: file.file.offset))
     }
   }
 
@@ -314,7 +314,7 @@ extension Operators {
 
       let (int, file) = try context.operands.popAs((IntegerValue, FileValue).self)
 
-      try file.file.setOffset(int.value)
+      try file.file.setOffset(Int(int.value))
     }
   }
 

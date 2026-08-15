@@ -24,9 +24,9 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
 
-      let time = Int(Date.timeIntervalSinceReferenceDate / 1000)
+      let time = Int64(Date.timeIntervalSinceReferenceDate * 1000)
 
-      context.operands.push(.integer(time))
+      context.operands.push(.integer(Int32(truncatingIfNeeded: time)))
     }
   }
 
@@ -40,9 +40,9 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
 
-      let time = Int((Date.timeIntervalSinceReferenceDate - context.start) / 1000)
+      let time = Int64((Date.timeIntervalSinceReferenceDate - context.start) * 1000)
 
-      context.operands.push(.integer(time))
+      context.operands.push(.integer(Int32(truncatingIfNeeded: time)))
     }
   }
 

@@ -25,15 +25,10 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
       let arg = try context.operands.pop()
-      let result: Object =
-        switch arg.value {
-        case let l as IntegerValue:
-          .real(try sin(radians(l.real)))
-        case let l as RealValue:
-          .real(sin(radians(l.value)))
-        default:
-          throw Error.typeCheck
-        }
+      guard let angle = arg.value as? NumericConvertible else {
+        throw Error.typeCheck
+      }
+      let result: Object = try .real(sin(radians(angle.real)))
       context.operands.push(result)
     }
   }
@@ -48,15 +43,10 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
       let arg = try context.operands.pop()
-      let result: Object =
-        switch arg.value {
-        case let l as IntegerValue:
-          .real(try cos(radians(l.real)))
-        case let l as RealValue:
-          .real(cos(radians(l.value)))
-        default:
-          throw Error.typeCheck
-        }
+      guard let angle = arg.value as? NumericConvertible else {
+        throw Error.typeCheck
+      }
+      let result: Object = try .real(cos(radians(angle.real)))
       context.operands.push(result)
     }
   }
@@ -71,17 +61,15 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
       let args = try context.operands.pop(count: 2)
-      let result: Object =
-        switch (args[1].value, args[0].value) {
-        case (let l as IntegerValue, let r as IntegerValue):
-          .real(try degrees(atan2(l.real, r.real)))
-        case (let l as RealValue, let r as RealValue):
-          .real(degrees(atan2(l.value, r.value)))
-        case (let l as NumericConvertible, let r as NumericConvertible):
-          .real(try degrees(atan2(l.real, r.real)))
-        default:
-          throw Error.typeCheck
-        }
+      guard let numerator = args[1].value as? NumericConvertible,
+        let denominator = args[0].value as? NumericConvertible
+      else {
+        throw Error.typeCheck
+      }
+      guard numerator.real != 0 || denominator.real != 0 else {
+        throw Error.undefinedResult
+      }
+      let result: Object = try .real(degrees(atan2(numerator.real, denominator.real)))
       context.operands.push(result)
     }
 
@@ -95,7 +83,7 @@ extension Operators {
   }
 
   private static func radians(_ degrees: Double) -> Double {
-    degrees * degreesToRadiansCoeff
+    degrees.truncatingRemainder(dividingBy: 360.0) * degreesToRadiansCoeff
   }
 
 }

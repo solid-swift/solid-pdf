@@ -95,10 +95,8 @@ struct ArithmeticTests {
     #expect(res3.value == 5.3)
     let res4: RealValue = try await Interpreter.result(content: "-5.3 abs")
     #expect(res4.value == 5.3)
-    let res5: RealValue = try await Interpreter.result(content: "\(Int.min) abs")
-    #expect(
-      res5.value.isFinite || res5.value.isNaN || abs(res5.value - Double(-Int.max)) <= Double.greatestFiniteMagnitude
-    )
+    let res5: RealValue = try await Interpreter.result(content: "\(Int32.min) abs")
+    #expect(res5.value == 2_147_483_648)
   }
 
   @Test func testNegativeValue() async throws {
@@ -110,10 +108,8 @@ struct ArithmeticTests {
     #expect(res3.value == -5.3)
     let res4: RealValue = try await Interpreter.result(content: "-5.3 neg")
     #expect(res4.value == 5.3)
-    let res5: RealValue = try await Interpreter.result(content: "\(Int.min) neg")
-    #expect(
-      res5.value.isFinite || res5.value.isNaN || abs(res5.value - Double(-Int.max)) <= Double.greatestFiniteMagnitude
-    )
+    let res5: RealValue = try await Interpreter.result(content: "\(Int32.min) neg")
+    #expect(res5.value == 2_147_483_648)
   }
 
   @Test func testCeiling() async throws {

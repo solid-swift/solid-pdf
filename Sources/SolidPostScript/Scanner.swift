@@ -57,6 +57,16 @@ public class Scanner {
     "Invalid regular expression pattern",
     try Regex(#"([0-9]{1,2})#([0-9a-zA-Z]+)"#)
   )
+  // Regex is immutable after initialization, but Regex is not declared Sendable.
+  nonisolated(unsafe) static let decimalIntegerRegex = neverThrow(
+    "Invalid regular expression pattern",
+    try Regex(#"[+-]?[0-9]+"#)
+  )
+  // Regex is immutable after initialization, but Regex is not declared Sendable.
+  nonisolated(unsafe) static let realRegex = neverThrow(
+    "Invalid regular expression pattern",
+    try Regex(#"[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[+-]?[0-9]+[eE][+-]?[0-9]+"#)
+  )
 
   /// The ``file`` value.
   public let file: File
@@ -141,7 +151,7 @@ public class Scanner {
 
       let string = try String(bytes: chars, encoding: .isoLatin1).unwrap()
 
-      guard let number = Self.number(string: string) else {
+      guard let number = try Self.number(string: string) else {
         return .name(string, kind: .executable)
       }
       return number
@@ -282,35 +292,69 @@ public class Scanner {
     }
   }
 
-  static func number(string: String) -> Token? {
+  static func number(string: String) throws -> Token? {
 
-    if let int = integer(string: string) {
-      return .integer(int)
-    } else if let real = real(string: string) {
-      return .real(real)
-    } else {
+    if string.wholeMatch(of: decimalIntegerRegex) != nil {
+      if let integer = Int32(string) {
+        return .integer(integer)
+      }
+      return .real(try parseReal(string))
+    }
+
+    if string.wholeMatch(of: realRegex) != nil {
+      return .real(try parseReal(string))
+    }
+
+    guard let match = string.wholeMatch(of: radixRegex),
+      match.output.count == 3,
+      let baseSubstring = match.output[1].substring,
+      let digitsSubstring = match.output[2].substring,
+      let base = Int(baseSubstring),
+      (2...36).contains(base)
+    else {
       return nil
     }
+
+    let digits = String(digitsSubstring)
+    guard digits.allSatisfy({ digitValue($0).map { $0 < base } ?? false }) else {
+      return nil
+    }
+
+    var value: UInt32 = 0
+    for digit in digits {
+      let (multiplied, multiplyOverflow) = value.multipliedReportingOverflow(by: UInt32(base))
+      let (next, addOverflow) = multiplied.addingReportingOverflow(UInt32(digitValue(digit).neverNil()))
+      guard !multiplyOverflow && !addOverflow else {
+        throw Error.limitCheck
+      }
+      value = next
+    }
+    return .integer(Int32(bitPattern: value))
   }
 
-  static func real(string: String) -> Double? {
-    guard let real = Double(string) else {
-      return nil
+  private static func parseReal(_ string: String) throws -> Double {
+    guard let real = Double(string), real.isFinite else {
+      throw Error.limitCheck
+    }
+
+    let significand = string.prefix { $0 != "e" && $0 != "E" }
+    let underflowed = real == 0 && significand.contains { $0.isNumber && $0 != "0" }
+    guard !underflowed else {
+      throw Error.limitCheck
     }
     return real
   }
 
-  static func integer(string: String) -> Int? {
-    if let int = Int(string) {
-      return int
-    } else if let match = string.wholeMatch(of: Self.radixRegex),
-      match.output.count == 3,
-      let base = match.output[1].substring.map({ Int($0) }) ?? nil,
-      let number = match.output[2].substring.map({ Int($0, radix: base) }) ?? nil
-    {
-      return number
-    } else {
-      return nil
+  private static func digitValue(_ digit: Character) -> Int? {
+    switch digit {
+    case "0"..."9":
+      Int(digit.asciiValue.neverNil() - Character("0").asciiValue.neverNil())
+    case "a"..."z":
+      Int(digit.asciiValue.neverNil() - Character("a").asciiValue.neverNil()) + 10
+    case "A"..."Z":
+      Int(digit.asciiValue.neverNil() - Character("A").asciiValue.neverNil()) + 10
+    default:
+      nil
     }
   }
 

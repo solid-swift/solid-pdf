@@ -52,7 +52,7 @@ extension Operators {
     public func execute(context: isolated Context) throws {
 
       let (obj, indexObj) = try context.operands.pop2()
-      let index = try indexObj.value(as: IntegerValue.self).value
+      let index = Int(try indexObj.value(as: IntegerValue.self).value)
 
       let userObjects = try userObjects(in: context, for: index)
       try userObjects.updateObject(obj, at: index.unsigned)
@@ -69,7 +69,8 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
 
-      let index = try context.operands.popAs(IntegerValue.self).value
+      let indexValue = try context.operands.popAs(IntegerValue.self).value
+      let index = Int(indexValue)
 
       guard let userObjects = try userObjects(in: context) else {
         return
@@ -93,7 +94,8 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
 
-      let index = try context.operands.popAs(IntegerValue.self).value
+      let indexValue = try context.operands.popAs(IntegerValue.self).value
+      let index = Int(indexValue)
 
       guard let userObjects = try userObjects(in: context) else {
         throw Error.undefined

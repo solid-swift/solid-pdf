@@ -26,7 +26,7 @@ public class TokenObjectIterator: ObjectIterator {
 
     return switch token {
     case .integer(let int): int.numericObject
-    case .real(let real): real.numericObject
+    case .real(let real): try real.numericObject
     case .string(let string):
       .string(string, access: .unlimited, vm: .local, kind: .literal)
     case .name(let name, kind: let kind):

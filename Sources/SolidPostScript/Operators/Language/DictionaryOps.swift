@@ -38,9 +38,10 @@ extension Operators {
     public func execute(context: isolated Context) throws {
       let capacity: IntegerValue = try context.operands.popAs()
 
-      try context.limitCheck(size: capacity.value, objectType: .dictionary)
+      let capacityValue = Int(capacity.value)
+      try context.limitCheck(size: capacityValue, objectType: .dictionary)
 
-      let dict = DictionaryValue.Storage(minimumCapacity: capacity.value)
+      let dict = DictionaryValue.Storage(minimumCapacity: capacityValue)
       context.operands.push(try .dictionary(dict, access: .unlimited, vm: context.allocationMode, kind: .literal))
     }
   }
@@ -81,7 +82,7 @@ extension Operators {
     public func execute(context: isolated Context) throws {
 
       let op: DictionaryValue = try context.operands.peekAs()
-      context.operands.push(.integer(try op.capacity.signed))
+      context.operands.push(try NumericSemantics.integer(validating: op.capacity))
     }
   }
 
@@ -248,7 +249,7 @@ extension Operators {
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
-      context.operands.push(.integer(context.dictionaries.depth))
+      context.operands.push(try NumericSemantics.integer(validating: context.dictionaries.depth))
     }
   }
 

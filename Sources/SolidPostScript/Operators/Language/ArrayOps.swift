@@ -27,9 +27,10 @@ extension Operators {
     public func execute(context: isolated Context) throws {
       let count: IntegerValue = try context.operands.popAs()
 
-      try context.limitCheck(size: count.value, objectType: .array)
+      let countValue = Int(count.value)
+      try context.limitCheck(size: countValue, objectType: .array)
 
-      let array: [Object] = Array(repeating: .null, count: count.value)
+      let array: [Object] = Array(repeating: .null, count: countValue)
       context.operands.push(try .array(array, access: .unlimited, vm: context.allocationMode, kind: .literal))
     }
   }

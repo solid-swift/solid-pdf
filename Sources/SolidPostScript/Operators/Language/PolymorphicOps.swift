@@ -32,7 +32,7 @@ extension Operators {
         guard count.value >= 0 else {
           throw Error.rangeCheck
         }
-        let ops = try context.operands.peek(count: count.value)
+        let ops = try context.operands.peek(count: Int(count.value))
         context.operands.push(contentsOf: ops)
 
       // Copy array

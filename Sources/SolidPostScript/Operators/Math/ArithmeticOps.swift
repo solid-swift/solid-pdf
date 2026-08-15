@@ -37,11 +37,9 @@ extension Operators {
       let result: Object =
         switch (args[1].value, args[0].value) {
         case (let l as IntegerValue, let r as IntegerValue):
-          .integer(l.value + r.value)
-        case (let l as RealValue, let r as RealValue):
-          .real(l.value + r.value)
+          try NumericSemantics.integerOrReal(Int64(l.value) + Int64(r.value))
         case (let l as NumericConvertible, let r as NumericConvertible):
-          .real(try l.real + r.real)
+          try .real(l.real + r.real)
         default:
           throw Error.typeCheck
         }
@@ -62,11 +60,9 @@ extension Operators {
       let result: Object =
         switch (args[1].value, args[0].value) {
         case (let l as IntegerValue, let r as IntegerValue):
-          .integer(l.value - r.value)
-        case (let l as RealValue, let r as RealValue):
-          .real(l.value - r.value)
+          try NumericSemantics.integerOrReal(Int64(l.value) - Int64(r.value))
         case (let l as NumericConvertible, let r as NumericConvertible):
-          .real(try l.real - r.real)
+          try .real(l.real - r.real)
         default:
           throw Error.typeCheck
         }
@@ -87,11 +83,9 @@ extension Operators {
       let result: Object =
         switch (args[1].value, args[0].value) {
         case (let l as IntegerValue, let r as IntegerValue):
-          .integer(l.value * r.value)
-        case (let l as RealValue, let r as RealValue):
-          .real(l.value * r.value)
+          try NumericSemantics.integerOrReal(Int64(l.value) * Int64(r.value))
         case (let l as NumericConvertible, let r as NumericConvertible):
-          .real(try l.real * r.real)
+          try NumericSemantics.multiply(l.real, r.real)
         default:
           throw Error.typeCheck
         }
@@ -111,12 +105,8 @@ extension Operators {
       let args = try context.operands.pop(count: 2)
       let result: Object =
         switch (args[1].value, args[0].value) {
-        case (let l as IntegerValue, let r as IntegerValue):
-          .real(try l.real / r.real)
-        case (let l as RealValue, let r as RealValue):
-          .real(l.value / r.value)
         case (let l as NumericConvertible, let r as NumericConvertible):
-          .real(try l.real / r.real)
+          try NumericSemantics.divide(l.real, by: r.real)
         default:
           throw Error.typeCheck
         }
@@ -134,13 +124,19 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
       let args = try context.operands.pop(count: 2)
-      let result: Object =
-        switch (args[1].value, args[0].value) {
-        case (let l as IntegerValue, let r as IntegerValue):
-          .integer(l.value / r.value)
-        default:
-          throw Error.typeCheck
-        }
+      guard let dividend = args[1].value as? IntegerValue,
+        let divisor = args[0].value as? IntegerValue
+      else {
+        throw Error.typeCheck
+      }
+      guard divisor.value != 0 else {
+        throw Error.undefinedResult
+      }
+      let quotient = Int64(dividend.value) / Int64(divisor.value)
+      guard let quotient = Int32(exactly: quotient) else {
+        throw Error.undefinedResult
+      }
+      let result: Object = .integer(quotient)
       context.operands.push(result)
     }
   }
@@ -155,13 +151,15 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
       let args = try context.operands.pop(count: 2)
-      let result: Object =
-        switch (args[1].value, args[0].value) {
-        case (let l as IntegerValue, let r as IntegerValue):
-          .integer(l.value % r.value)
-        default:
-          throw Error.typeCheck
-        }
+      guard let dividend = args[1].value as? IntegerValue,
+        let divisor = args[0].value as? IntegerValue
+      else {
+        throw Error.typeCheck
+      }
+      guard divisor.value != 0 else {
+        throw Error.undefinedResult
+      }
+      let result: Object = .integer(Int32(Int64(dividend.value) % Int64(divisor.value)))
       context.operands.push(result)
     }
   }
@@ -182,10 +180,10 @@ extension Operators {
           if l.value != .min {
             .integer(abs(l.value))
           } else {
-            .real(abs(try l.real))
+            try .real(abs(l.real))
           }
         case (let l as RealValue):
-          .real(abs(l.value))
+          try .real(abs(l.value))
         default:
           throw Error.typeCheck
         }
@@ -209,10 +207,10 @@ extension Operators {
           if l.value != .min {
             .integer(-l.value)
           } else {
-            .real(try -l.real)
+            try .real(-l.real)
           }
         case (let l as RealValue):
-          .real(-l.value)
+          try .real(-l.value)
         default:
           throw Error.typeCheck
         }
@@ -235,7 +233,7 @@ extension Operators {
         case (is IntegerValue):
           arg
         case (let l as RealValue):
-          .real(ceil(l.value))
+          try .real(ceil(l.value))
         default:
           throw Error.typeCheck
         }
@@ -258,7 +256,7 @@ extension Operators {
         case (is IntegerValue):
           arg
         case (let l as RealValue):
-          .real(floor(l.value))
+          try .real(floor(l.value))
         default:
           throw Error.typeCheck
         }
@@ -281,7 +279,7 @@ extension Operators {
         case (is IntegerValue):
           arg
         case (let l as RealValue):
-          .real(round(l.value))
+          try .real(floor(l.value + 0.5))
         default:
           throw Error.typeCheck
         }
@@ -304,7 +302,7 @@ extension Operators {
         case (is IntegerValue):
           arg
         case (let l as RealValue):
-          .real(trunc(l.value))
+          try .real(trunc(l.value))
         default:
           throw Error.typeCheck
         }

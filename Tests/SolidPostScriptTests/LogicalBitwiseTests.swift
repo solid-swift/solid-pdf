@@ -51,10 +51,10 @@ struct LogicalBitwiseTests {
   func testNotInts() async throws {
 
     let int1: IntegerValue = try await Interpreter.result(content: "16#a5a5 not")
-    expectEqual(int1.value, Int(bitPattern: 0xffffffffffff5a5a))
+    expectEqual(int1.value, Int32(bitPattern: 0xFFFF_5A5A))
 
     let int2: IntegerValue = try await Interpreter.result(content: "16#0000 not")
-    expectEqual(int2.value, Int(bitPattern: .max))
+    expectEqual(int2.value, -1)
   }
 
   // MARK: Or (or)
@@ -76,10 +76,10 @@ struct LogicalBitwiseTests {
   func testOrInts() async throws {
 
     let int1: IntegerValue = try await Interpreter.result(content: "0 16#a5a5 or")
-    expectEqual(int1.value, Int(bitPattern: 0xa5a5))
+    expectEqual(int1.value, 0xA5A5)
 
     let int2: IntegerValue = try await Interpreter.result(content: "16#5a5a 0 or")
-    expectEqual(int2.value, Int(bitPattern: 0x5a5a))
+    expectEqual(int2.value, 0x5A5A)
   }
 
   // MARK: Exclusive Or (xor)
@@ -104,10 +104,10 @@ struct LogicalBitwiseTests {
   func testXorInts() async throws {
 
     let int1: IntegerValue = try await Interpreter.result(content: "16#ffff 16#a5a5 xor")
-    expectEqual(int1.value, Int(bitPattern: 0x5a5a))
+    expectEqual(int1.value, 0x5A5A)
 
     let int2: IntegerValue = try await Interpreter.result(content: "16#5a5a 16#5a5a xor")
-    expectEqual(int2.value, Int(bitPattern: 0))
+    expectEqual(int2.value, 0)
   }
 
   // MARK: Bit Shift (bitshift)
@@ -116,10 +116,10 @@ struct LogicalBitwiseTests {
   func testBitShift() async throws {
 
     let int1: IntegerValue = try await Interpreter.result(content: "16#5555 1 bitshift")
-    expectEqual(int1.value, Int(bitPattern: 0xaaaa))
+    expectEqual(int1.value, 0xAAAA)
 
     let int2: IntegerValue = try await Interpreter.result(content: "16#aaaa -1 bitshift")
-    expectEqual(int2.value, Int(bitPattern: 0x5555))
+    expectEqual(int2.value, 0x5555)
   }
 
 }

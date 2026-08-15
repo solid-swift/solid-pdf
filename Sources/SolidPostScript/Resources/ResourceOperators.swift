@@ -334,14 +334,22 @@ extension Operators {
 
         let size = try resourceCategory.sizeOfResource(instance)
 
-        context.operands.push(.boolean(true), .integer(size), .integer(0))
+        context.operands.push(
+          .boolean(true),
+          try NumericSemantics.integer(validating: size),
+          .integer(0)
+        )
       } else {
 
         let resourceCategory = try Resources.loadCategory(forKey: categoryKey)
 
         if let status = try resourceCategory.statusOfResource(forKey: key) {
 
-          context.operands.push(.boolean(true), .integer(status.size), .integer(status.isLoaded ? 1 : 2))
+          context.operands.push(
+            .boolean(true),
+            try NumericSemantics.integer(validating: status.size),
+            .integer(status.isLoaded ? 1 : 2)
+          )
         } else {
 
           context.operands.push(.boolean(false))

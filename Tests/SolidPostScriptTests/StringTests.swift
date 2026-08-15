@@ -29,7 +29,7 @@ struct StringTests {
   @Test
   func testGet() async throws {
     let char: IntegerValue = try await Interpreter.result(content: "(abcdef) 2 get")
-    expectEqual(char.value, Character("c").asciiValue.map(Int.init))
+    expectEqual(char.value, Character("c").asciiValue.map(Int32.init))
   }
 
   @Test
@@ -59,12 +59,12 @@ struct StringTests {
   @Test
   func testForAll() async throws {
     let ints = try await Interpreter.result(content: "(abcdef) {} forall", count: 6, as: IntegerValue.self)
-    expectEqual(ints[0].value, Character("f").asciiValue.map(Int.init))
-    expectEqual(ints[1].value, Character("e").asciiValue.map(Int.init))
-    expectEqual(ints[2].value, Character("d").asciiValue.map(Int.init))
-    expectEqual(ints[3].value, Character("c").asciiValue.map(Int.init))
-    expectEqual(ints[4].value, Character("b").asciiValue.map(Int.init))
-    expectEqual(ints[5].value, Character("a").asciiValue.map(Int.init))
+    expectEqual(ints[0].value, Character("f").asciiValue.map(Int32.init))
+    expectEqual(ints[1].value, Character("e").asciiValue.map(Int32.init))
+    expectEqual(ints[2].value, Character("d").asciiValue.map(Int32.init))
+    expectEqual(ints[3].value, Character("c").asciiValue.map(Int32.init))
+    expectEqual(ints[4].value, Character("b").asciiValue.map(Int32.init))
+    expectEqual(ints[5].value, Character("a").asciiValue.map(Int32.init))
   }
 
   @Test

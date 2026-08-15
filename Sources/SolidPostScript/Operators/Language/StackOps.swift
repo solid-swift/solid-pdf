@@ -74,7 +74,7 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
       let index: IntegerValue = try context.operands.popAs()
-      let op = try context.operands.peek(at: index.value)
+      let op = try context.operands.peek(at: Int(index.value))
       context.operands.push(op)
     }
   }
@@ -89,9 +89,15 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
       let (times, count): (IntegerValue, IntegerValue) = try context.operands.popAs()
-      var ops = try context.operands.pop(count: count.value)
+      guard count.value >= 0 else {
+        throw Error.rangeCheck
+      }
+      guard count.value != 0 else {
+        return
+      }
+      var ops = try context.operands.pop(count: Int(count.value))
       let shift = times.value % count.value
-      let start = shift >= 0 ? shift : shift + count.value
+      let start = Int(shift >= 0 ? shift : shift + count.value)
       ops.rotate(toStartAt: start)
       context.operands.push(contentsOf: ops)
     }
@@ -119,7 +125,7 @@ extension Operators {
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
-      context.operands.push(.integer(context.operands.depth))
+      context.operands.push(try NumericSemantics.integer(validating: context.operands.depth))
     }
   }
 
@@ -145,7 +151,7 @@ extension Operators {
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
-      context.operands.push(.integer(try context.operands.countToMark()))
+      context.operands.push(try NumericSemantics.integer(validating: context.operands.countToMark()))
     }
   }
 

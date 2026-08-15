@@ -16,7 +16,7 @@ struct RandomTests {
   @Test
   func testRandom() async throws {
     let res1: IntegerValue = try await Interpreter.result(content: "rand")
-    expectTrue((0...Int(UInt32.max)).contains(res1.value))
+    expectTrue((Int32(0)...Int32.max).contains(res1.value))
 
     let res2: IntegerValue = try await Interpreter.result(content: "0 srand rand")
     expectEqual(res2.value, 1)
@@ -31,6 +31,6 @@ struct RandomTests {
       content: "123 srand rrand rand rand rrand",
       count: 4
     )
-    #expect(sequence.map(\.value) == [123, 211_684_897, 3_419_675_296, 123])
+    #expect(sequence.map(\.value) == [123, 211_684_897, 1_272_191_648, 123])
   }
 }

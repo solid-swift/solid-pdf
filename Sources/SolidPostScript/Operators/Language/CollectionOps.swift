@@ -44,7 +44,7 @@ extension Operators {
           throw Error.typeCheck
         }
 
-      context.operands.push(.integer(try length.signed))
+      context.operands.push(try NumericSemantics.integer(validating: length))
     }
   }
 
@@ -67,7 +67,7 @@ extension Operators {
         case (let dictionary as DictionaryValue, _):
           try dictionary.object(forKey: indexOrKey)
         case (let string as StringValue, let index as IntegerValue):
-          .integer(try Int(string.character(at: index.value.unsigned)))
+          .integer(Int32(try string.character(at: index.value.unsigned)))
         default:
           throw Error.typeCheck
         }
@@ -194,7 +194,7 @@ extension Operators {
 
       case (let string as StringValue, is CollectionValue):
         for idx in 0..<string.count {
-          let result = try context.execute(proc: proc, ops: [.integer(Int(string.character(at: idx)))])
+          let result = try context.execute(proc: proc, ops: [.integer(Int32(string.character(at: idx)))])
           if !result {
             break
           }

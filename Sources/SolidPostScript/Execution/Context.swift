@@ -32,7 +32,7 @@ public actor Context {
   }
 
   typealias RandomGenerator = PostScriptRandomNumberGenerator
-  var random = RandomGenerator(seed: Int.random(in: .min ... .max))
+  var random = RandomGenerator(seed: Int32.random(in: .min ... .max))
 
   let start = Date.timeIntervalSinceReferenceDate
   let fileDevices = FileDevices()
@@ -248,12 +248,15 @@ public actor Context {
   }
 
   internal func limitCheck(size: Int, objectType: ObjectType) throws {
+    guard size >= 0 else {
+      throw Error.rangeCheck
+    }
     let allowed =
       switch objectType {
       case .array, .packedArray, .dictionary:
-        size > 0 && size < 10_000_000
+        size < 10_000_000
       case .string:
-        size > 0 && size < (1024 * 1024 * 20)
+        size < (1024 * 1024 * 20)
       default:
         false
       }

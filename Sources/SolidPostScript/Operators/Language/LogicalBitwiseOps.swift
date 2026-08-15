@@ -129,7 +129,20 @@ extension Operators {
 
       let (shift, int) = try context.operands.popAs((IntegerValue, IntegerValue).self)
 
-      context.operands.push(.integer(int.value << shift.value))
+      let shiftCount = Int64(shift.value)
+      guard abs(shiftCount) < 32 else {
+        context.operands.push(.integer(0))
+        return
+      }
+
+      let bits = UInt32(bitPattern: int.value)
+      let shifted =
+        if shiftCount >= 0 {
+          bits << UInt32(shiftCount)
+        } else {
+          bits >> UInt32(-shiftCount)
+        }
+      context.operands.push(.integer(Int32(bitPattern: shifted)))
     }
   }
 

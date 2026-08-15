@@ -46,6 +46,13 @@ public API and execution behavior while replacing shared TPPackages utilities wi
 This baseline is not a claim of complete PostScript conformance. Scanner hardening, ASCII85 edge cases,
 file-reset semantics, and further language-conformance work remain follow-up work.
 
+## Numeric implementation profile
+
+`SolidPostScript` uses signed 32-bit PostScript integers and finite IEEE-754 binary64 real numbers.
+Integer arithmetic promotes results outside the integer range to real values where required by the
+PostScript Language Reference. Numeric overflow, underflow, invalid domains, and division by zero are
+reported through the PostScript error environment; NaN and infinity are not representable VM values.
+
 ## License
 
 SolidPDF is available under the MIT License. See [LICENSE](LICENSE).

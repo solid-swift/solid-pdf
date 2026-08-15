@@ -25,7 +25,9 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
       let count: IntegerValue = try context.operands.popAs()
-      let data = Data(repeating: 0, count: count.value)
+      let countValue = Int(count.value)
+      try context.limitCheck(size: countValue, objectType: .string)
+      let data = Data(repeating: 0, count: countValue)
       context.operands.push(.string(data, access: .unlimited, vm: context.allocationMode, kind: .literal))
     }
   }

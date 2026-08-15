@@ -8,10 +8,10 @@
 /// The deterministic pseudo-random number generator used by PostScript's random operators.
 struct PostScriptRandomNumberGenerator: RandomNumberGenerator {
 
-  private(set) var seed: Int
+  private(set) var seed: Int32
   private var state: UInt64
 
-  init(seed: Int) {
+  init(seed: Int32) {
     self.seed = seed
     self.state = UInt64(bitPattern: Int64(seed))
   }

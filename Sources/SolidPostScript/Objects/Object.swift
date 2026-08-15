@@ -73,6 +73,11 @@ public struct Object: Equatable, Hashable, Sendable {
 
   /// Hashes the value into the supplied hasher.
   public func hash(into hasher: inout Hasher) {
+    if let numeric = value as? NumericConvertible {
+      hasher.combine(ObjectType.integer)
+      hasher.combine(numeric.real)
+      return
+    }
     hasher.combine(type)
     value.hash(into: &hasher)
   }

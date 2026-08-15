@@ -6,8 +6,6 @@
 //
 
 import Foundation
-import SolidCore
-
 extension Operators {
 
   static let randomOps: [OperatorValue] = [
@@ -25,8 +23,8 @@ extension Operators {
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
-      let value = UInt32.random(in: 0 ... .max, using: &context.random)
-      context.operands.push(.integer(Int(value)))
+      let value = Int32(context.random.next() & 0x7FFF_FFFF)
+      context.operands.push(.integer(value))
     }
   }
 

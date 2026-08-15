@@ -138,7 +138,7 @@ struct ConversionTests {
     let res5 = try await Interpreter.results(content: "-123 16 100 string cvrs")
     expectEqual(res5.count, 1)
     expectEqual(res5[0].type, .string)
-    expectEqual((res5[0].value as? StringValue)?.string, "-7B")
+    expectEqual((res5[0].value as? StringValue)?.string, "FFFFFF85")
 
     let res6 = try await Interpreter.results(content: "123.4 16 100 string cvrs")
     expectEqual(res6.count, 1)

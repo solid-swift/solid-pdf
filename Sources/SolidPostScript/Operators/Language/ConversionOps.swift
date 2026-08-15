@@ -36,11 +36,11 @@ extension Operators {
           try num.integer
 
         case let str as StringValue:
-          switch Scanner.number(string: str.string) {
+          switch try Scanner.number(string: str.string) {
           case .integer(let int):
             int
           case .real(let real):
-            try RealValue(value: real).integer
+            try RealValue(validating: real, error: .undefinedResult).integer
           default:
             throw Error.syntaxError
           }
@@ -68,12 +68,12 @@ extension Operators {
       let real =
         switch op.value {
         case let num as NumericConvertible:
-          try num.real
+          num.real
 
         case let str as StringValue:
-          switch Scanner.number(string: str.string) {
+          switch try Scanner.number(string: str.string) {
           case .integer(let int):
-            try IntegerValue(value: int).real
+            IntegerValue(value: int).real
           case .real(let real):
             real
           default:
@@ -84,7 +84,7 @@ extension Operators {
           throw Error.typeCheck
         }
 
-      context.operands.push(.real(real))
+      context.operands.push(try .real(real))
     }
   }
 
@@ -141,7 +141,7 @@ extension Operators {
             .data(using: .isoLatin1)
             .neverNil()
         } else {
-          try String(num.integer, radix: radix, uppercase: true)
+          try String(UInt32(bitPattern: num.integer), radix: Int(radix), uppercase: true)
             .data(using: .isoLatin1)
             .neverNil()
         }

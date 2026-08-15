@@ -25,7 +25,10 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
       let count: IntegerValue = try context.operands.popAs()
-      let ops = try context.operands.pop(count: count.value).reversed()
+      guard count.value >= 0 else {
+        throw Error.rangeCheck
+      }
+      let ops = try context.operands.pop(count: Int(count.value)).reversed()
       context.operands.push(.packedArray(ops, kind: .literal))
     }
   }

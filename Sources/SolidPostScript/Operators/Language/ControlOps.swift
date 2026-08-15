@@ -88,7 +88,11 @@ extension Operators {
 
       switch (initial.value, increment.value, limit.value) {
       case (let initial as IntegerValue, let increment as IntegerValue, let limit as IntegerValue):
-        try Self.execute(context: context, proc: proc, ops: (initial.value, increment.value, limit.value))
+        try Self.executeIntegers(
+          context: context,
+          proc: proc,
+          ops: (initial.value, increment.value, limit.value)
+        )
 
       case (let initial as NumericConvertible, let increment as NumericConvertible, let limit as NumericConvertible):
         try Self.execute(context: context, proc: proc, ops: (initial.real, increment.real, limit.real))
@@ -100,12 +104,29 @@ extension Operators {
 
     typealias ExecArgs<T> = (initial: T, increment: T, limit: T)
 
+    static func executeIntegers(
+      context: isolated Context,
+      proc: Object,
+      ops: ExecArgs<Int32>
+    ) throws {
+      var control = Int64(ops.initial)
+      let increment = Int64(ops.increment)
+      let limit = Int64(ops.limit)
+      while increment >= 0 ? control <= limit : control >= limit {
+        let controlObject = try NumericSemantics.integer(validating: control)
+        if try !context.execute(proc: proc, ops: [controlObject]) {
+          break
+        }
+        control += increment
+      }
+    }
+
     static func execute<T>(context: isolated Context, proc: Object, ops: ExecArgs<T>) throws
     where T: AdditiveArithmetic, T: Comparable, T: NumericObjectConvertible {
 
       var control = ops.initial
       while ops.increment >= .zero ? control <= ops.limit : control >= ops.limit {
-        if try !context.execute(proc: proc, ops: [control.numericObject]) {
+        if try !context.execute(proc: proc, ops: [try control.numericObject]) {
           break
         }
         control += ops.increment
@@ -125,6 +146,9 @@ extension Operators {
 
       let (proc, countObj) = try context.operands.pop2()
       let count = try countObj.value(as: IntegerValue.self)
+      guard count.value >= 0 else {
+        throw Error.rangeCheck
+      }
 
       for _ in 0..<count.value where try !context.execute(proc: proc) {
         break
@@ -216,7 +240,7 @@ extension Operators {
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
-      context.operands.push(.integer(context.execution.depth))
+      context.operands.push(try NumericSemantics.integer(validating: context.execution.depth))
     }
   }
 

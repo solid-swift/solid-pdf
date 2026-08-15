@@ -9,17 +9,19 @@ import Foundation
 
 protocol NumericObjectConvertible {
 
-  var numericObject: Object { get }
+  var numericObject: Object { get throws }
 
 }
 
 extension Double: NumericObjectConvertible {
 
-  var numericObject: Object { .real(self) }
+  var numericObject: Object {
+    get throws { try .real(self) }
+  }
 
 }
 
-extension Int: NumericObjectConvertible {
+extension Int32: NumericObjectConvertible {
 
   var numericObject: Object { .integer(self) }
 
