@@ -20,7 +20,13 @@ public enum Interpreter {
   public static func execute(file: File) async throws -> Context {
     let source: Object = .file(file, access: .readOnly, vm: .local, kind: .executable)
     let context = Context()
-    try await context.pushAndRun(source: source)
+    do {
+      try await context.pushAndRun(source: source)
+    } catch let stop as ErrorStop {
+      throw stop.error
+    } catch let undispatched as UndispatchedError {
+      throw undispatched.error
+    }
     return context
   }
 

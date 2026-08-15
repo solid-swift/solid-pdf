@@ -61,11 +61,7 @@ public struct Object: Equatable, Hashable, Sendable {
   }
 
   func execute(context: isolated Context, method: AccessMethod) throws {
-    if kind == .executable {
-      try value.execute(context: context, kind: kind, method: method)
-    } else {
-      context.operands.push(self)
-    }
+    try context.execute(object: self, method: method)
   }
 
   func makeIterator(context: isolated Context) throws -> ObjectIterator {

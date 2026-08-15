@@ -200,6 +200,9 @@ extension Operators {
       } catch Error.control(.stop) {
 
         context.operands.push(.boolean(true))
+      } catch is ErrorStop {
+
+        context.operands.push(.boolean(true))
       }
     }
   }
