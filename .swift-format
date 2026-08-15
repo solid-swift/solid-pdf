@@ -1,0 +1,27 @@
+{
+  "version" : 1,
+  "tabWidth" : 2,
+  "lineLength" : 120,
+  "lineBreakBeforeEachArgument" : true,
+  "lineBreakBeforeEachGenericRequirement" : true,
+  "lineBreakAroundMultilineExpressionChainComponents" : true,
+  "maximumBlankLines" : 2,
+  "multiElementCollectionTrailingCommas" : true,
+  "prioritizeKeepingFunctionOutputTogether" : false,
+  "respectsExistingLineBreaks" : true,
+  "spacesBeforeEndOfLineComments" : 4,
+  "rules" : {
+    "AllPublicDeclarationsHaveDocumentation" : true,
+    "AlwaysUseLiteralForEmptyCollectionInit" : true,
+    "BeginDocumentationCommentWithOneLineSummary" : true,
+    "IdentifiersMustBeASCII" : false,
+    "NeverForceUnwrap" : true,
+    "NeverUseForceTry" : true,
+    "NeverUseImplicitlyUnwrappedOptionals" : true,
+    "NoLeadingUnderscores" : true,
+    "OneCasePerLine" : false,
+    "UseEarlyExits" : true,
+    "UseWhereClausesInForLoops" : true,
+    "ValidateDocumentationComments" : true
+  }
+}

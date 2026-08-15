@@ -1,0 +1,17 @@
+.DS_Store
+/.build
+/Packages
+xcuserdata/
+DerivedData/
+.swiftpm/configuration/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.swiftpm/**/*.xcscheme
+.netrc
+.vscode
+.editorconfig
+.cursor
+*.xcscheme
+.idea
+/.cache
+*.trace
+.claude

@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-macos:
+    name: Test (macOS)
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v3
+        with:
+          swift-version: "6.2.3"
+
+      - name: Build
+        run: swift build --enable-code-coverage
+
+      - name: Test
+        run: swift test --enable-code-coverage --xunit-output .build/test-results.xml
+
+      - name: Compile with sanitizers
+        run: swift build --sanitize thread --sanitize undefined
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-macos
+          path: .build/test-results*.xml
+          retention-days: 30
+
+  test-linux:
+    name: Test (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v3
+        with:
+          swift-version: "6.2.3"
+          skip-verify-signature: true
+
+      - name: Build
+        run: swift build --enable-code-coverage
+
+      - name: Test
+        run: swift test --enable-code-coverage --xunit-output .build/test-results.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-linux
+          path: .build/test-results*.xml
+          retention-days: 30

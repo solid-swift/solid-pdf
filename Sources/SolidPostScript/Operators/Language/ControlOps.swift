@@ -1,0 +1,252 @@
+//
+//  ControlOps.swift
+//
+//
+//  Created by Kevin Wooten on 6/28/24.
+//
+
+import Foundation
+import SolidCore
+
+extension Operators {
+
+  static let controlOps: [OperatorValue] = [
+    Exec.instance,
+    If.instance,
+    IfElse.instance,
+    For.instance,
+    Repeat.instance,
+    Loop.instance,
+    Exit.instance,
+    Stop.instance,
+    Stopped.instance,
+    CountExecStack.instance,
+    CopyExecStack.instance,
+    Quit.instance,
+  ]
+
+  /// Implements the PostScript `exec` operator.
+  public enum Exec: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["exec"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+      try context.operands.pop().execute(context: context, method: .indirect)
+    }
+  }
+
+  /// Implements the PostScript `if` operator.
+  public enum If: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["if"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+
+      let (proc, boolObj) = try context.operands.pop2()
+      let bool = try boolObj.value(as: BooleanValue.self)
+
+      if bool.value {
+        try context.execution.push(source: proc, in: context)
+      }
+    }
+  }
+
+  /// Implements the PostScript `ifelse` operator.
+  public enum IfElse: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["ifelse"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+
+      let (elseproc, ifproc, boolObj) = try context.operands.pop3()
+      let bool = try boolObj.value(as: BooleanValue.self)
+
+      try context.execution.push(source: bool.value ? ifproc : elseproc, in: context)
+    }
+  }
+
+  /// Implements the PostScript `for` operator.
+  public enum For: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["for"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+
+      let (proc, limit, increment, initial) = try context.operands.pop4()
+
+      switch (initial.value, increment.value, limit.value) {
+      case (let initial as IntegerValue, let increment as IntegerValue, let limit as IntegerValue):
+        try Self.execute(context: context, proc: proc, ops: (initial.value, increment.value, limit.value))
+
+      case (let initial as NumericConvertible, let increment as NumericConvertible, let limit as NumericConvertible):
+        try Self.execute(context: context, proc: proc, ops: (initial.real, increment.real, limit.real))
+
+      default:
+        throw Error.typeCheck
+      }
+    }
+
+    typealias ExecArgs<T> = (initial: T, increment: T, limit: T)
+
+    static func execute<T>(context: isolated Context, proc: Object, ops: ExecArgs<T>) throws
+    where T: AdditiveArithmetic, T: Comparable, T: NumericObjectConvertible {
+
+      var control = ops.initial
+      while ops.increment >= .zero ? control <= ops.limit : control >= ops.limit {
+        if try !context.execute(proc: proc, ops: [control.numericObject]) {
+          break
+        }
+        control += ops.increment
+      }
+    }
+  }
+
+  /// Implements the PostScript `repeat` operator.
+  public enum Repeat: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["repeat"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+
+      let (proc, countObj) = try context.operands.pop2()
+      let count = try countObj.value(as: IntegerValue.self)
+
+      for _ in 0..<count.value where try !context.execute(proc: proc) {
+        break
+      }
+    }
+  }
+
+  /// Implements the PostScript `loop` operator.
+  public enum Loop: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["loop"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+
+      let proc = try context.operands.pop()
+
+      while true {
+        if try !context.execute(proc: proc) {
+          break
+        }
+      }
+    }
+  }
+
+  /// Implements the PostScript `exit` operator.
+  public enum Exit: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["exit"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+      throw Error.control(.exit)
+    }
+  }
+
+  /// Implements the PostScript `stop` operator.
+  public enum Stop: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["stop"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+      throw Error.control(.stop)
+    }
+  }
+
+  /// Implements the PostScript `stopped` operator.
+  public enum Stopped: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["stopped"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+
+      let proc = try context.operands.pop()
+
+      do {
+
+        if try !context.execute(proc: proc) {
+          throw Error.invalidExit
+        }
+
+        context.operands.push(.boolean(false))
+      } catch Error.control(.stop) {
+
+        context.operands.push(.boolean(true))
+      }
+    }
+  }
+
+  /// Implements the PostScript `countexecstack` operator.
+  public enum CountExecStack: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["countexecstack"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+      context.operands.push(.integer(context.execution.depth))
+    }
+  }
+
+  /// Implements the PostScript `execstack` operator.
+  public enum CopyExecStack: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["execstack"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+      let arrayObj = try context.operands.pop()
+      let array = try arrayObj.value(as: ArrayValue.self)
+      guard array.count >= context.execution.depth else {
+        throw Error.rangeCheck
+      }
+      let execs = context.execution[context.execution.startIndex..<context.execution.endIndex]
+      try array.updateObjects(execs.map { $0.source }.reversed(), startingAt: 0)
+      context.operands.push(try .array(sharing: array, subRange: 0..<execs.count.unsigned, kind: arrayObj.kind))
+    }
+  }
+
+  /// Implements the PostScript `quit` operator.
+  public enum Quit: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["quit"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+      throw Error.control(.quit)
+    }
+  }
+}
