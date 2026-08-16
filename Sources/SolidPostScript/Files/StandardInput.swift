@@ -92,7 +92,9 @@ final class StandardInputFile: ContextualFile, Sendable {
 
   func read(max: Int, context: isolated Context) async throws -> Data? {
     try checkOpen()
-    return try await channel.read(max: max)
+    return try await context.withUserTimeSuspended {
+      try await channel.read(max: max)
+    }
   }
 
   func readByte(context: isolated Context) async throws -> UInt8? {
@@ -134,7 +136,9 @@ final class StandardInputFile: ContextualFile, Sendable {
 
   func flush(context: isolated Context) async throws {
     try checkOpen()
-    try await channel.flush()
+    try await context.withUserTimeSuspended {
+      try await channel.flush()
+    }
   }
 
   func reset() {}

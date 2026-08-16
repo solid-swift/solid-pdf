@@ -7,6 +7,7 @@
 
 import Foundation
 import SolidCore
+import SolidTempo
 
 /// Actor-isolated state for a PostScript interpreter execution.
 public actor Context {
@@ -53,9 +54,9 @@ public actor Context {
   typealias RandomGenerator = PostScriptRandomNumberGenerator
   var random = RandomGenerator(seed: Int32.random(in: .min ... .max))
 
-  let start = Date.timeIntervalSinceReferenceDate
   let environment: InterpreterEnvironment
   let fileDevices: FileDevices
+  let userTime: Stopwatch
   private let vmAccountingID = UUID()
 
   var operands = OperandStack()
@@ -80,10 +81,13 @@ public actor Context {
   private var fileGeneration = 0
   private var openedLocalFiles: [(generation: Int, file: WeakFile)] = []
   private var standardFiles: [String: any File] = [:]
+  private var executionTimingDepth = 0
+  private var hostSuspensionDepth = 0
 
   init(environment: InterpreterEnvironment = InterpreterEnvironment(), jobServerEnabled: Bool = false) {
     self.environment = environment
     self.fileDevices = environment.fileDevices
+    self.userTime = Stopwatch(source: environment.monotonicInstantSource)
     self.jobServerEnabled = jobServerEnabled
     let userParameters = environment.userParameters()
     self.userParameters = userParameters
@@ -101,6 +105,7 @@ public actor Context {
     let environment = InterpreterEnvironment(fileDevices: fileDevices)
     self.environment = environment
     self.fileDevices = fileDevices
+    self.userTime = Stopwatch(source: environment.monotonicInstantSource)
     self.jobServerEnabled = false
     let userParameters = environment.userParameters()
     self.userParameters = userParameters
@@ -131,48 +136,104 @@ public actor Context {
   }
 
   internal func pushAndRun(source: Object) async throws {
-    try execution.push(source: source, in: self)
-    try await run(untilExecutionDepth: 0)
+    try await withUserTimeAccounting {
+      try execution.push(source: source, in: self)
+      try await run(untilExecutionDepth: 0)
+    }
   }
 
   func executeStart() async throws {
-    let targetDepth = execution.depth
-    try await execute(object: .executableName("start"), method: .direct)
-    try await run(untilExecutionDepth: targetDepth)
+    try await withUserTimeAccounting {
+      let targetDepth = execution.depth
+      try await execute(object: .executableName("start"), method: .direct)
+      try await run(untilExecutionDepth: targetDepth)
+    }
   }
 
   func prepareIdiomResources() async throws {
-    let savedOperands = operands
-    do {
-      try await ResourceRuntime.preloadIdiomSets(context: self)
-    } catch let error as ErrorStop {
-      throw error
-    } catch let error as UndispatchedError {
-      throw error
-    } catch let error as CancellationError {
-      throw error
-    } catch let error as Error where error.postScriptName != nil {
-      try await initiate(error: error, command: .executableName("findresource"), savedOperands: savedOperands)
+    try await withUserTimeAccounting {
+      let savedOperands = operands
+      do {
+        try await ResourceRuntime.preloadIdiomSets(context: self)
+      } catch let error as ErrorStop {
+        throw error
+      } catch let error as UndispatchedError {
+        throw error
+      } catch let error as CancellationError {
+        throw error
+      } catch let error as Error where error.postScriptName != nil {
+        try await initiate(error: error, command: .executableName("findresource"), savedOperands: savedOperands)
+      }
     }
   }
 
   func beginSessionJob() async throws {
-    try beginJob(persistent: false)
-    try await prepareIdiomResources()
+    try await withUserTimeAccounting {
+      try beginJob(persistent: false)
+      try await prepareIdiomResources()
+    }
   }
 
   func finishSessionJob() async throws {
-    try await finishJob()
+    try await withUserTimeAccounting {
+      try await finishJob()
+    }
   }
 
   var currentJobPersistent: Bool { jobLifecycle?.persistent ?? false }
 
   func reportCurrentError() async throws {
-    try await executeHandleError()
+    try await withUserTimeAccounting {
+      try await executeHandleError()
+    }
   }
 
   func flush(file: any File) async throws {
-    try await file.flush(context: self)
+    try await withUserTimeAccounting {
+      try await file.flush(context: self)
+    }
+  }
+
+  func withUserTimeAccounting<Result>(
+    _ operation: () async throws -> Result
+  ) async rethrows -> Result {
+    beginUserTimeAccounting()
+    defer { endUserTimeAccounting() }
+    return try await operation()
+  }
+
+  func withUserTimeSuspended<Result>(
+    _ operation: () async throws -> Result
+  ) async rethrows -> Result {
+    suspendUserTimeAccounting()
+    defer { resumeUserTimeAccounting() }
+    return try await operation()
+  }
+
+  private func beginUserTimeAccounting() {
+    executionTimingDepth += 1
+    guard executionTimingDepth == 1, hostSuspensionDepth == 0 else { return }
+    userTime.start()
+  }
+
+  private func endUserTimeAccounting() {
+    precondition(executionTimingDepth > 0, "Unbalanced PostScript execution timing scope")
+    executionTimingDepth -= 1
+    guard executionTimingDepth == 0, hostSuspensionDepth == 0 else { return }
+    userTime.stop()
+  }
+
+  private func suspendUserTimeAccounting() {
+    hostSuspensionDepth += 1
+    guard hostSuspensionDepth == 1, executionTimingDepth > 0 else { return }
+    userTime.stop()
+  }
+
+  private func resumeUserTimeAccounting() {
+    precondition(hostSuspensionDepth > 0, "Unbalanced PostScript host suspension scope")
+    hostSuspensionDepth -= 1
+    guard hostSuspensionDepth == 0, executionTimingDepth > 0 else { return }
+    userTime.start()
   }
 
   nonisolated static let deferredExecutionNames = [
@@ -776,11 +837,15 @@ public actor Context {
   }
 
   func writeStandardOutput(_ data: Data) async throws {
-    try await environment.standardOutput.write(data)
+    try await withUserTimeSuspended {
+      try await environment.standardOutput.write(data)
+    }
   }
 
   func flushStandardOutput() async throws {
-    try await environment.standardOutput.flush()
+    try await withUserTimeSuspended {
+      try await environment.standardOutput.flush()
+    }
   }
 
   func openInteractiveFile(statement: Bool) async throws -> any File {
@@ -832,7 +897,9 @@ public actor Context {
       if executivePendingInput.isEmpty {
         let event: InteractiveExecutiveEvent
         do {
-          event = try await environment.nextExecutiveEvent()
+          event = try await withUserTimeSuspended {
+            try await environment.nextExecutiveEvent()
+          }
         } catch is CancellationError {
           throw CancellationError()
         } catch let error as Error {

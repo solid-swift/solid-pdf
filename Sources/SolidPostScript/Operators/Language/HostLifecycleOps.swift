@@ -61,7 +61,9 @@ extension Operators {
     func execute(context: isolated Context) async throws {
       let content: Data?
       do {
-        content = try await context.environment.startupProgram()
+        content = try await context.withUserTimeSuspended {
+          try await context.environment.startupProgram()
+        }
       } catch is CancellationError {
         throw CancellationError()
       } catch {
@@ -109,8 +111,10 @@ extension Operators {
       let priorPersistent = job.persistent
       try await context.transitionJob(persistent: persistent)
       context.operands.push(.boolean(true))
-      try await context.environment.emit(.jobFinished(persistent: priorPersistent))
-      try await context.environment.emit(.jobStarted(persistent: persistent))
+      try await context.withUserTimeSuspended {
+        try await context.environment.emit(.jobFinished(persistent: priorPersistent))
+        try await context.environment.emit(.jobStarted(persistent: persistent))
+      }
     }
   }
 
@@ -137,10 +141,12 @@ extension Operators {
       let priorPersistent = job.persistent
       let suppressNotice = try context.binaryErrorReportingEnabled()
       try await context.transitionJob(persistent: true)
-      try await context.environment.emit(.jobFinished(persistent: priorPersistent))
-      try await context.environment.emit(.jobStarted(persistent: true))
-      if !suppressNotice {
-        try await context.environment.emit(.exitServerAuthorized)
+      try await context.withUserTimeSuspended {
+        try await context.environment.emit(.jobFinished(persistent: priorPersistent))
+        try await context.environment.emit(.jobStarted(persistent: true))
+        if !suppressNotice {
+          try await context.environment.emit(.exitServerAuthorized)
+        }
       }
     }
   }
@@ -177,7 +183,9 @@ extension Operators {
     context: isolated Context
   ) async throws -> Bool {
     do {
-      return try await context.environment.authorize(request)
+      return try await context.withUserTimeSuspended {
+        try await context.environment.authorize(request)
+      }
     } catch is CancellationError {
       throw CancellationError()
     } catch {

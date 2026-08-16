@@ -1,5 +1,6 @@
 import Foundation
 import SolidIO
+import SolidTempo
 import Synchronization
 
 /// Shared system and device state for one PostScript interpreter environment.
@@ -12,6 +13,7 @@ public final class InterpreterEnvironment: Sendable {
   let standardInput: StandardInputChannel
   let standardOutput: StandardOutputChannel
   let standardError: StandardOutputChannel
+  let monotonicInstantSource: any MonotonicInstantSource
 
   /// The application integration used by this environment.
   public let hostConfiguration: InterpreterHostConfiguration
@@ -52,15 +54,30 @@ public final class InterpreterEnvironment: Sendable {
   }
 
   /// Creates an interpreter environment using `hostConfiguration`.
-  public init(
+  public convenience init(
     hostConfiguration: InterpreterHostConfiguration,
     fileDevices: FileDevices = FileDevices(),
     resourceCategories: [Object: any ResourceCategory] = [:]
+  ) {
+    self.init(
+      hostConfiguration: hostConfiguration,
+      fileDevices: fileDevices,
+      resourceCategories: resourceCategories,
+      monotonicInstantSource: UptimeInstantSource.instance
+    )
+  }
+
+  init(
+    hostConfiguration: InterpreterHostConfiguration = InterpreterHostConfiguration(),
+    fileDevices: FileDevices = FileDevices(),
+    resourceCategories: [Object: any ResourceCategory] = [:],
+    monotonicInstantSource: any MonotonicInstantSource
   ) {
     self.hostConfiguration = hostConfiguration
     self.standardInput = StandardInputChannel(source: hostConfiguration.standardInput)
     self.standardOutput = StandardOutputChannel(sink: hostConfiguration.standardOutput)
     self.standardError = StandardOutputChannel(sink: hostConfiguration.standardError)
+    self.monotonicInstantSource = monotonicInstantSource
     self.fileDevices = fileDevices
       .replacing(StandardInputFileDevice(channel: self.standardInput))
       .replacing(StandardOutputFileDevice(channel: self.standardOutput, deviceName: "stdout"))

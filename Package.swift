@@ -17,7 +17,7 @@ let package = Package(
   dependencies: [
     .package(
       url: "https://github.com/solid-swift/solid-foundation.git",
-      revision: "f82582841ec907cf113525504a1de971ceb6a0ff"
+      revision: "0d229d759279998ca1e865a7ab654cea16275819"
     ),
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
   ],
@@ -27,6 +27,7 @@ let package = Package(
       dependencies: [
         .product(name: "SolidCore", package: "solid-foundation"),
         .product(name: "SolidIO", package: "solid-foundation"),
+        .product(name: "SolidTempo", package: "solid-foundation"),
       ],
       plugins: lintPlugins
     ),
@@ -36,6 +37,7 @@ let package = Package(
         "SolidPostScript",
         .product(name: "SolidCore", package: "solid-foundation"),
         .product(name: "SolidIO", package: "solid-foundation"),
+        .product(name: "SolidTempo", package: "solid-foundation"),
       ],
       plugins: lintPlugins
     ),

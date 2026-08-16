@@ -122,7 +122,9 @@ final class StandardOutputFile: ContextualFile, Sendable {
 
   func write(contentsOf data: Data, context: isolated Context) async throws {
     try checkOpen()
-    try await channel.write(data)
+    try await context.withUserTimeSuspended {
+      try await channel.write(data)
+    }
   }
 
   func close() {
@@ -142,7 +144,9 @@ final class StandardOutputFile: ContextualFile, Sendable {
 
   func flush(context: isolated Context) async throws {
     try checkOpen()
-    try await channel.flush()
+    try await context.withUserTimeSuspended {
+      try await channel.flush()
+    }
   }
 
   func reset() {}

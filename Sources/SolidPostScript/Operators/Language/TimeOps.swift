@@ -5,7 +5,7 @@
 //  Created by Kevin Wooten on 6/30/24.
 //
 
-import Foundation
+import SolidTempo
 
 extension Operators {
 
@@ -24,9 +24,8 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
 
-      let time = Int64(Date.timeIntervalSinceReferenceDate * 1000)
-
-      context.operands.push(.integer(Int32(truncatingIfNeeded: time)))
+      let elapsed = context.environment.monotonicInstantSource.instant.durationSinceEpoch
+      context.operands.push(.integer(postScriptMilliseconds(elapsed)))
     }
   }
 
@@ -40,10 +39,12 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
 
-      let time = Int64((Date.timeIntervalSinceReferenceDate - context.start) * 1000)
-
-      context.operands.push(.integer(Int32(truncatingIfNeeded: time)))
+      context.operands.push(.integer(postScriptMilliseconds(context.userTime.elapsed)))
     }
+  }
+
+  private static func postScriptMilliseconds(_ duration: SolidTempo.Duration) -> Int32 {
+    Int32(truncatingIfNeeded: duration[.totalMilliseconds])
   }
 
 }
