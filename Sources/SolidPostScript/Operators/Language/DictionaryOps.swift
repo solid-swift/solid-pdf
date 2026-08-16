@@ -59,6 +59,7 @@ extension Operators {
       guard elements.count.isMultiple(of: 2) else {
         throw Error.rangeCheck
       }
+      try context.limitCheck(size: elements.count / 2, objectType: .dictionary)
       let entries: [(key: Object, value: Object)] = elements.chunks(ofCount: 2)
         .map { pair in
           let first = pair[pair.startIndex]
@@ -128,7 +129,9 @@ extension Operators {
 
       let (value, key) = try context.operands.pop2()
 
-      try context.dictionaries.currentDictionary().updateObject(value, forKey: key)
+      let dictionary = try context.dictionaries.currentDictionary()
+      try context.preflightDictionaryGrowth(dictionary, key: key)
+      try dictionary.updateObject(value, forKey: key)
     }
   }
 
@@ -161,6 +164,9 @@ extension Operators {
 
       let (value, key) = try context.operands.pop2()
 
+      let dictionary = try context.dictionaries.object(forKeyIfExists: key)?.source
+        .value(as: DictionaryValue.self) ?? context.dictionaries.currentDictionary()
+      try context.preflightDictionaryGrowth(dictionary, key: key)
       _ = try context.dictionaries.updateObject(value, forKey: key)
     }
   }

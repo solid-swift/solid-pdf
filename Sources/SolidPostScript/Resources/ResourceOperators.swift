@@ -56,7 +56,9 @@ extension Operators {
         {
           return systemCategories
         }
-        let catDict = try DictionaryValue(value: [:], access: .unlimited, vm: context.allocationMode)
+        try context.preflightAllocation(bytes: 32, vm: vm)
+        let catDict = try DictionaryValue(value: [:], access: .unlimited, vm: vm)
+        try context.preflightDictionaryGrowth(allocDict, key: categoriesDictName)
         try allocDict.updateObject(.init(value: catDict, kind: .literal), forKey: categoriesDictName)
         return catDict
       }
@@ -66,13 +68,16 @@ extension Operators {
     static func resources(for context: isolated Context, category key: Object, vmOveride: VM? = nil) throws
       -> DictionaryValue
     {
+      let vm = vmOveride ?? context.allocationMode
       let catDict = try resourceCategories(for: context, vmOverride: vmOveride)
 
       if let resDict: DictionaryValue = try catDict.objectValue(forKeyIfExists: key) {
         return resDict
       }
 
-      let resDict = try DictionaryValue(value: [:], access: .unlimited, vm: context.allocationMode)
+      try context.preflightAllocation(bytes: 32, vm: vm)
+      let resDict = try DictionaryValue(value: [:], access: .unlimited, vm: vm)
+      try context.preflightDictionaryGrowth(catDict, key: key)
       try catDict.updateObject(.init(value: resDict, kind: .literal), forKey: key)
       return resDict
     }
@@ -175,6 +180,7 @@ extension Operators {
 
       let resources = try ResourceOperator.resources(for: context, category: categoryKey)
 
+      try context.preflightDictionaryGrowth(resources, key: key)
       try resources.updateObject(instance, forKey: key)
 
       if context.allocationMode == .global {
@@ -264,7 +270,8 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
 
-      let (categoryKey, key) = try context.operands.pop2()
+      let key = try context.operands.pop()
+      let categoryKey = try context.dictionaries.object(forKey: "Category")
 
       let instances: [Object?]
 
@@ -317,7 +324,8 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
 
-      let (categoryKey, key) = try context.operands.pop2()
+      let key = try context.operands.pop()
+      let categoryKey = try context.dictionaries.object(forKey: "Category")
 
       let instance: Object? =
         if context.allocationMode == .local {
@@ -393,7 +401,8 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
 
-      let (categoryKey, scratchObj, proc, templateObj) = try context.operands.pop4()
+      let (scratchObj, proc, templateObj) = try context.operands.pop3()
+      let categoryKey = try context.dictionaries.object(forKey: "Category")
       let scratch = try scratchObj.value(as: StringValue.self)
       let template = try templateObj.value(as: NameStringConvertible.self).nameString
 
@@ -429,11 +438,16 @@ extension Operators {
 
         let procArg: Object
 
-        if let stringKey = resourceKey.value as? StringValue {
+        if categoryKey == "IODevice", let nameKey = resourceKey.value as? NameValue {
+          let characters = Data(nameKey.value.utf8)
+          try scratch.updateCharacters(characters, startingAt: 0)
+          procArg = try .string(sharing: scratch, subRange: 0..<UInt(characters.count), kind: .literal)
+        } else if let stringKey = resourceKey.value as? StringValue {
 
-          try scratch.updateCharacters(stringKey.characters(in: stringKey.range), startingAt: 0)
+          let characters = try stringKey.characters(in: stringKey.range)
+          try scratch.updateCharacters(characters, startingAt: 0)
 
-          procArg = try .string(sharing: scratch, subRange: stringKey.range, kind: .literal)
+          procArg = try .string(sharing: scratch, subRange: 0..<UInt(characters.count), kind: .literal)
         } else {
 
           procArg = resourceKey

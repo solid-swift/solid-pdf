@@ -13,7 +13,9 @@ public enum Resources {
 
   /// The ``resources`` value.
   public static let resources: [Object: any ResourceCategory] = [
-    "Filter": FilterResources.instance
+    "Filter": FilterResources.instance,
+    "IODevice": IODeviceResources.instance,
+    "IdiomSet": IdiomSetResources.instance,
   ]
 
   /// Performs the ``loadCategory`` operation.

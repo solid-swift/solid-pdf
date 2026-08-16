@@ -27,6 +27,7 @@ extension Operators {
 
       _ = context.executionModes.pop()
       let deferred = try context.operands.popToMark().reversed()
+      try context.limitCheck(size: deferred.count, objectType: .array)
 
       let array: Object =
         try context.packingMode == .packed
@@ -76,7 +77,64 @@ extension Operators {
         }
       }
 
-      return try .packedArray(elements, vm: array.vm, kind: .executable)
+      try context.limitCheck(size: elements.count, objectType: .array)
+      let bound = try Object.packedArray(elements, vm: array.vm, kind: .executable)
+      return try recognizeIdiom(context: context, candidate: bound)
+    }
+
+    private func recognizeIdiom(context: isolated Context, candidate: Object) throws -> Object {
+      guard context.userParameters.boolean("IdiomRecognition") else { return candidate }
+
+      var sets: [DictionaryValue] = []
+      if context.allocationMode == .local {
+        let local = try ResourceOperator.resources(for: context, category: "IdiomSet", vmOveride: .local)
+        try local.forEachUnchecked { _, instance in
+          if let dictionary = instance.value as? DictionaryValue { sets.append(dictionary) }
+        }
+      }
+      let global = try ResourceOperator.resources(for: context, category: "IdiomSet", vmOveride: .global)
+      try global.forEachUnchecked { _, instance in
+        if let dictionary = instance.value as? DictionaryValue { sets.append(dictionary) }
+      }
+
+      let candidateVM = (candidate.value as? any CompositeValue)?.vm
+      for set in sets {
+        var replacement: Object?
+        try set.forEachUnchecked { _, pairObject in
+          guard replacement == nil,
+                let pair = pairObject.value as? any CollectionValue,
+                pair.count == 2
+          else { return }
+          let procedures = try pair.objects(in: pair.range)
+          guard try proceduresMatch(candidate, procedures[0], depth: 0) else { return }
+          let substitute = procedures[1]
+          if candidateVM == .global,
+             let composite = substitute.value as? any CompositeValue,
+             composite.vm == .local
+          {
+            return
+          }
+          replacement = substitute
+        }
+        if let replacement { return replacement }
+      }
+      return candidate
+    }
+
+    private func proceduresMatch(_ lhs: Object, _ rhs: Object, depth: Int) throws -> Bool {
+      if lhs == rhs { return true }
+      guard let lhsArray = lhs.value as? any CollectionValue,
+            let rhsArray = rhs.value as? any CollectionValue
+      else {
+        return false
+      }
+      guard depth < 10, lhsArray.count == rhsArray.count else { return false }
+      let lhsElements = try lhsArray.objects(in: lhsArray.range)
+      let rhsElements = try rhsArray.objects(in: rhsArray.range)
+      for (lhsElement, rhsElement) in zip(lhsElements, rhsElements) {
+        guard try proceduresMatch(lhsElement, rhsElement, depth: depth + 1) else { return false }
+      }
+      return true
     }
 
   }

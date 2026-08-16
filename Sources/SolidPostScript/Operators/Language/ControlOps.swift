@@ -223,10 +223,10 @@ extension Operators {
         context.operands.push(.boolean(false))
       } catch Error.control(.stop) {
 
-        context.operands.push(.boolean(true))
+        context.operands.pushUnchecked(.boolean(true))
       } catch is ErrorStop {
 
-        context.operands.push(.boolean(true))
+        context.operands.pushUnchecked(.boolean(true))
       }
     }
   }

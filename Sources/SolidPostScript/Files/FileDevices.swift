@@ -8,14 +8,21 @@
 import Foundation
 
 /// A registry of file devices available to an interpreter.
-public final class FileDevices {
+public final class FileDevices: Sendable {
 
   /// The ``registeredDevices`` value.
-  public private(set) var registeredDevices: [FileDevice]
+  public let registeredDevices: [FileDevice]
 
   /// Creates an instance.
   public init(devices: [FileDevice] = defaultDevices) {
     self.registeredDevices = devices.sorted { ($0.searched ? 1 : 0) > ($1.searched ? 1 : 0) }
+  }
+
+  func device(named name: String) throws -> any FileDevice {
+    guard let device = registeredDevices.first(where: { $0.name == name }) else {
+      throw Error.undefined
+    }
+    return device
   }
 
   /// The ``defaultDevices`` value.

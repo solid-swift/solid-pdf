@@ -89,13 +89,36 @@ struct Weak<Value: AnyObject> {
 }
 
 extension String {
-
-  // Regex is immutable after initialization, but Regex is not declared Sendable.
-  nonisolated(unsafe) private static let templateReplaceRegex = neverThrow(try Regex(#"(?<=\\)(\*|\?|\\)"#))
-
   var asTemplateRegex: Regex<AnyRegexOutput>? {
-    let pattern = replacing(Self.templateReplaceRegex) { $0[2].substring ?? "" }
+    var pattern = ""
+    var escaped = false
+    for character in self {
+      if escaped {
+        pattern.append(character.regexEscaped)
+        escaped = false
+      } else {
+        switch character {
+        case "\\":
+          escaped = true
+        case "*":
+          pattern.append(".*")
+        case "?":
+          pattern.append(".")
+        default:
+          pattern.append(character.regexEscaped)
+        }
+      }
+    }
+    if escaped {
+      pattern.append(#"\\"#)
+    }
     return try? Regex(pattern)
   }
 
+}
+
+private extension Character {
+  var regexEscaped: String {
+    "\\.^$|()[]{}+".contains(self) ? "\\\(self)" : String(self)
+  }
 }

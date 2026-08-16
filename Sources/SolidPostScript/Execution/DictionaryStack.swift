@@ -13,6 +13,7 @@ struct DictionaryStack {
   typealias Storage = Stack<Object>
 
   private var storage: Storage
+  private var maximumDepth = Int.max
 
   init(_ dictionaries: [Object] = []) {
     self.storage = Stack(dictionaries)
@@ -43,7 +44,7 @@ struct DictionaryStack {
 
   func objectValue<V>(forKeyIfExists key: Object, as: V.Type = V.self) throws -> V? {
 
-    return try object(forKeyIfExists: key)?.source.value(as: V.self)
+    return try object(forKeyIfExists: key)?.value.value(as: V.self)
   }
 
   func object(forKeyIfExists key: Object) throws -> (source: Object, value: Object)? {
@@ -95,6 +96,10 @@ struct DictionaryStack {
   var isEmpty: Bool { storage.isEmpty }
   var depth: Int { storage.depth }
 
+  mutating func setMaximumDepth(_ maximumDepth: Int) {
+    self.maximumDepth = maximumDepth
+  }
+
   func current() throws -> Object {
     guard let dict = peek() else {
       throw Error.dictionaryStackUnderflow
@@ -145,6 +150,9 @@ struct DictionaryStack {
   mutating func push(_ element: Object) throws {
 
     _ = try element.value(as: DictionaryValue.self)
+    guard depth < maximumDepth else {
+      throw Error.dictionaryStackOverflow
+    }
 
     storage.push(element)
   }

@@ -36,15 +36,16 @@ extension Scanner {
 
   private func object(from token: Token, context: isolated Context) throws -> Object {
     switch token {
-    case .integer(let int): int.numericObject
-    case .real(let real): try real.numericObject
+    case .integer(let int): return int.numericObject
+    case .real(let real): return try real.numericObject
     case .string(let string):
-      .string(string, access: .unlimited, vm: context.allocationMode, kind: .literal)
+      try context.limitCheck(size: string.count, objectType: .string)
+      return .string(string, access: .unlimited, vm: context.allocationMode, kind: .literal)
     case .name(let name, kind: let kind):
       if name.starts(with: "/") {
-        try NameValue(value: String(name.dropFirst())).lookup(in: context)
+        return try NameValue(value: String(name.dropFirst())).lookup(in: context)
       } else {
-        .name(name, kind: kind)
+        return .name(name, kind: kind)
       }
     }
   }

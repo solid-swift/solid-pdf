@@ -35,22 +35,55 @@ public actor Context {
   var random = RandomGenerator(seed: Int32.random(in: .min ... .max))
 
   let start = Date.timeIntervalSinceReferenceDate
+  let environment: InterpreterEnvironment
   let fileDevices: FileDevices
+  private let vmAccountingID = UUID()
 
   var operands = OperandStack()
-  var dictionaries = DictionaryStack(defaultDictionaries())
+  var dictionaries: DictionaryStack
   var execution = ExecutionStack()
+  var userParameters: UserParameterState
   var allocationMode: VM = .local
   var objectFormat: ObjectFormat = .disabled
   var executionModes: Stack<ExecutionMode> = [.immediate]
   var packingMode: PackingMode = .unpacked
   var activeErrors: [ErrorInvocation] = []
   var resolvingErrorNames: Set<String> = []
+  var stackLimitBypassDepth = 0
+  var saveDepth = 0
   private var fileGeneration = 0
   private var openedLocalFiles: [(generation: Int, file: WeakFile)] = []
 
-  init(fileDevices: FileDevices = FileDevices()) {
+  init(environment: InterpreterEnvironment = InterpreterEnvironment()) {
+    self.environment = environment
+    self.fileDevices = environment.fileDevices
+    let userParameters = environment.userParameters()
+    self.userParameters = userParameters
+    self.dictionaries = DictionaryStack(Self.defaultDictionaries(fileDevices: environment.fileDevices))
+    self.operands.setMaximumDepth(Int(userParameters.integer("MaxOpStack")))
+    self.dictionaries.setMaximumDepth(Int(userParameters.integer("MaxDictStack")))
+  }
+
+  init(fileDevices: FileDevices) {
+    let environment = InterpreterEnvironment(fileDevices: fileDevices)
+    self.environment = environment
     self.fileDevices = fileDevices
+    let userParameters = environment.userParameters()
+    self.userParameters = userParameters
+    self.dictionaries = DictionaryStack(Self.defaultDictionaries(fileDevices: fileDevices))
+    self.operands.setMaximumDepth(Int(userParameters.integer("MaxOpStack")))
+    self.dictionaries.setMaximumDepth(Int(userParameters.integer("MaxDictStack")))
+  }
+
+  deinit {
+    environment.removeGlobalVMUsage(for: vmAccountingID)
+  }
+
+  var stackLimitsBypassed: Bool { stackLimitBypassDepth > 0 }
+
+  func applyUserParameterLimits() {
+    operands.setMaximumDepth(Int(userParameters.integer("MaxOpStack")))
+    dictionaries.setMaximumDepth(Int(userParameters.integer("MaxDictStack")))
   }
 
   internal var executionMode: ExecutionMode {
@@ -133,6 +166,11 @@ public actor Context {
         try object.execute(context: self, method: .direct)
       } else {
         operands.push(object)
+        do {
+          try operands.throwIfOverflowed()
+        } catch let error as Error {
+          try initiate(error: error, command: object, savedOperands: savedOperands)
+        }
       }
     }
   }
@@ -146,6 +184,7 @@ public actor Context {
       } else {
         operands.push(object)
       }
+      try operands.throwIfOverflowed()
     } catch let failure as ScannerFailure {
       try initiate(
         error: failure.error,
@@ -175,7 +214,7 @@ public actor Context {
 
     if !error.isExternal {
       operands = savedOperands
-      operands.push(command)
+      operands.pushUnchecked(command)
     }
 
     guard let handler = try resolveErrorHandler(for: error) else {
@@ -229,7 +268,14 @@ public actor Context {
     let targetDepth = execution.depth
     defer { execution = savedExecution }
 
-    try handler.execute(context: self, method: .indirect)
+    stackLimitBypassDepth += 1
+    do {
+      try handler.execute(context: self, method: .indirect)
+    } catch {
+      stackLimitBypassDepth -= 1
+      throw error
+    }
+    stackLimitBypassDepth -= 1
     try run(untilExecutionDepth: targetDepth)
   }
 
@@ -323,6 +369,7 @@ public actor Context {
 
     do {
       operands.push(contentsOf: ops)
+      try operands.throwIfOverflowed()
 
       try run(untilExecutionDepth: targetDepth)
 
@@ -347,6 +394,92 @@ public actor Context {
       }
     if !allowed {
       throw Error.limitCheck
+    }
+
+    let requested = estimatedAllocationSize(count: size, objectType: objectType)
+    try preflightAllocation(bytes: requested)
+  }
+
+  func estimatedVMUsage(in vm: VM) throws -> Int {
+    let used = try estimatedReachableVMUsage(in: vm)
+    guard vm == .global else { return used }
+    return environment.updateGlobalVMUsage(for: vmAccountingID, to: used)
+  }
+
+  func preflightDictionaryGrowth(_ dictionary: DictionaryValue, key: Object) throws {
+    guard try dictionary.object(forKeyIfExists: key) == nil else { return }
+    try preflightAllocation(bytes: 16, vm: dictionary.vm)
+  }
+
+  func preflightAllocation(bytes: Int, vm: VM? = nil) throws {
+    let vm = vm ?? allocationMode
+    let used = try estimatedReachableVMUsage(in: vm)
+    if vm == .global {
+      _ = environment.updateGlobalVMUsage(for: vmAccountingID, to: used.saturatingAdd(bytes))
+      return
+    }
+    let maximum = Int(userParameters.integer("MaxLocalVM"))
+    guard bytes <= maximum - min(used, maximum) else { throw Error.vmError }
+  }
+
+  private func estimatedReachableVMUsage(in vm: VM) throws -> Int {
+    var identities = Set<ObjectIdentifier>()
+    var packedValues = Set<Object>()
+    var used = 0
+
+    func visit(_ object: Object) throws {
+      guard let composite = object.value as? any CompositeValue else { return }
+
+      if let identifiable = composite as? SnapshotIdentifiableValue {
+        guard identities.insert(identifiable.snapshotIdentity).inserted else { return }
+      } else if object.type == .packedArray {
+        guard packedValues.insert(object).inserted else { return }
+      }
+
+      if composite.vm == vm {
+        switch object.value {
+        case let value as StringValue:
+          used = used.saturatingAdd(Int(value.count) + 16)
+        case let value as DictionaryValue:
+          used = used.saturatingAdd(Int(value.count) * 16 + 32)
+        case let value as any CollectionValue:
+          used = used.saturatingAdd(Int(value.count) * 8 + 16)
+        default:
+          used = used.saturatingAdd(32)
+        }
+      }
+
+      switch object.value {
+      case let dictionary as DictionaryValue:
+        try dictionary.forEachUnchecked { key, value in
+          try visit(key)
+          try visit(value)
+        }
+      case let collection as any CollectionValue:
+        try collection.forEachUnchecked(visit)
+      default:
+        break
+      }
+    }
+
+    try operands.forEach(visit)
+    try dictionaries.forEach(visit)
+    for item in execution {
+      try visit(item.source)
+    }
+    return used
+  }
+
+  private func estimatedAllocationSize(count: Int, objectType: ObjectType) -> Int {
+    switch objectType {
+    case .string:
+      count.saturatingAdd(16)
+    case .array, .packedArray:
+      count.saturatingMultiply(8).saturatingAdd(16)
+    case .dictionary:
+      count.saturatingMultiply(16).saturatingAdd(32)
+    default:
+      32
     }
   }
 
@@ -408,14 +541,26 @@ public actor Context {
 
   /// Performs the ``defaultDictionaries`` operation.
   nonisolated public static func defaultDictionaries() -> [Object] {
+    defaultDictionaries(fileDevices: FileDevices())
+  }
+
+  private nonisolated static func defaultDictionaries(fileDevices: FileDevices) -> [Object] {
     let userDict = defaultUserDictionary()
     let globalDict = defaultGlobalDictionary()
-    let sysDict = defaultSystemDictionary(userDict: userDict, globalDict: globalDict)
+    let sysDict = defaultSystemDictionary(userDict: userDict, globalDict: globalDict, fileDevices: fileDevices)
     return [userDict, globalDict, sysDict]
   }
 
   /// Performs the ``defaultSystemDictionary`` operation.
   nonisolated public static func defaultSystemDictionary(userDict: Object, globalDict: Object) -> Object {
+    defaultSystemDictionary(userDict: userDict, globalDict: globalDict, fileDevices: FileDevices())
+  }
+
+  private nonisolated static func defaultSystemDictionary(
+    userDict: Object,
+    globalDict: Object,
+    fileDevices: FileDevices
+  ) -> Object {
 
     let errorDictionary = defaultErrorDictionary()
     let errorState = defaultErrorState()
@@ -424,7 +569,11 @@ public actor Context {
     )
     let resourceCategories = neverThrow(
       try Object.dictionary(
-        ["Filter": defaultFilterResourceDictionary()],
+        [
+          "Filter": defaultFilterResourceDictionary(),
+          "IODevice": defaultIODeviceResourceDictionary(fileDevices: fileDevices),
+          "IdiomSet": defaultIdiomSetResourceDictionary(),
+        ],
         access: .unlimited,
         vm: .local,
         kind: .literal
@@ -526,7 +675,7 @@ public actor Context {
       "FindResource": Operators.FindResource.default,
       "ResourceStatus": Operators.ResourceStatus.default,
       "ResourceForAll": Operators.ResourceForAll.default,
-      "InstanceType": .literalName("name"),
+      "InstanceType": .literalName(ObjectType.name.name),
     ]
     for name in Operators.Filter.availableNames {
       entries[.literalName(name)] = .literalName(name)
@@ -534,4 +683,46 @@ public actor Context {
     return neverThrow(try .dictionary(entries, access: .unlimited, vm: .local, kind: .literal))
   }
 
+  private nonisolated static func defaultIODeviceResourceDictionary(fileDevices: FileDevices) -> Object {
+    var entries: [Object: Object] = [
+      "Category": .literalName("IODevice"),
+      "DefineResource": Operators.DefineResource.default,
+      "UndefineResource": Operators.UndefineResource.default,
+      "FindResource": Operators.FindResource.default,
+      "ResourceStatus": Operators.ResourceStatus.default,
+      "ResourceForAll": Operators.ResourceForAll.default,
+      "InstanceType": .literalName(ObjectType.string.name),
+    ]
+    for device in fileDevices.registeredDevices {
+      let identifier = "%\(device.name)%"
+      entries[.literalName(identifier)] = .string(identifier, access: .readOnly, vm: .local, kind: .literal)
+    }
+    return neverThrow(try .dictionary(entries, access: .unlimited, vm: .local, kind: .literal))
+  }
+
+  private nonisolated static func defaultIdiomSetResourceDictionary() -> Object {
+    let entries: [Object: Object] = [
+      "Category": .literalName("IdiomSet"),
+      "DefineResource": .init(value: Operators.DefineResource(extension: IdiomSetValidation.instance)),
+      "UndefineResource": Operators.UndefineResource.default,
+      "FindResource": Operators.FindResource.default,
+      "ResourceStatus": Operators.ResourceStatus.default,
+      "ResourceForAll": Operators.ResourceForAll.default,
+      "InstanceType": .literalName(ObjectType.dictionary.name),
+    ]
+    return neverThrow(try .dictionary(entries, access: .unlimited, vm: .local, kind: .literal))
+  }
+
+}
+
+private extension Int {
+  func saturatingAdd(_ other: Int) -> Int {
+    let (value, overflow) = addingReportingOverflow(other)
+    return overflow ? .max : value
+  }
+
+  func saturatingMultiply(_ other: Int) -> Int {
+    let (value, overflow) = multipliedReportingOverflow(by: other)
+    return overflow ? .max : value
+  }
 }

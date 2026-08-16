@@ -13,6 +13,9 @@ typealias ExecutionStack = Stack<(source: Object, iterator: ObjectIterator?)>
 extension ExecutionStack {
 
   mutating func push(source: Object, in context: isolated Context) throws {
+    guard context.stackLimitsBypassed || depth < Int(context.userParameters.integer("MaxExecStack")) else {
+      throw Error.executionStackOverflow
+    }
     let value = try source.value(as: ObjectSource.self)
     let iterator = try value.makeIterator(context: context)
     push((source, iterator))

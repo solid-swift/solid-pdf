@@ -45,6 +45,7 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
       let ops = try context.operands.popToMark().reversed()
+      try context.limitCheck(size: ops.count, objectType: .array)
       context.operands.push(try .array(ops, access: .unlimited, vm: context.allocationMode, kind: .literal))
     }
   }

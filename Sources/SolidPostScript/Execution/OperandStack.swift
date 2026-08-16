@@ -13,6 +13,8 @@ struct OperandStack {
   typealias Storage = Stack<Object>
 
   private var storage: Storage
+  private var maximumDepth = Int.max
+  private var overflowed = false
 
   init(_ items: [Object] = []) {
     self.storage = Stack(items)
@@ -24,6 +26,16 @@ struct OperandStack {
 
   var isEmpty: Bool { storage.isEmpty }
   var depth: Int { storage.depth }
+
+  mutating func setMaximumDepth(_ maximumDepth: Int) {
+    self.maximumDepth = maximumDepth
+  }
+
+  mutating func throwIfOverflowed() throws {
+    guard overflowed else { return }
+    overflowed = false
+    throw Error.stackOverflow
+  }
 
   func peekAs<R: ObjectValue>(at position: Int = 0, as: R.Type = R.self) throws -> R {
     guard position >= 0 else {
@@ -157,15 +169,28 @@ struct OperandStack {
   }
 
   mutating func push(_ element: Object) {
+    guard depth < maximumDepth else {
+      overflowed = true
+      return
+    }
     storage.push(element)
   }
 
   mutating func push(_ element: Object, _ elements: Object...) {
-    storage.push(contentsOf: [element] + elements)
+    push(contentsOf: [element] + elements)
   }
 
   mutating func push(contentsOf elements: some Sequence<Object>) {
+    let elements = Array(elements)
+    guard elements.count <= maximumDepth - min(depth, maximumDepth) else {
+      overflowed = true
+      return
+    }
     storage.push(contentsOf: elements)
+  }
+
+  mutating func pushUnchecked(_ element: Object) {
+    storage.push(element)
   }
 
   subscript(position: Storage.Index) -> Object {

@@ -15,7 +15,7 @@ public enum Operators {
   public static let all: [OperatorValue] =
     stackOps + deferOps + controlOps + attributeOps + conversionOps + procedureOps + polymorphicOps + collectionOps
     + arrayOps + packedArrayOps + dictionaryOps + stringOps + arithmeticOps + trigonometricOps + mathOps + randomOps
-    + relationalOps + logicalBitwiseOps + fileOps + binaryObjectOps + filterOps + resourceOperators + timeOps + vmOps
-    + userObjectsOps
+    + relationalOps + logicalBitwiseOps + fileOps + binaryObjectOps + filterOps + parameterOps + resourceOperators
+    + timeOps + vmOps + userObjectsOps
 
 }
