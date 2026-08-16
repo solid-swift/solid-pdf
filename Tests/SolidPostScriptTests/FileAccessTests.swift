@@ -34,7 +34,7 @@ struct FileAccessTests {
   }
 
   @Test
-  func readAndStatusRequireReadAccess() async throws {
+  func readRequiresReadAccessButStatusDoesNot() async throws {
     let url = temporaryURL()
     try Data([1]).write(to: url)
     defer { try? FileManager.default.removeItem(at: url) }
@@ -42,9 +42,51 @@ struct FileAccessTests {
     await #expect(throws: Error.invalidAccess) {
       try await Interpreter.execute(content: "(\(url.path)) (r) file noaccess read")
     }
-    await #expect(throws: Error.invalidAccess) {
-      try await Interpreter.execute(content: "(\(url.path)) (r) file noaccess status")
+
+    let status: BooleanValue = try await Interpreter.result(
+      content: "(\(url.path)) (r) file noaccess status"
+    )
+    #expect(status.value)
+  }
+
+  @Test
+  func statusReportsValidityRegardlessOfAccessOrDirection() async throws {
+    let inputURL = temporaryURL()
+    let outputURL = temporaryURL()
+    try Data([1]).write(to: inputURL)
+    defer {
+      try? FileManager.default.removeItem(at: inputURL)
+      try? FileManager.default.removeItem(at: outputURL)
     }
+
+    let results = try await Interpreter.results(
+      content: """
+        /input (\(inputURL.path)) (r) file def
+        /output (\(outputURL.path)) (w) file def
+        /readwrite (\(inputURL.path)) (r+) file def
+        /filtered (4869>) /ASCIIHexDecode filter def
+        input noaccess status
+        output executeonly status
+        readwrite readonly status
+        filtered noaccess status
+        (%stdout) (w) file noaccess status
+        /alias output def
+        output closefile
+        alias status
+        """
+    )
+
+    let statuses = results.compactMap { ($0.value as? BooleanValue)?.value }
+    #expect(statuses == [false, true, true, true, true, true])
+  }
+
+  @Test
+  func statusDoesNotRaiseAnAccessErrorThroughStopped() async throws {
+    let results = try await Interpreter.results(
+      content: "{ (%stdout) (w) file noaccess status } stopped"
+    )
+    let booleans = results.compactMap { ($0.value as? BooleanValue)?.value }
+    #expect(booleans == [false, true])
   }
 
   @Test

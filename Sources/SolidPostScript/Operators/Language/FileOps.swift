@@ -329,7 +329,6 @@ extension Operators {
 
       let operand = try context.operands.pop()
       if let file = operand.value as? FileValue {
-        try file.checkReadable()
         context.operands.push(.boolean(!file.file.isClosed))
         return
       }
