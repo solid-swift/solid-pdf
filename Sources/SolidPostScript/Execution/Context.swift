@@ -16,6 +16,7 @@ public actor Context {
 
   struct JobLifecycle {
     let persistent: Bool
+    let authorization: JobAuthorizationOutcome
     let snapshot: Snapshot?
     let startSaveDepth: Int
     let localBoundary: VMGenerationBoundary
@@ -31,6 +32,7 @@ public actor Context {
   struct ErrorInvocation {
     let error: Error
     let command: Object
+    let errorInfo: PostScriptParameterFailure?
     let operandStack: [Object]
     let executionStack: [Object]
     let dictionaryStack: [Object]
@@ -236,6 +238,12 @@ public actor Context {
         throw error
       } catch let error as CancellationError {
         throw error
+      } catch let failure as PostScriptParameterFailure {
+        try await initiate(
+          failure: failure,
+          command: .executableName("findresource"),
+          savedOperands: savedOperands
+        )
       } catch let error as Error where error.postScriptName != nil {
         try await initiate(error: error, command: .executableName("findresource"), savedOperands: savedOperands)
       }
@@ -244,7 +252,7 @@ public actor Context {
 
   func beginSessionJob() async throws {
     try await withUserTimeAccounting {
-      try beginJob(persistent: false)
+      try beginJob(persistent: false, authorization: .ordinary)
       try await prepareIdiomResources()
     }
   }
@@ -256,6 +264,7 @@ public actor Context {
   }
 
   var currentJobPersistent: Bool { jobLifecycle?.persistent ?? false }
+  var isSystemAdministratorJob: Bool { jobLifecycle?.authorization == .administrator }
 
   func reportCurrentError() async throws {
     try await withUserTimeAccounting {
@@ -365,6 +374,10 @@ public actor Context {
           savedOperands: savedOperands
         )
         continue
+      } catch let failure as PostScriptParameterFailure {
+        let command = execution.peek()?.source ?? .null
+        try await initiate(failure: failure, command: command, savedOperands: savedOperands)
+        continue
       } catch let error as Error {
         guard error.postScriptName != nil else {
           throw error
@@ -408,6 +421,8 @@ public actor Context {
         command: scannerCommand(failure.command),
         savedOperands: savedOperands
       )
+    } catch let failure as PostScriptParameterFailure {
+      try await initiate(failure: failure, command: object, savedOperands: savedOperands)
     } catch let error as Error {
       guard error.postScriptName != nil else {
         throw error
@@ -426,8 +441,33 @@ public actor Context {
     }
   }
 
-  private func initiate(error: Error, command: Object, savedOperands: OperandStack) async throws {
-    let invocation = try makeErrorInvocation(error: error, command: error.isExternal ? .null : command)
+  private func initiate(
+    failure: PostScriptParameterFailure,
+    command: Object,
+    savedOperands: OperandStack
+  ) async throws {
+    guard failure.error.postScriptName != nil else {
+      throw failure.error
+    }
+    try await initiate(
+      error: failure.error,
+      errorInfo: failure,
+      command: command,
+      savedOperands: savedOperands
+    )
+  }
+
+  private func initiate(
+    error: Error,
+    errorInfo: PostScriptParameterFailure? = nil,
+    command: Object,
+    savedOperands: OperandStack
+  ) async throws {
+    let invocation = try makeErrorInvocation(
+      error: error,
+      errorInfo: errorInfo,
+      command: error.isExternal ? .null : command
+    )
 
     if !error.isExternal {
       operands = savedOperands
@@ -444,7 +484,11 @@ public actor Context {
     try await executeErrorHandler(handler)
   }
 
-  private func makeErrorInvocation(error: Error, command: Object) throws -> ErrorInvocation {
+  private func makeErrorInvocation(
+    error: Error,
+    errorInfo: PostScriptParameterFailure?,
+    command: Object
+  ) throws -> ErrorInvocation {
     let operandStack = Array(try operands.peek(count: operands.depth).reversed())
     let executionStack = Array(execution.map(\.source).reversed())
     let dictionaryStack = Array(try dictionaries.peek(count: dictionaries.depth).reversed())
@@ -452,6 +496,7 @@ public actor Context {
     return ErrorInvocation(
       error: error,
       command: command,
+      errorInfo: errorInfo,
       operandStack: operandStack,
       executionStack: executionStack,
       dictionaryStack: dictionaryStack
@@ -509,7 +554,10 @@ public actor Context {
     try errorState.updateObject(.boolean(true), forKey: "newerror")
     try errorState.updateObject(.literalName(errorName), forKey: "errorname")
     try errorState.updateObject(invocation.command, forKey: "command")
-    try errorState.updateObject(.null, forKey: "errorinfo")
+    let errorInfo = try invocation.errorInfo.map {
+      try makeLocalArray([$0.key, $0.value ?? .null])
+    } ?? .null
+    try errorState.updateObject(errorInfo, forKey: "errorinfo")
 
     // A VMerror handler must itself be able to run when no composite allocation is possible.
     if recordStacks.value, invocation.error != .vmError {
@@ -780,8 +828,9 @@ public actor Context {
     fileReadAhead.removeAll()
   }
 
-  func beginJob(persistent: Bool) throws {
+  func beginJob(persistent: Bool, authorization: JobAuthorizationOutcome) throws {
     precondition(jobLifecycle == nil)
+    precondition(authorization != .denied)
     // Standard category implementations are part of the environment's initial VM, even when
     // their backing dictionaries are created lazily for the first job.
     try environment.ensureResourcesInitialized()
@@ -792,6 +841,7 @@ public actor Context {
     resourceLoadTransactions.append([])
     jobLifecycle = JobLifecycle(
       persistent: persistent,
+      authorization: authorization,
       snapshot: snapshot,
       startSaveDepth: saveDepth,
       localBoundary: localBoundary,
@@ -826,10 +876,10 @@ public actor Context {
     languageSaves.removeAll()
   }
 
-  func transitionJob(persistent: Bool) async throws {
+  func transitionJob(persistent: Bool, authorization: JobAuthorizationOutcome) async throws {
     let rootExecution = Array(execution).last
     try await finishJob()
-    try beginJob(persistent: persistent)
+    try beginJob(persistent: persistent, authorization: authorization)
     try await prepareIdiomResources()
     if let rootExecution {
       execution = ExecutionStack([rootExecution])

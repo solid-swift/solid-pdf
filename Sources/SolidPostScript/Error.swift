@@ -8,7 +8,7 @@
 import Foundation
 
 /// An error reported while scanning or executing PostScript.
-public enum Error: Swift.Error, Equatable {
+public enum Error: Swift.Error, Equatable, Sendable {
 
   /// An PostScript internal interpreter error.
   public enum InternalInterpreterError: Equatable, Sendable {

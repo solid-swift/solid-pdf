@@ -99,12 +99,21 @@ public final class InterpreterEnvironment: Sendable {
     return try await hostConfiguration.startupProgramProvider.startupProgram(for: mode)
   }
 
-  func authorize(_ request: JobAuthorizationRequest) async throws -> Bool {
+  func authorize(_ request: JobAuthorizationRequest) async throws -> JobAuthorizationOutcome {
     if let provider = hostConfiguration.jobAuthorizationProvider {
-      return try await provider.authorize(request)
+      if let outcomeProvider = provider as? any JobAuthorizationOutcomeProvider {
+        return try await outcomeProvider.authorizationOutcome(for: request)
+      }
+      return try await provider.authorize(request) ? .ordinary : .denied
     }
     return state.withLock { state in
-      request.candidate == state.startJobPassword || request.candidate == state.systemPassword
+      if state.systemPassword.isEmpty || request.candidate == state.systemPassword {
+        return .administrator
+      }
+      if state.startJobPassword.isEmpty || request.candidate == state.startJobPassword {
+        return .ordinary
+      }
+      return .denied
     }
   }
 
@@ -218,17 +227,31 @@ public final class InterpreterEnvironment: Sendable {
     }
   }
 
-  func updateSystemParameters(from dictionary: DictionaryValue) throws {
-    var entries: [String: Object] = [:]
+  func updateSystemParameters(
+    from dictionary: DictionaryValue,
+    administrator: Bool = false
+  ) throws {
+    try dictionary.access.check(.read)
+    var entries: [String: (key: Object, value: Object)] = [:]
     try dictionary.forEachUnchecked { key, value in
-      entries[try key.value(as: NameValue.self).value] = value
+      let name = try PostScriptParameterFailure.wrapping(key: key, value: value) {
+        try key.value(as: NameValue.self).value
+      }
+      entries[name] = (key, value)
     }
 
     let factoryOnly = Set(entries.keys).subtracting(["Password"]) == ["FactoryDefaults"]
     try state.withLock { state in
-      if !factoryOnly, !state.systemPassword.isEmpty {
-        guard let password = entries["Password"], try ParameterValue.password(from: password) == state.systemPassword else {
-          throw Error.invalidAccess
+      if !factoryOnly, !administrator, !state.systemPassword.isEmpty {
+        let passwordKey = Object.literalName("Password")
+        guard let password = entries["Password"] else {
+          throw PostScriptParameterFailure(error: .invalidAccess, key: passwordKey, value: nil)
+        }
+        let candidate = try PostScriptParameterFailure.wrapping(key: password.key, value: password.value) {
+          try ParameterValue.password(from: password.value)
+        }
+        guard candidate == state.systemPassword else {
+          throw PostScriptParameterFailure(error: .invalidAccess, key: password.key, value: password.value)
         }
       }
 
@@ -237,9 +260,11 @@ public final class InterpreterEnvironment: Sendable {
       var nextSystemPassword: Data?
       var nextStartJobPassword: Data?
 
-      for (name, object) in entries where name != "Password" {
+      for (name, entry) in entries where name != "Password" {
         if let definition = UserParameterState.definitions[name] {
-          defaultUpdates[name] = try definition.value(from: object)
+          defaultUpdates[name] = try PostScriptParameterFailure.wrapping(key: entry.key, value: entry.value) {
+            try definition.value(from: entry.value)
+          }
           continue
         }
         guard let access = SystemParameterState.definitions[name] else { continue }
@@ -247,9 +272,13 @@ public final class InterpreterEnvironment: Sendable {
         case .readOnly:
           continue
         case .readWrite(let definition):
-          valueUpdates[name] = try definition.value(from: object)
+          valueUpdates[name] = try PostScriptParameterFailure.wrapping(key: entry.key, value: entry.value) {
+            try definition.value(from: entry.value)
+          }
         case .writeOnly:
-          let password = try ParameterValue.password(from: object)
+          let password = try PostScriptParameterFailure.wrapping(key: entry.key, value: entry.value) {
+            try ParameterValue.password(from: entry.value)
+          }
           if name == "SystemParamsPassword" {
             nextSystemPassword = password
           } else {
@@ -289,14 +318,23 @@ public final class InterpreterEnvironment: Sendable {
     return value
   }
 
-  func validateDevicePassword(in entries: [Object: Object]) throws -> [Object: Object] {
+  func validateDevicePassword(
+    in entries: [Object: Object],
+    administrator: Bool = false
+  ) throws -> [Object: Object] {
     var parameters = entries
     let passwordKey = Object.literalName("Password")
     let password = parameters.removeValue(forKey: passwordKey)
     try state.withLock { state in
-      guard !state.systemPassword.isEmpty else { return }
-      guard let password, try ParameterValue.password(from: password) == state.systemPassword else {
-        throw Error.invalidAccess
+      guard !administrator, !state.systemPassword.isEmpty else { return }
+      guard let password else {
+        throw PostScriptParameterFailure(error: .invalidAccess, key: passwordKey, value: nil)
+      }
+      let candidate = try PostScriptParameterFailure.wrapping(key: passwordKey, value: password) {
+        try ParameterValue.password(from: password)
+      }
+      guard candidate == state.systemPassword else {
+        throw PostScriptParameterFailure(error: .invalidAccess, key: passwordKey, value: password)
       }
     }
     return parameters

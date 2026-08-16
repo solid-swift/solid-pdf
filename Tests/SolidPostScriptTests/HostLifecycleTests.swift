@@ -114,12 +114,182 @@ struct HostLifecycleTests {
   }
 
   @Test
+  func emptyPasswordsUsePLRMJobAuthorizationPrecedence() async throws {
+    let defaultEnvironment = InterpreterEnvironment()
+    let defaultSession = InterpreterSession(environment: defaultEnvironment)
+    try await defaultSession.executeJob(
+      content:
+        "true (anything) startjob pop << /Password 1.5 /PrinterName (Administrator) >> setsystemparams"
+    )
+    let administratorName: StringValue = try await Interpreter.result(
+      content: "currentsystemparams /PrinterName get",
+      environment: defaultEnvironment
+    )
+    #expect(administratorName.nameString == "Administrator")
+
+    let ordinaryEnvironment = InterpreterEnvironment()
+    _ = try await Interpreter.execute(
+      content: "<< /SystemParamsPassword (system) /StartJobPassword () >> setsystemparams",
+      environment: ordinaryEnvironment
+    )
+    let ordinarySession = InterpreterSession(environment: ordinaryEnvironment)
+    try await ordinarySession.executeJob(
+      content:
+        "true (anything) startjob pop { << /PrinterName (Denied) >> setsystemparams } stopped not {undefined} if clear"
+    )
+  }
+
+  @Test
+  func systemPasswordStartsAdministratorJobAndPrivilegeEndsWithJob() async throws {
+    let environment = InterpreterEnvironment()
+    _ = try await Interpreter.execute(
+      content: "<< /SystemParamsPassword (system) /StartJobPassword (ordinary) >> setsystemparams",
+      environment: environment
+    )
+    let session = InterpreterSession(environment: environment)
+
+    try await session.executeJob(
+      content: "true (system) startjob pop << /PrinterName (Authorized) >> setsystemparams"
+    )
+    let printerName: StringValue = try await Interpreter.result(
+      content: "currentsystemparams /PrinterName get",
+      environment: environment
+    )
+    #expect(printerName.nameString == "Authorized")
+
+    try await session.executeJob(
+      content:
+        "{ << /PrinterName (Leaked) >> setsystemparams } stopped not {undefined} if clear"
+    )
+    let unchanged: StringValue = try await Interpreter.result(
+      content: "currentsystemparams /PrinterName get",
+      environment: environment
+    )
+    #expect(unchanged.nameString == "Authorized")
+  }
+
+  @Test
+  func passwordsPreserveAllBytesAndUseDecimalIntegerConversion() async throws {
+    let environment = InterpreterEnvironment()
+    _ = try await Interpreter.execute(
+      content: "<< /SystemParamsPassword (sys\000tail) /StartJobPassword -42 >> setsystemparams",
+      environment: environment
+    )
+    let session = InterpreterSession(environment: environment)
+
+    try await session.executeJob(
+      content: "true (sys\000) startjob {undefined} if true (SYS\000tail) startjob {undefined} if"
+    )
+    try await session.executeJob(
+      content:
+        "true -42 startjob pop $error /recordstacks false put { << /PrinterName (Denied) >> setsystemparams } stopped clear"
+    )
+    try await session.executeJob(
+      content: "true (sys\000tail) startjob pop << /PrinterName (Exact) >> setsystemparams"
+    )
+  }
+
+  @Test
+  func authorizationOutcomeProvidersCanGrantAdministratorJobs() async throws {
+    let legacyEnvironment = InterpreterEnvironment(
+      hostConfiguration: InterpreterHostConfiguration(
+        jobAuthorizationProvider: RecordingAuthorizer(result: true)
+      )
+    )
+    _ = try await Interpreter.execute(
+      content: "<< /SystemParamsPassword (protected) >> setsystemparams",
+      environment: legacyEnvironment
+    )
+    let legacySession = InterpreterSession(environment: legacyEnvironment)
+    try await legacySession.executeJob(
+      content:
+        "true (ignored) startjob pop { << /PrinterName (Denied) >> setsystemparams } stopped not {undefined} if clear"
+    )
+
+    let outcomeProvider = RecordingOutcomeAuthorizer(outcome: .administrator)
+    let outcomeEnvironment = InterpreterEnvironment(
+      hostConfiguration: InterpreterHostConfiguration(jobAuthorizationProvider: outcomeProvider)
+    )
+    _ = try await Interpreter.execute(
+      content: "<< /SystemParamsPassword (protected) >> setsystemparams",
+      environment: outcomeEnvironment
+    )
+    let outcomeSession = InterpreterSession(environment: outcomeEnvironment)
+    try await outcomeSession.executeJob(
+      content: "true (ignored) startjob pop << /PrinterName (Granted) >> setsystemparams"
+    )
+    #expect(await outcomeProvider.requests.count == 1)
+  }
+
+  @Test
+  func administratorPrivilegeControlsDeviceParameters() async throws {
+    let device = LifecycleParameterizedDevice()
+    let environment = InterpreterEnvironment(fileDevices: FileDevices(devices: [device]))
+    _ = try await Interpreter.execute(
+      content: "<< /SystemParamsPassword (system) /StartJobPassword (ordinary) >> setsystemparams",
+      environment: environment
+    )
+    let session = InterpreterSession(environment: environment)
+
+    try await session.executeJob(
+      content:
+        "true (ordinary) startjob pop $error /recordstacks false put { (%lifecycle%) << /Value 1 >> setdevparams } stopped not {undefined} if clear"
+    )
+    #expect(try device.value() == nil)
+
+    try await session.executeJob(
+      content: "true (system) startjob pop (%lifecycle%) << /Value 2 >> setdevparams"
+    )
+    #expect(try device.value() == 2)
+
+    try await session.executeJob(
+      content:
+        "$error /recordstacks false put { (%lifecycle%) << /Value 3 >> setdevparams } stopped not {undefined} if clear"
+    )
+    #expect(try device.value() == 2)
+  }
+
+  @Test
   func serverDictionaryAndExitServerUseJobLifecycle() async throws {
     let session = InterpreterSession()
     try await session.executeJob(
       content: "serverdict type /dicttype ne {undefined} if serverdict begin () exitserver /installed true def"
     )
     try await session.executeJob(content: "installed not {undefined} if")
+  }
+
+  @Test
+  func exitServerUsesTheSameEmptyPasswordAuthorizationOutcomes() async throws {
+    let administratorEnvironment = InterpreterEnvironment()
+    let administratorSession = InterpreterSession(environment: administratorEnvironment)
+    try await administratorSession.executeJob(
+      content:
+        """
+        serverdict begin (anything) exitserver
+        << /SystemParamsPassword (protected) >> setsystemparams
+        << /PrinterName (Administrator) >> setsystemparams
+        """
+    )
+    let administratorName: StringValue = try await Interpreter.result(
+      content: "currentsystemparams /PrinterName get",
+      environment: administratorEnvironment
+    )
+    #expect(administratorName.nameString == "Administrator")
+
+    let ordinaryEnvironment = InterpreterEnvironment()
+    _ = try await Interpreter.execute(
+      content: "<< /SystemParamsPassword (protected) /StartJobPassword () >> setsystemparams",
+      environment: ordinaryEnvironment
+    )
+    let ordinarySession = InterpreterSession(environment: ordinaryEnvironment)
+    try await ordinarySession.executeJob(
+      content:
+        """
+        serverdict begin (anything) exitserver
+        $error /recordstacks false put
+        { << /PrinterName (Denied) >> setsystemparams } stopped not {undefined} if clear
+        """
+    )
   }
 
   @Test
@@ -341,6 +511,44 @@ private actor RecordingAuthorizer: JobAuthorizationProvider {
   func authorize(_ request: JobAuthorizationRequest) async throws -> Bool {
     requests.append(request)
     return result
+  }
+}
+
+private actor RecordingOutcomeAuthorizer: JobAuthorizationOutcomeProvider {
+  private let outcome: JobAuthorizationOutcome
+  private(set) var requests: [JobAuthorizationRequest] = []
+
+  init(outcome: JobAuthorizationOutcome) {
+    self.outcome = outcome
+  }
+
+  func authorizationOutcome(for request: JobAuthorizationRequest) async throws -> JobAuthorizationOutcome {
+    requests.append(request)
+    return outcome
+  }
+}
+
+private final class LifecycleParameterizedDevice: ParameterizedFileDevice, Sendable {
+  let name = "lifecycle"
+  let searched = false
+  private let parameters = Mutex<[Object: Object]>([:])
+
+  func open(name: String, mode: File.Mode, openMethod: OpenMethod) throws -> File {
+    throw Error.undefinedFilename
+  }
+
+  func currentParameters() throws -> [Object: Object] {
+    parameters.withLock { $0 }
+  }
+
+  func setParameters(_ parameters: [Object: Object]) throws {
+    self.parameters.withLock { $0 = parameters }
+  }
+
+  func value() throws -> Int32? {
+    try parameters.withLock { parameters in
+      try parameters["Value"]?.value(as: IntegerValue.self).value
+    }
   }
 }
 

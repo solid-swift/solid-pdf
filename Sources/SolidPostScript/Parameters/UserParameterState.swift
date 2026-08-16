@@ -69,11 +69,16 @@ struct UserParameterState: Equatable, Sendable {
   }
 
   mutating func update(from dictionary: DictionaryValue) throws {
+    try dictionary.access.check(.read)
     var updates: [String: ParameterValue] = [:]
     try dictionary.forEachUnchecked { key, object in
-      let name = try key.value(as: NameValue.self).value
+      let name = try PostScriptParameterFailure.wrapping(key: key, value: object) {
+        try key.value(as: NameValue.self).value
+      }
       guard let definition = Self.definitions[name] else { return }
-      updates[name] = try definition.value(from: object)
+      updates[name] = try PostScriptParameterFailure.wrapping(key: key, value: object) {
+        try definition.value(from: object)
+      }
     }
     values.merge(updates) { _, replacement in replacement }
   }

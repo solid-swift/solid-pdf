@@ -6,5 +6,8 @@ public protocol ParameterizedFileDevice: FileDevice {
   func currentParameters() throws -> [Object: Object]
 
   /// Atomically applies the supplied device parameter values.
+  ///
+  /// Parameter-specific failures should be reported with ``PostScriptParameterFailure``
+  /// so the interpreter can populate `$error /errorinfo`.
   func setParameters(_ parameters: [Object: Object]) throws
 }

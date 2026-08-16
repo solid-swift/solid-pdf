@@ -127,7 +127,8 @@ struct InterpreterParameterTests {
     #expect(printer.nameString == "Allowed")
 
     let factory: BooleanValue = try await Interpreter.result(
-      content: "<< /FactoryDefaults true >> setsystemparams currentsystemparams /FactoryDefaults get",
+      content:
+        "<< /FactoryDefaults true /Password 1.5 >> setsystemparams currentsystemparams /FactoryDefaults get",
       environment: environment
     )
     #expect(factory.value)

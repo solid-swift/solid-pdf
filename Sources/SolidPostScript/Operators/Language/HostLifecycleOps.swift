@@ -102,14 +102,14 @@ extension Operators {
         candidate: candidate,
         persistent: persistent
       )
-      let authorized = try await authorize(request, context: context)
-      guard authorized else {
+      let authorization = try await authorize(request, context: context)
+      guard authorization != .denied else {
         context.operands.push(.boolean(false))
         return
       }
 
       let priorPersistent = job.persistent
-      try await context.transitionJob(persistent: persistent)
+      try await context.transitionJob(persistent: persistent, authorization: authorization)
       context.operands.push(.boolean(true))
       try await context.withUserTimeSuspended {
         try await context.environment.emit(.jobFinished(persistent: priorPersistent))
@@ -132,15 +132,19 @@ extension Operators {
       )
       guard context.jobServerEnabled,
         let job = context.jobLifecycle,
-        context.saveDepth == job.startSaveDepth,
-        try await authorize(request, context: context)
+        context.saveDepth == job.startSaveDepth
       else {
+        throw Error.invalidAccess
+      }
+
+      let authorization = try await authorize(request, context: context)
+      guard authorization != .denied else {
         throw Error.invalidAccess
       }
 
       let priorPersistent = job.persistent
       let suppressNotice = try context.binaryErrorReportingEnabled()
-      try await context.transitionJob(persistent: true)
+      try await context.transitionJob(persistent: true, authorization: authorization)
       try await context.withUserTimeSuspended {
         try await context.environment.emit(.jobFinished(persistent: priorPersistent))
         try await context.environment.emit(.jobStarted(persistent: true))
@@ -181,7 +185,7 @@ extension Operators {
   private static func authorize(
     _ request: JobAuthorizationRequest,
     context: isolated Context
-  ) async throws -> Bool {
+  ) async throws -> JobAuthorizationOutcome {
     do {
       return try await context.withUserTimeSuspended {
         try await context.environment.authorize(request)

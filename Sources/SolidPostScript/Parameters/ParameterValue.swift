@@ -39,10 +39,7 @@ enum ParameterValue: Equatable, Sendable {
   static func password(from object: Object) throws -> Data {
     switch object.value {
     case let value as StringValue:
-      guard case .string(let data) = try string(from: Object(value: value)) else {
-        preconditionFailure("String conversion must produce a string parameter")
-      }
-      return data
+      return try value.characters(in: value.range)
     case let value as IntegerValue:
       return Data(String(value.value).utf8)
     default:

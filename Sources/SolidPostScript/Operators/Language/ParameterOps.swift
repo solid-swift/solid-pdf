@@ -61,7 +61,10 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
       let dictionary: DictionaryValue = try context.operands.popAs()
-      try context.environment.updateSystemParameters(from: dictionary)
+      try context.environment.updateSystemParameters(
+        from: dictionary,
+        administrator: context.isSystemAdministratorJob
+      )
     }
   }
 
@@ -98,12 +101,23 @@ extension Operators {
       let identifier = try identifierObject.value(as: StringValue.self)
       let device = try context.fileDevices.device(named: deviceName(identifier))
 
+      try dictionary.access.check(.read)
       var entries: [Object: Object] = [:]
-      try dictionary.forEachUnchecked { entries[$0] = $1 }
-      entries = try context.environment.validateDevicePassword(in: entries)
+      try dictionary.forEachUnchecked { key, value in
+        _ = try PostScriptParameterFailure.wrapping(key: key, value: value) {
+          try key.value(as: NameValue.self)
+        }
+        entries[key] = value
+      }
+      entries = try context.environment.validateDevicePassword(
+        in: entries,
+        administrator: context.isSystemAdministratorJob
+      )
 
       guard let parameterized = device as? any ParameterizedFileDevice else {
-        guard entries.isEmpty else { throw Error.undefined }
+        if let entry = entries.first {
+          throw PostScriptParameterFailure(error: .undefined, key: entry.key, value: entry.value)
+        }
         return
       }
       try parameterized.setParameters(entries)

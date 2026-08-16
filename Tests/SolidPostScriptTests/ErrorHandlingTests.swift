@@ -112,6 +112,106 @@ struct ErrorHandlingTests {
   }
 
   @Test
+  func `parameter errors record the offending key and value`() async throws {
+    let results = try await Interpreter.results(
+      content:
+        """
+        $error /recordstacks false put
+        { << /MaxOpStack (bad) >> setuserparams } stopped clear
+        $error /errorinfo get
+        $error /command get /setuserparams load eq
+        $error /errorname get
+        """
+    )
+
+    expectEqual(try results[0].value(as: NameValue.self).value, "typecheck")
+    expectEqual(try results[1].value(as: BooleanValue.self).value, true)
+    let errorInfo = try results[2].value(as: ArrayValue.self)
+    expectEqual(errorInfo.count, 2)
+    expectEqual(try errorInfo.object(at: 0).value(as: NameValue.self).value, "MaxOpStack")
+    expectEqual(try errorInfo.object(at: 1).value(as: StringValue.self).string, "bad")
+  }
+
+  @Test
+  func `missing password records the expected key with null`() async throws {
+    let environment = InterpreterEnvironment()
+    _ = try await Interpreter.execute(
+      content: "<< /SystemParamsPassword (secret) >> setsystemparams",
+      environment: environment
+    )
+
+    let results = try await Interpreter.results(
+      content:
+        """
+        { << /PrinterName (Denied) >> setsystemparams } stopped clear
+        $error /errorinfo get
+        $error /errorname get
+        """,
+      environment: environment
+    )
+
+    expectEqual(try results[0].value(as: NameValue.self).value, "invalidaccess")
+    let errorInfo = try results[1].value(as: ArrayValue.self)
+    expectEqual(try errorInfo.object(at: 0).value(as: NameValue.self).value, "Password")
+    expectTrue(try errorInfo.object(at: 1).value is NullValue)
+  }
+
+  @Test
+  func `nonparameter failures clear prior error information`() async throws {
+    let result: NullValue = try await Interpreter.result(
+      content:
+        """
+        { << /MaxOpStack (bad) >> setuserparams } stopped clear
+        {doesnotexist} stopped clear
+        $error /errorinfo get
+        """
+    )
+
+    expectTrue(result == .instance)
+  }
+
+  @Test
+  func `device providers can report structured parameter failures`() async throws {
+    let environment = InterpreterEnvironment(
+      fileDevices: FileDevices(devices: [RejectingParameterizedDevice()])
+    )
+    let errorInfo: ArrayValue = try await Interpreter.result(
+      content:
+        """
+        { (%reject%) << /BufferSize -1 >> setdevparams } stopped clear
+        $error /errorinfo get
+        """,
+      environment: environment
+    )
+
+    expectEqual(try errorInfo.object(at: 0).value(as: NameValue.self).value, "BufferSize")
+    expectEqual(try errorInfo.object(at: 1).value(as: IntegerValue.self).value, -1)
+  }
+
+  @Test
+  func `parameter keys are validated but dictionary access errors have no entry metadata`() async throws {
+    let invalidKeyInfo: ArrayValue = try await Interpreter.result(
+      content:
+        """
+        { << 1 2 >> setuserparams } stopped clear
+        $error /errorinfo get
+        """
+    )
+    expectEqual(try invalidKeyInfo.object(at: 0).value(as: IntegerValue.self).value, 1)
+    expectEqual(try invalidKeyInfo.object(at: 1).value(as: IntegerValue.self).value, 2)
+
+    let inaccessible: NullValue = try await Interpreter.result(
+      content:
+        """
+        /parameters << /MaxOpStack (bad) >> noaccess def
+        { parameters setuserparams } stopped clear
+        $error /errorinfo get
+        """
+    )
+    expectTrue(inaccessible == .instance)
+  }
+
+  @Test
   func `handleerror clears state without producing output`() async throws {
     let results = try await Interpreter.results(
       content:
@@ -289,6 +389,22 @@ struct ErrorHandlingTests {
       content: content,
       operatorValue: ExternalErrorOperator(error: error)
     )
+  }
+}
+
+private struct RejectingParameterizedDevice: ParameterizedFileDevice {
+  let name = "reject"
+  let searched = false
+
+  func open(name: String, mode: File.Mode, openMethod: OpenMethod) throws -> File {
+    throw Error.undefinedFilename
+  }
+
+  func currentParameters() throws -> [Object: Object] { [:] }
+
+  func setParameters(_ parameters: [Object: Object]) throws {
+    let key = Object.literalName("BufferSize")
+    throw PostScriptParameterFailure(error: .rangeCheck, key: key, value: parameters[key])
   }
 }
 
