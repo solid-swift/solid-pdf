@@ -23,6 +23,15 @@ struct OperatorRegistrationTests {
   }
 
   @Test
+  func registersFileSystemOperators() async throws {
+    let systemDictionary: DictionaryValue = try await Interpreter.result(content: "systemdict")
+
+    for name in ["deletefile", "renamefile", "filenameforall"] {
+      #expect(try systemDictionary.object(forKey: .literalName(name)).type == .operator)
+    }
+  }
+
+  @Test
   func currentFileReturnsLiteralExecutionFile() async throws {
     let results = try await Interpreter.results(content: "currentfile")
     #expect(results.count == 1)

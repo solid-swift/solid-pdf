@@ -24,6 +24,9 @@ extension Operators {
     FlushStd.instance,
     Reset.instance,
     Status.instance,
+    DeleteFile.instance,
+    RenameFile.instance,
+    FilenameForAll.instance,
     GetPosition.instance,
     SetPosition.instance,
     CurrentFile.instance,
@@ -314,11 +317,92 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
 
-      let file: FileValue = try context.operands.popAs()
+      let operand = try context.operands.pop()
+      if let file = operand.value as? FileValue {
+        try file.checkReadable()
+        context.operands.push(.boolean(!file.file.isClosed))
+        return
+      }
 
-      try file.checkReadable()
+      let name = try operand.value(as: StringValue.self)
+      try name.access.check(.read)
 
-      context.operands.push(.boolean(!file.file.isClosed))
+      guard let status = try? context.fileDevices.status(name: name.string) else {
+        context.operands.push(.boolean(false))
+        return
+      }
+
+      context.operands.push(
+        .integer(status.pages),
+        .integer(status.bytes),
+        .integer(status.referenced),
+        .integer(status.created),
+        .boolean(true)
+      )
+    }
+  }
+
+  /// Implements the PostScript `deletefile` operator.
+  public enum DeleteFile: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["deletefile"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+
+      let name: StringValue = try context.operands.popAs()
+      try name.access.check(.read)
+      try context.fileDevices.delete(name: name.string)
+    }
+  }
+
+  /// Implements the PostScript `renamefile` operator.
+  public enum RenameFile: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["renamefile"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+
+      let (newName, oldName) = try context.operands.popAs((StringValue, StringValue).self)
+      try oldName.access.check(.read)
+      try newName.access.check(.read)
+      try context.fileDevices.rename(name: oldName.string, to: newName.string)
+    }
+  }
+
+  /// Implements the PostScript `filenameforall` operator.
+  public enum FilenameForAll: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["filenameforall"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+
+      let (scratchObject, proc, templateObject) = try context.operands.pop3()
+      let scratch = try scratchObject.value(as: StringValue.self)
+      let template = try templateObject.value(as: StringValue.self)
+      try scratch.access.check(.write)
+      try template.access.check(.read)
+      guard (proc.type == .array || proc.type == .packedArray), proc.kind == .executable else {
+        throw Error.typeCheck
+      }
+
+      let names = try context.fileDevices.fileNames(matching: template.string)
+      for name in names {
+        guard let bytes = name.data(using: .isoLatin1), bytes.count <= scratch.count else {
+          throw Error.rangeCheck
+        }
+        try scratch.updateCharacters(bytes, startingAt: 0)
+        let argument = try Object.string(sharing: scratch, subRange: 0..<UInt(bytes.count), kind: .literal)
+        if try !context.execute(proc: proc, ops: [argument]) { break }
+      }
     }
   }
 

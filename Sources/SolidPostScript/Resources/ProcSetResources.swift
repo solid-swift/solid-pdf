@@ -87,38 +87,3 @@ public final class ProcSetResources: ResourceCategory {
 struct Weak<Value: AnyObject> {
   weak var value: Value?
 }
-
-extension String {
-  var asTemplateRegex: Regex<AnyRegexOutput>? {
-    var pattern = ""
-    var escaped = false
-    for character in self {
-      if escaped {
-        pattern.append(character.regexEscaped)
-        escaped = false
-      } else {
-        switch character {
-        case "\\":
-          escaped = true
-        case "*":
-          pattern.append(".*")
-        case "?":
-          pattern.append(".")
-        default:
-          pattern.append(character.regexEscaped)
-        }
-      }
-    }
-    if escaped {
-      pattern.append(#"\\"#)
-    }
-    return try? Regex(pattern)
-  }
-
-}
-
-private extension Character {
-  var regexEscaped: String {
-    "\\.^$|()[]{}+".contains(self) ? "\\\(self)" : String(self)
-  }
-}

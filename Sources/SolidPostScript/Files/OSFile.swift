@@ -201,60 +201,65 @@ public final class OSFile: File, Sendable {
   }
 
   private static func openExistingForRead(fileName: String) throws -> (FileHandle, Mode) {
-
-    guard let fileHandle = FileHandle(forReadingAtPath: fileName) else {
-      throw Error.undefinedFilename
+    do {
+      return (try FileHandle(forReadingFrom: URL(fileURLWithPath: fileName)), .read)
+    } catch {
+      throw FileSystemErrorTranslation.translate(error)
     }
-
-    return (fileHandle, .read)
   }
 
   private static func openNewForWrite(fileName: String) throws -> (FileHandle, Mode) {
-
-    guard
-      FileManager.default.createFile(atPath: fileName, contents: Data()),
-      let fileHandle = FileHandle(forWritingAtPath: fileName)
-    else {
-      throw Error.undefinedFilename
+    let url = URL(fileURLWithPath: fileName)
+    do {
+      try Data().write(to: url)
+      return (try FileHandle(forWritingTo: url), .write)
+    } catch {
+      throw FileSystemErrorTranslation.translate(error)
     }
-
-    return (fileHandle, .write)
   }
 
   private static func openForWrite(fileName: String) throws -> (FileHandle, Mode) {
-
-    if let fileHandle = FileHandle(forWritingAtPath: fileName) {
-      return (fileHandle, .write)
+    do {
+      let handle = try FileHandle(forWritingTo: URL(fileURLWithPath: fileName))
+      try handle.seekToEnd()
+      return (handle, .write)
+    } catch {
+      guard FileSystemErrorTranslation.translate(error) == .undefinedFilename else {
+        throw FileSystemErrorTranslation.translate(error)
+      }
+      return try openNewForWrite(fileName: fileName)
     }
-
-    return try openNewForWrite(fileName: fileName)
   }
 
   private static func openExistingForReadWrite(fileName: String) throws -> (FileHandle, Mode) {
-
-    guard let fileHandle = FileHandle(forUpdatingAtPath: fileName) else {
-      throw Error.undefinedFilename
+    do {
+      return (try FileHandle(forUpdating: URL(fileURLWithPath: fileName)), .readWrite)
+    } catch {
+      throw FileSystemErrorTranslation.translate(error)
     }
-
-    return (fileHandle, .readWrite)
   }
 
   private static func openNewForReadWrite(fileName: String) throws -> (FileHandle, Mode) {
-
-    guard FileManager.default.createFile(atPath: fileName, contents: Data()) else {
-      throw Error.undefinedFilename
+    let url = URL(fileURLWithPath: fileName)
+    do {
+      try Data().write(to: url)
+      return (try FileHandle(forUpdating: url), .readWrite)
+    } catch {
+      throw FileSystemErrorTranslation.translate(error)
     }
-
-    return try openExistingForReadWrite(fileName: fileName)
   }
 
   private static func openForReadWrite(fileName: String) throws -> (FileHandle, Mode) {
-
-    if let fileHandle = FileHandle(forUpdatingAtPath: fileName) {
-      return (fileHandle, .readWrite)
+    do {
+      let handle = try FileHandle(forUpdating: URL(fileURLWithPath: fileName))
+      try handle.seekToEnd()
+      return (handle, .readWrite)
+    } catch {
+      guard FileSystemErrorTranslation.translate(error) == .undefinedFilename else {
+        throw FileSystemErrorTranslation.translate(error)
+      }
+      return try openNewForReadWrite(fileName: fileName)
     }
-
-    return try openNewForReadWrite(fileName: fileName)
   }
 }
 
