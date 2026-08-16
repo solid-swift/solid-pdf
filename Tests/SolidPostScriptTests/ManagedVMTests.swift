@@ -111,7 +111,7 @@ struct ManagedVMTests {
     }
 
     #expect(local.chargedBytes == 32)
-    #expect(objects[0] == objects[1])
+    #expect(objects[0] != objects[1])
   }
 
   @Test

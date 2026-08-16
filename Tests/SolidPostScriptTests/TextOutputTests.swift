@@ -51,6 +51,17 @@ struct TextOutputTests {
   }
 
   @Test
+  func doubleEqualsDoesNotTreatADisjointSharedIntervalAsRecursive() async throws {
+    let sink = DataSink()
+    _ = try await Interpreter.execute(
+      content: "/array [null 1] def array 0 array 1 1 getinterval put array ==",
+      environment: InterpreterEnvironment(standardOutput: sink)
+    )
+
+    #expect(String(data: sink.data, encoding: .isoLatin1) == "[[1] 1]\n")
+  }
+
+  @Test
   func stackAndPStackPrintTopmostFirstWithoutMutation() async throws {
     let valueSink = DataSink()
     let valueResults = try await Interpreter.results(

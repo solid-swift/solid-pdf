@@ -15,7 +15,7 @@ struct PostScriptTextFormatter {
   private static let maximumDepth = 64
 
   let mode: Mode
-  private var activeArrays = Set<ObjectIdentifier>()
+  private var activeArrays = Set<ArrayViewIdentity>()
 
   init(mode: Mode) {
     self.mode = mode
@@ -66,13 +66,16 @@ struct PostScriptTextFormatter {
       return escapedString(characters)
     case let value as ArrayValue:
       guard value.access.isReadAllowed, depth < Self.maximumDepth else { return opaque(object) }
-      let identity = value.snapshotIdentity
+      let identity = value.arrayViewIdentity
       guard activeArrays.insert(identity).inserted else { return opaque(object) }
       defer { activeArrays.remove(identity) }
       guard let objects = try? value.objects(in: value.range, for: .read) else { return opaque(object) }
       return collection(Array(objects), kind: object.kind, depth: depth)
     case let value as PackedArrayValue:
       guard value.access.isReadAllowed, depth < Self.maximumDepth else { return opaque(object) }
+      let identity = value.arrayViewIdentity
+      guard activeArrays.insert(identity).inserted else { return opaque(object) }
+      defer { activeArrays.remove(identity) }
       return collection(value.elements, kind: object.kind, depth: depth)
     case let value as any OperatorValue:
       let name = value.systemDictionaryNames.first?.valueString ?? "nostringval"

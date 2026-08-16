@@ -66,6 +66,44 @@ struct IdiomRecognitionTests {
   }
 
   @Test
+  func bindUpdatesOnlyTheSelectedOrdinaryArrayInterval() async throws {
+    let result: BooleanValue = try await Interpreter.result(
+      content:
+        """
+        /full { before 1 2 add after } def
+        /interval /full load 1 3 getinterval def
+        /interval load dup bind eq
+        /full load 3 get type /operatortype eq and
+        /full load 0 get type /nametype eq and
+        /full load 4 get type /nametype eq and
+        """
+    )
+    #expect(result.value)
+  }
+
+  @Test
+  func bindDistinguishesPackedIntervalsSharingOneBacking() async throws {
+    let result: BooleanValue = try await Interpreter.result(
+      content:
+        """
+        true setpacking
+        /base { 1 2 add 3 4 sub } def
+        /first /base load 0 3 getinterval def
+        /second /base load 3 3 getinterval def
+        false setpacking
+        /outer 2 array cvx def
+        /outer load 0 /first load put
+        /outer load 1 /second load put
+        /outer load bind pop
+        /outer load 0 get /outer load 1 get ne
+        /outer load 0 get 2 get type /operatortype eq and
+        /outer load 1 get 2 get type /operatortype eq and
+        """
+    )
+    #expect(result.value)
+  }
+
+  @Test
   func packedArrayIdentityAndBindingParticipateInRestore() async throws {
     let identity: [BooleanValue] = try await Interpreter.result(
       content: "1 1 packedarray dup eq 1 1 packedarray 1 1 packedarray eq",
@@ -110,6 +148,25 @@ struct IdiomRecognitionTests {
         /Set << /mixed [ /template load /substitute load ] >> /IdiomSet defineresource pop
         << /IdiomRecognition true >> setuserparams
         { 4 /answer { 1 2 add } } bind exec
+        """
+    )
+    #expect(result.value == 42)
+  }
+
+  @Test
+  func idiomRecognitionComparesOnlySelectedProcedureIntervals() async throws {
+    let result: IntegerValue = try await Interpreter.result(
+      content:
+        """
+        << /IdiomRecognition false >> setuserparams
+        /templateBacking { templatePrefix 1 2 add templateSuffix } def
+        /template /templateBacking load 1 3 getinterval bind def
+        /substitute { 42 } bind def
+        /Set << /entry [ /template load /substitute load ] >> /IdiomSet defineresource pop
+        << /IdiomRecognition true >> setuserparams
+        /candidateBacking { candidatePrefix 1 2 add candidateSuffix } def
+        /candidate /candidateBacking load 1 3 getinterval def
+        /candidate load bind exec
         """
     )
     #expect(result.value == 42)

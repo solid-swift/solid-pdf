@@ -64,14 +64,9 @@ extension Operators {
       )
     }
 
-    private struct BindingIdentity: Hashable {
-      let storage: ObjectIdentifier
-      let range: Range<Int>?
-    }
-
     private struct BindingState {
-      var active: Set<BindingIdentity> = []
-      var results: [BindingIdentity: Object] = [:]
+      var active: Set<ArrayViewIdentity> = []
+      var results: [ArrayViewIdentity: Object] = [:]
     }
 
     private func bind(
@@ -109,10 +104,8 @@ extension Operators {
       return result
     }
 
-    private func bindingIdentity(of collection: any CollectionValue) -> BindingIdentity? {
-      guard let identifiable = collection as? SnapshotIdentifiableValue else { return nil }
-      let range = (collection as? ArrayValue)?.refRange
-      return BindingIdentity(storage: identifiable.snapshotIdentity, range: range)
+    private func bindingIdentity(of collection: any CollectionValue) -> ArrayViewIdentity? {
+      (collection as? any SharedBackingArrayValue)?.arrayViewIdentity
     }
 
     private func boundElements(

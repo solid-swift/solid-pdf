@@ -82,7 +82,7 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
 
-      let op: DictionaryValue = try context.operands.peekAs()
+      let op: DictionaryValue = try context.operands.popAs()
       try op.access.check(.read)
       context.operands.push(try NumericSemantics.integer(validating: op.capacity))
     }

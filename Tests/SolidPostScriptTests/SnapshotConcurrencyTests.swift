@@ -29,6 +29,34 @@ struct SnapshotConcurrencyTests {
     #expect(restoredValue == 2, "Expected restored array value 2, got \(restoredValue)")
   }
 
+  @Test func intervalSnapshotRestoresTheCompleteSharedBacking() async throws {
+    let array = try ArrayValue(elements: [1, 2, 3], access: .unlimited, vm: .local)
+    let interval = try ArrayValue(sharing: array, subRange: 1..<2)
+    let context = Context()
+    let snapshot = await context.snapshot(of: Object(value: interval))
+
+    try array.updateObject(10, at: 0)
+    try array.updateObject(20, at: 1)
+    try array.updateObject(30, at: 2)
+    try await snapshot.restore(to: context)
+
+    let restored = try (0..<array.count).map { try array.object(at: $0).value(as: IntegerValue.self).value }
+    #expect(restored == [1, 2, 3])
+  }
+
+  @Test func adoptingAnIntervalAdoptsAllocationsRetainedOutsideItsView() async throws {
+    let nested = try ArrayValue(elements: [1], access: .unlimited, vm: .local)
+    let array = try ArrayValue(elements: [Object(value: nested), 2], access: .unlimited, vm: .local)
+    let interval = try ArrayValue(sharing: array, subRange: 1..<2)
+    let context = Context()
+
+    _ = await context.snapshot(of: Object(value: interval))
+    let localSpace = await context.localVMAllocationSpace
+
+    #expect(array.allocation.membership(in: localSpace)?.isValid == true)
+    #expect(nested.allocation.membership(in: localSpace)?.isValid == true)
+  }
+
   @Test func restoreDoesNotChangeGlobalContainers() async throws {
     let global = try ArrayValue(elements: [1], access: .unlimited, vm: .global)
     let context = Context()

@@ -2,18 +2,13 @@ import Foundation
 import SolidCore
 
 struct BinaryObjectSequenceEncoder {
-  private struct ArrayKey: Hashable {
-    let identity: ObjectIdentifier
-    let range: Range<Int>
-  }
-
   private enum PayloadKey: Hashable {
     case string(ObjectIdentifier, Range<Int>)
     case name(String)
   }
 
   private struct ArrayEntry {
-    let key: ArrayKey
+    let key: ArrayViewIdentity
     let value: ArrayValue
   }
 
@@ -26,11 +21,11 @@ struct BinaryObjectSequenceEncoder {
   let tag: UInt8
 
   private var arrays: [ArrayEntry] = []
-  private var knownArrays: Set<ArrayKey> = []
-  private var visitingArrays: Set<ArrayKey> = []
+  private var knownArrays: Set<ArrayViewIdentity> = []
+  private var visitingArrays: Set<ArrayViewIdentity> = []
   private var payloads: [PayloadEntry] = []
   private var knownPayloads: Set<PayloadKey> = []
-  private var arrayOffsets: [ArrayKey: UInt32] = [:]
+  private var arrayOffsets: [ArrayViewIdentity: UInt32] = [:]
   private var payloadOffsets: [PayloadKey: UInt32] = [:]
 
   init(format: ObjectFormat, tag: UInt8) {
@@ -102,7 +97,7 @@ struct BinaryObjectSequenceEncoder {
     case .array:
       let array = try object.value(as: ArrayValue.self)
       guard array.count <= UInt(UInt16.max) else { throw Error.limitCheck }
-      let key = ArrayKey(identity: array.snapshotIdentity, range: array.refRange)
+      let key = array.arrayViewIdentity
       if visitingArrays.contains(key) {
         throw Error.limitCheck
       }
@@ -180,7 +175,7 @@ struct BinaryObjectSequenceEncoder {
       writer.appendUInt32(length == 0 ? 0 : offset, order: format.byteOrder)
     case .array:
       let array = try object.value(as: ArrayValue.self)
-      let key = ArrayKey(identity: array.snapshotIdentity, range: array.refRange)
+      let key = array.arrayViewIdentity
       guard let length = UInt16(exactly: array.count), let offset = arrayOffsets[key] else {
         throw Error.limitCheck
       }

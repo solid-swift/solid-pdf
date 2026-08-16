@@ -87,6 +87,70 @@ struct ArrayTests {
   }
 
   @Test
+  func uncheckedTraversalUsesOnlyTheSelectedInterval() throws {
+    let array = try ArrayValue(elements: [1, 2, 3, 4, 5], access: .unlimited, vm: .local)
+    let interval = try ArrayValue(sharing: array, subRange: 1..<4)
+    var values: [Int32] = []
+
+    try interval.forEachUnchecked {
+      values.append(try $0.value(as: IntegerValue.self).value)
+    }
+
+    #expect(values == [2, 3, 4])
+  }
+
+  @Test
+  func arrayEqualityAndHashingUseTheSharedValueAndSelectedRange() throws {
+    let array = try ArrayValue(elements: [1, 2, 3], access: .unlimited, vm: .local)
+    let fullInterval = try ArrayValue(sharing: array, subRange: 0..<3)
+    let firstInterval = try ArrayValue(sharing: array, subRange: 0..<2)
+    let sameFirstInterval = try ArrayValue(sharing: array, subRange: 0..<2)
+    let secondInterval = try ArrayValue(sharing: array, subRange: 1..<3)
+    let distinct = try ArrayValue(elements: [1, 2, 3], access: .unlimited, vm: .local)
+    let empty = try ArrayValue(elements: [], access: .unlimited, vm: .local)
+    let distinctEmpty = try ArrayValue(elements: [], access: .unlimited, vm: .local)
+    var restrictedInterval = firstInterval
+    try restrictedInterval.setAccess(to: .readOnly)
+
+    #expect(Object(value: array) == Object(value: fullInterval))
+    #expect(Object(value: firstInterval) == Object(value: sameFirstInterval))
+    #expect(Object(value: array) != Object(value: firstInterval))
+    #expect(Object(value: firstInterval) != Object(value: secondInterval))
+    #expect(Object(value: array) != Object(value: distinct))
+    #expect(Object(value: empty) == Object(value: distinctEmpty))
+    #expect(
+      Object(value: firstInterval, kind: .literal) == Object(value: restrictedInterval, kind: .executable)
+    )
+    #expect(Set([Object(value: firstInterval), Object(value: sameFirstInterval)]).count == 1)
+    #expect(Set([Object(value: firstInterval), Object(value: secondInterval)]).count == 2)
+    #expect(Set([Object(value: empty), Object(value: distinctEmpty)]).count == 1)
+  }
+
+  @Test
+  func packedArrayEqualityAndHashingUseTheSharedValueAndSelectedRange() throws {
+    let array = try PackedArrayValue(elements: [1, 2, 3], vm: .local)
+    let fullInterval = try PackedArrayValue(sharing: array, subRange: 0..<3)
+    let firstInterval = try PackedArrayValue(sharing: array, subRange: 0..<2)
+    let sameFirstInterval = try PackedArrayValue(sharing: array, subRange: 0..<2)
+    let secondInterval = try PackedArrayValue(sharing: array, subRange: 1..<3)
+    let distinct = try PackedArrayValue(elements: [1, 2, 3], vm: .local)
+    let empty = try PackedArrayValue(elements: [], vm: .local)
+    let distinctEmpty = try PackedArrayValue(elements: [], vm: .local)
+    let ordinaryEmpty = try ArrayValue(elements: [], access: .unlimited, vm: .local)
+
+    #expect(Object(value: array) == Object(value: fullInterval))
+    #expect(Object(value: firstInterval) == Object(value: sameFirstInterval))
+    #expect(Object(value: array) != Object(value: firstInterval))
+    #expect(Object(value: firstInterval) != Object(value: secondInterval))
+    #expect(Object(value: array) != Object(value: distinct))
+    #expect(Object(value: empty) == Object(value: distinctEmpty))
+    #expect(Set([Object(value: firstInterval), Object(value: sameFirstInterval)]).count == 1)
+    #expect(Set([Object(value: firstInterval), Object(value: secondInterval)]).count == 2)
+    #expect(Set([Object(value: empty), Object(value: distinctEmpty)]).count == 1)
+    #expect(Object(value: empty) != Object(value: ordinaryEmpty))
+  }
+
+  @Test
   func testPutInterval() async throws {
     let arr1: ArrayValue = try await Interpreter.result(content: "[(a)(b)(c)(d)(e)] dup 1 [(f)(g)(h)] putinterval")
     expectEqual(arr1.count, 5)
@@ -169,6 +233,12 @@ struct ArrayTests {
   func testForAll() async throws {
     let int: IntegerValue = try await Interpreter.result(content: "0 [13 29 3 -8 21] {add} forall")
     expectEqual(int.value, 58)
+  }
+
+  @Test
+  func forallEnumeratesOnlyTheSelectedInterval() async throws {
+    let int: IntegerValue = try await Interpreter.result(content: "0 [10 1 2 20] 1 2 getinterval {add} forall")
+    #expect(int.value == 3)
   }
 
 }

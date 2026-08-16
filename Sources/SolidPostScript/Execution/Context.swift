@@ -174,6 +174,8 @@ public actor Context {
           try visit(key)
           try visit(value)
         }
+      case let collection as any SharedBackingArrayValue:
+        try collection.forEachBackingUnchecked(visit)
       case let collection as any CollectionValue:
         try collection.forEachUnchecked(visit)
       default:

@@ -40,6 +40,8 @@ extension PackedArrayValue: SnapshotIdentifiableValue {
 
 }
 
+extension PackedArrayValue: SharedBackingArrayValue {}
+
 /// An immutable PostScript packed-array value.
 public struct PackedArrayValue: CollectionValue, CompositeValue, VMStoredCompositeValue {
 
@@ -126,6 +128,11 @@ public struct PackedArrayValue: CollectionValue, CompositeValue, VMStoredComposi
     try elements.forEach(block)
   }
 
+  func forEachBackingUnchecked(_ block: (Object) throws -> Void) rethrows {
+    let elements = ref.uncheckedRead { $0.value.map(\.object) }
+    try elements.forEach(block)
+  }
+
   func replaceElementsForBinding(_ elements: [Object]) throws {
     guard elements.count == refRange.count else { throw Error.rangeCheck }
     try elements.checkStorage(in: vm)
@@ -138,10 +145,7 @@ public struct PackedArrayValue: CollectionValue, CompositeValue, VMStoredComposi
 
   /// Records restorable state in a snapshot builder.
   public func save(to snapshot: Snapshot.Builder) {
-    let elements = ref.uncheckedRead { $0.value.map(\.object) }
-    for element in elements {
-      element.save(to: snapshot)
-    }
+    forEachBackingUnchecked { $0.save(to: snapshot) }
     ref.save(to: snapshot)
   }
 
@@ -163,12 +167,18 @@ public struct PackedArrayValue: CollectionValue, CompositeValue, VMStoredComposi
     guard let other = other as? Self else {
       return false
     }
-    return ref === other.ref
+    if refRange.isEmpty, other.refRange.isEmpty {
+      return true
+    }
+    return arrayViewIdentity == other.arrayViewIdentity
   }
 
   /// Hashes the value into the supplied hasher.
   public func hash(into hasher: inout Hasher) {
-    hasher.combine(ObjectIdentifier(ref))
+    hasher.combine(refRange.isEmpty)
+    if !refRange.isEmpty {
+      hasher.combine(arrayViewIdentity)
+    }
   }
 
   /// A debug representation of this value.

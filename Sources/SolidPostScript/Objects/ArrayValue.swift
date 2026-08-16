@@ -31,6 +31,8 @@ extension ArrayValue: SnapshotIdentifiableValue {
 
 }
 
+extension ArrayValue: SharedBackingArrayValue {}
+
 /// An PostScript array value.
 public struct ArrayValue: CollectionValue, VMStoredCompositeValue {
 
@@ -143,16 +145,18 @@ public struct ArrayValue: CollectionValue, VMStoredCompositeValue {
 
   /// Performs the ``forEachUnchecked`` operation.
   public func forEachUnchecked(_ block: (Object) throws -> Void) rethrows {
+    let elements = ref.uncheckedRead { $0.value[refRange].map(\.object) }
+    try elements.forEach(block)
+  }
+
+  func forEachBackingUnchecked(_ block: (Object) throws -> Void) rethrows {
     let elements = ref.uncheckedRead { $0.value.map(\.object) }
     try elements.forEach(block)
   }
 
   /// Records restorable state in a snapshot builder.
   public func save(to snapshot: Snapshot.Builder) {
-    let elements = ref.uncheckedRead { $0.value.map(\.object) }
-    for element in elements {
-      element.save(to: snapshot)
-    }
+    forEachBackingUnchecked { $0.save(to: snapshot) }
     ref.save(to: snapshot)
   }
 
@@ -176,32 +180,38 @@ public struct ArrayValue: CollectionValue, VMStoredCompositeValue {
     guard let other = other as? Self else {
       return false
     }
-    return ref === other.ref
+    if refRange.isEmpty, other.refRange.isEmpty {
+      return true
+    }
+    return arrayViewIdentity == other.arrayViewIdentity
   }
 
   /// Hashes the value into the supplied hasher.
   public func hash(into hasher: inout Hasher) {
-    hasher.combine(ObjectIdentifier(ref))
+    hasher.combine(refRange.isEmpty)
+    if !refRange.isEmpty {
+      hasher.combine(arrayViewIdentity)
+    }
   }
 
   /// A debug representation of this value.
   public var debugString: String {
-    ref.uncheckedRead { refState in
-      let slice = range.count != refState.value.count ? "[\(range)]" : ""
-      return "[\(refState.value[refRange].map { $0.object.debugString }.joined(separator: ", "))]\(slice)"
+    let snapshot = ref.uncheckedRead { refState in
+      (elements: refState.value[refRange].map(\.object), backingCount: refState.value.count)
     }
+    let logicalRange = 0..<UInt(snapshot.elements.count)
+    let slice = snapshot.elements.count != snapshot.backingCount ? "[\(logicalRange)]" : ""
+    return "[\(snapshot.elements.map(\.debugString).joined(separator: ", "))]\(slice)"
   }
 
   /// Returns the PostScript token representation, when available.
   public func tokenString(kind: ObjectKind) -> String? {
-    ref.uncheckedRead { refState in
-      let elements = refState.value[refRange].map(\.object)
-      let tokens = elements.compactMap { $0.tokenString() }
-      guard tokens.count == elements.count else {
-        return nil
-      }
-      return "[\(tokens.joined(separator: ", "))]"
+    let elements = ref.uncheckedRead { $0.value[refRange].map(\.object) }
+    let tokens = elements.compactMap { $0.tokenString() }
+    guard tokens.count == elements.count else {
+      return nil
     }
+    return "[\(tokens.joined(separator: ", "))]"
   }
 
   func storedObject(kind: ObjectKind) -> VMStoredObject {

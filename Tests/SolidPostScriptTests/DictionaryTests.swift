@@ -46,12 +46,18 @@ struct DictionaryTests {
 
   @Test
   func testMaxLength() async throws {
-    let (len1, dict1) = try await Interpreter.result(
-      content: "10 dict maxlength",
-      as: (IntegerValue, DictionaryValue).self
-    )
+    let len1: IntegerValue = try await Interpreter.result(content: "10 dict maxlength")
     expectGreaterThanOrEqual(len1.value, 10)
-    expectEqual(dict1.count, 0)
+  }
+
+  @Test
+  func maxlengthRestoresItsOperandWhenErrorHandlingStops() async throws {
+    let results = try await Interpreter.results(content: "{10 dict noaccess maxlength} stopped")
+
+    #expect(results.count == 3)
+    #expect(try results[0].value(as: BooleanValue.self).value)
+    #expect(results[1].value is Operators.MaxLength)
+    #expect(results[2].value is DictionaryValue)
   }
 
   @Test
