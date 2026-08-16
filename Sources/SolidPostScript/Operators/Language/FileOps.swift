@@ -45,19 +45,19 @@ extension Operators {
 
       let (mode, fileName) = try context.operands.popAs((StringValue, StringValue).self)
 
-      try mode.access.check(.read)
-      try fileName.access.check(.read)
+      let modeString = try mode.readableString
+      let fileNameString = try fileName.readableString
 
       let file: any File
-      switch fileName.string {
+      switch fileNameString {
       case "%lineedit":
-        guard mode.string == "r" else { throw Error.invalidFileAccess }
+        guard modeString == "r" else { throw Error.invalidFileAccess }
         file = try await context.openInteractiveFile(statement: false)
       case "%statementedit":
-        guard mode.string == "r" else { throw Error.invalidFileAccess }
+        guard modeString == "r" else { throw Error.invalidFileAccess }
         file = try await context.openInteractiveFile(statement: true)
       default:
-        file = try context.openFile(name: fileName.string, mode: mode.string)
+        file = try context.openFile(name: fileNameString, mode: modeString)
       }
 
       context.register(file: file, vm: context.allocationMode)
@@ -335,9 +335,9 @@ extension Operators {
       }
 
       let name = try operand.value(as: StringValue.self)
-      try name.access.check(.read)
+      let nameString = try name.readableString
 
-      guard let status = try? context.fileDevices.status(name: name.string) else {
+      guard let status = try? context.fileDevices.status(name: nameString) else {
         context.operands.push(.boolean(false))
         return
       }
@@ -363,8 +363,7 @@ extension Operators {
     public func execute(context: isolated Context) async throws {
 
       let name: StringValue = try context.operands.popAs()
-      try name.access.check(.read)
-      try context.fileDevices.delete(name: name.string)
+      try context.fileDevices.delete(name: name.readableString)
     }
   }
 
@@ -379,9 +378,9 @@ extension Operators {
     public func execute(context: isolated Context) async throws {
 
       let (newName, oldName) = try context.operands.popAs((StringValue, StringValue).self)
-      try oldName.access.check(.read)
-      try newName.access.check(.read)
-      try context.fileDevices.rename(name: oldName.string, to: newName.string)
+      let oldNameString = try oldName.readableString
+      let newNameString = try newName.readableString
+      try context.fileDevices.rename(name: oldNameString, to: newNameString)
     }
   }
 
@@ -399,10 +398,10 @@ extension Operators {
       let scratch = try scratchObject.value(as: StringValue.self)
       let template = try templateObject.value(as: StringValue.self)
       try scratch.access.check(.write)
-      try template.access.check(.read)
+      let templateString = try template.readableString
       try proc.checkProcedure()
 
-      let names = try context.fileDevices.fileNames(matching: template.string)
+      let names = try context.fileDevices.fileNames(matching: templateString)
       for name in names {
         guard let bytes = name.data(using: .isoLatin1), bytes.count <= scratch.count else {
           throw Error.rangeCheck

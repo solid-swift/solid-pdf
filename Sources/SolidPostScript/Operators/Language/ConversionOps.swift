@@ -36,7 +36,7 @@ extension Operators {
           try num.integer
 
         case let str as StringValue:
-          switch try Scanner.number(string: str.string) {
+          switch try Scanner.number(string: str.readableString) {
           case .integer(let int):
             int
           case .real(let real):
@@ -71,7 +71,7 @@ extension Operators {
           num.real
 
         case let str as StringValue:
-          switch try Scanner.number(string: str.string) {
+          switch try Scanner.number(string: str.readableString) {
           case .integer(let int):
             IntegerValue(value: int).real
           case .real(let real):
@@ -172,9 +172,10 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
 
-      let string: StringValue = try context.operands.popAs()
+      let stringObject = try context.operands.pop()
+      let string = try stringObject.value(as: StringValue.self)
 
-      context.operands.push(.literalName(string.string))
+      context.operands.push(.name(try string.readableString, kind: stringObject.kind))
     }
   }
 }

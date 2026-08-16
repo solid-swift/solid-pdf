@@ -125,14 +125,12 @@ enum ResourceFiles {
     let scratch = Object.string(Data(repeating: 0, count: 4096), access: .unlimited, vm: .local, kind: .literal)
     guard try await context.execute(proc: procedure, ops: [key, scratch]) else { throw Error.invalidExit }
     let result: StringValue = try context.operands.popAs()
-    try result.access.check(.read)
-    return result.string
+    return try result.readableString
   }
 
   private static func resourceName(_ key: Object) throws -> String? {
     if let string = key.value as? StringValue {
-      try string.access.check(.read)
-      return string.string
+      return try string.readableString
     }
     return (key.value as? NameValue)?.value
   }

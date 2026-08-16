@@ -66,8 +66,7 @@ struct ResourceStore: Sendable {
 
 func canonicalResourceKey(_ key: Object) throws -> Object {
   if let string = key.value as? StringValue {
-    try string.access.check(.read)
-    return .literalName(string.string)
+    return .literalName(try string.readableString)
   }
   return key
 }

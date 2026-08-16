@@ -143,17 +143,25 @@ public struct StringValue: CompositeValue, ObjectSource {
 
   /// Performs the ``compare`` operation.
   public func compare(_ other: StringValue) -> ComparisonResult {
-    return valueSnapshot < other.valueSnapshot
+    return rangedValueSnapshot < other.rangedValueSnapshot
+  }
+
+  /// Compares the readable portions of two string objects.
+  func compareReadable(_ other: StringValue) throws -> ComparisonResult {
+    try access.check(.read)
+    try other.access.check(.read)
+    return compare(other)
   }
 
   /// Performs the ``firstRange`` operation.
   public func firstRange(of subdata: StringValue) throws -> SubRange? {
-    let value = valueSnapshot
-    guard let found = value.firstRange(of: subdata.valueSnapshot, in: refRange) else {
+    let value = try characters(in: range)
+    let sought = try subdata.characters(in: subdata.range)
+    guard let found = value.firstRange(of: sought, in: value.indices) else {
       return nil
     }
 
-    let startIndex = UInt(value.distance(from: refRange.lowerBound, to: found.lowerBound))
+    let startIndex = UInt(value.distance(from: value.startIndex, to: found.lowerBound))
     let endIndex = startIndex + UInt(found.count)
     return startIndex..<endIndex
   }
@@ -181,15 +189,23 @@ public struct StringValue: CompositeValue, ObjectSource {
     String(data: rangedValueSnapshot, encoding: .isoLatin1).neverNil()
   }
 
+  var readableString: String {
+    get throws {
+      String(data: try characters(in: range), encoding: .isoLatin1).neverNil()
+    }
+  }
+
   /// Returns whether this value equals another PostScript value.
-  public func equals(_ other: any ObjectValue) -> Bool {
+  public func equals(_ other: any ObjectValue) throws -> Bool {
     switch other {
     case let otherString as StringValue:
-      rangedValueSnapshot == otherString.rangedValueSnapshot
+      try access.check(.read)
+      try otherString.access.check(.read)
+      return rangedValueSnapshot == otherString.rangedValueSnapshot
     case let otherName as NameValue:
-      string == otherName.value
+      return try readableString == otherName.value
     default:
-      false
+      return false
     }
   }
 

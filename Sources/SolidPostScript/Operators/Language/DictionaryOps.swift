@@ -83,6 +83,7 @@ extension Operators {
     public func execute(context: isolated Context) async throws {
 
       let op: DictionaryValue = try context.operands.peekAs()
+      try op.access.check(.read)
       context.operands.push(try NumericSemantics.integer(validating: op.capacity))
     }
   }

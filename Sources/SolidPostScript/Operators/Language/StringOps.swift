@@ -45,8 +45,10 @@ extension Operators {
       let (seekObj, stringObj) = try context.operands.pop2()
       let string = try stringObj.value(as: StringValue.self)
       let seek = try seekObj.value(as: StringValue.self)
+      try string.access.check(.read)
+      try seek.access.check(.read)
 
-      if string.count >= seek.count, try string.characters(in: seek.range) == seek.characters(in: seek.range) {
+      if string.count >= seek.count, try string.characters(in: 0..<seek.count) == seek.characters(in: seek.range) {
 
         let postObj: Object = try .string(sharing: string, subRange: seek.count..., kind: stringObj.kind)
 
@@ -69,6 +71,8 @@ extension Operators {
       let (seekObj, stringObj) = try context.operands.pop2()
       let string = try stringObj.value(as: StringValue.self)
       let seek = try seekObj.value(as: StringValue.self)
+      try string.access.check(.read)
+      try seek.access.check(.read)
 
       if let matchRange = try string.firstRange(of: seek) {
 

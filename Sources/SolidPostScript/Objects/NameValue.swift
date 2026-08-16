@@ -59,14 +59,14 @@ public struct NameValue: ObjectValue {
   }
 
   /// Returns whether this value equals another PostScript value.
-  public func equals(_ other: any ObjectValue) -> Bool {
+  public func equals(_ other: any ObjectValue) throws -> Bool {
     switch other {
     case let otherName as NameValue:
-      value == otherName.value
+      return value == otherName.value
     case let otherString as StringValue:
-      value == otherString.string
+      return try value == otherString.readableString
     default:
-      false
+      return false
     }
   }
 

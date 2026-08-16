@@ -275,8 +275,7 @@ extension Object {
       case is NullValue:
         throw Error.typeCheck
       case let string as StringValue:
-        try string.access.check(.read)
-        return .literalName(string.string)
+        return .literalName(try string.readableString)
       default:
         return self
       }

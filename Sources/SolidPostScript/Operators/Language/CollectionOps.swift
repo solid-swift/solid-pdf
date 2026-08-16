@@ -30,19 +30,22 @@ extension Operators {
 
       let op = try context.operands.pop()
 
-      let length =
-        switch op.value {
-        case let coll as CollectionValue:
-          coll.count
-        case let dictionary as DictionaryValue:
-          dictionary.count
-        case let string as StringValue:
-          string.count
-        case let name as NameValue:
-          try name.value.count.unsigned
-        default:
-          throw Error.typeCheck
-        }
+      let length: UInt
+      switch op.value {
+      case let coll as CollectionValue:
+        try coll.access.check(.read)
+        length = coll.count
+      case let dictionary as DictionaryValue:
+        try dictionary.access.check(.read)
+        length = dictionary.count
+      case let string as StringValue:
+        try string.access.check(.read)
+        length = string.count
+      case let name as NameValue:
+        length = try name.value.count.unsigned
+      default:
+        throw Error.typeCheck
+      }
 
       context.operands.push(try NumericSemantics.integer(validating: length))
     }
@@ -118,6 +121,7 @@ extension Operators {
 
       switch (source.value, index.value, count.value) {
       case (let array as ArrayValue, let index as IntegerValue, let count as IntegerValue):
+        try array.access.check(.read)
         let startIndex = try index.value.unsigned
         let endIndex = try startIndex + count.value.unsigned
         context.operands.push(try .array(sharing: array, subRange: startIndex..<endIndex, kind: source.kind))
@@ -129,6 +133,7 @@ extension Operators {
         context.operands.push(try .packedArray(elements, vm: array.vm, kind: source.kind))
 
       case (let string as StringValue, let index as IntegerValue, let count as IntegerValue):
+        try string.access.check(.read)
         let startIndex = try index.value.unsigned
         let endIndex = try startIndex + count.value.unsigned
         context.operands.push(try .string(sharing: string, subRange: startIndex..<endIndex, kind: source.kind))
@@ -180,6 +185,7 @@ extension Operators {
 
       switch source.value {
       case let coll as CollectionValue:
+        try coll.access.check(.read)
         for idx in 0..<coll.count {
           let result = try await context.execute(proc: proc, ops: [try coll.object(at: idx)])
           if !result {
@@ -188,6 +194,7 @@ extension Operators {
         }
 
       case let dict as DictionaryValue:
+        try dict.access.check(.read)
         for key in dict.keys {
           let value = try dict.object(forKey: key)
           let result = try await context.execute(proc: proc, ops: [value, key])
@@ -197,6 +204,7 @@ extension Operators {
         }
 
       case let string as StringValue:
+        try string.access.check(.read)
         for idx in 0..<string.count {
           let result = try await context.execute(proc: proc, ops: [.integer(Int32(string.character(at: idx)))])
           if !result {
