@@ -97,16 +97,6 @@ public struct FileValue: CompositeValue, ObjectSource {
   public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
     try access.check(.execute)
     guard mode != .write else { throw Error.invalidAccess }
-    if file is StandardInputFile {
-      var data = Data()
-      while let chunk = try await file.read(max: 4096, context: context) {
-        data.append(chunk)
-      }
-      let materialized = DataFile(data: data, mode: .read)
-      let source = Object.file(materialized, access: access, vm: vm, kind: kind)
-      try context.execution.push(source: source, in: context)
-      return
-    }
     try context.execution.push(source: Object(value: self, kind: kind), in: context)
   }
 

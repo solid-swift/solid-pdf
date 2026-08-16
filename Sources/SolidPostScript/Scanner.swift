@@ -103,10 +103,6 @@ public class Scanner {
   }
 
   func nextContextualObject(context: isolated Context) async throws -> ScannedObject? {
-    guard file is any ContextualFile else {
-      return try nextObject(context: context)
-    }
-
     let savedPushback = pushback
     let savedHistory = history
     var input: [Char] = []
@@ -121,17 +117,27 @@ public class Scanner {
 
       do {
         let object = try nextObject(context: context)
+        returnContextualLookahead(to: context)
         contextualInput = nil
         contextualOffset = 0
         contextualEOF = false
         return object
       } catch is ScannerInputRequired {
-        if let byte = try await file.readByte(context: context) {
-          input.append(byte)
-        } else {
-          reachedEOF = true
+        do {
+          if let byte = try await file.readByte(context: context) {
+            input.append(byte)
+          } else {
+            reachedEOF = true
+          }
+        } catch {
+          returnContextualLookahead(to: context)
+          contextualInput = nil
+          contextualOffset = 0
+          contextualEOF = false
+          throw error
         }
       } catch {
+        returnContextualLookahead(to: context)
         contextualInput = nil
         contextualOffset = 0
         contextualEOF = false
@@ -159,8 +165,14 @@ public class Scanner {
 
       switch char {
       case Self.whitespace:
-        if let token = try token(chars) {
-          return .token(token)
+        if !chars.isEmpty {
+          if contextualInput != nil {
+            if char == Self.carriageReturn, try peek() == Self.lineFeed {
+              try skip()
+            }
+            return .token(try token(chars, putBack: 0).neverNil())
+          }
+          return .token(try token(chars).neverNil())
         }
         try skip(while: Self.whitespace.contains)
 
@@ -190,10 +202,15 @@ public class Scanner {
         }
 
       case Self.commentDelim:
-        try comment()
-        if let token = try token(chars, putBack: 0) {
-          return .token(token)
+        if !chars.isEmpty {
+          if contextualInput != nil {
+            try rewind()
+            return .token(try token(chars, putBack: 0).neverNil())
+          }
+          try comment()
+          return .token(try token(chars, putBack: 0).neverNil())
         }
+        try comment()
 
       default:
         chars.append(char)
@@ -490,6 +507,15 @@ public class Scanner {
       }
     }
     return byte
+  }
+
+  private func returnContextualLookahead(to context: isolated Context) {
+    var unread = Data(pushback.reversed())
+    if let contextualInput, contextualOffset < contextualInput.count {
+      unread.append(contentsOf: contextualInput.dropFirst(contextualOffset))
+    }
+    pushback.removeAll()
+    context.prependReadAhead(unread, to: file)
   }
 
   private func take(_ count: Int) throws -> [Char] {

@@ -30,6 +30,11 @@ public actor Context {
     let dictionaryStack: [Object]
   }
 
+  struct FileReadAhead {
+    let file: any File
+    var data: Data
+  }
+
   private enum StatementDelimiter {
     case literalString
     case procedure
@@ -81,6 +86,7 @@ public actor Context {
   private var fileGeneration = 0
   private var openedLocalFiles: [(generation: Int, file: WeakFile)] = []
   private var standardFiles: [String: any File] = [:]
+  var fileReadAhead: [ObjectIdentifier: FileReadAhead] = [:]
   private var executionTimingDepth = 0
   private var hostSuspensionDepth = 0
 
@@ -746,6 +752,7 @@ public actor Context {
 
   func resetStandardFiles() {
     standardFiles.removeAll()
+    fileReadAhead.removeAll()
   }
 
   func beginJob(persistent: Bool) throws {
@@ -1031,7 +1038,10 @@ public actor Context {
 
   func closeFiles(openedAfter generation: Int) {
     for tracked in openedLocalFiles where tracked.generation > generation {
-      try? tracked.file.value?.close()
+      if let file = tracked.file.value {
+        clearReadAhead(for: file)
+        try? file.close()
+      }
     }
     openedLocalFiles.removeAll { $0.generation > generation || $0.file.value == nil }
   }

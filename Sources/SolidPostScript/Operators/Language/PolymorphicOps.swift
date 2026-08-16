@@ -80,7 +80,7 @@ extension Operators {
         let scanner = try Scanner(content: string.characters(in: string.range))
         let reader = TokenObjectIterator(scanner: scanner)
 
-        if let object = try await reader.nextContextual(context: context)?.object {
+        if let object = try reader.nextScanned(context: context)?.object {
 
           let post: Object = try .string(
             sharing: string,

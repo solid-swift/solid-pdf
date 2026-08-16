@@ -310,7 +310,7 @@ extension Operators {
       let file: FileValue = try context.operands.popAs()
 
       do {
-        try file.file.reset()
+        try context.reset(file: file.file)
       } catch Error.ioError {
         // resetfile is best-effort and never reports an I/O error.
       }
@@ -427,7 +427,7 @@ extension Operators {
 
       guard file.file.isPositionable else { throw Error.ioError }
 
-      context.operands.push(try NumericSemantics.integer(validating: file.file.offset))
+      context.operands.push(try NumericSemantics.integer(validating: context.logicalOffset(in: file.file)))
     }
   }
 
@@ -449,7 +449,7 @@ extension Operators {
 
       guard file.file.isPositionable else { throw Error.ioError }
 
-      try file.file.setOffset(Int(int.value))
+      try context.setLogicalOffset(Int(int.value), in: file.file)
     }
   }
 

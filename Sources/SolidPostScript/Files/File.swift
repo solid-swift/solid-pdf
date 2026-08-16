@@ -161,34 +161,22 @@ extension ContextualFile {
 extension File {
 
   func readByte(context: isolated Context) async throws -> UInt8? {
-    if let contextual = self as? any ContextualFile {
-      return try await contextual.readByte(context: context)
-    }
-    return try readByte()
+    try await context.readByte(from: self)
   }
 
   func readByte(
     ifMatches predicate: (UInt8) -> Bool,
     context: isolated Context
   ) async throws -> (matched: UInt8?, eof: Bool) {
-    if let contextual = self as? any ContextualFile {
-      return try await contextual.readByte(ifMatches: predicate, context: context)
-    }
-    return try readByte(ifMatches: predicate)
+    try await context.readByte(from: self, ifMatches: predicate)
   }
 
   func read(max: Int, context: isolated Context) async throws -> Data? {
-    if let contextual = self as? any ContextualFile {
-      return try await contextual.read(max: max, context: context)
-    }
-    return try read(max: max)
+    try await context.read(max: max, from: self)
   }
 
   func available(context: isolated Context) async throws -> Int {
-    if let contextual = self as? any ContextualFile {
-      return try await contextual.available(context: context)
-    }
-    return try available
+    try await context.available(in: self)
   }
 
   func readHex(max: Int, context: isolated Context) async throws -> (data: Data, eof: Bool) {
@@ -234,19 +222,11 @@ extension File {
   }
 
   func close(context: isolated Context) async throws {
-    if let contextual = self as? any ContextualFile {
-      try await contextual.close(context: context)
-    } else {
-      try close()
-    }
+    try await context.closeLogicalFile(self)
   }
 
   func flush(context: isolated Context) async throws {
-    if let contextual = self as? any ContextualFile {
-      try await contextual.flush(context: context)
-    } else {
-      try flush()
-    }
+    try await context.flushLogicalFile(self)
   }
 
 }

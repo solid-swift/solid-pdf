@@ -527,7 +527,7 @@ private struct FilterSource {
   mutating func next(context: isolated Context) async throws -> Data? {
     switch source {
     case .file(let file):
-      return try file.file.read(max: 1)
+      return try await file.file.read(max: 1, context: context)
     case .string(let string, let consumed):
       guard !consumed else { return nil }
       source = .string(string, consumed: true)
