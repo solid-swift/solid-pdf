@@ -184,14 +184,26 @@ final class EncodingFilterFile: ContextualFile, Sendable {
     guard !isClosed else { throw Error.ioError }
     guard !target.requiresContext else { throw Error.ioError }
     let result = try translateCodecError { try codec.process(input: data) }
-    try target.writeWithoutContext(result.output)
+    try validate(result, inputCount: data.count)
+    if result.progress == .finished {
+      try target.finishWithoutContext(result.output)
+      state.withLock { $0.closed = true }
+    } else {
+      try target.writeWithoutContext(result.output)
+    }
   }
 
   func write(contentsOf data: Data, context: isolated Context) async throws {
     try checkOpen()
     try await target.initialize(context: context)
     let result = try translateCodecError { try codec.process(input: data) }
-    try await target.write(result.output, context: context)
+    try validate(result, inputCount: data.count)
+    if result.progress == .finished {
+      try await target.finish(result.output, context: context)
+      state.withLock { $0.closed = true }
+    } else {
+      try await target.write(result.output, context: context)
+    }
   }
 
   func close() throws {
@@ -240,6 +252,10 @@ final class EncodingFilterFile: ContextualFile, Sendable {
 
   private func checkOpen() throws {
     guard !isClosed else { throw Error.ioError }
+  }
+
+  private func validate(_ result: IncrementalFilterResult, inputCount: Int) throws {
+    guard result.consumedInput == inputCount else { throw Error.ioError }
   }
 
 }
@@ -332,6 +348,19 @@ final class FilterTarget: Sendable {
     try file.file.close()
   }
 
+  func finishWithoutContext(_ data: Data) throws {
+    guard state.withLock({ !$0.finished }) else { return }
+    try writeWithoutContext(data)
+    if closeTarget, case .file(let file) = destination {
+      try file.file.close()
+    }
+    guard case .procedure = destination else {
+      state.withLock { $0.finished = true }
+      return
+    }
+    throw Error.ioError
+  }
+
   func finish(_ data: Data, context: isolated Context) async throws {
     guard state.withLock({ !$0.finished }) else { return }
     try await write(data, context: context)
@@ -404,8 +433,6 @@ final class FilterTarget: Sendable {
 func translateCodecError<T>(_ body: () throws -> T) throws -> T {
   do {
     return try body()
-  } catch StreamCodecError.unsupportedOperation {
-    throw Error.undefined
   } catch is StreamCodecError {
     throw Error.ioError
   }
@@ -414,8 +441,6 @@ func translateCodecError<T>(_ body: () throws -> T) throws -> T {
 func translateCodecOption<T>(_ body: () throws -> T) throws -> T {
   do {
     return try body()
-  } catch StreamCodecError.unsupportedOperation {
-    throw Error.undefined
   } catch StreamCodecError.invalidOption {
     throw Error.rangeCheck
   } catch is StreamCodecError {

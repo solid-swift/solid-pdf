@@ -64,6 +64,19 @@ struct FilteredFileTests {
   }
 
   @Test
+  func decodingFilterConstructionIsLazy() async throws {
+    let calls: IntegerValue = try await Interpreter.result(
+      content: """
+        /calls 0 def
+        /source { /calls calls 1 add def (61>) } def
+        /decoded /source load /ASCIIHexDecode filter def
+        calls
+        """
+    )
+    #expect(calls.value == 0)
+  }
+
+  @Test
   func procedureTargetUsesBufferExchangeAndFinalFalseCallback() async throws {
     let results = try await Interpreter.results(
       content: """
@@ -90,6 +103,18 @@ struct FilteredFileTests {
   func executableSequentialFilterDoesNotRequireSeeking() async throws {
     let result: IntegerValue = try await Interpreter.result(
       content: "(32203320616464>) /ASCIIHexDecode filter cvx exec"
+    )
+    #expect(result.value == 5)
+  }
+
+  @Test
+  func executableProcedureBackedFilterUsesContextualScanner() async throws {
+    let result: IntegerValue = try await Interpreter.result(
+      content: """
+        /first true def
+        { first { /first false def (32203320616464>) } { () } ifelse }
+        /ASCIIHexDecode filter cvx exec
+        """
     )
     #expect(result.value == 5)
   }
@@ -190,6 +215,26 @@ struct FilteredFileTests {
   }
 
   @Test
+  func closeSourceWaitsUntilDecodedEOD() async throws {
+    let sourceURL = temporaryURL()
+    defer { try? FileManager.default.removeItem(at: sourceURL) }
+    try Data("61>tail".utf8).write(to: sourceURL)
+
+    let results = try await Interpreter.results(
+      content: """
+        /source (\(sourceURL.path)) (r) file def
+        /decoded source << /CloseSource true >> /ASCIIHexDecode filter def
+        source status
+        decoded read pop pop
+        decoded read pop
+        source status
+        """
+    )
+    let booleans = results.compactMap { ($0.value as? BooleanValue)?.value }
+    #expect(booleans == [false, true])
+  }
+
+  @Test
   func ordinaryAndReusablePositioning() async throws {
     await #expect(throws: Error.ioError) {
       try await Interpreter.execute(
@@ -230,7 +275,7 @@ struct FilteredFileTests {
   func malformedCodecDataUsesErrorLifecycle() async throws {
     let results = try await Interpreter.results(
       content: """
-        { (!!!!) /FlateDecode filter } stopped
+        { (!!!!) /FlateDecode filter 1 string readstring } stopped
         $error /errorname get
         """
     )
@@ -255,6 +300,59 @@ struct FilteredFileTests {
         content: "(data) noaccess /ASCIIHexDecode filter"
       )
     }
+  }
+
+  @Test
+  func dctParametersAcceptEveryPLRMSequenceRepresentation() async throws {
+    let stopped: BooleanValue = try await Interpreter.result(
+      content: """
+        /samples 1 string def samples 0 1 put
+        /quant 64 string def quant 0 2 put
+        /huff 17 string def huff 0 1 put
+        {
+          128 string <<
+            /Columns 1 /Rows 1 /Colors 1
+            /HSamples samples /VSamples [1]
+            /QuantTables [quant]
+            /HuffTables [huff]
+            /QFactor 0 /ColorTransform 0
+          >> /DCTEncode filter pop
+        } stopped
+        """
+    )
+    #expect(stopped.value == false)
+
+    let decodeStopped: BooleanValue = try await Interpreter.result(
+      content: """
+        /samples 1 string def samples 0 1 put
+        /quant 64 string def quant 0 2 put
+        /huff 17 string def huff 0 1 put
+        {
+          () <<
+            /Colors 1 /HSamples [1] /VSamples samples
+            /QuantTables [quant] /HuffTables [huff]
+          >> /DCTDecode filter pop
+        } stopped
+        """
+    )
+    #expect(decodeStopped.value == false)
+  }
+
+  @Test
+  func dctEncoderClosesAtDeclaredSampleCount() async throws {
+    let results = try await Interpreter.results(
+      content: """
+        /target 1024 string def
+        /encoded target << /Columns 1 /Rows 1 /Colors 1 >> /DCTEncode filter def
+        encoded 0 write
+        encoded
+        { encoded 0 write } stopped
+        """
+    )
+    let stopped = try #require(results.first?.value as? BooleanValue)
+    let encoded = try #require(results.compactMap { $0.value as? FileValue }.first)
+    #expect(stopped.value == true)
+    #expect(encoded.file.isClosed)
   }
 
   @Test

@@ -40,15 +40,7 @@ extension Operators {
       "ReusableStreamDecode",
     ]
 
-    static let availableNames: [String] = {
-      #if canImport(ImageIO) && canImport(CoreGraphics)
-      standardNames
-      #else
-      standardNames.filter {
-        !$0.hasPrefix("CCITTFax") && !$0.hasPrefix("DCT")
-      }
-      #endif
-    }()
+    static let availableNames = standardNames
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
@@ -79,13 +71,12 @@ extension Operators {
         } else {
           let closeSource = try dictionary.boolean("CloseSource", default: false)
           let codec = try decoder(named: name, dictionary: dictionary)
-          let data = try await decode(codec: codec, source: source, closeSource: closeSource, context: context)
           let vm = retainedVM([source] + retainedDictionary(name: name, dictionary: dictionary))
-          let file = MaterializedFilterFile(
-            data: data,
+          let file = try DecodingFilterFile(
             name: name,
-            positionable: false,
-            closeAtEnd: true
+            codec: codec,
+            source: source,
+            closeSource: closeSource
           )
           context.register(file: file, vm: vm)
           context.operands.push(.file(file, access: .readOnly, vm: vm, kind: .literal))
@@ -135,14 +126,13 @@ extension Operators {
       guard count == 0 || !marker.isEmpty else { throw Error.rangeCheck }
       let closeSource = try dictionary.boolean("CloseSource", default: false)
       let codec = try SubFileDecoder(eodCount: count, eodString: marker)
-      let data = try await decode(codec: codec, source: source, closeSource: closeSource, context: context)
       let markerObject = Object.string(marker, access: .readOnly, vm: source.vmIfComposite, kind: .literal)
       let vm = retainedVM([source, markerObject])
-      let file = MaterializedFilterFile(
-        data: data,
+      let file = try DecodingFilterFile(
         name: "SubFileDecode",
-        positionable: false,
-        closeAtEnd: true
+        codec: codec,
+        source: source,
+        closeSource: closeSource
       )
       context.register(file: file, vm: vm)
       context.operands.push(.file(file, access: .readOnly, vm: vm, kind: .literal))
@@ -294,17 +284,18 @@ extension Operators {
     }
 
     private func dctEncodeOptions(dictionary: FilterDictionary) throws -> DCTEncodeOptions {
-      try translateCodecOption {
+      let colors = try dictionary.requiredInteger("Colors")
+      return try translateCodecOption {
         try DCTEncodeOptions(
           columns: dictionary.requiredInteger("Columns"),
           rows: dictionary.requiredInteger("Rows"),
-          colors: dictionary.requiredInteger("Colors"),
+          colors: colors,
           horizontalSamples: dictionary.integerArray("HSamples", default: []),
           verticalSamples: dictionary.integerArray("VSamples", default: []),
           quantizationTables: dictionary.dataArray("QuantTables", default: []),
           quantizationFactor: dictionary.number("QFactor", default: 1),
-          huffmanTables: [],
-          colorTransform: dictionary.integer("ColorTransform", default: 1)
+          huffmanTables: dictionary.huffmanTables("HuffTables", default: []),
+          colorTransform: dictionary.integer("ColorTransform", default: colors == 3 ? 1 : 0)
         )
       }
     }
@@ -315,7 +306,11 @@ extension Operators {
           columns: dictionary.integer("Columns", default: 0),
           rows: dictionary.integer("Rows", default: 0),
           colors: dictionary.integer("Colors", default: 0),
-          colorTransform: dictionary.optionalInteger("ColorTransform")
+          colorTransform: dictionary.optionalInteger("ColorTransform"),
+          horizontalSamples: dictionary.integerArray("HSamples", default: []),
+          verticalSamples: dictionary.integerArray("VSamples", default: []),
+          quantizationTables: dictionary.dataArray("QuantTables", default: []),
+          huffmanTables: dictionary.huffmanTables("HuffTables", default: [])
         )
       }
     }
@@ -330,39 +325,6 @@ extension Operators {
         guard let composite = object.value as? any CompositeValue else { return true }
         return composite.vm == .global
       } ? .global : .local
-    }
-
-    private func decode(
-      codec: any IncrementalFilter,
-      source: Object,
-      closeSource: Bool,
-      context: isolated Context
-    ) async throws -> Data {
-      var provider = try FilterSource(object: source)
-      var output = Data()
-      var reachedEnd = false
-
-      while let chunk = try await provider.next(context: context) {
-        var remaining = chunk
-        while !remaining.isEmpty {
-          let result = try translateCodecError { try codec.process(input: remaining) }
-          output.append(result.output)
-          if result.progress == .finished {
-            reachedEnd = true
-            remaining.removeFirst(result.consumedInput)
-            break
-          }
-          guard result.consumedInput > 0 else { throw Error.ioError }
-          remaining.removeFirst(result.consumedInput)
-        }
-        if reachedEnd { break }
-      }
-
-      if !reachedEnd {
-        output.append(try translateCodecError { try codec.finish() ?? Data() })
-      }
-      if closeSource { try await provider.close(context: context) }
-      return output
     }
 
     private func decode(codec: any IncrementalFilter, data: Data) throws -> Data {
@@ -464,31 +426,55 @@ private struct FilterDictionary: Sendable {
 
   func integerArray(_ key: Object, default defaultValue: [Int]) throws -> [Int] {
     guard let object = try object(key) else { return defaultValue }
-    let values: [Object]
-    if let array = object.value as? ArrayValue {
-      values = Array(try array.objects(in: array.range, for: .read))
-    } else if let array = object.value as? PackedArrayValue {
-      values = Array(try array.objects(in: array.range, for: .read))
-    } else {
-      throw Error.typeCheck
+    if let string = object.value as? StringValue {
+      try string.access.check(.read)
+      return try string.characters(in: string.range).map(Int.init)
     }
+    let values = try objects(in: object)
     return try values.map { Int(try $0.value(as: IntegerValue.self).value) }
   }
 
   func dataArray(_ key: Object, default defaultValue: [Data]) throws -> [Data] {
     guard let object = try object(key) else { return defaultValue }
-    let values: [Object]
-    if let array = object.value as? ArrayValue {
-      values = Array(try array.objects(in: array.range, for: .read))
-    } else if let array = object.value as? PackedArrayValue {
-      values = Array(try array.objects(in: array.range, for: .read))
-    } else {
-      throw Error.typeCheck
+    return try objects(in: object).map(byteSequence)
+  }
+
+  func huffmanTables(_ key: Object, default defaultValue: [DCTHuffmanTable]) throws
+    -> [DCTHuffmanTable]
+  {
+    guard let object = try object(key) else { return defaultValue }
+    return try objects(in: object).map { table in
+      let bytes = try byteSequence(table)
+      guard bytes.count >= 16 else { throw Error.rangeCheck }
+      let counts = Data(bytes.prefix(16))
+      let symbols = Data(bytes.dropFirst(16))
+      return try translateCodecOption {
+        try DCTHuffmanTable(codeCounts: counts, symbols: symbols)
+      }
     }
-    return try values.map { object in
-      let string = try object.value(as: StringValue.self)
+  }
+
+  private func objects(in object: Object) throws -> [Object] {
+    if let array = object.value as? ArrayValue {
+      return Array(try array.objects(in: array.range, for: .read))
+    }
+    if let array = object.value as? PackedArrayValue {
+      return Array(try array.objects(in: array.range, for: .read))
+    }
+    throw Error.typeCheck
+  }
+
+  private func byteSequence(_ object: Object) throws -> Data {
+    if let string = object.value as? StringValue {
+      try string.access.check(.read)
       return try string.characters(in: string.range)
     }
+    let values = try objects(in: object)
+    return try Data(values.map { value in
+      let number = try value.value(as: NumericConvertible.self).real
+      guard number.isFinite, (0...255).contains(number) else { throw Error.rangeCheck }
+      return UInt8(number.rounded())
+    })
   }
 
 }

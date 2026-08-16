@@ -77,6 +77,9 @@ public class Scanner {
   public let file: File
   private var pushback: [Char] = []
   private var history: [Char] = []
+  private var contextualInput: [Char]?
+  private var contextualOffset = 0
+  private var contextualEOF = false
 
   /// Creates an instance.
   public convenience init(content: Data) throws {
@@ -97,6 +100,44 @@ public class Scanner {
       throw Error.unregistered(.internalScannerError)
     }
     return token
+  }
+
+  func nextContextualObject(context: isolated Context) async throws -> ScannedObject? {
+    guard file is any ContextualFile else {
+      return try nextObject(context: context)
+    }
+
+    let savedPushback = pushback
+    let savedHistory = history
+    var input: [Char] = []
+    var reachedEOF = false
+
+    while true {
+      pushback = savedPushback
+      history = savedHistory
+      contextualInput = input
+      contextualOffset = 0
+      contextualEOF = reachedEOF
+
+      do {
+        let object = try nextObject(context: context)
+        contextualInput = nil
+        contextualOffset = 0
+        contextualEOF = false
+        return object
+      } catch is ScannerInputRequired {
+        if let byte = try await file.readByte(context: context) {
+          input.append(byte)
+        } else {
+          reachedEOF = true
+        }
+      } catch {
+        contextualInput = nil
+        contextualOffset = 0
+        contextualEOF = false
+        throw error
+      }
+    }
   }
 
   func nextLexeme(binaryEnabled: Bool) throws -> Lexeme? {
@@ -427,10 +468,20 @@ public class Scanner {
   }
 
   private func next() throws -> Char? {
-    let byte = if let pushed = pushback.popLast() {
-      pushed
+    let byte: Char?
+    if let pushed = pushback.popLast() {
+      byte = pushed
+    } else if let contextualInput {
+      if contextualOffset < contextualInput.count {
+        byte = contextualInput[contextualOffset]
+        contextualOffset += 1
+      } else if contextualEOF {
+        byte = nil
+      } else {
+        throw ScannerInputRequired()
+      }
     } else {
-      try file.readByte()
+      byte = try file.readByte()
     }
     if let byte {
       history.append(byte)
@@ -511,6 +562,8 @@ public class Scanner {
   }
 
 }
+
+private struct ScannerInputRequired: Swift.Error {}
 
 extension Scanner.CharSet {
 

@@ -207,7 +207,7 @@ public actor Context {
 
       do {
         let nextObject = if let tokenIterator = iterator as? TokenObjectIterator {
-          try tokenIterator.nextScanned(context: self)
+          try await tokenIterator.nextContextual(context: self)
         } else {
           try iterator.next(context: self).map { ScannedObject($0) }
         }

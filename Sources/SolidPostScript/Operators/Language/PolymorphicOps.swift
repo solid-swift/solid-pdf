@@ -80,7 +80,7 @@ extension Operators {
         let scanner = try Scanner(content: string.characters(in: string.range))
         let reader = TokenObjectIterator(scanner: scanner)
 
-        if let object = try reader.next(context: context) {
+        if let object = try await reader.nextContextual(context: context)?.object {
 
           let post: Object = try .string(
             sharing: string,
@@ -99,7 +99,7 @@ extension Operators {
         let scanner = try Scanner(file: file.file)
         let reader = TokenObjectIterator(scanner: scanner)
 
-        if let object = try reader.next(context: context) {
+        if let object = try await reader.nextContextual(context: context)?.object {
 
           context.operands.push(contentsOf: [.boolean(true), object])
         } else {

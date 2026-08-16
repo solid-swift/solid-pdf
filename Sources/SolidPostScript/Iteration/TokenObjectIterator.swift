@@ -25,4 +25,8 @@ public class TokenObjectIterator: ObjectIterator {
   func nextScanned(context: isolated Context) throws -> ScannedObject? {
     try scanner.nextObject(context: context)
   }
+
+  func nextContextual(context: isolated Context) async throws -> ScannedObject? {
+    try await scanner.nextContextualObject(context: context)
+  }
 }
