@@ -71,25 +71,47 @@ public final class FileDevices: Sendable {
   }
 
   private func open(deviceFileName name: String, mode: FileMode, openMethod: FileOpenMethod) throws -> File {
+    let parsed = parseDeviceFileName(name)
+    guard let deviceName = parsed.device else { throw Error.undefinedFilename }
+    return try open(device: deviceName, name: parsed.name, mode: mode, openMethod: openMethod)
+  }
 
-    let deviceNameStart = name.index(after: name.startIndex)
-    guard let deviceNameEnd = name.dropFirst().firstIndex(of: "%") else {
-
-      let deviceName = String(name[deviceNameStart...])
-
-      return try open(device: deviceName, name: "", mode: mode, openMethod: openMethod)
+  func resourceFileMetadata(name: String) throws -> ResourceFileMetadata? {
+    let parsed = parseDeviceFileName(name)
+    if let deviceName = parsed.device {
+      guard let device = registeredDevices.first(where: { $0.name == deviceName }) as? any ResourceFileDevice else {
+        return nil
+      }
+      return try device.resourceFileMetadata(name: parsed.name)
     }
-
-    let deviceName = String(name[deviceNameStart..<deviceNameEnd])
-
-    guard let fileNameStart = name.index(name.startIndex, offsetBy: 1, limitedBy: name.endIndex) else {
-
-      return try open(device: deviceName, name: "", mode: mode, openMethod: openMethod)
+    for device in registeredDevices where device.searched {
+      guard let resourceDevice = device as? any ResourceFileDevice else { continue }
+      if let metadata = try resourceDevice.resourceFileMetadata(name: name) { return metadata }
     }
+    return nil
+  }
 
-    let fileName = String(name[fileNameStart...])
+  func resourceFileNames(in directory: String) throws -> [String] {
+    let parsed = parseDeviceFileName(directory)
+    if let deviceName = parsed.device {
+      guard let device = registeredDevices.first(where: { $0.name == deviceName }) as? any ResourceFileDevice else {
+        return []
+      }
+      return try device.resourceFileNames(in: parsed.name)
+    }
+    return try registeredDevices.compactMap { $0 as? any ResourceFileDevice }
+      .filter(\.searched)
+      .flatMap { try $0.resourceFileNames(in: directory) }
+  }
 
-    return try open(device: deviceName, name: fileName, mode: mode, openMethod: openMethod)
+  private func parseDeviceFileName(_ value: String) -> (device: String?, name: String) {
+    guard value.first == "%" else { return (nil, value) }
+    let deviceStart = value.index(after: value.startIndex)
+    guard let deviceEnd = value[deviceStart...].firstIndex(of: "%") else {
+      return (String(value[deviceStart...]), "")
+    }
+    let nameStart = value.index(after: deviceEnd)
+    return (String(value[deviceStart..<deviceEnd]), String(value[nameStart...]))
   }
 
 }

@@ -5,13 +5,108 @@ import Synchronization
 public final class InterpreterEnvironment: Sendable {
   let state = Mutex(SystemParameterState())
   private let globalVMUsage = Mutex<[UUID: Int]>([:])
+  private let globalResources = Mutex(ResourceStore())
+  private let resourcesInitialized = Mutex(false)
+  let resourceCategories: [Object: any ResourceCategory]
 
   /// The file devices available to contexts created in this environment.
   public let fileDevices: FileDevices
 
-  /// Creates an interpreter environment with the supplied file devices.
-  public init(fileDevices: FileDevices = FileDevices()) {
+  /// Creates an interpreter environment with file devices and optional resource-category overrides.
+  ///
+  /// - Parameters:
+  ///   - fileDevices: The file devices shared by contexts in this environment.
+  ///   - resourceCategories: Category providers that augment or replace the standard registry.
+  public init(
+    fileDevices: FileDevices = FileDevices(),
+    resourceCategories: [Object: any ResourceCategory] = [:]
+  ) {
     self.fileDevices = fileDevices
+    var categories = Resources.resources
+    categories.merge(resourceCategories) { _, replacement in replacement }
+    if resourceCategories["IODevice"] == nil {
+      categories["IODevice"] = IODeviceResources(fileDevices: fileDevices)
+    }
+    self.resourceCategories = categories
+  }
+
+  func ensureResourcesInitialized() throws {
+    if resourcesInitialized.withLock({ $0 }) { return }
+
+    var initial = ResourceStore()
+    for provider in resourceCategories.values {
+      let descriptor = provider.dictionary
+      try initial.define(
+        ResourceEntry(instance: descriptor.object(), origin: .explicit, size: -1),
+        for: .literalName(descriptor.category),
+        in: .literalName("Category")
+      )
+    }
+    let generic = try ResourceCategoryDictionary(
+      category: "Generic",
+      fileName: Operators.ResourceFileName.default
+    ).object()
+    try initial.define(
+      ResourceEntry(instance: generic, origin: .explicit, size: -1),
+      for: .literalName("Generic"),
+      in: .literalName("Category")
+    )
+
+    resourcesInitialized.withLock { initialized in
+      guard !initialized else { return }
+      globalResources.withLock { $0 = initial }
+      initialized = true
+    }
+  }
+
+  func resourceCategory(for key: Object) throws -> (any ResourceCategory)? {
+    resourceCategories[try canonicalResourceKey(key)]
+  }
+
+  func globalResource(for key: Object, in category: Object) throws -> ResourceEntry? {
+    try ensureResourcesInitialized()
+    return try globalResources.withLock { try $0.entry(for: key, in: category) }
+  }
+
+  func globalResourceEntries(in category: Object) throws -> [Object: ResourceEntry] {
+    try ensureResourcesInitialized()
+    return try globalResources.withLock { try $0.entries(in: category) }
+  }
+
+  @discardableResult
+  func defineGlobalResource(_ entry: ResourceEntry, for key: Object, in category: Object) throws -> ResourceEntry? {
+    try ensureResourcesInitialized()
+    return try globalResources.withLock { try $0.define(entry, for: key, in: category) }
+  }
+
+  @discardableResult
+  func removeGlobalResource(_ key: Object, from category: Object) throws -> ResourceEntry? {
+    try ensureResourcesInitialized()
+    return try globalResources.withLock { try $0.remove(key, from: category) }
+  }
+
+  func reclaimAutomaticGlobalResources() {
+    globalResources.withLock { $0.removeAutomaticEntries() }
+  }
+
+  func rollbackGlobalResourceMutations(_ mutations: [GlobalResourceMutation]) throws {
+    try ensureResourcesInitialized()
+    try globalResources.withLock { resources in
+      for mutation in mutations.reversed() {
+        let current = try resources.entry(for: mutation.key, in: mutation.category)
+        guard current?.id == mutation.replacementID else { continue }
+        if let previous = mutation.previous {
+          try resources.define(previous, for: mutation.key, in: mutation.category)
+        } else {
+          _ = try resources.remove(mutation.key, from: mutation.category)
+        }
+      }
+    }
+  }
+
+  func globalResourceObjects() throws -> [Object] {
+    try ensureResourcesInitialized()
+    return globalResources.withLock { $0.objects }
   }
 
   func userParameters() -> UserParameterState {
@@ -20,6 +115,13 @@ public final class InterpreterEnvironment: Sendable {
 
   func systemParameters() -> [String: ParameterValue] {
     state.withLock { $0.currentValues }
+  }
+
+  func systemString(_ name: String) -> String? {
+    state.withLock { state in
+      guard case .string(let data) = state.currentValues[name] else { return nil }
+      return String(data: data, encoding: .isoLatin1)
+    }
   }
 
   func updateSystemParameters(from dictionary: DictionaryValue) throws {

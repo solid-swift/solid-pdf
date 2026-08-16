@@ -86,15 +86,10 @@ extension Operators {
       guard context.userParameters.boolean("IdiomRecognition") else { return candidate }
 
       var sets: [DictionaryValue] = []
-      if context.allocationMode == .local {
-        let local = try ResourceOperator.resources(for: context, category: "IdiomSet", vmOveride: .local)
-        try local.forEachUnchecked { _, instance in
-          if let dictionary = instance.value as? DictionaryValue { sets.append(dictionary) }
+      for (_, entry) in try ResourceRuntime.storedEntries(in: "IdiomSet", context: context) {
+        if let dictionary = entry.instance.value as? DictionaryValue {
+          sets.append(dictionary)
         }
-      }
-      let global = try ResourceOperator.resources(for: context, category: "IdiomSet", vmOveride: .global)
-      try global.forEachUnchecked { _, instance in
-        if let dictionary = instance.value as? DictionaryValue { sets.append(dictionary) }
       }
 
       let candidateVM = (candidate.value as? any CompositeValue)?.vm

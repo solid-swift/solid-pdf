@@ -10,8 +10,12 @@ import Foundation
 enum FilterResources: ResourceCategory {
   case instance
 
-  var dictionary: ResourceCatoryDictionary {
+  var dictionary: ResourceCategoryDictionary {
     .init(category: "Filter", instanceType: .name)
+  }
+
+  var resourceExtension: (any Operators.ResourceCategoryExtension)? {
+    ImplicitResourceValidation.instance
   }
 
   func statusOfResource(forKey key: Object) throws -> (isLoaded: Bool, size: Int)? {
@@ -20,7 +24,7 @@ enum FilterResources: ResourceCategory {
     else {
       return nil
     }
-    return (true, -1)
+    return (true, 0)
   }
 
   func loadResource(forKey key: Object, in context: isolated Context) throws -> Object {
@@ -29,7 +33,7 @@ enum FilterResources: ResourceCategory {
   }
 
   func sizeOfResource(_ instance: Object) throws -> Int {
-    -1
+    0
   }
 
   func enumerateResources(matching template: String) throws -> [Object] {

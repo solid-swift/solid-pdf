@@ -10,17 +10,44 @@ import Foundation
 /// A PostScript resource category.
 public protocol ResourceCategory: Sendable {
 
-  var dictionary: ResourceCatoryDictionary { get }
+  /// The global implementation dictionary installed in the `Category` category.
+  var dictionary: ResourceCategoryDictionary { get }
 
+  /// Category-specific validation and lifecycle behavior.
+  var resourceExtension: (any Operators.ResourceCategoryExtension)? { get }
+
+  /// Reports whether a provider can supply a resource and its known VM size.
   func statusOfResource(forKey key: Object) throws -> (isLoaded: Bool, size: Int)?
+  /// Loads a provider-backed resource instance.
   func loadResource(forKey key: Object, in context: isolated Context) throws -> Object
+  /// Reports the instance's known VM size, or `-1` when it is unknown.
   func sizeOfResource(_ instance: Object) throws -> Int
+  /// Enumerates provider-backed resource keys matching a PLRM wildcard template.
   func enumerateResources(matching template: String) throws -> [Object]
 
 }
 
-/// A PostScript resource catory dictionary.
-public struct ResourceCatoryDictionary: Sendable {
+extension ResourceCategory {
+  /// Categories without special semantics use the generic implementation.
+  public var resourceExtension: (any Operators.ResourceCategoryExtension)? { nil }
+
+  /// Categories without an external provider have no externally available instances.
+  public func statusOfResource(forKey key: Object) throws -> (isLoaded: Bool, size: Int)? { nil }
+
+  /// Categories without an external provider cannot load an instance.
+  public func loadResource(forKey key: Object, in context: isolated Context) throws -> Object {
+    throw Error.undefinedResource
+  }
+
+  /// The VM consumption of an explicitly defined resource is generally unknown.
+  public func sizeOfResource(_ instance: Object) throws -> Int { -1 }
+
+  /// Categories without an external provider enumerate no external instances.
+  public func enumerateResources(matching template: String) throws -> [Object] { [] }
+}
+
+/// A PostScript resource category implementation dictionary.
+public struct ResourceCategoryDictionary: Sendable {
   /// The ``category`` value.
   public var category: String
   /// The ``defineResource`` value.
@@ -58,4 +85,29 @@ public struct ResourceCatoryDictionary: Sendable {
     self.instanceType = instanceType
     self.fileName = fileName
   }
+
+  func object() throws -> Object {
+    var entries: [Object: Object] = [
+      "Category": .literalName(category),
+      "DefineResource": defineResource,
+      "UndefineResource": undefineResource,
+      "FindResource": findResource,
+      "ResourceStatus": resourceStatus,
+      "ResourceForAll": resourceForAll,
+    ]
+    if let instanceType {
+      entries["InstanceType"] = .literalName(instanceType.name)
+    }
+    if let fileName {
+      entries["ResourceFileName"] = fileName
+    }
+
+    let object = try Object.dictionary(entries, access: .unlimited, vm: .global, kind: .literal)
+    try object.value(as: DictionaryValue.self).setAccess(to: .readOnly)
+    return object
+  }
 }
+
+/// Compatibility spelling for ``ResourceCategoryDictionary``.
+@available(*, deprecated, renamed: "ResourceCategoryDictionary")
+public typealias ResourceCatoryDictionary = ResourceCategoryDictionary

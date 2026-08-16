@@ -8,8 +8,12 @@ import Foundation
 enum IdiomSetResources: ResourceCategory {
   case instance
 
-  var dictionary: ResourceCatoryDictionary {
-    .init(category: "IdiomSet", instanceType: .dictionary)
+  var dictionary: ResourceCategoryDictionary {
+    .init(category: "IdiomSet", instanceType: .dictionary, fileName: Operators.ResourceFileName.default)
+  }
+
+  var resourceExtension: (any Operators.ResourceCategoryExtension)? {
+    IdiomSetValidation.instance
   }
 
   func statusOfResource(forKey key: Object) throws -> (isLoaded: Bool, size: Int)? {
@@ -32,17 +36,15 @@ enum IdiomSetResources: ResourceCategory {
 enum IdiomSetValidation: Operators.ResourceCategoryExtension {
   case instance
 
-  func execute(context: isolated Context, instances: some Collection<Object>) throws {
-    for instance in instances {
-      guard let dictionary = instance.value as? DictionaryValue else { throw Error.typeCheck }
-      try dictionary.forEachUnchecked { _, value in
-        guard let pair = value.value as? any CollectionValue, pair.count == 2 else {
-          throw Error.typeCheck
-        }
-        let procedures = try pair.objects(in: pair.range)
-        guard procedures.allSatisfy({ $0.kind == .executable && $0.value is any CollectionValue }) else {
-          throw Error.typeCheck
-        }
+  func validateDefinition(key: Object, instance: Object, context: isolated Context) throws {
+    let dictionary = try instance.value(as: DictionaryValue.self)
+    try dictionary.forEachUnchecked { _, value in
+      guard let pair = value.value as? any CollectionValue, pair.count == 2 else {
+        throw Error.typeCheck
+      }
+      let procedures = try pair.objects(in: pair.range)
+      guard procedures.allSatisfy({ $0.kind == .executable && $0.value is any CollectionValue }) else {
+        throw Error.typeCheck
       }
     }
   }

@@ -9,30 +9,20 @@ import Foundation
 
 /// A PostScript category resources.
 public enum CategoryResources: ResourceCategory {
+  case instance
 
   /// The ``dictionary`` value.
-  public var dictionary: ResourceCatoryDictionary {
-    .init(category: "Generic")
+  public var dictionary: ResourceCategoryDictionary {
+    .init(
+      category: "Category",
+      instanceType: .dictionary,
+      fileName: Operators.ResourceFileName.default
+    )
   }
 
-  /// Performs the ``statusOfResource`` operation.
-  public func statusOfResource(forKey key: Object) throws -> (isLoaded: Bool, size: Int)? {
-    return nil
-  }
-
-  /// Performs the ``loadResource`` operation.
-  public func loadResource(forKey key: Object, in context: isolated Context) throws -> Object {
-    throw Error.undefinedResource
-  }
-
-  /// Performs the ``sizeOfResource`` operation.
-  public func sizeOfResource(_ instance: Object) throws -> Int {
-    return -1
-  }
-
-  /// Performs the ``enumerateResources`` operation.
-  public func enumerateResources(matching template: String) throws -> [Object] {
-    return []
+  /// Category definitions require their own structural validation.
+  public var resourceExtension: (any Operators.ResourceCategoryExtension)? {
+    CategoryResourceValidation.instance
   }
 
 }

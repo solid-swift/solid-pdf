@@ -22,8 +22,8 @@ public final class ProcSetResources: ResourceCategory {
   }
 
   /// The ``dictionary`` value.
-  public var dictionary: ResourceCatoryDictionary {
-    .init(category: "ProcSet", instanceType: .dictionary)
+  public var dictionary: ResourceCategoryDictionary {
+    .init(category: "ProcSet", instanceType: .dictionary, fileName: Operators.ResourceFileName.default)
   }
 
   /// Performs the ``loadResource`` operation.

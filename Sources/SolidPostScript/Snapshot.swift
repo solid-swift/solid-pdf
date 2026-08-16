@@ -32,6 +32,7 @@ public final class Snapshot: Sendable {
     public var allocationMode: VM
     var objectFormat: ObjectFormat
     var userParameters: UserParameterState
+    var localResources: ResourceStore
     let saveDepth: Int
     let fileGeneration: Int
 
@@ -47,6 +48,7 @@ public final class Snapshot: Sendable {
       allocationMode: VM,
       objectFormat: ObjectFormat,
       userParameters: UserParameterState,
+      localResources: ResourceStore,
       saveDepth: Int,
       fileGeneration: Int
     ) {
@@ -54,6 +56,7 @@ public final class Snapshot: Sendable {
       self.allocationMode = allocationMode
       self.objectFormat = objectFormat
       self.userParameters = userParameters
+      self.localResources = localResources
       self.saveDepth = saveDepth
       self.fileGeneration = fileGeneration
     }
@@ -90,6 +93,7 @@ public final class Snapshot: Sendable {
         allocationMode: allocationMode,
         objectFormat: objectFormat,
         userParameters: userParameters,
+        localResources: localResources,
         saveDepth: saveDepth,
         fileGeneration: fileGeneration
       )
@@ -107,6 +111,7 @@ public final class Snapshot: Sendable {
       allocationMode: context.allocationMode,
       objectFormat: context.objectFormat,
       userParameters: context.userParameters,
+      localResources: context.localResources,
       saveDepth: context.saveDepth,
       fileGeneration: fileGeneration
     )
@@ -119,6 +124,7 @@ public final class Snapshot: Sendable {
   private let allocationMode: VM
   private let objectFormat: ObjectFormat
   private let userParameters: UserParameterState
+  private let localResources: ResourceStore
   private let saveDepth: Int
   private let fileGeneration: Int
 
@@ -129,6 +135,7 @@ public final class Snapshot: Sendable {
     allocationMode: VM,
     objectFormat: ObjectFormat,
     userParameters: UserParameterState,
+    localResources: ResourceStore,
     saveDepth: Int,
     fileGeneration: Int
   ) {
@@ -138,6 +145,7 @@ public final class Snapshot: Sendable {
     self.allocationMode = allocationMode
     self.objectFormat = objectFormat
     self.userParameters = userParameters
+    self.localResources = localResources
     self.saveDepth = saveDepth
     self.fileGeneration = fileGeneration
   }
@@ -163,6 +171,7 @@ public final class Snapshot: Sendable {
     context.allocationMode = allocationMode
     context.objectFormat = objectFormat
     context.userParameters = userParameters
+    context.localResources = localResources
     context.saveDepth = saveDepth
     context.applyUserParameterLimits()
     context.closeFiles(openedAfter: fileGeneration)

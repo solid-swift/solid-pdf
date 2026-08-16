@@ -49,6 +49,8 @@ public actor Context {
   var packingMode: PackingMode = .unpacked
   var activeErrors: [ErrorInvocation] = []
   var resolvingErrorNames: Set<String> = []
+  var localResources = ResourceStore()
+  var resourceLoadTransactions: [[GlobalResourceMutation]] = []
   var stackLimitBypassDepth = 0
   var saveDepth = 0
   private var fileGeneration = 0
@@ -59,7 +61,7 @@ public actor Context {
     self.fileDevices = environment.fileDevices
     let userParameters = environment.userParameters()
     self.userParameters = userParameters
-    self.dictionaries = DictionaryStack(Self.defaultDictionaries(fileDevices: environment.fileDevices))
+    self.dictionaries = DictionaryStack(Self.defaultDictionaries())
     self.operands.setMaximumDepth(Int(userParameters.integer("MaxOpStack")))
     self.dictionaries.setMaximumDepth(Int(userParameters.integer("MaxDictStack")))
   }
@@ -70,7 +72,7 @@ public actor Context {
     self.fileDevices = fileDevices
     let userParameters = environment.userParameters()
     self.userParameters = userParameters
-    self.dictionaries = DictionaryStack(Self.defaultDictionaries(fileDevices: fileDevices))
+    self.dictionaries = DictionaryStack(Self.defaultDictionaries())
     self.operands.setMaximumDepth(Int(userParameters.integer("MaxOpStack")))
     self.dictionaries.setMaximumDepth(Int(userParameters.integer("MaxDictStack")))
   }
@@ -80,6 +82,12 @@ public actor Context {
   }
 
   var stackLimitsBypassed: Bool { stackLimitBypassDepth > 0 }
+
+  func recordGlobalResourceMutation(_ mutation: GlobalResourceMutation) {
+    for index in resourceLoadTransactions.indices {
+      resourceLoadTransactions[index].append(mutation)
+    }
+  }
 
   func applyUserParameterLimits() {
     operands.setMaximumDepth(Int(userParameters.integer("MaxOpStack")))
@@ -106,7 +114,6 @@ public actor Context {
   // These are the PLRM-defined local roots that a global system dictionary may retain.
   nonisolated static let localSystemDictionaryNames: Set<Object> = [
     "$error",
-    "@Internal.Resources",
     "errordict",
     "statusdict",
     "userdict",
@@ -467,6 +474,11 @@ public actor Context {
     for item in execution {
       try visit(item.source)
     }
+    if vm == .local {
+      try localResources.objects.forEach(visit)
+    } else {
+      try environment.globalResourceObjects().forEach(visit)
+    }
     return used
   }
 
@@ -541,45 +553,19 @@ public actor Context {
 
   /// Performs the ``defaultDictionaries`` operation.
   nonisolated public static func defaultDictionaries() -> [Object] {
-    defaultDictionaries(fileDevices: FileDevices())
-  }
-
-  private nonisolated static func defaultDictionaries(fileDevices: FileDevices) -> [Object] {
     let userDict = defaultUserDictionary()
     let globalDict = defaultGlobalDictionary()
-    let sysDict = defaultSystemDictionary(userDict: userDict, globalDict: globalDict, fileDevices: fileDevices)
+    let sysDict = defaultSystemDictionary(userDict: userDict, globalDict: globalDict)
     return [userDict, globalDict, sysDict]
   }
 
   /// Performs the ``defaultSystemDictionary`` operation.
   nonisolated public static func defaultSystemDictionary(userDict: Object, globalDict: Object) -> Object {
-    defaultSystemDictionary(userDict: userDict, globalDict: globalDict, fileDevices: FileDevices())
-  }
-
-  private nonisolated static func defaultSystemDictionary(
-    userDict: Object,
-    globalDict: Object,
-    fileDevices: FileDevices
-  ) -> Object {
-
     let errorDictionary = defaultErrorDictionary()
     let errorState = defaultErrorState()
     let statusDictionary = neverThrow(
       try Object.dictionary([:], access: .unlimited, vm: .local, kind: .literal)
     )
-    let resourceCategories = neverThrow(
-      try Object.dictionary(
-        [
-          "Filter": defaultFilterResourceDictionary(),
-          "IODevice": defaultIODeviceResourceDictionary(fileDevices: fileDevices),
-          "IdiomSet": defaultIdiomSetResourceDictionary(),
-        ],
-        access: .unlimited,
-        vm: .local,
-        kind: .literal
-      )
-    )
-
     var dict: [Object: Object] = [
 
       // Constants
@@ -589,7 +575,6 @@ public actor Context {
 
       // Dictionaries
       "$error": errorState,
-      "@Internal.Resources": resourceCategories,
       "errordict": errorDictionary,
       "globaldict": globalDict,
       "userdict": userDict,
@@ -665,52 +650,6 @@ public actor Context {
   nonisolated public static func defaultUserDictionary() -> Object {
     let dict: [Object: Object] = [:]
     return neverThrow(try .dictionary(dict, access: .unlimited, vm: .local, kind: .literal))
-  }
-
-  private nonisolated static func defaultFilterResourceDictionary() -> Object {
-    var entries: [Object: Object] = [
-      "Category": .literalName("Filter"),
-      "DefineResource": Operators.DefineResource.default,
-      "UndefineResource": Operators.UndefineResource.default,
-      "FindResource": Operators.FindResource.default,
-      "ResourceStatus": Operators.ResourceStatus.default,
-      "ResourceForAll": Operators.ResourceForAll.default,
-      "InstanceType": .literalName(ObjectType.name.name),
-    ]
-    for name in Operators.Filter.availableNames {
-      entries[.literalName(name)] = .literalName(name)
-    }
-    return neverThrow(try .dictionary(entries, access: .unlimited, vm: .local, kind: .literal))
-  }
-
-  private nonisolated static func defaultIODeviceResourceDictionary(fileDevices: FileDevices) -> Object {
-    var entries: [Object: Object] = [
-      "Category": .literalName("IODevice"),
-      "DefineResource": Operators.DefineResource.default,
-      "UndefineResource": Operators.UndefineResource.default,
-      "FindResource": Operators.FindResource.default,
-      "ResourceStatus": Operators.ResourceStatus.default,
-      "ResourceForAll": Operators.ResourceForAll.default,
-      "InstanceType": .literalName(ObjectType.string.name),
-    ]
-    for device in fileDevices.registeredDevices {
-      let identifier = "%\(device.name)%"
-      entries[.literalName(identifier)] = .string(identifier, access: .readOnly, vm: .local, kind: .literal)
-    }
-    return neverThrow(try .dictionary(entries, access: .unlimited, vm: .local, kind: .literal))
-  }
-
-  private nonisolated static func defaultIdiomSetResourceDictionary() -> Object {
-    let entries: [Object: Object] = [
-      "Category": .literalName("IdiomSet"),
-      "DefineResource": .init(value: Operators.DefineResource(extension: IdiomSetValidation.instance)),
-      "UndefineResource": Operators.UndefineResource.default,
-      "FindResource": Operators.FindResource.default,
-      "ResourceStatus": Operators.ResourceStatus.default,
-      "ResourceForAll": Operators.ResourceForAll.default,
-      "InstanceType": .literalName(ObjectType.dictionary.name),
-    ]
-    return neverThrow(try .dictionary(entries, access: .unlimited, vm: .local, kind: .literal))
   }
 
 }

@@ -142,8 +142,10 @@ extension Operators {
       case -2 ... 0:
         context.userParameters.setInteger(value.value, for: "VMReclaim")
       case 1:
+        ResourceRuntime.reclaimAutomaticResources(context: context, includeGlobal: false)
         _ = try context.estimatedVMUsage(in: .local)
       case 2:
+        ResourceRuntime.reclaimAutomaticResources(context: context, includeGlobal: true)
         _ = try context.estimatedVMUsage(in: .local)
         _ = try context.estimatedVMUsage(in: .global)
       default:
