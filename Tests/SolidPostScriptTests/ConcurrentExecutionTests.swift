@@ -55,6 +55,27 @@ struct ConcurrentExecutionTests {
     #expect(v3.value == 30)
   }
 
+  @Test func sharedDictionaryCompatibilityAliasRemainsContextIsolated() async throws {
+    let environment = InterpreterEnvironment()
+    async let result1: IntegerValue = Interpreter.result(
+      content: "shareddict /x 10 put shareddict /x get",
+      environment: environment
+    )
+    async let result2: IntegerValue = Interpreter.result(
+      content: "shareddict /x 20 put shareddict /x get",
+      environment: environment
+    )
+    async let result3: IntegerValue = Interpreter.result(
+      content: "shareddict /x 30 put shareddict /x get",
+      environment: environment
+    )
+
+    let (v1, v2, v3) = try await (result1, result2, result3)
+    #expect(v1.value == 10)
+    #expect(v2.value == 20)
+    #expect(v3.value == 30)
+  }
+
   @Test(.timeLimit(.minutes(1)))
   func cancellationStopsInfiniteExecution() async {
     let task = Task {

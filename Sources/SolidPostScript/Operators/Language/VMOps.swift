@@ -56,12 +56,12 @@ extension Operators {
     }
   }
 
-  /// Implements the PostScript `setglobal` operator.
+  /// Implements the PostScript `setglobal` and compatibility `setshared` operators.
   public enum SetGlobal: OperatorValue {
     case instance
 
     /// The names that register this operator in the system dictionary.
-    public static let systemDictionaryNames: [Object] = ["setglobal"]
+    public static let systemDictionaryNames: [Object] = ["setglobal", "setshared"]
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
@@ -72,12 +72,12 @@ extension Operators {
     }
   }
 
-  /// Implements the PostScript `currentglobal` operator.
+  /// Implements the PostScript `currentglobal` and compatibility `currentshared` operators.
   public enum GetGlobal: OperatorValue {
     case instance
 
     /// The names that register this operator in the system dictionary.
-    public static let systemDictionaryNames: [Object] = ["currentglobal"]
+    public static let systemDictionaryNames: [Object] = ["currentglobal", "currentshared"]
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
@@ -86,12 +86,12 @@ extension Operators {
     }
   }
 
-  /// Implements the PostScript `gcheck` operator.
+  /// Implements the PostScript `gcheck` and compatibility `scheck` operators.
   public enum CheckGlobal: OperatorValue {
     case instance
 
     /// The names that register this operator in the system dictionary.
-    public static let systemDictionaryNames: [Object] = ["gcheck"]
+    public static let systemDictionaryNames: [Object] = ["gcheck", "scheck"]
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {

@@ -980,6 +980,7 @@ public actor Context {
       "$error": errorState,
       "errordict": errorDictionary,
       "globaldict": globalDict,
+      "shareddict": globalDict,
       "userdict": userDict,
       "statusdict": statusDictionary,
 

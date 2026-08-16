@@ -32,6 +32,22 @@ struct OperatorRegistrationTests {
   }
 
   @Test
+  func registersSharedVMCompatibilityAliases() async throws {
+    let systemDictionary: DictionaryValue = try await Interpreter.result(content: "systemdict")
+
+    for (alias, canonical) in [
+      ("currentshared", "currentglobal"),
+      ("setshared", "setglobal"),
+      ("scheck", "gcheck"),
+    ] {
+      let aliasObject = try systemDictionary.object(forKey: .literalName(alias))
+      let canonicalObject = try systemDictionary.object(forKey: .literalName(canonical))
+      #expect(aliasObject.type == .operator)
+      #expect(aliasObject == canonicalObject)
+    }
+  }
+
+  @Test
   func currentFileReturnsLiteralExecutionFile() async throws {
     let results = try await Interpreter.results(content: "currentfile")
     #expect(results.count == 1)

@@ -38,6 +38,7 @@ struct VMTests {
     #expect(statusDictionary.vm == .local)
     #expect(statusDictionary.access == .unlimited)
     #expect(try systemDictionary.object(forKey: "systemdict") == dictionaries[2])
+    #expect(try systemDictionary.object(forKey: "shareddict") == dictionaries[1])
 
     let otherDictionaries = Context.defaultDictionaries()
     #expect(dictionaries[0] != otherDictionaries[0])
@@ -185,6 +186,41 @@ struct VMTests {
 
     let res3: BooleanValue = try await Interpreter.result(content: "true gcheck")
     expectEqual(res3.value, true)
+  }
+
+  @Test
+  func sharedVMCompatibilityAliasesTrackGlobalVM() async throws {
+    let checks: [BooleanValue] = try await Interpreter.result(
+      content:
+        """
+        currentshared
+        false setshared 1 string scheck
+        true setshared 1 string scheck
+        true scheck
+        save false setshared restore currentshared
+        """,
+      count: 5
+    )
+
+    #expect(checks.map(\.value) == [true, true, true, false, false])
+  }
+
+  @Test
+  func sharedDictionaryIsGlobalWritableAndUnaffectedByRestore() async throws {
+    let checks: [BooleanValue] = try await Interpreter.result(
+      content:
+        """
+        shareddict globaldict eq
+        shareddict gcheck
+        shareddict wcheck
+        shareddict /probe 1 put
+        save shareddict /probe 2 put restore
+        shareddict /probe get 2 eq
+        """,
+      count: 4
+    )
+
+    #expect(checks.allSatisfy { $0.value })
   }
 
   @Test

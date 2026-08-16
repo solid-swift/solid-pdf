@@ -91,6 +91,22 @@ struct BinaryEncodingTests {
   }
 
   @Test
+  func encodedCompatibilityNamesResolveToGlobalVMFacilities() async throws {
+    var input = Data("true 1 setobjectformat ".utf8)
+    input.append(contentsOf: [146, 158])
+    input.append(contentsOf: [146, 42])
+    input.append(contentsOf: [146, 159])
+    input.append(Data(" gcheck 7 ".utf8))
+    input.append(immediateSystemNameSequence(index: 336))
+
+    let checks = try await execute(input)
+    #expect(checks.count == 3)
+    for check in checks {
+      #expect(try check.value(as: BooleanValue.self).value)
+    }
+  }
+
+  @Test
   func disabledBinaryBytesRemainAsciiNameCharacters() throws {
     let scanner = try Scanner(content: Data([132, 65]))
     #expect(try scanner.nextToken() == .name("\u{84}A", kind: .executable))

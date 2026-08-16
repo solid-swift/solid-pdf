@@ -40,6 +40,15 @@ struct ErrorHandlingTests {
   }
 
   @Test
+  func `compatibility alias errors retain operand rollback and command identity`() async throws {
+    let commandMatches: BooleanValue = try await Interpreter.result(
+      content: "{1 setshared} stopped clear $error /command get /setshared load eq"
+    )
+
+    #expect(commandMatches.value)
+  }
+
+  @Test
   func `custom error handler can recover and resume execution`() async throws {
     let results = try await Interpreter.results(
       content: "errordict /undefined {pop 42} put doesnotexist 7"

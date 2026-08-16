@@ -93,6 +93,13 @@ struct HostLifecycleTests {
   }
 
   @Test
+  func jobResetRestoresSharedAllocationModeToLocal() async throws {
+    let session = InterpreterSession()
+    try await session.executeJob(content: "true setshared")
+    try await session.executeJob(content: "currentshared {undefined} if")
+  }
+
+  @Test
   func startJobUsesAuthorizationAndHonorsSaveDepth() async throws {
     let authorizer = RecordingAuthorizer(result: false)
     let environment = InterpreterEnvironment(
