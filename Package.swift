@@ -17,7 +17,7 @@ let package = Package(
   dependencies: [
     .package(
       url: "https://github.com/solid-swift/solid-foundation.git",
-      revision: "c97bb703862b5f0c6fe75fd477fb759b18830bd1"
+      revision: "f82582841ec907cf113525504a1de971ceb6a0ff"
     ),
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
   ],

@@ -59,6 +59,17 @@ Integer arithmetic promotes results outside the integer range to real values whe
 PostScript Language Reference. Numeric overflow, underflow, invalid domains, and division by zero are
 reported through the PostScript error environment; NaN and infinity are not representable VM values.
 
+## DCT/JPEG implementation profile
+
+On Apple platforms, `DCTDecode` supports the common baseline JPEG profiles used by PostScript jobs,
+including grayscale, RGB/YCbCr, CMYK, and YCCK data with common 4:4:4, 4:2:2, and 4:2:0 sampling.
+The interpreter validates JPEG structure and PostScript parameters before delegating pixel conversion
+to ImageIO. Progressive, abbreviated, two-component, and separate-scan JPEG data remains deferred and
+fails deterministically with `ioerror` rather than being accepted with partial semantics.
+
+See [PostScript conformance](Documentation/PostScriptConformance.md) for the detailed support matrix and
+the remaining portability boundary.
+
 ## License
 
 SolidPDF is available under the MIT License. See [LICENSE](LICENSE).

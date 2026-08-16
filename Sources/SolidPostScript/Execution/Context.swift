@@ -483,6 +483,12 @@ public actor Context {
     return environment.updateGlobalVMUsage(for: vmAccountingID, to: used)
   }
 
+  func remainingVMCapacity(in vm: VM) throws -> Int {
+    let maximum = vm == .local ? Int(userParameters.integer("MaxLocalVM")) : Int(Int32.max)
+    let used = try estimatedVMUsage(in: vm)
+    return maximum - min(used, maximum)
+  }
+
   func preflightDictionaryGrowth(_ dictionary: DictionaryValue, key: Object) throws {
     guard try dictionary.object(forKeyIfExists: key) == nil else { return }
     try preflightAllocation(bytes: 16, vm: dictionary.vm)

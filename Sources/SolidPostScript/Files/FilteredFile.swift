@@ -433,6 +433,8 @@ final class FilterTarget: Sendable {
 func translateCodecError<T>(_ body: () throws -> T) throws -> T {
   do {
     return try body()
+  } catch StreamCodecError.limitExceeded {
+    throw Error.limitCheck
   } catch is StreamCodecError {
     throw Error.ioError
   }
@@ -443,6 +445,8 @@ func translateCodecOption<T>(_ body: () throws -> T) throws -> T {
     return try body()
   } catch StreamCodecError.invalidOption {
     throw Error.rangeCheck
+  } catch StreamCodecError.limitExceeded {
+    throw Error.limitCheck
   } catch is StreamCodecError {
     throw Error.ioError
   }

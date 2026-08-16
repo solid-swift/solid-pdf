@@ -70,8 +70,12 @@ extension Operators {
           context.operands.push(.file(file, access: .unlimited, vm: vm, kind: .literal))
         } else {
           let closeSource = try dictionary.boolean("CloseSource", default: false)
-          let codec = try decoder(named: name, dictionary: dictionary)
           let vm = retainedVM([source] + retainedDictionary(name: name, dictionary: dictionary))
+          let codec = try decoder(
+            named: name,
+            dictionary: dictionary,
+            maximumDecodedBytes: context.remainingVMCapacity(in: vm)
+          )
           let file = try DecodingFilterFile(
             name: name,
             codec: codec,
@@ -156,17 +160,21 @@ extension Operators {
       let dictionary = try popOptionalDictionary(context: context)
       let source = try context.operands.pop()
       var data = try await readAll(source: source, context: context)
+      let vm = retainedVM([source])
 
       if let filterObject = try dictionary.object("Filter") {
         let filters = try filterNames(filterObject)
         let decodeParms = try decodeParameters(dictionary: dictionary, count: filters.count)
         for (index, name) in filters.enumerated() {
-          let codec = try decoder(named: name, dictionary: decodeParms[index])
+          let codec = try decoder(
+            named: name,
+            dictionary: decodeParms[index],
+            maximumDecodedBytes: context.remainingVMCapacity(in: vm)
+          )
           data = try decode(codec: codec, data: data)
         }
       }
 
-      let vm = retainedVM([source])
       let file = MaterializedFilterFile(
         data: data,
         name: "ReusableStreamDecode",
@@ -208,7 +216,11 @@ extension Operators {
       }
     }
 
-    private func decoder(named name: String, dictionary: FilterDictionary) throws -> any IncrementalFilter {
+    private func decoder(
+      named name: String,
+      dictionary: FilterDictionary,
+      maximumDecodedBytes: Int
+    ) throws -> any IncrementalFilter {
       switch name {
       case "ASCIIHexDecode":
         ASCIIHexDecoder()
@@ -223,7 +235,12 @@ extension Operators {
       case "CCITTFaxDecode":
         CCITTFaxDecoder(options: try ccittOptions(dictionary: dictionary))
       case "DCTDecode":
-        DCTDecoder(options: try dctDecodeOptions(dictionary: dictionary))
+        DCTDecoder(
+          options: try dctDecodeOptions(
+            dictionary: dictionary,
+            maximumDecodedBytes: maximumDecodedBytes
+          )
+        )
       default:
         throw Error.undefined
       }
@@ -300,7 +317,10 @@ extension Operators {
       }
     }
 
-    private func dctDecodeOptions(dictionary: FilterDictionary) throws -> DCTDecodeOptions {
+    private func dctDecodeOptions(
+      dictionary: FilterDictionary,
+      maximumDecodedBytes: Int
+    ) throws -> DCTDecodeOptions {
       try translateCodecOption {
         try DCTDecodeOptions(
           columns: dictionary.integer("Columns", default: 0),
@@ -310,7 +330,8 @@ extension Operators {
           horizontalSamples: dictionary.integerArray("HSamples", default: []),
           verticalSamples: dictionary.integerArray("VSamples", default: []),
           quantizationTables: dictionary.dataArray("QuantTables", default: []),
-          huffmanTables: dictionary.huffmanTables("HuffTables", default: [])
+          huffmanTables: dictionary.huffmanTables("HuffTables", default: []),
+          maximumDecodedBytes: maximumDecodedBytes
         )
       }
     }

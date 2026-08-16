@@ -7,6 +7,7 @@
 
 import Foundation
 @testable import SolidPostScript
+import SolidIO
 import Testing
 
 @Suite
@@ -281,6 +282,52 @@ struct FilteredFileTests {
     )
     #expect(results.contains { ($0.value as? BooleanValue)?.value == true })
     #expect(results.contains { ($0.value as? NameValue)?.value == "ioerror" })
+  }
+
+  @Test
+  func progressiveDCTFailureIsLazyAndUsesErrorLifecycle() async throws {
+    let results = try await Interpreter.results(
+      content: """
+        /decoder <FFD8FFC20002> /DCTDecode filter def
+        { decoder read } stopped
+        $error /errorname get
+        """
+    )
+    #expect(results.contains { ($0.value as? BooleanValue)?.value == true })
+    #expect(results.contains { ($0.value as? NameValue)?.value == "ioerror" })
+  }
+
+  @Test
+  func dctDecodeBudgetUsesRetainedVMDomain() async throws {
+    let encodedURL = temporaryURL()
+    defer { try? FileManager.default.removeItem(at: encodedURL) }
+
+    let codec = DCTEncoder(
+      options: try DCTEncodeOptions(columns: 1_024, rows: 1_024, colors: 1, colorTransform: 0)
+    )
+    let result = try codec.process(input: Data(repeating: 127, count: 1_024 * 1_024))
+    var encoded = result.output
+    encoded.append(try codec.finish() ?? Data())
+    try encoded.write(to: encodedURL)
+
+    let results = try await Interpreter.results(
+      content: """
+        << /MaxLocalVM 200000 >> setuserparams
+        { (\(encodedURL.path)) (r) file /DCTDecode filter read } stopped
+        $error /errorname get
+        """
+    )
+    #expect(results.contains { ($0.value as? BooleanValue)?.value == true })
+    #expect(results.contains { ($0.value as? NameValue)?.value == "limitcheck" })
+  }
+
+  @Test
+  func codecLimitErrorsTranslateToLimitcheck() {
+    #expect(throws: Error.limitCheck) {
+      try translateCodecError { () throws -> Void in
+        throw StreamCodecError.limitExceeded
+      }
+    }
   }
 
   @Test
