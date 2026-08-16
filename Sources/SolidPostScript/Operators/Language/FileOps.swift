@@ -280,8 +280,7 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) throws {
 
-      let stdout = try context.fileDevices.open(device: "%stdout", name: "", mode: .read, openMethod: .truncateOrCreate)
-      try stdout.flush()
+      try context.standardOutput().flush(context: context)
     }
   }
 

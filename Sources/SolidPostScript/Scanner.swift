@@ -11,6 +11,11 @@ import SolidCore
 /// A scanner that converts PostScript source bytes into tokens.
 public class Scanner {
 
+  enum Lexeme {
+    case token(Token)
+    case binary(UInt8)
+  }
+
   typealias Char = UInt8
   typealias Chars = [UInt8]
   typealias CharSet = Set<Char>
@@ -85,38 +90,55 @@ public class Scanner {
 
   /// Performs the ``nextToken`` operation.
   public func nextToken() throws -> Token? {
+    guard let lexeme = try nextLexeme(binaryEnabled: false) else {
+      return nil
+    }
+    guard case .token(let token) = lexeme else {
+      throw Error.unregistered(.internalScannerError)
+    }
+    return token
+  }
+
+  func nextLexeme(binaryEnabled: Bool) throws -> Lexeme? {
 
     var chars: [Char] = []
 
     while true {
 
       guard let char = try next() else {
-        return try token(chars, putBack: 0)
+        return try token(chars, putBack: 0).map(Lexeme.token)
+      }
+
+      if binaryEnabled && (128...159).contains(char) {
+        if let token = try token(chars) {
+          return .token(token)
+        }
+        return .binary(char)
       }
 
       switch char {
       case Self.whitespace:
         if let token = try token(chars) {
-          return token
+          return .token(token)
         }
         try skip(while: Self.whitespace.contains)
 
       case Self.literalStringDelims.open:
-        return try token(chars) ?? literalString()
+        return try token(chars).map(Lexeme.token) ?? .token(literalString())
 
       case Self.angleDelims.open where try peek().map { $0 == Self.ascii85Marker || $0.isHexDigit } ?? false:
-        return try token(chars) ?? encodedString()
+        return try token(chars).map(Lexeme.token) ?? .token(encodedString())
 
       case Self.angleDelims.open where try peek() == Self.angleDelims.open,
         Self.angleDelims.close where try peek() == Self.angleDelims.close:
-        return try token(chars) ?? token([char] + take(1), putBack: 0)
+        return try token(chars).map(Lexeme.token) ?? .token(token([char] + take(1), putBack: 0).neverNil())
 
       case Self.arrayDelims, Self.procedureDelims, Self.angleDelims.open, Self.angleDelims.close:
-        return try token(chars) ?? name(char)
+        return try token(chars).map(Lexeme.token) ?? .token(name(char))
 
       case Self.nameDelim:
         if let token = try token(chars) {
-          return token
+          return .token(token)
         }
 
         chars.append(char)
@@ -129,7 +151,7 @@ public class Scanner {
       case Self.commentDelim:
         try comment()
         if let token = try token(chars, putBack: 0) {
-          return token
+          return .token(token)
         }
 
       default:
@@ -391,6 +413,17 @@ public class Scanner {
     get throws {
       try file.available + pushback.count
     }
+  }
+
+  func readBinaryByte() throws -> UInt8 {
+    try next().unwrap(or: Error.syntaxError)
+  }
+
+  func readBinaryData(count: Int) throws -> Data {
+    guard count >= 0 else {
+      throw Error.syntaxError
+    }
+    return try Data((0..<count).map { _ in try readBinaryByte() })
   }
 
   private func next() throws -> Char? {

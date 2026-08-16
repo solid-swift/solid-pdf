@@ -30,6 +30,7 @@ public final class Snapshot: Sendable {
     public var packingMode: Context.PackingMode
     /// The ``allocationMode`` value.
     public var allocationMode: VM
+    var objectFormat: ObjectFormat
     let fileGeneration: Int
 
     /// The ``objects`` value.
@@ -39,9 +40,15 @@ public final class Snapshot: Sendable {
     private var savedCompositeIdentities: Set<ObjectIdentifier> = []
     private var retainedObjects: [Object] = []
 
-    fileprivate init(packingMode: Context.PackingMode, allocationMode: VM, fileGeneration: Int) {
+    fileprivate init(
+      packingMode: Context.PackingMode,
+      allocationMode: VM,
+      objectFormat: ObjectFormat,
+      fileGeneration: Int
+    ) {
       self.packingMode = packingMode
       self.allocationMode = allocationMode
+      self.objectFormat = objectFormat
       self.fileGeneration = fileGeneration
     }
 
@@ -75,6 +82,7 @@ public final class Snapshot: Sendable {
         operations: operations,
         packingMode: packingMode,
         allocationMode: allocationMode,
+        objectFormat: objectFormat,
         fileGeneration: fileGeneration
       )
     }
@@ -89,6 +97,7 @@ public final class Snapshot: Sendable {
     return Builder(
       packingMode: context.packingMode,
       allocationMode: context.allocationMode,
+      objectFormat: context.objectFormat,
       fileGeneration: fileGeneration
     )
   }
@@ -98,6 +107,7 @@ public final class Snapshot: Sendable {
   private let state: Mutex<State>
   private let packingMode: Context.PackingMode
   private let allocationMode: VM
+  private let objectFormat: ObjectFormat
   private let fileGeneration: Int
 
   private init(
@@ -105,12 +115,14 @@ public final class Snapshot: Sendable {
     operations: [RestoreOperation],
     packingMode: Context.PackingMode,
     allocationMode: VM,
+    objectFormat: ObjectFormat,
     fileGeneration: Int
   ) {
     self.timestamp = Date.now
     self.state = Mutex(.ready(Payload(retainedObjects: retainedObjects, operations: operations)))
     self.packingMode = packingMode
     self.allocationMode = allocationMode
+    self.objectFormat = objectFormat
     self.fileGeneration = fileGeneration
   }
 
@@ -133,6 +145,7 @@ public final class Snapshot: Sendable {
 
     context.packingMode = packingMode
     context.allocationMode = allocationMode
+    context.objectFormat = objectFormat
     context.closeFiles(openedAfter: fileGeneration)
   }
 

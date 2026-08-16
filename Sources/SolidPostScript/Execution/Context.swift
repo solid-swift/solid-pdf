@@ -35,18 +35,23 @@ public actor Context {
   var random = RandomGenerator(seed: Int32.random(in: .min ... .max))
 
   let start = Date.timeIntervalSinceReferenceDate
-  let fileDevices = FileDevices()
+  let fileDevices: FileDevices
 
   var operands = OperandStack()
   var dictionaries = DictionaryStack(defaultDictionaries())
   var execution = ExecutionStack()
   var allocationMode: VM = .local
+  var objectFormat: ObjectFormat = .disabled
   var executionModes: Stack<ExecutionMode> = [.immediate]
   var packingMode: PackingMode = .unpacked
   var activeErrors: [ErrorInvocation] = []
   var resolvingErrorNames: Set<String> = []
   private var fileGeneration = 0
   private var openedLocalFiles: [(generation: Int, file: WeakFile)] = []
+
+  init(fileDevices: FileDevices = FileDevices()) {
+    self.fileDevices = fileDevices
+  }
 
   internal var executionMode: ExecutionMode {
     executionModes.peek().neverNil("Mode stack overflow")
@@ -88,15 +93,28 @@ public actor Context {
       }
 
       let savedOperands = operands
-      let object: Object
+      let scanned: ScannedObject
 
       do {
-        guard let nextObject = try iterator.next(context: self) else {
+        let nextObject = if let tokenIterator = iterator as? TokenObjectIterator {
+          try tokenIterator.nextScanned(context: self)
+        } else {
+          try iterator.next(context: self).map { ScannedObject($0) }
+        }
+
+        guard let nextObject else {
           _ = execution.pop()
           continue
         }
 
-        object = nextObject
+        scanned = nextObject
+      } catch let failure as ScannerFailure {
+        try initiate(
+          error: failure.error,
+          command: scannerCommand(failure.command),
+          savedOperands: savedOperands
+        )
+        continue
       } catch let error as Error {
         guard error.postScriptName != nil else {
           throw error
@@ -107,7 +125,11 @@ public actor Context {
         continue
       }
 
-      if executionMode == .immediate || Self.deferredExecutionNames.contains(object) {
+      let object = scanned.object
+
+      if scanned.implicitlyExecutable && executionMode == .immediate {
+        try object.execute(context: self, method: .indirect)
+      } else if executionMode == .immediate || Self.deferredExecutionNames.contains(object) {
         try object.execute(context: self, method: .direct)
       } else {
         operands.push(object)
@@ -124,12 +146,27 @@ public actor Context {
       } else {
         operands.push(object)
       }
+    } catch let failure as ScannerFailure {
+      try initiate(
+        error: failure.error,
+        command: scannerCommand(failure.command),
+        savedOperands: savedOperands
+      )
     } catch let error as Error {
       guard error.postScriptName != nil else {
         throw error
       }
 
       try initiate(error: error, command: object, savedOperands: savedOperands)
+    }
+  }
+
+  private func scannerCommand(_ command: ScannerFailure.Command) -> Object {
+    switch command {
+    case .executableName(let name):
+      .name(name, kind: .executable)
+    case .string(let description):
+      .string(description, access: .unlimited, vm: allocationMode, kind: .literal)
     }
   }
 
@@ -222,8 +259,43 @@ public actor Context {
 
   func executeHandleError() throws {
     let errorState = try systemDictionary().objectValue(forKey: "$error", as: DictionaryValue.self)
+    let newError = try errorState.objectValue(forKey: "newerror", as: BooleanValue.self).value
+    let binary = try errorState.objectValue(forKey: "binary", as: BooleanValue.self).value
+    let errorName = try errorState.object(forKey: "errorname")
+    let command = try errorState.object(forKey: "command")
+
     try errorState.updateObject(.boolean(false), forKey: "newerror")
     try errorState.updateObject(.null, forKey: "errorinfo")
+
+    guard newError, binary, objectFormat.binaryEnabled else {
+      return
+    }
+
+    let printableCommand = binaryErrorCommand(command)
+    let report = try Object.array(
+      [.literalName("Error"), errorName, printableCommand, .boolean(false)],
+      access: .unlimited,
+      vm: .local,
+      kind: .literal
+    )
+    var encoder = BinaryObjectSequenceEncoder(format: objectFormat, tag: 250)
+    try standardOutput().write(contentsOf: encoder.encode(report), context: self)
+  }
+
+  private func binaryErrorCommand(_ command: Object) -> Object {
+    if let op = command.value as? any OperatorValue,
+      let name = op.systemDictionaryNames.first?.value as? NameValue
+    {
+      return .name(name.value, kind: .executable)
+    }
+
+    do {
+      var encoder = BinaryObjectSequenceEncoder(format: objectFormat, tag: 0)
+      _ = try encoder.encode(command)
+      return command
+    } catch {
+      return .name("--nostringval--", kind: .executable)
+    }
   }
 
   private func systemDictionary() throws -> DictionaryValue {
@@ -306,6 +378,10 @@ public actor Context {
     guard vm == .local else { return }
     openedLocalFiles.removeAll { $0.file.value == nil }
     openedLocalFiles.append((fileGeneration, WeakFile(file)))
+  }
+
+  func standardOutput() throws -> any File {
+    try fileDevices.open(device: "stdout", name: "", mode: .write, openMethod: .truncateOrCreate)
   }
 
   func closeFiles(openedAfter generation: Int) {
