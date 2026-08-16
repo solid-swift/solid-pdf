@@ -20,6 +20,7 @@ final class MaterializedFilterFile: File, Sendable {
   let name: String
   let mode: Mode = .read
   let isPositionable: Bool
+  var closesAtEndOfFile: Bool { closeAtEnd }
   private let closeAtEnd: Bool
   private let state: Mutex<State>
 

@@ -131,27 +131,27 @@ public class Scanner {
 
       do {
         let object = try nextObject(context: context)
-        returnContextualLookahead(to: context)
+        try await returnContextualLookahead(to: context)
         contextualInput = nil
         contextualOffset = 0
         contextualEOF = false
         return object
       } catch is ScannerInputRequired {
         do {
-          if let byte = try await file.readByte(context: context) {
+          if let byte = try await context.readScannerByte(from: file) {
             input.append(byte)
           } else {
             reachedEOF = true
           }
         } catch {
-          returnContextualLookahead(to: context)
+          try await returnContextualLookahead(to: context)
           contextualInput = nil
           contextualOffset = 0
           contextualEOF = false
           throw error
         }
       } catch {
-        returnContextualLookahead(to: context)
+        try await returnContextualLookahead(to: context)
         contextualInput = nil
         contextualOffset = 0
         contextualEOF = false
@@ -539,13 +539,14 @@ public class Scanner {
     return byte
   }
 
-  private func returnContextualLookahead(to context: isolated Context) {
+  private func returnContextualLookahead(to context: isolated Context) async throws {
     var unread = Data(pushback.reversed())
     if let contextualInput, contextualOffset < contextualInput.count {
       unread.append(contentsOf: contextualInput.dropFirst(contextualOffset))
     }
     pushback.removeAll()
     context.prependReadAhead(unread, to: file)
+    try await context.finishScannerRead(from: file)
   }
 
   private func take(_ count: Int) throws -> [Char] {

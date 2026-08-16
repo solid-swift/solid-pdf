@@ -95,7 +95,7 @@ extension Operators {
 
       case .file:
         let file = try op.value(as: FileValue.self)
-        try file.access.check(.read)
+        try file.checkReadable()
         let scanner = try Scanner(file: file.file)
         let reader = TokenObjectIterator(scanner: scanner)
 

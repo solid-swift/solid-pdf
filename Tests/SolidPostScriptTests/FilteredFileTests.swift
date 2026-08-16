@@ -262,6 +262,34 @@ struct FilteredFileTests {
   }
 
   @Test
+  func reusableStreamRemainsOpenAtEndOfFile() async throws {
+    let result: BooleanValue = try await Interpreter.result(
+      content: """
+        /stream (AB) /ReusableStreamDecode filter def
+        stream 2 string readstring pop pop
+        stream status
+        stream read not and
+        stream status and
+        """
+    )
+
+    #expect(result.value)
+  }
+
+  @Test
+  func decodingFilterClosesAfterEndOfDataIsDrained() async throws {
+    let result: BooleanValue = try await Interpreter.result(
+      content: """
+        /stream (41>) /ASCIIHexDecode filter def
+        stream 1 string readstring pop pop
+        stream status
+        """
+    )
+
+    #expect(!result.value)
+  }
+
+  @Test
   func subFileOverlapAndCount() async throws {
     let result: StringValue = try await Interpreter.result(
       content: """

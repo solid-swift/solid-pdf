@@ -48,12 +48,12 @@ struct OperatorRegistrationTests {
   }
 
   @Test
-  func currentFileReturnsLiteralExecutionFile() async throws {
+  func currentFileReturnsLiteralExecutionFileAndClosesAtEndOfFile() async throws {
     let results = try await Interpreter.results(content: "currentfile")
     #expect(results.count == 1)
     #expect(results.first?.kind == .literal)
     let file = try #require(results.first?.value as? FileValue)
-    #expect(!file.file.isClosed)
+    #expect(file.file.isClosed)
   }
 
   @Test

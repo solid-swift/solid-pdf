@@ -19,6 +19,9 @@ public protocol File: AnyObject, Sendable {
   /// Whether this file supports random positioning.
   var isPositionable: Bool { get }
 
+  /// Whether encountering end-of-file during reading closes this file automatically.
+  var closesAtEndOfFile: Bool { get }
+
   func readByte() throws -> UInt8?
   func readByte(ifMatches predicate: (UInt8) -> Bool) throws -> (matched: UInt8?, eof: Bool)
   func read(untilMatching predicate: (UInt8) -> Bool) throws -> UInt8?
@@ -47,6 +50,9 @@ extension File {
 
   /// Files are positionable unless a conformer reports otherwise.
   public var isPositionable: Bool { true }
+
+  /// Files close when end-of-file is encountered unless a conformer reports otherwise.
+  public var closesAtEndOfFile: Bool { true }
 
   /// Performs the ``read`` operation.
   public func read(untilMatching predicate: (UInt8) -> Bool) throws -> UInt8? {
@@ -83,7 +89,9 @@ extension File {
     while result.count < max {
 
       guard let byte = try readHexByte() else {
-        try close()
+        if closesAtEndOfFile, !isClosed {
+          try close()
+        }
         return (result, true)
       }
 
@@ -100,18 +108,22 @@ extension File {
     while true {
 
       guard let byte = try readByte() else {
+        if closesAtEndOfFile, !isClosed {
+          try close()
+        }
         return (result, true)
       }
 
       if byte == Scanner.carriageReturn || byte == Scanner.lineFeed {
 
         if byte == Scanner.carriageReturn {
-          if try readByte(ifMatches: { $0 == Scanner.lineFeed }).eof {
-            return (result, true)
+          let lookahead = try readByte(ifMatches: { $0 == Scanner.lineFeed })
+          if lookahead.eof, closesAtEndOfFile, !isClosed {
+            try close()
           }
         }
 
-        break
+        return (result, false)
       }
 
       result.append(byte)
@@ -196,7 +208,6 @@ extension File {
     var result = Data(capacity: max)
     while result.count < max {
       guard let first = try await nextHexDigit(), let second = try await nextHexDigit() else {
-        try await close(context: context)
         return (result, true)
       }
       let firstIndex = Int(first & 0x1F ^ 0x10)
@@ -211,12 +222,16 @@ extension File {
     while let byte = try await readByte(context: context) {
       if byte == Scanner.lineFeed { return (result, false) }
       if byte == Scanner.carriageReturn {
-        let lookahead = try await readByte(ifMatches: { $0 == Scanner.lineFeed }, context: context)
-        return (result, lookahead.eof)
+        _ = try await readByte(ifMatches: { $0 == Scanner.lineFeed }, context: context)
+        return (result, false)
       }
       result.append(byte)
     }
     return (result, true)
+  }
+
+  func readLine(max: Int, context: isolated Context) async throws -> (line: Data, eof: Bool) {
+    try await context.readLine(max: max, from: self)
   }
 
   func write(contentsOf data: Data, context: isolated Context) async throws {

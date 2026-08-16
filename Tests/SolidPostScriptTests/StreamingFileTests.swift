@@ -59,6 +59,31 @@ struct StreamingFileTests {
     _ = try await execution.value
   }
 
+  @Test(.timeLimit(.minutes(1)))
+  func readStringCombinesPartialLiveInputChunks() async throws {
+    let input = StreamingSource()
+    let environment = InterpreterEnvironment(
+      hostConfiguration: InterpreterHostConfiguration(standardInput: input)
+    )
+    let execution = Task {
+      try await Interpreter.results(
+        content: "(%stdin) (r) file 3 string readstring",
+        environment: environment
+      )
+    }
+
+    await input.waitUntilReadStarted()
+    input.send(Data("A".utf8))
+    input.send(Data("B".utf8))
+    input.send(Data("C".utf8))
+
+    let results = try await execution.value
+    #expect(try results[0].value(as: BooleanValue.self).value)
+    #expect(try results[1].value(as: StringValue.self).string == "ABC")
+    #expect(input.bytesRead == 3)
+    input.finish()
+  }
+
   @Test
   func fileTokenReturnsACompleteProcedure() async throws {
     let results = try await Interpreter.results(
@@ -151,6 +176,200 @@ struct StreamingFileTests {
   }
 
   @Test
+  func exactReadsRemainOpenUntilEndOfFileIsEncountered() async throws {
+    let file = DataFile(data: Data("AB".utf8), mode: .read)
+    let results = try await Interpreter.results(
+      content: """
+        /file (%cursor%input) (r) file def
+        file 2 string readstring pop pop
+        file status
+        file bytesavailable
+        file read
+        file status
+        file bytesavailable
+        """,
+      environment: environment(file: file)
+    )
+
+    #expect(try results[0].value(as: IntegerValue.self).value == -1)
+    #expect(try !results[1].value(as: BooleanValue.self).value)
+    #expect(try !results[2].value(as: BooleanValue.self).value)
+    #expect(try results[3].value(as: IntegerValue.self).value == 0)
+    #expect(try results[4].value(as: BooleanValue.self).value)
+  }
+
+  @Test
+  func inputFlushReachesEndWithoutClosingAnOrdinaryFile() async throws {
+    let file = DataFile(data: Data("AB".utf8), mode: .read)
+    let results = try await Interpreter.results(
+      content: """
+        /file (%cursor%input) (r) file def
+        file flushfile
+        file status
+        file read
+        file status
+        """,
+      environment: environment(file: file)
+    )
+
+    #expect(try !results[0].value(as: BooleanValue.self).value)
+    #expect(try !results[1].value(as: BooleanValue.self).value)
+    #expect(try results[2].value(as: BooleanValue.self).value)
+  }
+
+  @Test
+  func inputSurfacesCloseOrdinaryFilesAfterEncounteringEndOfFile() async throws {
+    let cases: [(Data, String)] = [
+      (Data(), "file read pop"),
+      (Data("A".utf8), "file 2 string readstring pop pop"),
+      (Data("4".utf8), "file 2 string readhexstring pop pop"),
+      (Data("A".utf8), "file 2 string readline pop pop"),
+      (Data("name".utf8), "file token pop pop"),
+    ]
+
+    for (data, operation) in cases {
+      let file = DataFile(data: data, mode: .read)
+      let status: BooleanValue = try await Interpreter.result(
+        content: """
+          /file (%cursor%input) (r) file def
+          \(operation)
+          file status
+          """,
+        environment: environment(file: file)
+      )
+      #expect(!status.value)
+    }
+  }
+
+  @Test
+  func executableFileClosesAfterItsFinalEndOfFileProbe() async throws {
+    let file = DataFile(data: Data("1".utf8), mode: .read)
+    let results = try await Interpreter.results(
+      content: """
+        /file (%cursor%input) (r) file def
+        file cvx exec
+        file status
+        """,
+      environment: environment(file: file)
+    )
+
+    #expect(try !results[0].value(as: BooleanValue.self).value)
+    #expect(try results[1].value(as: IntegerValue.self).value == 1)
+  }
+
+  @Test
+  func closedInputFilesReturnEndOfFileResults() async throws {
+    let file = DataFile(data: Data("A".utf8), mode: .read)
+    let results = try await Interpreter.results(
+      content: """
+        /file (%cursor%input) (r) file def
+        file closefile
+        file read
+        file 2 string readstring
+        file 2 string readhexstring
+        file 2 string readline
+        file token
+        """,
+      environment: environment(file: file)
+    )
+
+    #expect(results.count == 8)
+    #expect(try !results[0].value(as: BooleanValue.self).value)
+    for index in [1, 3, 5] {
+      #expect(try !results[index].value(as: BooleanValue.self).value)
+      #expect(try results[index + 1].value(as: StringValue.self).count == 0)
+    }
+    #expect(try !results[7].value(as: BooleanValue.self).value)
+  }
+
+  @Test
+  func readLineRecognizesEveryEndOfLineFormAndPreservesLookahead() async throws {
+    for data in ["A\nB", "A\rB", "A\r\nB"] {
+      let file = DataFile(data: Data(data.utf8), mode: .read)
+      let results = try await Interpreter.results(
+        content: """
+          /file (%cursor%input) (r) file def
+          file 2 string readline
+          file read
+          """,
+        environment: environment(file: file)
+      )
+
+      #expect(try results[0].value(as: IntegerValue.self).value == 66)
+      #expect(try results[1].value(as: BooleanValue.self).value)
+      #expect(try results[2].value(as: BooleanValue.self).value)
+      #expect(try results[3].value(as: StringValue.self).string == "A")
+    }
+  }
+
+  @Test
+  func carriageReturnAtEndOfFileTerminatesTheLineAndClosesTheFile() async throws {
+    let file = DataFile(data: Data("A\r".utf8), mode: .read)
+    let results = try await Interpreter.results(
+      content: """
+        /file (%cursor%input) (r) file def
+        file 2 string readline
+        file status
+        """,
+      environment: environment(file: file)
+    )
+
+    #expect(try !results[0].value(as: BooleanValue.self).value)
+    #expect(try results[1].value(as: BooleanValue.self).value)
+    #expect(try results[2].value(as: StringValue.self).string == "A")
+  }
+
+  @Test
+  func lineFeedAtEndOfFileDoesNotCloseUntilTheNextRead() async throws {
+    let file = DataFile(data: Data("A\n".utf8), mode: .read)
+    let results = try await Interpreter.results(
+      content: """
+        /file (%cursor%input) (r) file def
+        file 2 string readline pop pop
+        file status
+        file read
+        file status
+        """,
+      environment: environment(file: file)
+    )
+
+    #expect(try !results[0].value(as: BooleanValue.self).value)
+    #expect(try !results[1].value(as: BooleanValue.self).value)
+    #expect(try results[2].value(as: BooleanValue.self).value)
+  }
+
+  @Test
+  func readLineRangeCheckIsBoundedAndPreservesTheDestination() async throws {
+    for (data, nextByte) in [("abc\nrest", 10), ("abcdef\n", 100)] {
+      let file = DataFile(data: Data(data.utf8), mode: .read)
+      let result: BooleanValue = try await Interpreter.result(
+        content: """
+          /file (%cursor%input) (r) file def
+          /scratch 3 string def
+          { file scratch readline } stopped pop clear
+          $error /errorname get /rangecheck eq
+          $error /command get /readline load eq and
+          scratch 0 get 0 eq and
+          file read exch pop \(nextByte) eq and
+          """,
+        environment: environment(file: file)
+      )
+      #expect(result.value)
+    }
+
+    let zeroLengthFile = DataFile(data: Data("A\n".utf8), mode: .read)
+    let zeroLengthResult: BooleanValue = try await Interpreter.result(
+      content: """
+        /file (%cursor%input) (r) file def
+        { file 0 string readline } stopped pop clear
+        file read exch pop 65 eq
+        """,
+      environment: environment(file: zeroLengthFile)
+    )
+    #expect(zeroLengthResult.value)
+  }
+
+  @Test
   func cursorStateIsClearedByPositioningResetFlushAndClose() async throws {
     let positionFile = DataFile(data: Data("123<".utf8), mode: .read)
     let positionResult: IntegerValue = try await Interpreter.result(
@@ -178,11 +397,11 @@ struct StreamingFileTests {
     let closeResult: BooleanValue = try await Interpreter.result(
       content: """
         /file (%cursor%input) (r) file def
-        file token pop pop file closefile { file read } stopped
+        file token pop pop file closefile file read
         """,
       environment: environment(file: closeFile)
     )
-    #expect(closeResult.value)
+    #expect(!closeResult.value)
   }
 
   @Test

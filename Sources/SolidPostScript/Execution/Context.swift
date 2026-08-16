@@ -95,6 +95,7 @@ public actor Context {
   private var openedFiles: [OpenedFile] = []
   private var standardFiles: [String: any File] = [:]
   var fileReadAhead: [ObjectIdentifier: FileReadAhead] = [:]
+  var filePendingEndOfFile: [ObjectIdentifier: any File] = [:]
   private var executionTimingDepth = 0
   private var hostSuspensionDepth = 0
 
@@ -809,6 +810,7 @@ public actor Context {
   func resetStandardFiles() {
     standardFiles.removeAll()
     fileReadAhead.removeAll()
+    filePendingEndOfFile.removeAll()
   }
 
   func beginJob(persistent: Bool, authorization: JobAuthorizationOutcome) throws {

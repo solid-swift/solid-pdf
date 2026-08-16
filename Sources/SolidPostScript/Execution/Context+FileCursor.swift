@@ -9,9 +9,22 @@ extension Context {
 
   func readByte(from file: any File) async throws -> UInt8? {
     if let byte = takeReadAhead(max: 1, from: file).first {
+      try await finishPendingEndOfFileIfDrained(from: file)
       return byte
     }
-    return try await readUnderlying(max: 1, from: file)?.first
+    if hasPendingEndOfFile(for: file) {
+      try await finishPendingEndOfFile(from: file)
+      return nil
+    }
+    guard !file.isClosed else { return nil }
+    guard let data = try await readUnderlying(max: 1, from: file), !data.isEmpty else {
+      try await encounteredEndOfFile(in: file)
+      return nil
+    }
+    if data.count > 1 {
+      prependReadAhead(Data(data.dropFirst()), to: file)
+    }
+    return data.first
   }
 
   func readByte(
@@ -32,16 +45,63 @@ extension Context {
     guard max >= 0 else { throw Error.rangeCheck }
     guard max > 0 else { return Data() }
 
-    let buffered = takeReadAhead(max: max, from: file)
-    guard buffered.isEmpty else { return buffered }
-    guard let result = try await readUnderlying(max: max, from: file), !result.isEmpty else {
+    var result = takeReadAhead(max: max, from: file)
+    if hasPendingEndOfFile(for: file), readAheadCount(for: file) == 0 {
+      try await finishPendingEndOfFile(from: file)
+      return result.isEmpty ? nil : result
+    }
+    while result.count < max, !file.isClosed {
+      let remaining = max - result.count
+      guard let data = try await readUnderlying(max: remaining, from: file), !data.isEmpty else {
+        try await encounteredEndOfFile(in: file)
+        break
+      }
+
+      let consumed = min(remaining, data.count)
+      result.append(data.prefix(consumed))
+      if consumed < data.count {
+        prependReadAhead(Data(data.dropFirst(consumed)), to: file)
+      }
+    }
+
+    try await finishPendingEndOfFileIfDrained(from: file)
+
+    return result.isEmpty ? nil : result
+  }
+
+  func readScannerByte(from file: any File) async throws -> UInt8? {
+    if let byte = takeReadAhead(max: 1, from: file).first {
+      try await finishPendingEndOfFileIfDrained(from: file)
+      return byte
+    }
+    if hasPendingEndOfFile(for: file) {
+      try await finishPendingEndOfFile(from: file)
       return nil
     }
-    return result
+    guard !file.isClosed else { return nil }
+    guard let data = try await readUnderlying(max: 1, from: file), !data.isEmpty else {
+      filePendingEndOfFile[ObjectIdentifier(file)] = file
+      return nil
+    }
+    if data.count > 1 {
+      prependReadAhead(Data(data.dropFirst()), to: file)
+    }
+    return data.first
+  }
+
+  func finishScannerRead(from file: any File) async throws {
+    try await finishPendingEndOfFileIfDrained(from: file)
   }
 
   func available(in file: any File) async throws -> Int {
     let buffered = readAheadCount(for: file)
+    if buffered == 0, hasPendingEndOfFile(for: file) {
+      try await finishPendingEndOfFile(from: file)
+      return -1
+    }
+    if file.isClosed {
+      return buffered > 0 ? buffered : -1
+    }
     let underlying: Int
     if let contextual = file as? any ContextualFile {
       underlying = try await contextual.available(context: self)
@@ -62,15 +122,19 @@ extension Context {
   func setLogicalOffset(_ offset: Int, in file: any File) throws {
     try file.setOffset(offset)
     clearReadAhead(for: file)
+    clearPendingEndOfFile(for: file)
   }
 
   func reset(file: any File) throws {
     clearReadAhead(for: file)
+    clearPendingEndOfFile(for: file)
     try file.reset()
   }
 
   func closeLogicalFile(_ file: any File) async throws {
     clearReadAhead(for: file)
+    clearPendingEndOfFile(for: file)
+    guard !file.isClosed else { return }
     if let contextual = file as? any ContextualFile {
       try await contextual.close(context: self)
     } else {
@@ -80,6 +144,8 @@ extension Context {
 
   func flushLogicalFile(_ file: any File) async throws {
     clearReadAhead(for: file)
+    clearPendingEndOfFile(for: file)
+    guard !file.isClosed else { return }
     if let contextual = file as? any ContextualFile {
       try await contextual.flush(context: self)
     } else {
@@ -98,11 +164,58 @@ extension Context {
     fileReadAhead.removeValue(forKey: ObjectIdentifier(file))
   }
 
+  func readLine(max: Int, from file: any File) async throws -> (line: Data, eof: Bool) {
+    guard max > 0 else { throw Error.rangeCheck }
+
+    var line = Data(capacity: max)
+    while true {
+      guard let byte = try await readByte(from: file) else {
+        return (line, true)
+      }
+
+      if byte == Scanner.lineFeed {
+        return (line, false)
+      }
+      if byte == Scanner.carriageReturn {
+        _ = try await readByte(from: file, ifMatches: { $0 == Scanner.lineFeed })
+        return (line, false)
+      }
+
+      line.append(byte)
+      guard line.count < max else { throw Error.rangeCheck }
+    }
+  }
+
   private func readUnderlying(max: Int, from file: any File) async throws -> Data? {
     if let contextual = file as? any ContextualFile {
       return try await contextual.read(max: max, context: self)
     }
     return try file.read(max: max)
+  }
+
+  private func encounteredEndOfFile(in file: any File) async throws {
+    guard file.closesAtEndOfFile, !file.isClosed else { return }
+    try await closeLogicalFile(file)
+  }
+
+  private func hasPendingEndOfFile(for file: any File) -> Bool {
+    filePendingEndOfFile[ObjectIdentifier(file)] === file
+  }
+
+  private func clearPendingEndOfFile(for file: any File) {
+    let identifier = ObjectIdentifier(file)
+    guard filePendingEndOfFile[identifier] === file else { return }
+    filePendingEndOfFile.removeValue(forKey: identifier)
+  }
+
+  private func finishPendingEndOfFileIfDrained(from file: any File) async throws {
+    guard readAheadCount(for: file) == 0, hasPendingEndOfFile(for: file) else { return }
+    try await finishPendingEndOfFile(from: file)
+  }
+
+  private func finishPendingEndOfFile(from file: any File) async throws {
+    clearPendingEndOfFile(for: file)
+    try await encounteredEndOfFile(in: file)
   }
 
   private func takeReadAhead(max: Int, from file: any File) -> Data {

@@ -107,19 +107,21 @@ public final class DataFile: File, Sendable {
   /// Performs the ``write`` operation.
   public func write(contentsOf data: Data) throws {
     try access { state in
+      guard !data.isEmpty else { return }
 
-
-      let endIndex =
-        state.data.index(state.currentIndex, offsetBy: state.data.count, limitedBy: state.data.endIndex)
-        ?? state.data.endIndex
-      state.data.replaceSubrange(state.currentIndex..<endIndex, with: data)
+      let offset = state.data.distance(from: state.data.startIndex, to: state.currentIndex)
+      let remaining = state.data.distance(from: state.currentIndex, to: state.data.endIndex)
+      let replacedCount = min(data.count, remaining)
+      let replacementEnd = state.data.index(state.currentIndex, offsetBy: replacedCount)
+      state.data.replaceSubrange(state.currentIndex..<replacementEnd, with: data)
+      state.currentIndex = state.data.index(state.data.startIndex, offsetBy: offset + data.count)
     }
   }
 
   /// Performs the ``close`` operation.
   public func close() throws {
-    try access { state in
-
+    state.withLock { state in
+      guard !state.closed else { return }
       state.closed = true
       state.currentIndex = state.data.endIndex
     }

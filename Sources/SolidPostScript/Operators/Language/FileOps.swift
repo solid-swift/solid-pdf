@@ -178,10 +178,7 @@ extension Operators {
       try fileValue.checkReadable()
       try string.access.check(.write)
 
-      let (line, eof) = try await fileValue.file.readLine(context: context)
-      guard line.count <= string.count else {
-        throw Error.rangeCheck
-      }
+      let (line, eof) = try await fileValue.file.readLine(max: Int(string.count), context: context)
 
       try string.updateCharacters(line, startingAt: 0)
       let subRange = 0..<UInt(line.count)
