@@ -6,7 +6,6 @@ import Synchronization
 /// Shared system and device state for one PostScript interpreter environment.
 public final class InterpreterEnvironment: Sendable {
   let state = Mutex(SystemParameterState())
-  private let globalVMUsage = Mutex<[UUID: Int]>([:])
   let globalVMAllocationSpace = VMAllocationSpace(vm: .global)
   private let globalResources = Mutex(ResourceStore())
   private let resourcesInitialized = Mutex(false)
@@ -303,21 +302,4 @@ public final class InterpreterEnvironment: Sendable {
     return parameters
   }
 
-  func updateGlobalVMUsage(for context: UUID, to usage: Int) -> Int {
-    globalVMUsage.withLock { usages in
-      usages[context] = usage
-      return usages.values.reduce(0) { result, value in result.saturatingAdd(value) }
-    }
-  }
-
-  func removeGlobalVMUsage(for context: UUID) {
-    _ = globalVMUsage.withLock { $0.removeValue(forKey: context) }
-  }
-}
-
-private extension Int {
-  func saturatingAdd(_ other: Int) -> Int {
-    let (value, overflow) = addingReportingOverflow(other)
-    return overflow ? .max : value
-  }
 }

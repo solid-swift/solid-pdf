@@ -56,8 +56,7 @@ extension Operators {
     try context.updateDictionary(
       userDictionary,
       value: .init(value: new, kind: .literal),
-      forKey: "UserObjects",
-      additionalAllocationBytes: context.estimatedAllocationSize(count: count, objectType: .array)
+      forKey: "UserObjects"
     )
   }
 

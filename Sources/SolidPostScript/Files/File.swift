@@ -142,6 +142,12 @@ protocol ContextualFile: File {
 
 }
 
+/// Supplies retained PostScript edges for a file backing managed by VM allocation tracking.
+protocol VMManagedFileGraph: File {
+  var retainedVMAllocations: [VMAllocation] { get }
+  func identifyRetainedEdges(source: VMAllocation)
+}
+
 extension ContextualFile {
 
   func readByte(context: isolated Context) async throws -> UInt8? { try readByte() }

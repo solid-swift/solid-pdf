@@ -8,7 +8,7 @@
 import Foundation
 
 /// A PostScript save value.
-public struct SaveValue: CompositeValue, VMAllocatedCompositeValue {
+public struct SaveValue: CompositeValue, VMStoredCompositeValue {
 
   /// The PostScript object type represented by this value.
   public static let objectType: ObjectType = .save
@@ -22,10 +22,22 @@ public struct SaveValue: CompositeValue, VMAllocatedCompositeValue {
   /// Save objects are always allocated in local VM.
   public var vm: VM { .local }
   let allocation: VMAllocation
+  private let rootLease: VMRootLease
 
   init(snapshot: Snapshot) {
     self.snapshot = snapshot
-    self.allocation = VMAllocationContext.allocation(in: .local)
+    self.allocation = VMAllocationContext.allocation(in: .local, bytes: 32)
+    self.allocation.attach(owner: snapshot, children: { [weak snapshot] in
+      snapshot?.retainedAllocations() ?? []
+    })
+    snapshot.identifyRetainedEdges(source: allocation)
+    self.rootLease = VMRootLease(allocation: allocation, owner: snapshot)
+  }
+
+  private init(snapshot: Snapshot, allocation: VMAllocation) {
+    self.snapshot = snapshot
+    self.allocation = allocation
+    self.rootLease = VMRootLease(allocation: allocation, owner: snapshot)
   }
 
   /// Changes the access permitted for this value.
@@ -55,6 +67,14 @@ public struct SaveValue: CompositeValue, VMAllocatedCompositeValue {
   /// A debug representation of this value.
   public var debugString: String {
     "save: \(snapshot.sequence)"
+  }
+
+  func storedObject(kind: ObjectKind) -> VMStoredObject {
+    let object = Object(value: self, kind: kind)
+    return .reference(allocation: allocation, owner: snapshot, object: object) { [weak snapshot] in
+      guard let snapshot else { return nil }
+      return Object(value: Self(snapshot: snapshot, allocation: allocation), kind: kind)
+    }
   }
 }
 

@@ -39,47 +39,67 @@ extension FileValue: SnapshotIdentifiableValue {
 }
 
 /// A PostScript file value.
-public struct FileValue: CompositeValue, ObjectSource, VMAllocatedCompositeValue {
+public struct FileValue: CompositeValue, ObjectSource, VMStoredCompositeValue {
 
   /// The PostScript object type represented by this value.
   public static let objectType: ObjectType = .file
   /// The default execution kind for this value.
   public static let defaultKind: ObjectKind = .literal
 
+  private final class Shared: Sendable {
+    let file: File
+    let allocation: VMAllocation
+
+    init(file: File, vm: VM, allocation: VMAllocation? = nil) {
+      self.file = file
+      self.allocation = allocation ?? VMAllocationContext.allocation(in: vm, bytes: 32)
+      self.allocation.attach(
+        owner: self,
+        children: { [weak file] in
+          (file as? VMManagedFileGraph)?.retainedVMAllocations ?? []
+        }
+      )
+      (file as? VMManagedFileGraph)?.identifyRetainedEdges(source: self.allocation)
+    }
+  }
+
+  private let ref: Shared
+  private let rootLease: VMRootLease
+
   /// The ``file`` value.
-  public let file: File
+  public var file: File { ref.file }
   /// The ``access`` value.
   public private(set) var access: ObjectAccess
   /// The ``vm`` value.
   public let vm: VM
-  let allocation: VMAllocation
+  var allocation: VMAllocation { ref.allocation }
 
   init(file: File, vm: VM) {
-    self.file = file
+    self.ref = Shared(file: file, vm: vm)
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
     self.access = file.mode.access
     self.vm = vm
-    self.allocation = VMAllocationContext.allocation(in: vm)
   }
 
   init(file: File, access: ObjectAccess, vm: VM) {
-    self.file = file
+    self.ref = Shared(file: file, vm: vm)
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
     self.access = access
     self.vm = vm
-    self.allocation = VMAllocationContext.allocation(in: vm)
   }
 
   init(file: File, access: ObjectAccess, vm: VM, allocation: VMAllocation) {
-    self.file = file
+    self.ref = Shared(file: file, vm: vm, allocation: allocation)
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
     self.access = access
     self.vm = vm
-    self.allocation = allocation
   }
 
   init(sharing: FileValue, access: ObjectAccess) {
-    self.file = sharing.file
+    self.ref = sharing.ref
+    self.rootLease = sharing.rootLease
     self.access = access
     self.vm = sharing.vm
-    self.allocation = sharing.allocation
   }
 
   /// The ``name`` value.
@@ -147,5 +167,22 @@ public struct FileValue: CompositeValue, ObjectSource, VMAllocatedCompositeValue
   /// A debug representation of this value.
   public var debugString: String {
     "name: \(file.name), mode: \(file.mode)"
+  }
+
+  func storedObject(kind: ObjectKind) -> VMStoredObject {
+    let object = Object(value: self, kind: kind)
+    let access = access
+    let vm = vm
+    return .reference(allocation: allocation, owner: ref, object: object) { [weak ref] in
+      guard let ref else { return nil }
+      return Object(value: Self(ref: ref, access: access, vm: vm), kind: kind)
+    }
+  }
+
+  private init(ref: Shared, access: ObjectAccess, vm: VM) {
+    self.ref = ref
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
+    self.access = access
+    self.vm = vm
   }
 }

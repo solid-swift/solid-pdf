@@ -20,7 +20,7 @@ public final class Snapshot: Sendable {
   public typealias RestoreOperation = @Sendable () throws -> Void
 
   private struct Payload: Sendable {
-    let retainedObjects: [Object]
+    let retainedObjects: [VMStoredObject]
     let operations: [RestoreOperation]
   }
 
@@ -52,6 +52,7 @@ public final class Snapshot: Sendable {
     public private(set) var operations: [RestoreOperation] = []
     private var savedCompositeIdentities: Set<ObjectIdentifier> = []
     private var retainedObjects: [Object] = []
+    private var retainedStoredObjects: [VMStoredObject] = []
 
     fileprivate init(
       packingMode: Context.PackingMode,
@@ -105,9 +106,14 @@ public final class Snapshot: Sendable {
       operations.append(block)
     }
 
+    func retainStoredObjects(_ objects: [VMStoredObject]) {
+      retainedStoredObjects.append(contentsOf: objects)
+    }
+
     internal func build() -> Snapshot {
       return Snapshot(
         retainedObjects: retainedObjects,
+        retainedStoredObjects: retainedStoredObjects,
         operations: operations,
         packingMode: packingMode,
         allocationMode: allocationMode,
@@ -157,6 +163,7 @@ public final class Snapshot: Sendable {
 
   private init(
     retainedObjects: [Object],
+    retainedStoredObjects: [VMStoredObject],
     operations: [RestoreOperation],
     packingMode: Context.PackingMode,
     allocationMode: VM,
@@ -170,7 +177,10 @@ public final class Snapshot: Sendable {
   ) {
     self.timestamp = Date.now
     self.sequence = sequence
-    self.state = Mutex(.ready(Payload(retainedObjects: retainedObjects, operations: operations)))
+    self.state = Mutex(.ready(Payload(
+      retainedObjects: retainedObjects.map(VMStoredObject.init) + retainedStoredObjects,
+      operations: operations
+    )))
     self.packingMode = packingMode
     self.allocationMode = allocationMode
     self.objectFormat = objectFormat
@@ -251,6 +261,20 @@ public final class Snapshot: Sendable {
       if case .ready = state {
         state = .invalidated
       }
+    }
+  }
+
+  func retainedAllocations() -> [VMAllocation] {
+    state.withLock { state in
+      guard case .ready(let payload) = state else { return [] }
+      return payload.retainedObjects.compactMap(\.allocation)
+    }
+  }
+
+  func identifyRetainedEdges(source: VMAllocation) {
+    state.withLock { state in
+      guard case .ready(let payload) = state else { return }
+      payload.retainedObjects.identifyVMEdgeSources(source)
     }
   }
 }

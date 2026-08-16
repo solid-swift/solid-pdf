@@ -41,7 +41,7 @@ struct DictionaryVMAccountingTests {
       content:
         """
         /source << /a 1 >> def
-        /destination 1 dict def
+        /destination 0 dict def
         /operation { source destination copy } def
         << /MaxLocalVM 1 >> setuserparams
         17 /operation load stopped
@@ -159,7 +159,7 @@ struct DictionaryVMAccountingTests {
     let results = try await Interpreter.results(
       content:
         """
-        /dictionary 1 dict def
+        /dictionary 0 dict def
         /operation { \(operation) } def
         << /MaxLocalVM 1 >> setuserparams
         /operation load stopped clear

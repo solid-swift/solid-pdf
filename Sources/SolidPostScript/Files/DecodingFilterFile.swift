@@ -9,12 +9,12 @@ import Foundation
 import SolidIO
 import Synchronization
 
-final class DecodingFilterFile: ContextualFile, Sendable {
+final class DecodingFilterFile: ContextualFile, VMManagedFileGraph, Sendable {
 
-  private enum Source: Sendable {
-    case file(FileValue)
-    case string(StringValue)
-    case procedure(Object)
+  private enum SourceKind: Sendable, Equatable {
+    case file
+    case string
+    case procedure
   }
 
   private struct State: Sendable {
@@ -31,7 +31,8 @@ final class DecodingFilterFile: ContextualFile, Sendable {
   let isPositionable = false
 
   private let codec: any IncrementalFilter
-  private let source: Source
+  private let source: VMStoredObject
+  private let sourceKind: SourceKind
   private let closeSource: Bool
   private let state = Mutex(State())
   private let operation = Mutex(false)
@@ -44,14 +45,15 @@ final class DecodingFilterFile: ContextualFile, Sendable {
     switch source.value {
     case let file as FileValue:
       try file.checkReadable()
-      self.source = .file(file)
+      self.sourceKind = .file
     case let string as StringValue:
       try string.access.check(.read)
-      self.source = .string(string)
+      self.sourceKind = .string
     default:
       try source.checkProcedure()
-      self.source = .procedure(source)
+      self.sourceKind = .procedure
     }
+    self.source = VMStoredObject(source)
   }
 
   deinit {
@@ -143,8 +145,8 @@ final class DecodingFilterFile: ContextualFile, Sendable {
       state.encoded.removeAll()
       return closeSource
     }
-    if shouldCloseSource, case .file(let file) = source {
-      try file.file.close()
+    if shouldCloseSource, sourceKind == .file {
+      try sourceFile.file.close()
     }
   }
 
@@ -156,8 +158,8 @@ final class DecodingFilterFile: ContextualFile, Sendable {
       state.encoded.removeAll()
       return closeSource
     }
-    if shouldCloseSource, case .file(let file) = source {
-      try await file.file.close(context: context)
+    if shouldCloseSource, sourceKind == .file {
+      try await sourceFile.file.close(context: context)
     }
   }
 
@@ -259,15 +261,16 @@ final class DecodingFilterFile: ContextualFile, Sendable {
   }
 
   private func nextSourceChunkWithoutContext() throws -> Data? {
-    switch source {
-    case .file(let file):
-      return try file.file.read(max: 1)
-    case .string(let string):
+    switch sourceKind {
+    case .file:
+      return try sourceFile.file.read(max: 1)
+    case .string:
       let shouldRead = state.withLock { state -> Bool in
         guard !state.stringConsumed else { return false }
         state.stringConsumed = true
         return true
       }
+      let string = sourceString
       return shouldRead ? try string.characters(in: string.range) : nil
     case .procedure:
       throw Error.ioError
@@ -275,12 +278,13 @@ final class DecodingFilterFile: ContextualFile, Sendable {
   }
 
   private func nextSourceChunk(context: isolated Context) async throws -> Data? {
-    switch source {
-    case .file(let file):
-      return try await file.file.read(max: 1, context: context)
+    switch sourceKind {
+    case .file:
+      return try await sourceFile.file.read(max: 1, context: context)
     case .string:
       return try nextSourceChunkWithoutContext()
-    case .procedure(let procedure):
+    case .procedure:
+      let procedure = source.object
       let originalDepth = context.operands.depth
       guard try await context.execute(proc: procedure) else { throw Error.invalidExit }
       guard context.operands.depth == originalDepth + 1 else { throw Error.typeCheck }
@@ -339,8 +343,8 @@ final class DecodingFilterFile: ContextualFile, Sendable {
       state.closed = true
       return closeSource
     }
-    if shouldCloseSource, case .file(let file) = source {
-      try file.file.close()
+    if shouldCloseSource, sourceKind == .file {
+      try sourceFile.file.close()
     }
   }
 
@@ -350,8 +354,8 @@ final class DecodingFilterFile: ContextualFile, Sendable {
       state.closed = true
       return closeSource
     }
-    if shouldCloseSource, case .file(let file) = source {
-      try await file.file.close(context: context)
+    if shouldCloseSource, sourceKind == .file {
+      try await sourceFile.file.close(context: context)
     }
   }
 
@@ -359,6 +363,22 @@ final class DecodingFilterFile: ContextualFile, Sendable {
     if state.closed && !(state.reachedEOD && state.decoded.isEmpty) {
       throw Error.ioError
     }
+  }
+
+  var retainedVMAllocations: [VMAllocation] {
+    source.allocation.map { [$0] } ?? []
+  }
+
+  func identifyRetainedEdges(source allocation: VMAllocation) {
+    source.identifyEdgeSource(allocation)
+  }
+
+  private var sourceFile: FileValue {
+    source.object.value as! FileValue
+  }
+
+  private var sourceString: StringValue {
+    source.object.value as! StringValue
   }
 
   private func beginOperation() throws {

@@ -145,7 +145,7 @@ final class MaterializedFilterFile: File, Sendable {
 
 }
 
-final class EncodingFilterFile: ContextualFile, Sendable {
+final class EncodingFilterFile: ContextualFile, VMManagedFileGraph, Sendable {
 
   private struct State: Sendable {
     var closed = false
@@ -258,66 +258,81 @@ final class EncodingFilterFile: ContextualFile, Sendable {
     guard result.consumedInput == inputCount else { throw Error.ioError }
   }
 
+  var retainedVMAllocations: [VMAllocation] { target.retainedVMAllocations }
+
+  func identifyRetainedEdges(source: VMAllocation) {
+    target.identifyRetainedEdges(source: source)
+  }
+
 }
 
 final class FilterTarget: Sendable {
 
-  private enum Destination: Sendable {
-    case file(FileValue)
-    case string(StringValue)
-    case procedure(Object)
+  private enum DestinationKind: Sendable, Equatable {
+    case file
+    case string
+    case procedure
   }
 
   private struct State: Sendable {
     var offset = 0
-    var procedureBuffer: StringValue?
+    var procedureBuffer: VMStoredObject?
+    var sourceAllocation: VMAllocation?
     var initialized = false
     var finished = false
   }
 
-  private let destination: Destination
+  private let destination: VMStoredObject
+  private let destinationKind: DestinationKind
   private let closeTarget: Bool
   private let state = Mutex(State())
 
   var requiresContext: Bool {
-    if case .procedure = destination { return true }
-    return false
+    destinationKind == .procedure
   }
 
   init(destination: Object, closeTarget: Bool) throws {
     switch destination.value {
     case let file as FileValue:
       try file.checkWritable()
-      self.destination = .file(file)
+      self.destinationKind = .file
     case let string as StringValue:
       try string.access.check(.write)
-      self.destination = .string(string)
+      self.destinationKind = .string
     default:
       try destination.checkProcedure()
-      self.destination = .procedure(destination)
+      self.destinationKind = .procedure
     }
+    self.destination = VMStoredObject(destination)
     self.closeTarget = closeTarget
   }
 
   func initialize(context: isolated Context) async throws {
-    guard case .procedure(let procedure) = destination else { return }
+    guard destinationKind == .procedure else { return }
+    let procedure = destination.object
     guard state.withLock({ !$0.initialized }) else { return }
     let empty = Object.string(Data(), access: .unlimited, vm: .local, kind: .literal)
     let buffer = try await invoke(procedure, data: empty, more: true, context: context)
     guard buffer.count > 0 else { throw Error.rangeCheck }
-    state.withLock { state in
-      state.procedureBuffer = buffer
-      state.initialized = true
+    VMGraph.withLock {
+      state.withLock { state in
+        let stored = VMStoredObject(Object(value: buffer, kind: .literal))
+        if let allocation = state.sourceAllocation {
+          stored.identifyEdgeSource(allocation)
+        }
+        state.procedureBuffer = stored
+        state.initialized = true
+      }
     }
   }
 
   func writeWithoutContext(_ data: Data) throws {
     guard !data.isEmpty else { return }
-    switch destination {
-    case .file(let file):
-      try file.file.write(contentsOf: data)
-    case .string(let string):
-      try write(data, to: string)
+    switch destinationKind {
+    case .file:
+      try destinationFile.file.write(contentsOf: data)
+    case .string:
+      try write(data, to: destinationString)
     case .procedure:
       throw Error.ioError
     }
@@ -325,34 +340,34 @@ final class FilterTarget: Sendable {
 
   func write(_ data: Data, context: isolated Context) async throws {
     guard !data.isEmpty else { return }
-    switch destination {
-    case .file(let file):
-      try await file.file.write(contentsOf: data, context: context)
-    case .string(let string):
-      try write(data, to: string)
-    case .procedure(let procedure):
-      try await write(data, to: procedure, context: context)
+    switch destinationKind {
+    case .file:
+      try await destinationFile.file.write(contentsOf: data, context: context)
+    case .string:
+      try write(data, to: destinationString)
+    case .procedure:
+      try await write(data, to: destination.object, context: context)
     }
   }
 
   func flush(context: isolated Context) async throws {
-    if case .file(let file) = destination {
-      try await file.file.flush(context: context)
+    if destinationKind == .file {
+      try await destinationFile.file.flush(context: context)
     }
   }
 
   func closeWithoutContext() throws {
-    guard closeTarget, case .file(let file) = destination else { return }
-    try file.file.close()
+    guard closeTarget, destinationKind == .file else { return }
+    try destinationFile.file.close()
   }
 
   func finishWithoutContext(_ data: Data) throws {
     guard state.withLock({ !$0.finished }) else { return }
     try writeWithoutContext(data)
-    if closeTarget, case .file(let file) = destination {
-      try file.file.close()
+    if closeTarget, destinationKind == .file {
+      try destinationFile.file.close()
     }
-    guard case .procedure = destination else {
+    guard destinationKind == .procedure else {
       state.withLock { $0.finished = true }
       return
     }
@@ -362,17 +377,21 @@ final class FilterTarget: Sendable {
   func finish(_ data: Data, context: isolated Context) async throws {
     guard state.withLock({ !$0.finished }) else { return }
     try await write(data, context: context)
-    switch destination {
-    case .file(let file):
-      if closeTarget { try await file.file.close(context: context) }
+    switch destinationKind {
+    case .file:
+      if closeTarget { try await destinationFile.file.close(context: context) }
     case .string:
       break
-    case .procedure(let procedure):
+    case .procedure:
       let finalObject = try state.withLock { state -> Object in
-        guard let buffer = state.procedureBuffer else { throw Error.ioError }
+        guard let stored = state.procedureBuffer,
+          let buffer = stored.object.value as? StringValue
+        else {
+          throw Error.ioError
+        }
         return try .string(sharing: buffer, subRange: 0..<UInt(state.offset), kind: .literal)
       }
-      _ = try await invoke(procedure, data: finalObject, more: false, context: context)
+      _ = try await invoke(destination.object, data: finalObject, more: false, context: context)
     }
     state.withLock { $0.finished = true }
   }
@@ -389,7 +408,11 @@ final class FilterTarget: Sendable {
     var remaining = data
     while !remaining.isEmpty {
       let transfer = try state.withLock { state -> (StringValue, Int) in
-        guard let buffer = state.procedureBuffer else { throw Error.ioError }
+        guard let stored = state.procedureBuffer,
+          let buffer = stored.object.value as? StringValue
+        else {
+          throw Error.ioError
+        }
         let count = min(remaining.count, Int(buffer.count) - state.offset)
         try buffer.updateCharacters(remaining.prefix(count), startingAt: UInt(state.offset))
         state.offset += count
@@ -402,9 +425,15 @@ final class FilterTarget: Sendable {
         let object = Object(value: transfer.0, kind: .literal)
         let next = try await invoke(procedure, data: object, more: true, context: context)
         guard next.count > 0 else { throw Error.rangeCheck }
-        state.withLock { state in
-          state.procedureBuffer = next
-          state.offset = 0
+        VMGraph.withLock {
+          state.withLock { state in
+            let stored = VMStoredObject(Object(value: next, kind: .literal))
+            if let allocation = state.sourceAllocation {
+              stored.identifyEdgeSource(allocation)
+            }
+            state.procedureBuffer = stored
+            state.offset = 0
+          }
         }
       }
     }
@@ -424,6 +453,32 @@ final class FilterTarget: Sendable {
     let result: StringValue = try context.operands.popAs()
     try result.access.check(.write)
     return result
+  }
+
+  var retainedVMAllocations: [VMAllocation] {
+    var allocations = destination.allocation.map { [$0] } ?? []
+    if let buffer = state.withLock({ $0.procedureBuffer?.allocation }) {
+      allocations.append(buffer)
+    }
+    return allocations
+  }
+
+  func identifyRetainedEdges(source: VMAllocation) {
+    VMGraph.withLock {
+      destination.identifyEdgeSource(source)
+      state.withLock { state in
+        state.sourceAllocation = source
+        state.procedureBuffer?.identifyEdgeSource(source)
+      }
+    }
+  }
+
+  private var destinationFile: FileValue {
+    destination.object.value as! FileValue
+  }
+
+  private var destinationString: StringValue {
+    destination.object.value as! StringValue
   }
 
 }

@@ -35,7 +35,7 @@ extension Object {
 }
 
 /// A PostScript string value.
-public struct StringValue: CompositeValue, ObjectSource, VMAllocatedCompositeValue {
+public struct StringValue: CompositeValue, ObjectSource, VMStoredCompositeValue {
 
   /// The type used to represent ``Storage``.
   public typealias Storage = Data
@@ -62,11 +62,16 @@ public struct StringValue: CompositeValue, ObjectSource, VMAllocatedCompositeVal
     init(value: Storage, vm: VM) {
       self.value = Mutex(value)
       self.vm = vm
-      self.allocation = VMAllocationContext.allocation(in: vm)
+      self.allocation = VMAllocationContext.allocation(in: vm, bytes: value.count + 16)
+      self.allocation.attach(
+        owner: self,
+        clear: { [weak self] in self?.value.withLock { $0.removeAll(keepingCapacity: false) } }
+      )
     }
   }
 
   private let ref: Shared
+  private let rootLease: VMRootLease
   /// The ``refRange`` value.
   public let refRange: StorageRange
 
@@ -79,6 +84,7 @@ public struct StringValue: CompositeValue, ObjectSource, VMAllocatedCompositeVal
   /// Creates an instance.
   public init(data: Storage, access: ObjectAccess, vm: VM) {
     self.ref = Shared(value: data, vm: vm)
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
     self.refRange = data.indices
     self.access = access
   }
@@ -86,6 +92,7 @@ public struct StringValue: CompositeValue, ObjectSource, VMAllocatedCompositeVal
   /// Creates an instance.
   public init(sharing: Self, subRange: SubRange) throws {
     self.ref = sharing.ref
+    self.rootLease = sharing.rootLease
     self.refRange = try sharing.ref.value.withLock {
       try sharing.refRange.select(subRange: subRange, in: $0)
     }
@@ -100,6 +107,7 @@ public struct StringValue: CompositeValue, ObjectSource, VMAllocatedCompositeVal
   /// The ``vm`` value.
   public var vm: VM { ref.vm }
   var allocation: VMAllocation { ref.allocation }
+  var allocationFootprint: Int { ref.value.withLock { $0.count + 16 } }
 
   /// The ``count`` value.
   public var count: UInt {
@@ -129,18 +137,22 @@ public struct StringValue: CompositeValue, ObjectSource, VMAllocatedCompositeVal
   /// Performs the ``updateCharacter`` operation.
   public func updateCharacter(_ character: UInt8, at position: UInt) throws {
     try access.check(.write)
-    try ref.value.withLock { value in
-      let index = try refRange.select(subRange: position..<position + 1, in: value).lowerBound
-      value[index] = character
+    try VMGraph.withLock {
+      try ref.value.withLock { value in
+        let index = try refRange.select(subRange: position..<position + 1, in: value).lowerBound
+        value[index] = character
+      }
     }
   }
 
   /// Performs the ``updateCharacters`` operation.
   public func updateCharacters(_ characters: some Collection<UInt8>, startingAt position: UInt) throws {
     try access.check(.write)
-    try ref.value.withLock { value in
-      let range = try refRange.select(subRange: position..<position + UInt(characters.count), in: value)
-      value.replaceSubrange(range, with: characters)
+    try VMGraph.withLock {
+      try ref.value.withLock { value in
+        let range = try refRange.select(subRange: position..<position + UInt(characters.count), in: value)
+        value.replaceSubrange(range, with: characters)
+      }
     }
   }
 
@@ -235,6 +247,23 @@ public struct StringValue: CompositeValue, ObjectSource, VMAllocatedCompositeVal
 
   private var rangedValueSnapshot: Storage {
     ref.value.withLock { $0[refRange] }
+  }
+
+  func storedObject(kind: ObjectKind) -> VMStoredObject {
+    let object = Object(value: self, kind: kind)
+    let range = refRange
+    let access = access
+    return .reference(allocation: allocation, owner: ref, object: object) { [weak ref] in
+      guard let ref else { return nil }
+      return Object(value: Self(ref: ref, refRange: range, access: access), kind: kind)
+    }
+  }
+
+  private init(ref: Shared, refRange: StorageRange, access: ObjectAccess) {
+    self.ref = ref
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
+    self.refRange = refRange
+    self.access = access
   }
 }
 

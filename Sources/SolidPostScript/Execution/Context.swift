@@ -69,7 +69,6 @@ public actor Context {
   let fileDevices: FileDevices
   let userTime: Stopwatch
   let localVMAllocationSpace: VMAllocationSpace
-  private let vmAccountingID = UUID()
 
   var operands = OperandStack()
   var dictionaries: DictionaryStack
@@ -140,7 +139,14 @@ public actor Context {
   }
 
   deinit {
-    environment.removeGlobalVMUsage(for: vmAccountingID)
+    operands = OperandStack()
+    dictionaries = DictionaryStack([Object]())
+    localResources = ResourceStore()
+    languageSaves.removeAll()
+    activeErrors.removeAll()
+    jobLifecycle = nil
+    environment.globalVMAllocationSpace.collectCycles()
+    localVMAllocationSpace.collectCycles()
   }
 
   var stackLimitsBypassed: Bool { stackLimitBypassDepth > 0 }
@@ -160,7 +166,7 @@ public actor Context {
       guard let composite = object.value as? VMAllocatedCompositeValue else { return }
       let allocation = composite.allocation
       guard visited.insert(allocation.identity).inserted else { return }
-      try spaces.space(for: composite.vm).adopt(allocation)
+      try spaces.space(for: composite.vm).adopt(allocation, chargedBytes: composite.allocationFootprint)
 
       switch object.value {
       case let dictionary as DictionaryValue:
@@ -173,6 +179,7 @@ public actor Context {
       default:
         break
       }
+      composite.refreshStoredEdges()
     }
 
     for object in objects {
@@ -502,7 +509,8 @@ public actor Context {
     try errorState.updateObject(invocation.command, forKey: "command")
     try errorState.updateObject(.null, forKey: "errorinfo")
 
-    if recordStacks.value {
+    // A VMerror handler must itself be able to run when no composite allocation is possible.
+    if recordStacks.value, invocation.error != .vmError {
       try errorState.updateObject(makeLocalArray(invocation.operandStack), forKey: "ostack")
       try errorState.updateObject(makeLocalArray(invocation.executionStack), forKey: "estack")
       try errorState.updateObject(makeLocalArray(invocation.dictionaryStack), forKey: "dstack")
@@ -630,9 +638,7 @@ public actor Context {
   }
 
   func estimatedVMUsage(in vm: VM) throws -> Int {
-    let used = try estimatedReachableVMUsage(in: vm)
-    guard vm == .global else { return used }
-    return environment.updateGlobalVMUsage(for: vmAccountingID, to: used)
+    allocationSpaces.space(for: vm).chargedBytes
   }
 
   func remainingVMCapacity(in vm: VM) throws -> Int {
@@ -676,74 +682,27 @@ public actor Context {
     additionalAllocationBytes: Int = 0
   ) throws {
     precondition(additionalAllocationBytes >= 0)
-    let bytes = additionalAllocationBytes.saturatingAdd(
-      mutation.addedEntryCount.saturatingMultiply(Self.estimatedDictionaryEntryAllocationSize)
-    )
+    let bytes = additionalAllocationBytes.saturatingAdd(mutation.allocationGrowthBytes)
     try preflightAllocation(bytes: bytes, vm: dictionary.vm)
   }
 
   func preflightAllocation(bytes: Int, vm: VM? = nil) throws {
     let vm = vm ?? allocationMode
-    let used = try estimatedReachableVMUsage(in: vm)
-    if vm == .global {
-      _ = environment.updateGlobalVMUsage(for: vmAccountingID, to: used.saturatingAdd(bytes))
-      return
-    }
-    let maximum = Int(userParameters.integer("MaxLocalVM"))
-    guard bytes <= maximum - min(used, maximum) else { throw Error.vmError }
-  }
-
-  private func estimatedReachableVMUsage(in vm: VM) throws -> Int {
-    var identities = Set<ObjectIdentifier>()
-    var packedValues = Set<Object>()
-    var used = 0
-
-    func visit(_ object: Object) throws {
-      guard let composite = object.value as? any CompositeValue else { return }
-
-      if let identifiable = composite as? SnapshotIdentifiableValue {
-        guard identities.insert(identifiable.snapshotIdentity).inserted else { return }
-      } else if object.type == .packedArray {
-        guard packedValues.insert(object).inserted else { return }
+    let reclaim = userParameters.integer("VMReclaim")
+    let automaticCollection = vm == .local ? reclaim == 0 : reclaim >= -1
+    let maximum = vm == .local ? Int(userParameters.integer("MaxLocalVM")) : nil
+    let threshold = Int(userParameters.integer("VMThreshold"))
+    guard allocationSpaces.space(for: vm).prepareForAllocation(
+      bytes: bytes,
+      maximum: maximum,
+      automaticCollection: automaticCollection,
+      threshold: threshold,
+      beforeFullCollection: {
+        ResourceRuntime.reclaimAutomaticResources(context: self, includeGlobal: vm == .global)
       }
-
-      if composite.vm == vm {
-        switch object.value {
-        case let value as StringValue:
-          used = used.saturatingAdd(Int(value.count) + 16)
-        case let value as DictionaryValue:
-          used = used.saturatingAdd(Int(value.count) * 16 + 32)
-        case let value as any CollectionValue:
-          used = used.saturatingAdd(Int(value.count) * 8 + 16)
-        default:
-          used = used.saturatingAdd(32)
-        }
-      }
-
-      switch object.value {
-      case let dictionary as DictionaryValue:
-        try dictionary.forEachUnchecked { key, value in
-          try visit(key)
-          try visit(value)
-        }
-      case let collection as any CollectionValue:
-        try collection.forEachUnchecked(visit)
-      default:
-        break
-      }
+    ) else {
+      throw Error.vmError
     }
-
-    try operands.forEach(visit)
-    try dictionaries.forEach(visit)
-    for item in execution {
-      try visit(item.source)
-    }
-    if vm == .local {
-      try localResources.objects.forEach(visit)
-    } else {
-      try environment.globalResourceObjects().forEach(visit)
-    }
-    return used
   }
 
   func estimatedAllocationSize(count: Int, objectType: ObjectType) -> Int {
@@ -821,6 +780,9 @@ public actor Context {
 
   func beginJob(persistent: Bool) throws {
     precondition(jobLifecycle == nil)
+    // Standard category implementations are part of the environment's initial VM, even when
+    // their backing dictionaries are created lazily for the first job.
+    try environment.ensureResourcesInitialized()
     let localBoundary = localVMAllocationSpace.boundary()
     let globalBoundary = environment.globalVMAllocationSpace.boundary()
     let snapshot = persistent ? nil : try snapshot(scope: .job)
