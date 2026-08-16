@@ -46,7 +46,7 @@ extension Operators {
       case .dictionary:
         let dict1 = try context.operands.pop().value(as: DictionaryValue.self)
         let dict2 = try opObj.value(as: DictionaryValue.self)
-        try dict2.updateObjects(forKeysIn: dict1)
+        try context.updateDictionary(dict2, from: dict1)
         context.operands.push(opObj)
 
       // Copy string

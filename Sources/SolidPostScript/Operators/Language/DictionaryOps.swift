@@ -131,8 +131,7 @@ extension Operators {
       let (value, key) = try context.operands.pop2()
 
       let dictionary = try context.dictionaries.currentDictionary()
-      try context.preflightDictionaryGrowth(dictionary, key: key)
-      try dictionary.updateObject(value, forKey: key)
+      try context.updateDictionary(dictionary, value: value, forKey: key)
     }
   }
 
@@ -167,8 +166,7 @@ extension Operators {
 
       let dictionary = try context.dictionaries.object(forKeyIfExists: key)?.source
         .value(as: DictionaryValue.self) ?? context.dictionaries.currentDictionary()
-      try context.preflightDictionaryGrowth(dictionary, key: key)
-      _ = try context.dictionaries.updateObject(value, forKey: key)
+      try context.updateDictionary(dictionary, value: value, forKey: key)
     }
   }
 

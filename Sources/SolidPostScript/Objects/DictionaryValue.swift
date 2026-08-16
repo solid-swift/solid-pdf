@@ -57,6 +57,12 @@ public struct DictionaryValue: CompositeValue {
 
   typealias Shared = CompositeShared<Storage>
 
+  struct PreparedMutation: Sendable {
+    let revision: UInt64
+    let entries: Storage
+    let addedEntryCount: Int
+  }
+
   private let ref: Shared
 
   /// Creates an instance.
@@ -172,15 +178,34 @@ public struct DictionaryValue: CompositeValue {
 
   /// Performs the ``updateObjects`` operation.
   public func updateObjects(forKeysIn dict: DictionaryValue) throws {
+    while true {
+      let mutation = try prepareUpdateObjects(forKeysIn: dict)
+      if try commit(mutation) {
+        return
+      }
+    }
+  }
+
+  func prepareUpdateObject(_ value: Object, forKey key: Object) throws -> PreparedMutation {
+    let key = try key.dictionaryKey
+    try key.checkStorage(in: ref.vm)
+    try value.checkStorage(in: ref.vm)
+    return try prepareMutation(entries: [key: value])
+  }
+
+  func prepareUpdateObjects(forKeysIn dict: DictionaryValue) throws -> PreparedMutation {
     let source = try dict.ref.read { $0.value }
-    let normalizedSource = try Self.normalizedStorage(
+    let entries = try Self.normalizedStorage(
       source.map { ($0.key, $0.value) },
       minimumCapacity: source.capacity,
       in: ref.vm
     )
+    return try prepareMutation(entries: entries)
+  }
 
-    try ref.write { destination in
-      for (key, value) in normalizedSource {
+  func commit(_ mutation: PreparedMutation) throws -> Bool {
+    try ref.write(ifRevision: mutation.revision) { destination in
+      for (key, value) in mutation.entries {
         destination.value[key] = value
       }
     }
@@ -258,6 +283,18 @@ public struct DictionaryValue: CompositeValue {
       normalized[key] = value
     }
     return normalized
+  }
+
+  private func prepareMutation(entries: Storage) throws -> PreparedMutation {
+    let snapshot = try ref.versionedRead { destination in
+      try destination.access.check(.write)
+      return entries.keys.count { destination.value[$0] == nil }
+    }
+    return PreparedMutation(
+      revision: snapshot.revision,
+      entries: entries,
+      addedEntryCount: snapshot.value
+    )
   }
 }
 

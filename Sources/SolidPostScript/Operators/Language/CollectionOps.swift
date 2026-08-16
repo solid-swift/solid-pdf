@@ -94,8 +94,7 @@ extension Operators {
       case (let coll as ArrayValue, let index as IntegerValue, _):
         try coll.updateObject(value, at: index.value.unsigned)
       case (let dictionary as DictionaryValue, _, _):
-        try context.preflightDictionaryGrowth(dictionary, key: indexOrKey)
-        try dictionary.updateObject(value, forKey: indexOrKey)
+        try context.updateDictionary(dictionary, value: value, forKey: indexOrKey)
       case (let string as StringValue, let index as IntegerValue, let char as IntegerValue):
         guard let byte = UInt8(exactly: char.value) else {
           throw Error.rangeCheck

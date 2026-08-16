@@ -61,20 +61,6 @@ struct DictionaryStack {
     return nil
   }
 
-  func updateObject(_ object: Object, forKey key: Object) throws -> Object? {
-
-    for dictionaryObj in storage {
-
-      let dictionary = try dictionaryObj.value(as: DictionaryValue.self)
-
-      if try dictionary.object(forKeyIfExists: key) != nil {
-        return try dictionary.updateObject(object, forKey: key)
-      }
-    }
-
-    return try currentDictionary().updateObject(object, forKey: key)
-  }
-
   func removeObject(forKey key: Object) throws -> Object? {
 
     for dictionaryObj in storage {

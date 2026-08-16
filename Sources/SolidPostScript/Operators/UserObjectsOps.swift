@@ -53,7 +53,12 @@ extension Operators {
     elements[index] = object
 
     let new = try ArrayValue(elements: elements, access: .unlimited, vm: .local)
-    _ = try userDictionary.updateObject(.init(value: new, kind: .literal), forKey: "UserObjects")
+    try context.updateDictionary(
+      userDictionary,
+      value: .init(value: new, kind: .literal),
+      forKey: "UserObjects",
+      additionalAllocationBytes: context.estimatedAllocationSize(count: count, objectType: .array)
+    )
   }
 
   /// Implements the PostScript `defineuserobject` operator.

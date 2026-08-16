@@ -512,9 +512,45 @@ public actor Context {
     return maximum - min(used, maximum)
   }
 
-  func preflightDictionaryGrowth(_ dictionary: DictionaryValue, key: Object) throws {
-    guard try dictionary.object(forKeyIfExists: key) == nil else { return }
-    try preflightAllocation(bytes: Self.estimatedDictionaryEntryAllocationSize, vm: dictionary.vm)
+  func updateDictionary(
+    _ dictionary: DictionaryValue,
+    value: Object,
+    forKey key: Object,
+    additionalAllocationBytes: Int = 0
+  ) throws {
+    while true {
+      let mutation = try dictionary.prepareUpdateObject(value, forKey: key)
+      try preflightDictionaryMutation(
+        mutation,
+        in: dictionary,
+        additionalAllocationBytes: additionalAllocationBytes
+      )
+      if try dictionary.commit(mutation) {
+        return
+      }
+    }
+  }
+
+  func updateDictionary(_ dictionary: DictionaryValue, from source: DictionaryValue) throws {
+    while true {
+      let mutation = try dictionary.prepareUpdateObjects(forKeysIn: source)
+      try preflightDictionaryMutation(mutation, in: dictionary)
+      if try dictionary.commit(mutation) {
+        return
+      }
+    }
+  }
+
+  private func preflightDictionaryMutation(
+    _ mutation: DictionaryValue.PreparedMutation,
+    in dictionary: DictionaryValue,
+    additionalAllocationBytes: Int = 0
+  ) throws {
+    precondition(additionalAllocationBytes >= 0)
+    let bytes = additionalAllocationBytes.saturatingAdd(
+      mutation.addedEntryCount.saturatingMultiply(Self.estimatedDictionaryEntryAllocationSize)
+    )
+    try preflightAllocation(bytes: bytes, vm: dictionary.vm)
   }
 
   func preflightAllocation(bytes: Int, vm: VM? = nil) throws {
@@ -581,7 +617,7 @@ public actor Context {
     return used
   }
 
-  private func estimatedAllocationSize(count: Int, objectType: ObjectType) -> Int {
+  func estimatedAllocationSize(count: Int, objectType: ObjectType) -> Int {
     switch objectType {
     case .string:
       count.saturatingAdd(16)
