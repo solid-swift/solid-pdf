@@ -116,7 +116,15 @@ public struct PackedArrayValue: CollectionValue, CompositeValue {
 
   /// Executes this value in the supplied interpreter context.
   public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
-    try context.execution.push(source: Object(value: self, kind: kind), in: context)
+    let object = Object(value: self, kind: kind)
+    switch method {
+    case .indirect:
+      try access.check(.execute)
+      try context.execution.push(source: object, in: context)
+
+    case .direct:
+      context.operands.push(object)
+    }
   }
 
   /// Returns whether this value equals another PostScript value.

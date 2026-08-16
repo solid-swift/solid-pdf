@@ -439,6 +439,20 @@ public actor Context {
     return try await execute(proc: proc, ops: ops)
   }
 
+  internal func executeAny(_ object: Object) async throws -> Bool {
+    let saved = execution
+    let targetDepth = execution.depth
+    defer { execution = saved }
+
+    do {
+      try await object.execute(context: self, method: .indirect)
+      try await run(untilExecutionDepth: targetDepth)
+      return true
+    } catch Error.control(.exit) {
+      return false
+    }
+  }
+
   internal func execute(proc: Object, ops: [Object] = []) async throws -> Bool {
 
     let saved = execution

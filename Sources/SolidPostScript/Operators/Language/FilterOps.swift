@@ -518,11 +518,9 @@ private struct FilterSource {
     case let string as StringValue:
       try string.access.check(.read)
       source = .string(string, consumed: false)
-    case is ArrayValue where object.kind == .executable,
-         is PackedArrayValue where object.kind == .executable:
-      source = .procedure(object)
     default:
-      throw Error.typeCheck
+      try object.checkProcedure()
+      source = .procedure(object)
     }
   }
 

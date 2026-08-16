@@ -305,49 +305,52 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
 
-      let (scratchObj, proc, templateObj) = try context.operands.pop3()
-      let categoryKey = try context.dictionaries.object(forKey: "Category")
-      let scratch = try scratchObj.value(as: StringValue.self)
-      let templateString = try templateObj.value(as: StringValue.self)
-      try templateString.access.check(.read)
-      try scratch.access.check(.write)
-      let template = templateString.nameString
+      var categoryDictionaryActive = true
+      do {
+        let (scratchObj, proc, templateObj) = try context.operands.pop3()
+        let categoryKey = try context.dictionaries.object(forKey: "Category")
+        let scratch = try scratchObj.value(as: StringValue.self)
+        let templateString = try templateObj.value(as: StringValue.self)
+        try templateString.access.check(.read)
+        try scratch.access.check(.write)
+        try proc.checkProcedure()
+        let template = templateString.nameString
 
-      var resourceKeys: [Object] = []
-      let stored = try ResourceRuntime.storedEntries(in: categoryKey, context: context)
-      resourceKeys.append(contentsOf: stored.filter { $0.entry.origin == .explicit }.map(\.key))
+        var resourceKeys: [Object] = []
+        let stored = try ResourceRuntime.storedEntries(in: categoryKey, context: context)
+        resourceKeys.append(contentsOf: stored.filter { $0.entry.origin == .explicit }.map(\.key))
 
-      var providerAvailable: [Object] = []
-      if let provider = try ResourceRuntime.provider(categoryKey, context: context) {
-        for key in try provider.enumerateResources(matching: template) {
-          if try provider.statusOfResource(forKey: key)?.isLoaded == true {
-            resourceKeys.append(key)
-          } else {
-            providerAvailable.append(key)
+        var providerAvailable: [Object] = []
+        if let provider = try ResourceRuntime.provider(categoryKey, context: context) {
+          for key in try provider.enumerateResources(matching: template) {
+            if try provider.statusOfResource(forKey: key)?.isLoaded == true {
+              resourceKeys.append(key)
+            } else {
+              providerAvailable.append(key)
+            }
           }
         }
-      }
-      resourceKeys.append(contentsOf: stored.filter { $0.entry.origin == .automatic }.map(\.key))
-      resourceKeys.append(contentsOf: providerAvailable)
-      resourceKeys.append(
-        contentsOf: try await ResourceFiles.externalKeys(
-          in: categoryKey,
-          matching: template,
-          context: context
+        resourceKeys.append(contentsOf: stored.filter { $0.entry.origin == .automatic }.map(\.key))
+        resourceKeys.append(contentsOf: providerAvailable)
+        resourceKeys.append(
+          contentsOf: try await ResourceFiles.externalKeys(
+            in: categoryKey,
+            matching: template,
+            context: context
+          )
         )
-      )
 
-      guard let regex = template.asTemplateRegex else { return }
-      var seen = Set<Object>()
-      resourceKeys = try resourceKeys.filter { key in
-        guard seen.insert(try canonicalResourceKey(key)).inserted else { return false }
-        guard let name = key.value as? NameStringConvertible else { return template == "*" }
-        if let string = key.value as? StringValue { try string.access.check(.read) }
-        return (try? regex.wholeMatch(in: name.nameString)) != nil
-      }
+        guard let regex = template.asTemplateRegex else { return }
+        var seen = Set<Object>()
+        resourceKeys = try resourceKeys.filter { key in
+          guard seen.insert(try canonicalResourceKey(key)).inserted else { return false }
+          guard let name = key.value as? NameStringConvertible else { return template == "*" }
+          if let string = key.value as? StringValue { try string.access.check(.read) }
+          return (try? regex.wholeMatch(in: name.nameString)) != nil
+        }
 
-      try await End.instance.execute(context: context)
-      do {
+        try await End.instance.execute(context: context)
+        categoryDictionaryActive = false
         for resourceKey in resourceKeys {
 
           let procArg: Object
@@ -365,13 +368,14 @@ extension Operators {
             break
           }
         }
+        try context.dictionaries.push(try await ResourceRuntime.categoryDictionary(categoryKey, context: context))
+        categoryDictionaryActive = true
       } catch {
-        context.operands.push(try await ResourceRuntime.categoryDictionary(categoryKey, context: context))
-        try await Begin.instance.execute(context: context)
+        if categoryDictionaryActive {
+          try? await End.instance.execute(context: context)
+        }
         throw error
       }
-      context.operands.push(try await ResourceRuntime.categoryDictionary(categoryKey, context: context))
-      try await Begin.instance.execute(context: context)
     }
   }
 }

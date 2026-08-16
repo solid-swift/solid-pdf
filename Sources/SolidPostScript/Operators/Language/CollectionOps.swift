@@ -176,9 +176,10 @@ extension Operators {
     public func execute(context: isolated Context) async throws {
 
       let (proc, source) = try context.operands.pop2()
+      try proc.checkProcedure()
 
-      switch (source.value, proc.value) {
-      case (let coll as CollectionValue, is CollectionValue):
+      switch source.value {
+      case let coll as CollectionValue:
         for idx in 0..<coll.count {
           let result = try await context.execute(proc: proc, ops: [try coll.object(at: idx)])
           if !result {
@@ -186,7 +187,7 @@ extension Operators {
           }
         }
 
-      case (let dict as DictionaryValue, is CollectionValue):
+      case let dict as DictionaryValue:
         for key in dict.keys {
           let value = try dict.object(forKey: key)
           let result = try await context.execute(proc: proc, ops: [value, key])
@@ -195,7 +196,7 @@ extension Operators {
           }
         }
 
-      case (let string as StringValue, is CollectionValue):
+      case let string as StringValue:
         for idx in 0..<string.count {
           let result = try await context.execute(proc: proc, ops: [.integer(Int32(string.character(at: idx)))])
           if !result {

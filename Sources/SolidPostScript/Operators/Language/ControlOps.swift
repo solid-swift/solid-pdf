@@ -50,6 +50,7 @@ extension Operators {
 
       let (proc, boolObj) = try context.operands.pop2()
       let bool = try boolObj.value(as: BooleanValue.self)
+      try proc.checkProcedure()
 
       if bool.value {
         try context.execution.push(source: proc, in: context)
@@ -69,6 +70,8 @@ extension Operators {
 
       let (elseproc, ifproc, boolObj) = try context.operands.pop3()
       let bool = try boolObj.value(as: BooleanValue.self)
+      try ifproc.checkProcedure()
+      try elseproc.checkProcedure()
 
       try context.execution.push(source: bool.value ? ifproc : elseproc, in: context)
     }
@@ -85,6 +88,7 @@ extension Operators {
     public func execute(context: isolated Context) async throws {
 
       let (proc, limit, increment, initial) = try context.operands.pop4()
+      try proc.checkProcedure()
 
       switch (initial.value, increment.value, limit.value) {
       case (let initial as IntegerValue, let increment as IntegerValue, let limit as IntegerValue):
@@ -149,6 +153,7 @@ extension Operators {
       guard count.value >= 0 else {
         throw Error.rangeCheck
       }
+      try proc.checkProcedure()
 
       for _ in 0..<count.value where try await !context.execute(proc: proc) {
         break
@@ -167,6 +172,7 @@ extension Operators {
     public func execute(context: isolated Context) async throws {
 
       let proc = try context.operands.pop()
+      try proc.checkProcedure()
 
       while true {
         if try await !context.execute(proc: proc) {
@@ -216,7 +222,7 @@ extension Operators {
 
       do {
 
-        if try await !context.execute(proc: proc) {
+        if try await !context.executeAny(proc) {
           throw Error.invalidExit
         }
 

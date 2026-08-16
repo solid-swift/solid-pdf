@@ -48,11 +48,9 @@ final class DecodingFilterFile: ContextualFile, Sendable {
     case let string as StringValue:
       try string.access.check(.read)
       self.source = .string(string)
-    case is ArrayValue where source.kind == .executable,
-         is PackedArrayValue where source.kind == .executable:
-      self.source = .procedure(source)
     default:
-      throw Error.typeCheck
+      try source.checkProcedure()
+      self.source = .procedure(source)
     }
   }
 

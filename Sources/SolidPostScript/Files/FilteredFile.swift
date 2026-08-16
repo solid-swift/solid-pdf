@@ -292,11 +292,9 @@ final class FilterTarget: Sendable {
     case let string as StringValue:
       try string.access.check(.write)
       self.destination = .string(string)
-    case is ArrayValue where destination.kind == .executable,
-         is PackedArrayValue where destination.kind == .executable:
-      self.destination = .procedure(destination)
     default:
-      throw Error.typeCheck
+      try destination.checkProcedure()
+      self.destination = .procedure(destination)
     }
     self.closeTarget = closeTarget
   }

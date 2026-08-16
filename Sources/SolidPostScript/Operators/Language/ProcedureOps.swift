@@ -48,9 +48,7 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
       let procedure = try context.operands.pop()
-      guard procedure.kind == .executable, procedure.value is any CollectionValue else {
-        throw Error.typeCheck
-      }
+      try procedure.checkProcedure()
       var state = BindingState()
       let bound = try bind(context: context, procedure: procedure, state: &state)
       context.operands.push(bound)
@@ -135,7 +133,7 @@ extension Operators {
           } catch Error.undefined {
             continue
           }
-        } else if element.kind == .executable, element.value is any CollectionValue {
+        } else if element.isProcedure {
           let nested = try bind(context: context, procedure: element, state: &state)
           elements[index] = try readOnly(nested)
         }

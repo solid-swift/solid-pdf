@@ -51,11 +51,8 @@ enum IdiomSetValidation: Operators.ResourceCategoryExtension {
         throw Error.typeCheck
       }
       let procedures = try pair.objects(in: pair.range)
-      guard procedures.allSatisfy({ procedure in
-        procedure.kind == .executable
-          && (procedure.value is ArrayValue || procedure.value is PackedArrayValue)
-      }) else {
-        throw Error.typeCheck
+      for procedure in procedures {
+        try procedure.checkProcedure()
       }
     }
   }

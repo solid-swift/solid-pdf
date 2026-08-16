@@ -400,9 +400,7 @@ extension Operators {
       let template = try templateObject.value(as: StringValue.self)
       try scratch.access.check(.write)
       try template.access.check(.read)
-      guard (proc.type == .array || proc.type == .packedArray), proc.kind == .executable else {
-        throw Error.typeCheck
-      }
+      try proc.checkProcedure()
 
       let names = try context.fileDevices.fileNames(matching: template.string)
       for name in names {
