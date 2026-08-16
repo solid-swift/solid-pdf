@@ -12,7 +12,9 @@ public enum Resources {
   case instance
 
   /// The ``resources`` value.
-  public static let resources: [Object: any ResourceCategory] = [:]
+  public static let resources: [Object: any ResourceCategory] = [
+    "Filter": FilterResources.instance
+  ]
 
   /// Performs the ``loadCategory`` operation.
   public static func loadCategory(forKey key: Object) throws -> any ResourceCategory {
@@ -29,7 +31,7 @@ public enum Resources {
     -> Object
   {
 
-    let resourceCategory = try loadCategory(forKey: key)
+    let resourceCategory = try loadCategory(forKey: categoryKey)
 
     return try resourceCategory.loadResource(forKey: key, in: context)
   }

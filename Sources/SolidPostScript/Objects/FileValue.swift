@@ -66,6 +66,22 @@ public struct FileValue: CompositeValue, ObjectSource {
   /// The ``mode`` value.
   public var mode: File.Mode { file.mode }
 
+  var isReadable: Bool {
+    access.isReadAllowed && mode != .write
+  }
+
+  var isWritable: Bool {
+    access.isWriteAllowed && mode != .read
+  }
+
+  func checkReadable() throws {
+    guard isReadable else { throw Error.invalidAccess }
+  }
+
+  func checkWritable() throws {
+    guard isWritable else { throw Error.invalidAccess }
+  }
+
   /// Performs the ``setAccess`` operation.
   public mutating func setAccess(to access: ObjectAccess) throws {
     self.access = access
@@ -80,6 +96,7 @@ public struct FileValue: CompositeValue, ObjectSource {
   /// Executes this value in the supplied interpreter context.
   public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
     try access.check(.execute)
+    guard mode != .write else { throw Error.invalidAccess }
     try context.execution.push(source: Object(value: self, kind: kind), in: context)
   }
 

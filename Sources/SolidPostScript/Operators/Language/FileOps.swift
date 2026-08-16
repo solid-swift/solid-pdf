@@ -47,6 +47,8 @@ extension Operators {
 
       let file = try context.fileDevices.open(name: fileName.string, mode: mode.string)
 
+      context.register(file: file, vm: context.allocationMode)
+
       context.operands.push(.init(value: FileValue(file: file, vm: context.allocationMode), kind: .literal))
     }
   }
@@ -63,7 +65,7 @@ extension Operators {
 
       let file: FileValue = try context.operands.popAs()
 
-      try file.file.close()
+      try file.file.close(context: context)
     }
   }
 
@@ -79,7 +81,7 @@ extension Operators {
 
       let file: FileValue = try context.operands.popAs()
 
-      try file.access.check(.read)
+      try file.checkReadable()
 
       if let byte = try file.file.read(max: 1)?.first {
         context.operands.push(.integer(Int32(byte)), .boolean(true))
@@ -103,7 +105,7 @@ extension Operators {
       let fileValue = try fileObj.value(as: FileValue.self)
       let string = try stringObj.value(as: StringValue.self)
 
-      try fileValue.access.check(.read)
+      try fileValue.checkReadable()
       try string.access.check(.write)
       guard string.count > 0 else {
         throw Error.rangeCheck
@@ -134,7 +136,7 @@ extension Operators {
       let fileValue = try fileObj.value(as: FileValue.self)
       let string = try stringObj.value(as: StringValue.self)
 
-      try fileValue.access.check(.read)
+      try fileValue.checkReadable()
       try string.access.check(.write)
 
       let (bytes, eof) = try fileValue.file.readHex(max: Int(string.count))
@@ -160,7 +162,7 @@ extension Operators {
       let fileValue = try fileObj.value(as: FileValue.self)
       let string = try stringObj.value(as: StringValue.self)
 
-      try fileValue.access.check(.read)
+      try fileValue.checkReadable()
       try string.access.check(.write)
 
       let (line, eof) = try fileValue.file.readLine()
@@ -187,11 +189,11 @@ extension Operators {
 
       let (int, file) = try context.operands.popAs((IntegerValue, FileValue).self)
 
-      try file.access.check(.write)
+      try file.checkWritable()
 
       let byte = UInt8(truncatingIfNeeded: int.value)
 
-      try file.file.write(contentsOf: Data([byte]))
+      try file.file.write(contentsOf: Data([byte]), context: context)
     }
   }
 
@@ -207,10 +209,10 @@ extension Operators {
 
       let (string, file) = try context.operands.popAs((StringValue, FileValue).self)
 
-      try file.access.check(.write)
+      try file.checkWritable()
       try string.access.check(.read)
 
-      try file.file.write(contentsOf: string.characters(in: string.range))
+      try file.file.write(contentsOf: string.characters(in: string.range), context: context)
     }
   }
 
@@ -226,10 +228,11 @@ extension Operators {
 
       let (string, file) = try context.operands.popAs((StringValue, FileValue).self)
 
-      try file.access.check(.write)
+      try file.checkWritable()
       try string.access.check(.read)
 
-      try file.file.writeHex(contentsOf: string.characters(in: string.range))
+      let data = try string.characters(in: string.range)
+      try file.file.write(contentsOf: Data(data.baseEncoded(using: .base16Lower).utf8), context: context)
     }
   }
 
@@ -245,7 +248,7 @@ extension Operators {
 
       let file: FileValue = try context.operands.popAs()
 
-      try file.access.check(.read)
+      try file.checkReadable()
 
       context.operands.push(try NumericSemantics.integer(validating: file.file.available))
     }
@@ -263,7 +266,7 @@ extension Operators {
 
       let file: FileValue = try context.operands.popAs()
 
-      try file.file.flush()
+      try file.file.flush(context: context)
     }
   }
 
@@ -314,7 +317,7 @@ extension Operators {
 
       let file: FileValue = try context.operands.popAs()
 
-      try file.access.check(.read)
+      try file.checkReadable()
 
       context.operands.push(.boolean(!file.file.isClosed))
     }
@@ -331,6 +334,8 @@ extension Operators {
     public func execute(context: isolated Context) throws {
 
       let file: FileValue = try context.operands.popAs()
+
+      guard file.file.isPositionable else { throw Error.ioError }
 
       context.operands.push(try NumericSemantics.integer(validating: file.file.offset))
     }
@@ -351,6 +356,8 @@ extension Operators {
       guard int.value >= 0 else {
         throw Error.rangeCheck
       }
+
+      guard file.file.isPositionable else { throw Error.ioError }
 
       try file.file.setOffset(Int(int.value))
     }

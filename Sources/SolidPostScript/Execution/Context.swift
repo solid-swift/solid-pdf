@@ -45,6 +45,8 @@ public actor Context {
   var packingMode: PackingMode = .unpacked
   var activeErrors: [ErrorInvocation] = []
   var resolvingErrorNames: Set<String> = []
+  private var fileGeneration = 0
+  private var openedLocalFiles: [(generation: Int, file: WeakFile)] = []
 
   internal var executionMode: ExecutionMode {
     executionModes.peek().neverNil("Mode stack overflow")
@@ -66,6 +68,7 @@ public actor Context {
   // These are the PLRM-defined local roots that a global system dictionary may retain.
   nonisolated static let localSystemDictionaryNames: Set<Object> = [
     "$error",
+    "@Internal.Resources",
     "errordict",
     "statusdict",
     "userdict",
@@ -233,8 +236,8 @@ public actor Context {
 
   internal func executeIsolated(proc: Object, ops: [Object] = []) throws -> Bool {
 
-    let saved = (operands, dictionaries)
-    defer { (operands, dictionaries) = saved }
+    let savedDictionaries = dictionaries
+    defer { dictionaries = savedDictionaries }
 
     return try execute(proc: proc, ops: ops)
   }
@@ -276,7 +279,8 @@ public actor Context {
   }
 
   internal func snapshot() throws -> Snapshot {
-    let builder = Snapshot.builder(for: self)
+    let builder = Snapshot.builder(for: self, fileGeneration: fileGeneration)
+    fileGeneration += 1
 
     let systemDictionary = try systemDictionary()
     for name in Self.localSystemDictionaryNames {
@@ -296,6 +300,19 @@ public actor Context {
     }
 
     return builder.build()
+  }
+
+  func register(file: any File, vm: VM) {
+    guard vm == .local else { return }
+    openedLocalFiles.removeAll { $0.file.value == nil }
+    openedLocalFiles.append((fileGeneration, WeakFile(file)))
+  }
+
+  func closeFiles(openedAfter generation: Int) {
+    for tracked in openedLocalFiles where tracked.generation > generation {
+      try? tracked.file.value?.close()
+    }
+    openedLocalFiles.removeAll { $0.generation > generation || $0.file.value == nil }
   }
 
   /// Performs the ``results`` operation.
@@ -329,6 +346,14 @@ public actor Context {
     let statusDictionary = neverThrow(
       try Object.dictionary([:], access: .unlimited, vm: .local, kind: .literal)
     )
+    let resourceCategories = neverThrow(
+      try Object.dictionary(
+        ["Filter": defaultFilterResourceDictionary()],
+        access: .unlimited,
+        vm: .local,
+        kind: .literal
+      )
+    )
 
     var dict: [Object: Object] = [
 
@@ -339,6 +364,7 @@ public actor Context {
 
       // Dictionaries
       "$error": errorState,
+      "@Internal.Resources": resourceCategories,
       "errordict": errorDictionary,
       "globaldict": globalDict,
       "userdict": userDict,
@@ -414,6 +440,22 @@ public actor Context {
   nonisolated public static func defaultUserDictionary() -> Object {
     let dict: [Object: Object] = [:]
     return neverThrow(try .dictionary(dict, access: .unlimited, vm: .local, kind: .literal))
+  }
+
+  private nonisolated static func defaultFilterResourceDictionary() -> Object {
+    var entries: [Object: Object] = [
+      "Category": .literalName("Filter"),
+      "DefineResource": Operators.DefineResource.default,
+      "UndefineResource": Operators.UndefineResource.default,
+      "FindResource": Operators.FindResource.default,
+      "ResourceStatus": Operators.ResourceStatus.default,
+      "ResourceForAll": Operators.ResourceForAll.default,
+      "InstanceType": .literalName("name"),
+    ]
+    for name in Operators.Filter.availableNames {
+      entries[.literalName(name)] = .literalName(name)
+    }
+    return neverThrow(try .dictionary(entries, access: .unlimited, vm: .local, kind: .literal))
   }
 
 }

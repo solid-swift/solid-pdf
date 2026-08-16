@@ -50,6 +50,12 @@ extension Operators {
         }
 
       guard let catDict = try allocDict.objectValue(forKeyIfExists: categoriesDictName, as: DictionaryValue.self) else {
+        if vm == .local,
+           let systemCategories = try context.dictionaries.systemDictionary()
+            .objectValue(forKeyIfExists: categoriesDictName, as: DictionaryValue.self)
+        {
+          return systemCategories
+        }
         let catDict = try DictionaryValue(value: [:], access: .unlimited, vm: context.allocationMode)
         try allocDict.updateObject(.init(value: catDict, kind: .literal), forKey: categoriesDictName)
         return catDict
@@ -88,7 +94,10 @@ extension Operators {
 
         let implementationProc = try category.value(as: DictionaryValue.self).object(forKey: implementationKey)
 
-        if isolated {
+        if let implementation = implementationProc.value as? any OperatorValue {
+          try implementation.execute(context: context)
+          result = true
+        } else if isolated {
           result = try context.executeIsolated(proc: implementationProc)
         } else {
           result = try context.execute(proc: implementationProc)
@@ -392,17 +401,29 @@ extension Operators {
 
       if context.allocationMode == .local {
 
-        resourceKeys.append(contentsOf: try ResourceOperator.resources(for: context, category: categoryKey).keys)
+        resourceKeys.append(
+          contentsOf: try ResourceOperator.resources(for: context, category: categoryKey).keys
+            .filter { !$0.isResourceImplementationKey }
+        )
       }
 
       resourceKeys.append(
         contentsOf:
           try ResourceOperator
           .resources(for: context, category: categoryKey, vmOveride: .global).keys
+          .filter { !$0.isResourceImplementationKey }
       )
 
       let category = try Resources.loadCategory(forKey: categoryKey)
       resourceKeys.append(contentsOf: try category.enumerateResources(matching: template))
+
+      guard let regex = template.asTemplateRegex else { return }
+      var seen = Set<Object>()
+      resourceKeys = try resourceKeys.filter { key in
+        guard seen.insert(key).inserted else { return false }
+        let name = try key.value(as: NameStringConvertible.self).nameString
+        return (try? regex.wholeMatch(in: name)) != nil
+      }
 
       for resourceKey in resourceKeys {
 
@@ -424,6 +445,24 @@ extension Operators {
       }
     }
   }
+}
+
+private extension Object {
+
+  var isResourceImplementationKey: Bool {
+    guard let name = value as? NameValue else { return false }
+    return [
+      "Category",
+      "DefineResource",
+      "UndefineResource",
+      "FindResource",
+      "ResourceStatus",
+      "ResourceForAll",
+      "InstanceType",
+      "FileName",
+    ].contains(name.value)
+  }
+
 }
 
 extension Operators.ResourceOperatorImplementation {

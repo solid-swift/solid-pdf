@@ -1,0 +1,703 @@
+//
+//  FilterOps.swift
+//  SolidPostScript
+//
+//  Created by Codex on 8/15/26.
+//
+
+import Foundation
+import SolidIO
+import Synchronization
+
+extension Operators {
+
+  static let filterOps: [OperatorValue] = [Filter.instance]
+
+  /// Implements the PostScript `filter` operator.
+  public enum Filter: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["filter"]
+
+    static let standardNames: [String] = [
+      "ASCIIHexEncode",
+      "ASCIIHexDecode",
+      "ASCII85Encode",
+      "ASCII85Decode",
+      "LZWEncode",
+      "LZWDecode",
+      "FlateEncode",
+      "FlateDecode",
+      "RunLengthEncode",
+      "RunLengthDecode",
+      "CCITTFaxEncode",
+      "CCITTFaxDecode",
+      "DCTEncode",
+      "DCTDecode",
+      "NullEncode",
+      "SubFileDecode",
+      "ReusableStreamDecode",
+    ]
+
+    static let availableNames: [String] = {
+      #if canImport(ImageIO) && canImport(CoreGraphics)
+      standardNames
+      #else
+      standardNames.filter {
+        !$0.hasPrefix("CCITTFax") && !$0.hasPrefix("DCT")
+      }
+      #endif
+    }()
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) throws {
+      let nameObject = try context.operands.pop()
+      let name = try nameObject.value(as: NameValue.self).value
+      guard Self.availableNames.contains(name) else { throw Error.undefined }
+
+      switch name {
+      case "RunLengthEncode":
+        try makeRunLengthEncoder(context: context)
+      case "SubFileDecode":
+        try makeSubFileDecoder(context: context)
+      case "DCTEncode":
+        try makeDCTEncoder(context: context)
+      case "ReusableStreamDecode":
+        try makeReusableStream(context: context)
+      default:
+        let dictionary = try popOptionalDictionary(context: context)
+        let source = try context.operands.pop()
+        if name.hasSuffix("Encode") {
+          let closeTarget = try dictionary.boolean("CloseTarget", default: false)
+          let codec = try encoder(named: name, dictionary: dictionary)
+          let target = try FilterTarget(destination: source, closeTarget: closeTarget)
+          let file = EncodingFilterFile(name: name, codec: codec, target: target)
+          let vm = retainedVM([source] + retainedDictionary(name: name, dictionary: dictionary))
+          context.register(file: file, vm: vm)
+          context.operands.push(.file(file, access: .unlimited, vm: vm, kind: .literal))
+        } else {
+          let closeSource = try dictionary.boolean("CloseSource", default: false)
+          let codec = try decoder(named: name, dictionary: dictionary)
+          let data = try decode(codec: codec, source: source, closeSource: closeSource, context: context)
+          let vm = retainedVM([source] + retainedDictionary(name: name, dictionary: dictionary))
+          let file = MaterializedFilterFile(
+            data: data,
+            name: name,
+            positionable: false,
+            closeAtEnd: true
+          )
+          context.register(file: file, vm: vm)
+          context.operands.push(.file(file, access: .readOnly, vm: vm, kind: .literal))
+        }
+      }
+    }
+
+    private func makeRunLengthEncoder(context: isolated Context) throws {
+      let recordSize: IntegerValue = try context.operands.popAs()
+      guard recordSize.value >= 0 else { throw Error.rangeCheck }
+      let dictionary = try popOptionalDictionary(context: context)
+      let source = try context.operands.pop()
+      let closeTarget = try dictionary.boolean("CloseTarget", default: false)
+      let codec = try translateCodecOption {
+        try RunLengthEncoder(recordSize: Int(recordSize.value))
+      }
+      let target = try FilterTarget(destination: source, closeTarget: closeTarget)
+      let file = EncodingFilterFile(name: "RunLengthEncode", codec: codec, target: target)
+      let vm = retainedVM([source])
+      context.register(file: file, vm: vm)
+      context.operands.push(.file(file, access: .unlimited, vm: vm, kind: .literal))
+    }
+
+    private func makeSubFileDecoder(context: isolated Context) throws {
+      let dictionary: FilterDictionary
+      let source: Object
+      let count: Int
+      let marker: Data
+
+      if let dict = try context.operands.peek().value as? DictionaryValue {
+        _ = try context.operands.pop()
+        dictionary = FilterDictionary(dict)
+        source = try context.operands.pop()
+        count = try dictionary.integer("EODCount", default: 0)
+        marker = try dictionary.string("EODString", default: Data())
+      } else {
+        let markerValue: StringValue = try context.operands.popAs()
+        try markerValue.access.check(.read)
+        let countValue: IntegerValue = try context.operands.popAs()
+        dictionary = try popOptionalDictionary(context: context)
+        source = try context.operands.pop()
+        count = Int(countValue.value)
+        marker = try markerValue.characters(in: markerValue.range)
+      }
+
+      guard count >= 0 else { throw Error.rangeCheck }
+      guard count == 0 || !marker.isEmpty else { throw Error.rangeCheck }
+      let closeSource = try dictionary.boolean("CloseSource", default: false)
+      let codec = try SubFileDecoder(eodCount: count, eodString: marker)
+      let data = try decode(codec: codec, source: source, closeSource: closeSource, context: context)
+      let markerObject = Object.string(marker, access: .readOnly, vm: source.vmIfComposite, kind: .literal)
+      let vm = retainedVM([source, markerObject])
+      let file = MaterializedFilterFile(
+        data: data,
+        name: "SubFileDecode",
+        positionable: false,
+        closeAtEnd: true
+      )
+      context.register(file: file, vm: vm)
+      context.operands.push(.file(file, access: .readOnly, vm: vm, kind: .literal))
+    }
+
+    private func makeDCTEncoder(context: isolated Context) throws {
+      let dictionaryValue: DictionaryValue = try context.operands.popAs()
+      let dictionary = FilterDictionary(dictionaryValue)
+      let source = try context.operands.pop()
+      let closeTarget = try dictionary.boolean("CloseTarget", default: false)
+      let codec = try encoder(named: "DCTEncode", dictionary: dictionary)
+      let target = try FilterTarget(destination: source, closeTarget: closeTarget)
+      let file = EncodingFilterFile(name: "DCTEncode", codec: codec, target: target)
+      let dictObject = Object.dictionary(sharing: dictionaryValue, kind: .literal)
+      let vm = retainedVM([source, dictObject])
+      context.register(file: file, vm: vm)
+      context.operands.push(.file(file, access: .unlimited, vm: vm, kind: .literal))
+    }
+
+    private func makeReusableStream(context: isolated Context) throws {
+      let dictionary = try popOptionalDictionary(context: context)
+      let source = try context.operands.pop()
+      var data = try readAll(source: source, context: context)
+
+      if let filterObject = try dictionary.object("Filter") {
+        let filters = try filterNames(filterObject)
+        let decodeParms = try decodeParameters(dictionary: dictionary, count: filters.count)
+        for (index, name) in filters.enumerated() {
+          let codec = try decoder(named: name, dictionary: decodeParms[index])
+          data = try decode(codec: codec, data: data)
+        }
+      }
+
+      let vm = retainedVM([source])
+      let file = MaterializedFilterFile(
+        data: data,
+        name: "ReusableStreamDecode",
+        positionable: true,
+        closeAtEnd: false
+      )
+      context.register(file: file, vm: vm)
+      context.operands.push(.file(file, access: .readOnly, vm: vm, kind: .literal))
+    }
+
+    private func popOptionalDictionary(context: isolated Context) throws -> FilterDictionary {
+      guard context.operands.depth > 0,
+            let dictionary = try context.operands.peek().value as? DictionaryValue
+      else {
+        return FilterDictionary(nil)
+      }
+      _ = try context.operands.pop()
+      return FilterDictionary(dictionary)
+    }
+
+    private func encoder(named name: String, dictionary: FilterDictionary) throws -> any IncrementalFilter {
+      switch name {
+      case "ASCIIHexEncode":
+        ASCIIHexEncoder()
+      case "ASCII85Encode":
+        ASCII85Encoder()
+      case "LZWEncode":
+        try makeLZWEncoder(dictionary: dictionary)
+      case "FlateEncode":
+        FlateEncoder(options: try flateOptions(dictionary: dictionary, encoding: true))
+      case "CCITTFaxEncode":
+        CCITTFaxEncoder(options: try ccittOptions(dictionary: dictionary))
+      case "DCTEncode":
+        DCTEncoder(options: try dctEncodeOptions(dictionary: dictionary))
+      case "NullEncode":
+        NullEncoder()
+      default:
+        throw Error.undefined
+      }
+    }
+
+    private func decoder(named name: String, dictionary: FilterDictionary) throws -> any IncrementalFilter {
+      switch name {
+      case "ASCIIHexDecode":
+        ASCIIHexDecoder()
+      case "ASCII85Decode":
+        ASCII85Decoder()
+      case "LZWDecode":
+        try makeLZWDecoder(dictionary: dictionary)
+      case "FlateDecode":
+        FlateDecoder(options: try flateOptions(dictionary: dictionary, encoding: false))
+      case "RunLengthDecode":
+        RunLengthDecoder()
+      case "CCITTFaxDecode":
+        CCITTFaxDecoder(options: try ccittOptions(dictionary: dictionary))
+      case "DCTDecode":
+        DCTDecoder(options: try dctDecodeOptions(dictionary: dictionary))
+      default:
+        throw Error.undefined
+      }
+    }
+
+    private func makeLZWEncoder(dictionary: FilterDictionary) throws -> any IncrementalFilter {
+      let earlyChange = try dictionary.integer("EarlyChange", default: 1)
+      let options = try translateCodecOption { try LZWOptions(earlyChange: earlyChange) }
+      let codec = LZWEncoder(options: options)
+      let predictor = try predictorOptions(dictionary: dictionary)
+      return predictor.predictor == 1 ? codec : PredictingEncoder(codec: codec, options: predictor)
+    }
+
+    private func makeLZWDecoder(dictionary: FilterDictionary) throws -> any IncrementalFilter {
+      let earlyChange = try dictionary.integer("EarlyChange", default: 1)
+      let unitLength = try dictionary.integer("UnitLength", default: 8)
+      let lowBitFirst = try dictionary.boolean("LowBitFirst", default: false)
+      let options = try translateCodecOption {
+        try LZWOptions(earlyChange: earlyChange, unitLength: unitLength, lowBitFirst: lowBitFirst)
+      }
+      let codec = LZWDecoder(options: options)
+      let predictor = try predictorOptions(dictionary: dictionary)
+      return predictor.predictor == 1 ? codec : PredictingDecoder(codec: codec, options: predictor)
+    }
+
+    private func flateOptions(dictionary: FilterDictionary, encoding: Bool) throws -> FlateOptions {
+      let effort = encoding ? try dictionary.integer("Effort", default: -1) : -1
+      return try translateCodecOption {
+        try FlateOptions(effort: effort, predictor: predictorOptions(dictionary: dictionary))
+      }
+    }
+
+    private func predictorOptions(dictionary: FilterDictionary) throws -> PredictorOptions {
+      try translateCodecOption {
+        try PredictorOptions(
+          predictor: dictionary.integer("Predictor", default: 1),
+          colors: dictionary.integer("Colors", default: 1),
+          bitsPerComponent: dictionary.integer("BitsPerComponent", default: 8),
+          columns: dictionary.integer("Columns", default: 1)
+        )
+      }
+    }
+
+    private func ccittOptions(dictionary: FilterDictionary) throws -> CCITTFaxOptions {
+      try translateCodecOption {
+        try CCITTFaxOptions(
+          uncompressed: dictionary.boolean("Uncompressed", default: false),
+          k: dictionary.integer("K", default: 0),
+          endOfLine: dictionary.boolean("EndOfLine", default: false),
+          encodedByteAlign: dictionary.boolean("EncodedByteAlign", default: false),
+          columns: dictionary.integer("Columns", default: 1728),
+          rows: dictionary.integer("Rows", default: 0),
+          endOfBlock: dictionary.boolean("EndOfBlock", default: true),
+          blackIs1: dictionary.boolean("BlackIs1", default: false),
+          damagedRowsBeforeError: dictionary.integer("DamagedRowsBeforeError", default: 0)
+        )
+      }
+    }
+
+    private func dctEncodeOptions(dictionary: FilterDictionary) throws -> DCTEncodeOptions {
+      try translateCodecOption {
+        try DCTEncodeOptions(
+          columns: dictionary.requiredInteger("Columns"),
+          rows: dictionary.requiredInteger("Rows"),
+          colors: dictionary.requiredInteger("Colors"),
+          horizontalSamples: dictionary.integerArray("HSamples", default: []),
+          verticalSamples: dictionary.integerArray("VSamples", default: []),
+          quantizationTables: dictionary.dataArray("QuantTables", default: []),
+          quantizationFactor: dictionary.number("QFactor", default: 1),
+          huffmanTables: [],
+          colorTransform: dictionary.integer("ColorTransform", default: 1)
+        )
+      }
+    }
+
+    private func dctDecodeOptions(dictionary: FilterDictionary) throws -> DCTDecodeOptions {
+      try translateCodecOption {
+        try DCTDecodeOptions(
+          columns: dictionary.integer("Columns", default: 0),
+          rows: dictionary.integer("Rows", default: 0),
+          colors: dictionary.integer("Colors", default: 0),
+          colorTransform: dictionary.optionalInteger("ColorTransform")
+        )
+      }
+    }
+
+    private func retainedDictionary(name: String, dictionary: FilterDictionary) -> [Object] {
+      guard name == "DCTEncode" || name == "DCTDecode", let value = dictionary.value else { return [] }
+      return [.dictionary(sharing: value, kind: .literal)]
+    }
+
+    private func retainedVM(_ objects: [Object]) -> VM {
+      objects.allSatisfy { object in
+        guard let composite = object.value as? any CompositeValue else { return true }
+        return composite.vm == .global
+      } ? .global : .local
+    }
+
+    private func decode(
+      codec: any IncrementalFilter,
+      source: Object,
+      closeSource: Bool,
+      context: isolated Context
+    ) throws -> Data {
+      var provider = try FilterSource(object: source)
+      var output = Data()
+      var reachedEnd = false
+
+      while let chunk = try provider.next(context: context) {
+        var remaining = chunk
+        while !remaining.isEmpty {
+          let result = try translateCodecError { try codec.process(input: remaining) }
+          output.append(result.output)
+          if result.progress == .finished {
+            reachedEnd = true
+            remaining.removeFirst(result.consumedInput)
+            break
+          }
+          guard result.consumedInput > 0 else { throw Error.ioError }
+          remaining.removeFirst(result.consumedInput)
+        }
+        if reachedEnd { break }
+      }
+
+      if !reachedEnd {
+        output.append(try translateCodecError { try codec.finish() ?? Data() })
+      }
+      if closeSource { try provider.close(context: context) }
+      return output
+    }
+
+    private func decode(codec: any IncrementalFilter, data: Data) throws -> Data {
+      let result = try translateCodecError { try codec.process(input: data) }
+      if result.progress == .finished { return result.output }
+      return result.output + (try translateCodecError { try codec.finish() ?? Data() })
+    }
+
+    private func readAll(source: Object, context: isolated Context) throws -> Data {
+      var provider = try FilterSource(object: source)
+      var output = Data()
+      while let chunk = try provider.next(context: context) { output.append(chunk) }
+      return output
+    }
+
+    private func filterNames(_ object: Object) throws -> [String] {
+      if let name = object.value as? NameValue { return [name.value] }
+      if let array = object.value as? ArrayValue {
+        return try array.objects(in: array.range, for: .read).map {
+          try $0.value(as: NameValue.self).value
+        }
+      }
+      if let array = object.value as? PackedArrayValue {
+        return try array.objects(in: array.range, for: .read).map {
+          try $0.value(as: NameValue.self).value
+        }
+      }
+      throw Error.typeCheck
+    }
+
+    private func decodeParameters(dictionary: FilterDictionary, count: Int) throws -> [FilterDictionary] {
+      guard let object = try dictionary.object("DecodeParms") else {
+        return Array(repeating: FilterDictionary(nil), count: count)
+      }
+      if let value = object.value as? DictionaryValue {
+        guard count == 1 else { throw Error.typeCheck }
+        return [FilterDictionary(value)]
+      }
+      let objects: [Object]
+      if let array = object.value as? ArrayValue {
+        objects = Array(try array.objects(in: array.range, for: .read))
+      } else if let array = object.value as? PackedArrayValue {
+        objects = Array(try array.objects(in: array.range, for: .read))
+      } else {
+        throw Error.typeCheck
+      }
+      guard objects.count == count else { throw Error.rangeCheck }
+      return try objects.map { object in
+        if object.type == .null { return FilterDictionary(nil) }
+        return FilterDictionary(try object.value(as: DictionaryValue.self))
+      }
+    }
+  }
+
+}
+
+private struct FilterDictionary: Sendable {
+
+  let value: DictionaryValue?
+
+  init(_ value: DictionaryValue?) {
+    self.value = value
+  }
+
+  func object(_ key: Object) throws -> Object? {
+    try value?.object(forKeyIfExists: key)
+  }
+
+  func boolean(_ key: Object, default defaultValue: Bool) throws -> Bool {
+    guard let object = try object(key) else { return defaultValue }
+    return try object.value(as: BooleanValue.self).value
+  }
+
+  func integer(_ key: Object, default defaultValue: Int) throws -> Int {
+    guard let object = try object(key) else { return defaultValue }
+    return Int(try object.value(as: IntegerValue.self).value)
+  }
+
+  func requiredInteger(_ key: Object) throws -> Int {
+    guard let object = try object(key) else { throw Error.undefined }
+    return Int(try object.value(as: IntegerValue.self).value)
+  }
+
+  func optionalInteger(_ key: Object) throws -> Int? {
+    guard let object = try object(key) else { return nil }
+    return Int(try object.value(as: IntegerValue.self).value)
+  }
+
+  func number(_ key: Object, default defaultValue: Double) throws -> Double {
+    guard let object = try object(key) else { return defaultValue }
+    return try object.value(as: NumericConvertible.self).real
+  }
+
+  func string(_ key: Object, default defaultValue: Data) throws -> Data {
+    guard let object = try object(key) else { return defaultValue }
+    let string = try object.value(as: StringValue.self)
+    return try string.characters(in: string.range)
+  }
+
+  func integerArray(_ key: Object, default defaultValue: [Int]) throws -> [Int] {
+    guard let object = try object(key) else { return defaultValue }
+    let values: [Object]
+    if let array = object.value as? ArrayValue {
+      values = Array(try array.objects(in: array.range, for: .read))
+    } else if let array = object.value as? PackedArrayValue {
+      values = Array(try array.objects(in: array.range, for: .read))
+    } else {
+      throw Error.typeCheck
+    }
+    return try values.map { Int(try $0.value(as: IntegerValue.self).value) }
+  }
+
+  func dataArray(_ key: Object, default defaultValue: [Data]) throws -> [Data] {
+    guard let object = try object(key) else { return defaultValue }
+    let values: [Object]
+    if let array = object.value as? ArrayValue {
+      values = Array(try array.objects(in: array.range, for: .read))
+    } else if let array = object.value as? PackedArrayValue {
+      values = Array(try array.objects(in: array.range, for: .read))
+    } else {
+      throw Error.typeCheck
+    }
+    return try values.map { object in
+      let string = try object.value(as: StringValue.self)
+      return try string.characters(in: string.range)
+    }
+  }
+
+}
+
+private struct FilterSource {
+
+  private enum Source {
+    case file(FileValue)
+    case string(StringValue, consumed: Bool)
+    case procedure(Object)
+  }
+
+  private var source: Source
+
+  init(object: Object) throws {
+    switch object.value {
+    case let file as FileValue:
+      try file.checkReadable()
+      source = .file(file)
+    case let string as StringValue:
+      try string.access.check(.read)
+      source = .string(string, consumed: false)
+    case is ArrayValue where object.kind == .executable,
+         is PackedArrayValue where object.kind == .executable:
+      source = .procedure(object)
+    default:
+      throw Error.typeCheck
+    }
+  }
+
+  mutating func next(context: isolated Context) throws -> Data? {
+    switch source {
+    case .file(let file):
+      return try file.file.read(max: 1)
+    case .string(let string, let consumed):
+      guard !consumed else { return nil }
+      source = .string(string, consumed: true)
+      return try string.characters(in: string.range)
+    case .procedure(let procedure):
+      let originalDepth = context.operands.depth
+      guard try context.execute(proc: procedure) else { throw Error.invalidExit }
+      guard context.operands.depth == originalDepth + 1 else { throw Error.typeCheck }
+      let string: StringValue = try context.operands.popAs()
+      try string.access.check(.read)
+      let data = try string.characters(in: string.range)
+      return data.isEmpty ? nil : data
+    }
+  }
+
+  func close(context: isolated Context) throws {
+    if case .file(let file) = source {
+      try file.file.close(context: context)
+    }
+  }
+
+}
+
+private final class NullEncoder: IncrementalFilter {
+
+  private let finished = Mutex(false)
+
+  func process(input: Data) throws -> IncrementalFilterResult {
+    guard !finished.withLock({ $0 }) else { throw StreamCodecError.invalidData }
+    return IncrementalFilterResult(output: input, consumedInput: input.count, progress: .needsInput)
+  }
+
+  func finish() throws -> Data? {
+    finished.withLock { finished in
+      guard !finished else { return nil }
+      finished = true
+      return Data()
+    }
+  }
+
+}
+
+private final class SubFileDecoder: IncrementalFilter {
+
+  private struct State: Sendable {
+    var input = Data()
+    var finished = false
+  }
+
+  private let eodCount: Int
+  private let eodString: Data
+  private let state = Mutex(State())
+
+  init(eodCount: Int, eodString: Data) throws {
+    guard eodCount >= 0 else { throw StreamCodecError.invalidOption("EODCount") }
+    guard eodCount == 0 || !eodString.isEmpty else {
+      throw StreamCodecError.invalidOption("EODString")
+    }
+    self.eodCount = eodCount
+    self.eodString = eodString
+  }
+
+  func process(input: Data) throws -> IncrementalFilterResult {
+    state.withLock { state in
+      guard !state.finished else {
+        return IncrementalFilterResult(output: Data(), consumedInput: 0, progress: .finished)
+      }
+      let previousCount = state.input.count
+      state.input.append(input)
+      guard eodCount > 0,
+            let end = Self.endOffset(in: state.input, marker: eodString, count: eodCount)
+      else {
+        return IncrementalFilterResult(
+          output: Data(),
+          consumedInput: input.count,
+          progress: .needsInput
+        )
+      }
+      let output = Data(state.input.prefix(end.outputEnd))
+      state.finished = true
+      return IncrementalFilterResult(
+        output: output,
+        consumedInput: max(0, end.consumedEnd - previousCount),
+        progress: .finished
+      )
+    }
+  }
+
+  func finish() throws -> Data? {
+    state.withLock { state in
+      guard !state.finished else { return nil }
+      state.finished = true
+      return state.input
+    }
+  }
+
+  private static func endOffset(
+    in data: Data,
+    marker: Data,
+    count: Int
+  ) -> (outputEnd: Int, consumedEnd: Int)? {
+    guard data.count >= marker.count else { return nil }
+    var matches = 0
+    var index = 0
+    while index + marker.count <= data.count {
+      if data[index..<(index + marker.count)].elementsEqual(marker) {
+        matches += 1
+        if matches == count { return (index, index + marker.count) }
+      }
+      index += 1
+    }
+    return nil
+  }
+
+}
+
+private final class PredictingEncoder: IncrementalFilter {
+
+  private let codec: any IncrementalFilter
+  private let options: PredictorOptions
+  private let input = Mutex(Data())
+
+  init(codec: any IncrementalFilter, options: PredictorOptions) {
+    self.codec = codec
+    self.options = options
+  }
+
+  func process(input: Data) throws -> IncrementalFilterResult {
+    self.input.withLock { $0.append(input) }
+    return IncrementalFilterResult(output: Data(), consumedInput: input.count, progress: .needsInput)
+  }
+
+  func finish() throws -> Data? {
+    let source = input.withLock { data -> Data in
+      defer { data.removeAll() }
+      return data
+    }
+    let predicted = try PredictorCodec.encode(source, options: options)
+    let result = try codec.process(input: predicted)
+    return result.output + (try codec.finish() ?? Data())
+  }
+
+}
+
+private final class PredictingDecoder: IncrementalFilter {
+
+  private let codec: any IncrementalFilter
+  private let options: PredictorOptions
+
+  init(codec: any IncrementalFilter, options: PredictorOptions) {
+    self.codec = codec
+    self.options = options
+  }
+
+  func process(input: Data) throws -> IncrementalFilterResult {
+    let result = try codec.process(input: input)
+    guard result.progress == .finished else { return result }
+    return IncrementalFilterResult(
+      output: try PredictorCodec.decode(result.output, options: options),
+      consumedInput: result.consumedInput,
+      progress: .finished
+    )
+  }
+
+  func finish() throws -> Data? {
+    guard let output = try codec.finish() else { return nil }
+    return try PredictorCodec.decode(output, options: options)
+  }
+
+}
+
+private extension Object {
+
+  var vmIfComposite: VM {
+    (value as? any CompositeValue)?.vm ?? .global
+  }
+
+}

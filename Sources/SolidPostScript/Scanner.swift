@@ -70,6 +70,8 @@ public class Scanner {
 
   /// The ``file`` value.
   public let file: File
+  private var pushback: [Char] = []
+  private var history: [Char] = []
 
   /// Creates an instance.
   public convenience init(content: Data) throws {
@@ -387,12 +389,23 @@ public class Scanner {
 
   var available: Int {
     get throws {
-      try file.available
+      try file.available + pushback.count
     }
   }
 
   private func next() throws -> Char? {
-    return try file.readByte()
+    let byte = if let pushed = pushback.popLast() {
+      pushed
+    } else {
+      try file.readByte()
+    }
+    if let byte {
+      history.append(byte)
+      if history.count > 8 {
+        history.removeFirst(history.count - 8)
+      }
+    }
+    return byte
   }
 
   private func take(_ count: Int) throws -> [Char] {
@@ -430,7 +443,7 @@ public class Scanner {
   }
 
   private func skip(count: Int = 1) throws {
-    for _ in 0..<1 {
+    for _ in 0..<count {
       _ = try next()
     }
   }
@@ -456,7 +469,12 @@ public class Scanner {
   }
 
   private func rewind(count: Int = 1) throws {
-    try file.setOffset(file.offset - count)
+    guard count >= 0, history.count >= count else {
+      throw Error.unregistered(.internalScannerError)
+    }
+    for _ in 0..<count {
+      pushback.append(history.removeLast())
+    }
   }
 
 }

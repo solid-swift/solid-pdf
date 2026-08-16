@@ -109,6 +109,19 @@ extension Operators {
 
     let op = try context.operands.pop()
 
+    if let file = op.value as? FileValue {
+      let result =
+        if keyPath == \ObjectAccess.isReadAllowed {
+          file.isReadable
+        } else if keyPath == \ObjectAccess.isWriteAllowed {
+          file.isWritable
+        } else {
+          file.access[keyPath: keyPath]
+        }
+      context.operands.push(.boolean(result))
+      return
+    }
+
     guard let value = op.value as? AccessedValue else {
       throw Error.typeCheck
     }

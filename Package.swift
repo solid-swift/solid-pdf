@@ -15,14 +15,18 @@ let package = Package(
     .library(name: "SolidPostScript", targets: ["SolidPostScript"])
   ],
   dependencies: [
-    .package(url: "https://github.com/solid-swift/solid-foundation.git", from: "0.1.0"),
+    .package(
+      url: "https://github.com/solid-swift/solid-foundation.git",
+      revision: "8c7e40c7b98e700e6c8dc35e46ccfc57898abb33"
+    ),
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
   ],
   targets: [
     .target(
       name: "SolidPostScript",
       dependencies: [
-        .product(name: "SolidCore", package: "solid-foundation")
+        .product(name: "SolidCore", package: "solid-foundation"),
+        .product(name: "SolidIO", package: "solid-foundation"),
       ],
       plugins: lintPlugins
     ),

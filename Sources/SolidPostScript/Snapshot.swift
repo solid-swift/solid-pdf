@@ -30,6 +30,7 @@ public final class Snapshot: Sendable {
     public var packingMode: Context.PackingMode
     /// The ``allocationMode`` value.
     public var allocationMode: VM
+    let fileGeneration: Int
 
     /// The ``objects`` value.
     public private(set) var objects: Set<Object> = []
@@ -38,9 +39,10 @@ public final class Snapshot: Sendable {
     private var savedCompositeIdentities: Set<ObjectIdentifier> = []
     private var retainedObjects: [Object] = []
 
-    fileprivate init(packingMode: Context.PackingMode, allocationMode: VM) {
+    fileprivate init(packingMode: Context.PackingMode, allocationMode: VM, fileGeneration: Int) {
       self.packingMode = packingMode
       self.allocationMode = allocationMode
+      self.fileGeneration = fileGeneration
     }
 
     /// Records restorable state in a snapshot builder.
@@ -72,16 +74,22 @@ public final class Snapshot: Sendable {
         retainedObjects: retainedObjects,
         operations: operations,
         packingMode: packingMode,
-        allocationMode: allocationMode
+        allocationMode: allocationMode,
+        fileGeneration: fileGeneration
       )
     }
   }
 
   /// Performs the ``builder`` operation.
   public static func builder(for context: isolated Context) -> Builder {
+    builder(for: context, fileGeneration: 0)
+  }
+
+  static func builder(for context: isolated Context, fileGeneration: Int) -> Builder {
     return Builder(
       packingMode: context.packingMode,
-      allocationMode: context.allocationMode
+      allocationMode: context.allocationMode,
+      fileGeneration: fileGeneration
     )
   }
 
@@ -90,17 +98,20 @@ public final class Snapshot: Sendable {
   private let state: Mutex<State>
   private let packingMode: Context.PackingMode
   private let allocationMode: VM
+  private let fileGeneration: Int
 
   private init(
     retainedObjects: [Object],
     operations: [RestoreOperation],
     packingMode: Context.PackingMode,
-    allocationMode: VM
+    allocationMode: VM,
+    fileGeneration: Int
   ) {
     self.timestamp = Date.now
     self.state = Mutex(.ready(Payload(retainedObjects: retainedObjects, operations: operations)))
     self.packingMode = packingMode
     self.allocationMode = allocationMode
+    self.fileGeneration = fileGeneration
   }
 
   internal func restore(to context: isolated Context) throws {
@@ -122,6 +133,7 @@ public final class Snapshot: Sendable {
 
     context.packingMode = packingMode
     context.allocationMode = allocationMode
+    context.closeFiles(openedAfter: fileGeneration)
   }
 
   private func check(context: isolated Context) throws {
@@ -161,4 +173,14 @@ public final class Snapshot: Sendable {
     try context.dictionaries.forEach(check)
     try context.execution.map(\.source).forEach(check)
   }
+}
+
+final class WeakFile: @unchecked Sendable {
+
+  weak var value: (any File)?
+
+  init(_ value: any File) {
+    self.value = value
+  }
+
 }
