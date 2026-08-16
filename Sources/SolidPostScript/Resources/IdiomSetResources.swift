@@ -37,13 +37,24 @@ enum IdiomSetValidation: Operators.ResourceCategoryExtension {
   case instance
 
   func validateDefinition(key: Object, instance: Object, context: isolated Context) throws {
+    try validate(instance)
+  }
+
+  func validateLoaded(key: Object, instance: Object, context: isolated Context) throws {
+    try validate(instance)
+  }
+
+  private func validate(_ instance: Object) throws {
     let dictionary = try instance.value(as: DictionaryValue.self)
     try dictionary.forEachUnchecked { _, value in
-      guard let pair = value.value as? any CollectionValue, pair.count == 2 else {
+      guard let pair = value.value as? ArrayValue, pair.count == 2 else {
         throw Error.typeCheck
       }
       let procedures = try pair.objects(in: pair.range)
-      guard procedures.allSatisfy({ $0.kind == .executable && $0.value is any CollectionValue }) else {
+      guard procedures.allSatisfy({ procedure in
+        procedure.kind == .executable
+          && (procedure.value is ArrayValue || procedure.value is PackedArrayValue)
+      }) else {
         throw Error.typeCheck
       }
     }

@@ -3,6 +3,40 @@ import Foundation
 enum ResourceRuntime {
   static let categoryCategory: Object = "Category"
 
+  static func preloadIdiomSets(context: isolated Context) async throws {
+    let category = Object.literalName("IdiomSet")
+    var keys = try provider(category, context: context)?.enumerateResources(matching: "*") ?? []
+    keys.append(contentsOf: try await ResourceFiles.externalKeys(in: category, matching: "*", context: context))
+    guard !keys.isEmpty else { return }
+
+    let savedMode = context.allocationMode
+    let savedOperands = context.operands
+    let savedDictionaries = context.dictionaries
+    let savedLocalResources = context.localResources
+    context.resourceLoadTransactions.append([])
+    do {
+      var seen = Set<Object>()
+      let findResource = Operators.ResourceOperator("FindResource", "findresource")
+      for key in keys where seen.insert(try canonicalResourceKey(key)).inserted {
+        context.operands.push(category, key)
+        try await findResource.execute(context: context)
+        _ = try context.operands.pop()
+      }
+      _ = context.resourceLoadTransactions.removeLast()
+      context.allocationMode = savedMode
+      context.operands = savedOperands
+      context.dictionaries = savedDictionaries
+    } catch {
+      let mutations = context.resourceLoadTransactions.removeLast()
+      context.localResources = savedLocalResources
+      try? context.environment.rollbackGlobalResourceMutations(mutations)
+      context.allocationMode = savedMode
+      context.operands = savedOperands
+      context.dictionaries = savedDictionaries
+      throw error
+    }
+  }
+
   static func categoryDictionary(_ category: Object, context: isolated Context) async throws -> Object {
     let category = try categoryName(category)
     if let entry = try context.environment.globalResource(for: category, in: categoryCategory) {

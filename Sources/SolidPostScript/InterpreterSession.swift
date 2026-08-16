@@ -59,10 +59,10 @@ public actor InterpreterSession {
   @discardableResult
   public func executeJob(file: any File) async throws -> Context {
     try await start()
-    try await context.beginSessionJob()
 
     let source = Object.file(file, access: .readOnly, vm: .local, kind: .executable)
     do {
+      try await context.beginSessionJob()
       try await environment.emit(.jobStarted(persistent: false))
       try await context.pushAndRun(source: source)
       let persistent = await context.currentJobPersistent

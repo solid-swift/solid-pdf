@@ -26,7 +26,13 @@ extension Object {
   }
 }
 
-/// A PostScript packed array value.
+extension PackedArrayValue: SnapshotIdentifiableValue {
+
+  var snapshotIdentity: ObjectIdentifier { ObjectIdentifier(ref) }
+
+}
+
+/// An immutable PostScript packed-array value.
 public struct PackedArrayValue: CollectionValue, CompositeValue {
 
   /// The PostScript object type represented by this value.
@@ -38,23 +44,23 @@ public struct PackedArrayValue: CollectionValue, CompositeValue {
 
   /// The ``access`` value.
   public private(set) var access: ObjectAccess = Self.maxAccess
-  /// The ``vm`` value.
-  public let vm: VM
 
-  /// The ``elements`` value.
-  public let elements: [Object]
+  typealias Shared = CompositeShared<Storage>
+
+  private let ref: Shared
+
+  /// The packed array's elements.
+  public var elements: [Object] { ref.uncheckedRead { $0.value } }
 
   /// Creates an instance.
   public init(elements: [Object]) {
-    self.elements = elements
-    self.vm = .local
+    self.ref = Shared(value: elements, access: Self.maxAccess, vm: .local)
   }
 
   /// Creates an instance in the specified virtual-memory domain.
   public init(elements: [Object], vm: VM) throws {
     try elements.checkStorage(in: vm)
-    self.elements = elements
-    self.vm = vm
+    self.ref = Shared(value: elements, access: Self.maxAccess, vm: vm)
   }
 
   /// Performs the ``setAccess`` operation.
@@ -62,35 +68,50 @@ public struct PackedArrayValue: CollectionValue, CompositeValue {
     self.access = access
   }
 
+  /// The virtual-memory domain containing this packed array.
+  public var vm: VM { ref.vm }
+
   /// The ``count`` value.
-  public var count: UInt { UInt(elements.count) }
+  public var count: UInt { UInt(ref.uncheckedRead { $0.value.count }) }
   /// The ``range`` value.
   public var range: SubRange { 0..<count }
 
   /// Performs the ``object`` operation.
   public func object(at position: UInt, for access: Object.Access) throws -> Object {
     try self.access.check(access)
-    let index = try elements.indices.select(subRange: position..<position + 1, in: elements).lowerBound
-    return elements[index]
+    return try ref.uncheckedRead { state in
+      let index = try state.value.indices.select(subRange: position..<position + 1, in: state.value).lowerBound
+      return state.value[index]
+    }
   }
 
   /// Performs the ``objects`` operation.
   public func objects(in subRange: SubRange, for access: Object.Access) throws -> ArraySlice<Object> {
     try self.access.check(access)
-    let subRange = try elements.indices.select(subRange: subRange, in: elements)
-    return elements[subRange]
+    return try ref.uncheckedRead { state in
+      let selected = try state.value.indices.select(subRange: subRange, in: state.value)
+      return state.value[selected]
+    }
   }
 
   /// Performs the ``forEachUnchecked`` operation.
   public func forEachUnchecked(_ block: (Object) throws -> Void) rethrows {
+    let elements = ref.uncheckedRead { $0.value }
     try elements.forEach(block)
+  }
+
+  func replaceElementsForBinding(_ elements: [Object]) throws {
+    try elements.checkStorage(in: vm)
+    ref.uncheckedWrite { $0.value = elements }
   }
 
   /// Records restorable state in a snapshot builder.
   public func save(to snapshot: Snapshot.Builder) {
+    let elements = ref.uncheckedRead { $0.value }
     for element in elements {
       element.save(to: snapshot)
     }
+    ref.save(to: snapshot)
   }
 
   /// Executes this value in the supplied interpreter context.
@@ -103,12 +124,12 @@ public struct PackedArrayValue: CollectionValue, CompositeValue {
     guard let other = other as? Self else {
       return false
     }
-    return elements == other.elements
+    return ref === other.ref
   }
 
   /// Hashes the value into the supplied hasher.
   public func hash(into hasher: inout Hasher) {
-    hasher.combine(elements)
+    hasher.combine(ObjectIdentifier(ref))
   }
 
   /// A debug representation of this value.

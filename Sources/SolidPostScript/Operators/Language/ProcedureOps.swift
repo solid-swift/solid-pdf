@@ -47,91 +47,114 @@ extension Operators {
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
-
-      let proc = try context.operands.pop().value(as: (any CollectionValue).self)
-
-      let bound = try bind(context: context, array: proc)
-
+      let procedure = try context.operands.pop()
+      guard procedure.kind == .executable, procedure.value is any CollectionValue else {
+        throw Error.typeCheck
+      }
+      var state = BindingState()
+      let bound = try bind(context: context, procedure: procedure, state: &state)
       context.operands.push(bound)
     }
 
-
     /// Performs the ``bind`` operation.
     public func bind(context: isolated Context, array: CollectionValue) throws -> Object {
-      var elements = try array.objects(in: array.range)
+      var state = BindingState()
+      return try bind(
+        context: context,
+        procedure: Object(value: array, kind: .executable),
+        state: &state
+      )
+    }
+
+    private struct BindingIdentity: Hashable {
+      let storage: ObjectIdentifier
+      let range: Range<Int>?
+    }
+
+    private struct BindingState {
+      var active: Set<BindingIdentity> = []
+      var results: [BindingIdentity: Object] = [:]
+    }
+
+    private func bind(
+      context: isolated Context,
+      procedure: Object,
+      state: inout BindingState
+    ) throws -> Object {
+      let collection = try procedure.value(as: (any CollectionValue).self)
+      let identity = bindingIdentity(of: collection)
+      if let identity, let result = state.results[identity] { return result }
+      if let identity, !state.active.insert(identity).inserted { return procedure }
+      defer {
+        if let identity { state.active.remove(identity) }
+      }
+
+      switch collection {
+      case let array as ArrayValue where array.access == .unlimited:
+        let elements = try boundElements(context: context, collection: array, state: &state)
+        try array.updateObjects(elements, startingAt: 0)
+
+      case is ArrayValue:
+        if let identity { state.results[identity] = procedure }
+        return procedure
+
+      case let packed as PackedArrayValue:
+        let elements = try boundElements(context: context, collection: packed, state: &state)
+        try packed.replaceElementsForBinding(elements)
+
+      default:
+        break
+      }
+
+      let result = try IdiomRecognizer.recognize(candidate: procedure, context: context)
+      if let identity { state.results[identity] = result }
+      return result
+    }
+
+    private func bindingIdentity(of collection: any CollectionValue) -> BindingIdentity? {
+      guard let identifiable = collection as? SnapshotIdentifiableValue else { return nil }
+      let range = (collection as? ArrayValue)?.refRange
+      return BindingIdentity(storage: identifiable.snapshotIdentity, range: range)
+    }
+
+    private func boundElements(
+      context: isolated Context,
+      collection: any CollectionValue,
+      state: inout BindingState
+    ) throws -> [Object] {
+      var elements: [Object] = []
+      elements.reserveCapacity(Int(collection.count))
+      collection.forEachUnchecked { elements.append($0) }
 
       for index in elements.indices {
-
         let element = elements[index]
-        if let name = element.value as? NameValue, element.kind == .executable {
-
-          let value = try name.lookup(in: context)
-          guard value.value is OperatorValue else {
+        if element.kind == .executable, let name = element.value as? NameValue {
+          do {
+            let value = try name.lookup(in: context)
+            if value.value is OperatorValue { elements[index] = value }
+          } catch Error.undefined {
             continue
           }
-          elements[index] = value
-
-        } else if element.kind == .executable, let proc = element.value as? CollectionValue {
-
-          elements[index] = try bind(context: context, array: proc)
+        } else if element.kind == .executable, element.value is any CollectionValue {
+          let nested = try bind(context: context, procedure: element, state: &state)
+          elements[index] = try readOnly(nested)
         }
       }
-
-      try context.limitCheck(size: elements.count, objectType: .array)
-      let bound = try Object.packedArray(elements, vm: array.vm, kind: .executable)
-      return try recognizeIdiom(context: context, candidate: bound)
+      return elements
     }
 
-    private func recognizeIdiom(context: isolated Context, candidate: Object) throws -> Object {
-      guard context.userParameters.boolean("IdiomRecognition") else { return candidate }
-
-      var sets: [DictionaryValue] = []
-      for (_, entry) in try ResourceRuntime.storedEntries(in: "IdiomSet", context: context) {
-        if let dictionary = entry.instance.value as? DictionaryValue {
-          sets.append(dictionary)
-        }
+    private func readOnly(_ procedure: Object) throws -> Object {
+      switch procedure.value {
+      case var array as ArrayValue where array.access == .unlimited:
+        try array.setAccess(to: .readOnly)
+        return Object(value: array, kind: procedure.kind)
+      case var packed as PackedArrayValue where packed.access == .unlimited:
+        try packed.setAccess(to: .readOnly)
+        return Object(value: packed, kind: procedure.kind)
+      default:
+        return procedure
       }
-
-      let candidateVM = (candidate.value as? any CompositeValue)?.vm
-      for set in sets {
-        var replacement: Object?
-        try set.forEachUnchecked { _, pairObject in
-          guard replacement == nil,
-                let pair = pairObject.value as? any CollectionValue,
-                pair.count == 2
-          else { return }
-          let procedures = try pair.objects(in: pair.range)
-          guard try proceduresMatch(candidate, procedures[0], depth: 0) else { return }
-          let substitute = procedures[1]
-          if candidateVM == .global,
-             let composite = substitute.value as? any CompositeValue,
-             composite.vm == .local
-          {
-            return
-          }
-          replacement = substitute
-        }
-        if let replacement { return replacement }
-      }
-      return candidate
     }
-
-    private func proceduresMatch(_ lhs: Object, _ rhs: Object, depth: Int) throws -> Bool {
-      if lhs == rhs { return true }
-      guard let lhsArray = lhs.value as? any CollectionValue,
-            let rhsArray = rhs.value as? any CollectionValue
-      else {
-        return false
-      }
-      guard depth < 10, lhsArray.count == rhsArray.count else { return false }
-      let lhsElements = try lhsArray.objects(in: lhsArray.range)
-      let rhsElements = try rhsArray.objects(in: rhsArray.range)
-      for (lhsElement, rhsElement) in zip(lhsElements, rhsElements) {
-        guard try proceduresMatch(lhsElement, rhsElement, depth: depth + 1) else { return false }
-      }
-      return true
-    }
-
   }
 
 }

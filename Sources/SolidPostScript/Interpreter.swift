@@ -35,6 +35,7 @@ public enum Interpreter {
     let context = Context(environment: environment)
     do {
       try await context.executeStart()
+      try await context.prepareIdiomResources()
       try await context.pushAndRun(source: source)
     } catch let stop as ErrorStop {
       throw stop.error

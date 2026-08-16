@@ -139,8 +139,24 @@ public actor Context {
     try await run(untilExecutionDepth: targetDepth)
   }
 
-  func beginSessionJob() throws {
+  func prepareIdiomResources() async throws {
+    let savedOperands = operands
+    do {
+      try await ResourceRuntime.preloadIdiomSets(context: self)
+    } catch let error as ErrorStop {
+      throw error
+    } catch let error as UndispatchedError {
+      throw error
+    } catch let error as CancellationError {
+      throw error
+    } catch let error as Error where error.postScriptName != nil {
+      try await initiate(error: error, command: .executableName("findresource"), savedOperands: savedOperands)
+    }
+  }
+
+  func beginSessionJob() async throws {
     try beginJob(persistent: false)
+    try await prepareIdiomResources()
   }
 
   func finishSessionJob() async throws {
@@ -651,6 +667,7 @@ public actor Context {
     let rootExecution = Array(execution).last
     try await finishJob()
     try beginJob(persistent: persistent)
+    try await prepareIdiomResources()
     if let rootExecution {
       execution = ExecutionStack([rootExecution])
     }
