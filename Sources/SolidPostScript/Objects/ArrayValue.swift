@@ -32,7 +32,7 @@ extension ArrayValue: SnapshotIdentifiableValue {
 }
 
 /// An PostScript array value.
-public struct ArrayValue: CollectionValue {
+public struct ArrayValue: CollectionValue, VMAllocatedCompositeValue {
 
   /// The PostScript object type represented by this value.
   public static let objectType: ObjectType = .array
@@ -70,6 +70,7 @@ public struct ArrayValue: CollectionValue {
 
   /// The ``vm`` value.
   public var vm: VM { ref.vm }
+  var allocation: VMAllocation { ref.allocation }
 
   /// The ``count`` value.
   public var count: UInt {

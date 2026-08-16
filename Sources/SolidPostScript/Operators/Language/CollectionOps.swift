@@ -128,8 +128,9 @@ extension Operators {
       case (let array as PackedArrayValue, let index as IntegerValue, let count as IntegerValue):
         let startIndex = try index.value.unsigned
         let endIndex = try startIndex + count.value.unsigned
-        let elements = try array.objects(in: startIndex..<endIndex)
-        context.operands.push(try .packedArray(elements, vm: array.vm, kind: source.kind))
+        context.operands.push(
+          try .packedArray(sharing: array, subRange: startIndex..<endIndex, kind: source.kind)
+        )
 
       case (let string as StringValue, let index as IntegerValue, let count as IntegerValue):
         try string.access.check(.read)

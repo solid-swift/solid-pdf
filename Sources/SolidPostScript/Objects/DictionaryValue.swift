@@ -45,7 +45,7 @@ extension Object: ExpressibleByDictionaryLiteral {
 }
 
 /// A PostScript dictionary value.
-public struct DictionaryValue: CompositeValue {
+public struct DictionaryValue: CompositeValue, VMAllocatedCompositeValue {
 
   /// The type used to represent ``Storage``.
   public typealias Storage = [Object: Object]
@@ -121,6 +121,7 @@ public struct DictionaryValue: CompositeValue {
 
   /// The ``vm`` value.
   public var vm: VM { ref.vm }
+  var allocation: VMAllocation { ref.allocation }
 
   /// The ``count`` value.
   public var count: UInt { UInt(ref.uncheckedRead { $0.value.count }) }
@@ -219,7 +220,7 @@ public struct DictionaryValue: CompositeValue {
 
   /// Performs the ``forEachUnchecked`` operation.
   public func forEachUnchecked(_ block: (Object, Object) throws -> Void) throws {
-    let entries = try ref.read { $0.value }
+    let entries = ref.uncheckedRead { $0.value }
     try entries.forEach(block)
   }
 

@@ -26,7 +26,9 @@ public final class Snapshot: Sendable {
 
   private enum State: Sendable {
     case ready(Payload)
+    case restoring
     case consumed
+    case invalidated
   }
 
   /// Collects objects and restore operations for a virtual-memory snapshot.
@@ -39,7 +41,9 @@ public final class Snapshot: Sendable {
     var userParameters: UserParameterState
     var localResources: ResourceStore
     let saveDepth: Int
-    let fileGeneration: Int
+    let sequence: UInt64
+    let localBoundary: VMGenerationBoundary
+    let globalBoundary: VMGenerationBoundary?
     private let scope: Scope
 
     /// The ``objects`` value.
@@ -56,7 +60,9 @@ public final class Snapshot: Sendable {
       userParameters: UserParameterState,
       localResources: ResourceStore,
       saveDepth: Int,
-      fileGeneration: Int,
+      sequence: UInt64,
+      localBoundary: VMGenerationBoundary,
+      globalBoundary: VMGenerationBoundary?,
       scope: Scope
     ) {
       self.packingMode = packingMode
@@ -65,7 +71,9 @@ public final class Snapshot: Sendable {
       self.userParameters = userParameters
       self.localResources = localResources
       self.saveDepth = saveDepth
-      self.fileGeneration = fileGeneration
+      self.sequence = sequence
+      self.localBoundary = localBoundary
+      self.globalBoundary = globalBoundary
       self.scope = scope
     }
 
@@ -77,14 +85,16 @@ public final class Snapshot: Sendable {
         return
       }
 
-      if let identifiable = composite as? SnapshotIdentifiableValue {
-        guard savedCompositeIdentities.insert(identifiable.snapshotIdentity).inserted else {
+      if let allocated = composite as? VMAllocatedCompositeValue {
+        guard savedCompositeIdentities.insert(allocated.allocation.identity).inserted else {
           return
         }
+      } else if let identifiable = composite as? SnapshotIdentifiableValue {
+        guard savedCompositeIdentities.insert(identifiable.snapshotIdentity).inserted else { return }
       }
 
       retainedObjects.append(object)
-      if !(composite is StringValue) && !(composite is PackedArrayValue) {
+      if !(composite is StringValue) {
         objects.insert(object)
       }
       composite.save(to: self)
@@ -105,17 +115,19 @@ public final class Snapshot: Sendable {
         userParameters: userParameters,
         localResources: localResources,
         saveDepth: saveDepth,
-        fileGeneration: fileGeneration
+        sequence: sequence,
+        localBoundary: localBoundary,
+        globalBoundary: globalBoundary
       )
     }
   }
 
   /// Performs the ``builder`` operation.
   public static func builder(for context: isolated Context) -> Builder {
-    builder(for: context, fileGeneration: 0, scope: .local)
+    builder(for: context, scope: .local)
   }
 
-  static func builder(for context: isolated Context, fileGeneration: Int, scope: Scope = .local) -> Builder {
+  static func builder(for context: isolated Context, scope: Scope = .local) -> Builder {
     return Builder(
       packingMode: context.packingMode,
       allocationMode: context.allocationMode,
@@ -123,13 +135,16 @@ public final class Snapshot: Sendable {
       userParameters: context.userParameters,
       localResources: context.localResources,
       saveDepth: context.saveDepth,
-      fileGeneration: fileGeneration,
+      sequence: context.takeSnapshotSequence(),
+      localBoundary: context.localVMAllocationSpace.boundary(),
+      globalBoundary: scope == .job ? context.environment.globalVMAllocationSpace.boundary() : nil,
       scope: scope
     )
   }
 
-  /// The ``timestamp`` value.
+  /// The creation timestamp retained for diagnostics; restore ordering uses VM generations.
   public let timestamp: Date
+  let sequence: UInt64
   private let state: Mutex<State>
   private let packingMode: Context.PackingMode
   private let allocationMode: VM
@@ -137,7 +152,8 @@ public final class Snapshot: Sendable {
   private let userParameters: UserParameterState
   private let localResources: ResourceStore
   private let saveDepth: Int
-  private let fileGeneration: Int
+  private let localBoundary: VMGenerationBoundary
+  private let globalBoundary: VMGenerationBoundary?
 
   private init(
     retainedObjects: [Object],
@@ -148,9 +164,12 @@ public final class Snapshot: Sendable {
     userParameters: UserParameterState,
     localResources: ResourceStore,
     saveDepth: Int,
-    fileGeneration: Int
+    sequence: UInt64,
+    localBoundary: VMGenerationBoundary,
+    globalBoundary: VMGenerationBoundary?
   ) {
     self.timestamp = Date.now
+    self.sequence = sequence
     self.state = Mutex(.ready(Payload(retainedObjects: retainedObjects, operations: operations)))
     self.packingMode = packingMode
     self.allocationMode = allocationMode
@@ -158,7 +177,8 @@ public final class Snapshot: Sendable {
     self.userParameters = userParameters
     self.localResources = localResources
     self.saveDepth = saveDepth
-    self.fileGeneration = fileGeneration
+    self.localBoundary = localBoundary
+    self.globalBoundary = globalBoundary
   }
 
   internal func restore(to context: isolated Context) throws {
@@ -166,64 +186,72 @@ public final class Snapshot: Sendable {
     try check(context: context)
 
     let operations = try state.withLock { state in
-      guard case .ready(let payload) = state, !payload.retainedObjects.isEmpty else {
+      guard case .ready(let payload) = state else {
         throw Error.invalidRestore
       }
 
-      state = .consumed
+      state = .restoring
       return payload.operations
     }
 
-    for operation in operations {
-      try operation()
-    }
+    do {
+      for operation in operations {
+        try operation()
+      }
 
-    context.packingMode = packingMode
-    context.allocationMode = allocationMode
-    context.objectFormat = objectFormat
-    context.userParameters = userParameters
-    context.localResources = localResources
-    context.saveDepth = saveDepth
-    context.applyUserParameterLimits()
-    context.closeFiles(openedAfter: fileGeneration)
+      context.packingMode = packingMode
+      context.allocationMode = allocationMode
+      context.objectFormat = objectFormat
+      context.userParameters = userParameters
+      context.localResources = localResources
+      context.saveDepth = saveDepth
+      context.applyUserParameterLimits()
+      context.closeFiles(allocatedAfter: localBoundary, globalBoundary: globalBoundary)
+      localBoundary.space.invalidateAllocations(after: localBoundary.generation)
+      if let globalBoundary {
+        globalBoundary.space.invalidateAllocations(after: globalBoundary.generation)
+      }
+      context.didRestore(self)
+      state.withLock { $0 = .consumed }
+    } catch {
+      state.withLock { $0 = .invalidated }
+      throw error
+    }
   }
 
   private func check(context: isolated Context) throws {
-
-    var checkedCompositeIdentities: Set<ObjectIdentifier> = []
+    guard localBoundary.space === context.localVMAllocationSpace else {
+      throw Error.invalidRestore
+    }
 
     func check(_ object: Object) throws {
-      if let identifiable = object.value as? SnapshotIdentifiableValue {
-        guard checkedCompositeIdentities.insert(identifiable.snapshotIdentity).inserted else {
-          return
-        }
+      guard let composite = object.value as? VMAllocatedCompositeValue else { return }
+      let boundary = switch composite.vm {
+      case .local:
+        localBoundary
+      case .global:
+        globalBoundary
       }
-
-      switch object.value {
-      case let save as SaveValue:
-        if save.snapshot.timestamp > self.timestamp {
-          throw Error.invalidRestore
-        }
-
-      case let dict as DictionaryValue:
-        try dict.forEachUnchecked { key, value in
-          try check(key)
-          try check(value)
-        }
-
-      case let coll as CollectionValue:
-        try coll.forEachUnchecked { value in
-          try check(value)
-        }
-
-      default:
-        break
+      guard let boundary else { return }
+      guard let membership = composite.allocation.membership(in: boundary.space), membership.isValid else {
+        throw Error.invalidRestore
+      }
+      if membership.generation > boundary.generation {
+        throw Error.invalidRestore
       }
     }
 
     try context.operands.forEach(check)
     try context.dictionaries.forEach(check)
     try context.execution.map(\.source).forEach(check)
+  }
+
+  func invalidate() {
+    state.withLock { state in
+      if case .ready = state {
+        state = .invalidated
+      }
+    }
   }
 }
 

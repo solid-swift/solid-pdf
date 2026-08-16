@@ -35,7 +35,7 @@ extension Object {
 }
 
 /// A PostScript string value.
-public struct StringValue: CompositeValue, ObjectSource {
+public struct StringValue: CompositeValue, ObjectSource, VMAllocatedCompositeValue {
 
   /// The type used to represent ``Storage``.
   public typealias Storage = Data
@@ -57,10 +57,12 @@ public struct StringValue: CompositeValue, ObjectSource {
   private final class Shared: Sendable {
     let value: Mutex<Storage>
     let vm: VM
+    let allocation: VMAllocation
 
     init(value: Storage, vm: VM) {
       self.value = Mutex(value)
       self.vm = vm
+      self.allocation = VMAllocationContext.allocation(in: vm)
     }
   }
 
@@ -97,6 +99,7 @@ public struct StringValue: CompositeValue, ObjectSource {
 
   /// The ``vm`` value.
   public var vm: VM { ref.vm }
+  var allocation: VMAllocation { ref.allocation }
 
   /// The ``count`` value.
   public var count: UInt {
@@ -168,10 +171,7 @@ public struct StringValue: CompositeValue, ObjectSource {
 
   /// Records restorable state in a snapshot builder.
   public func save(to snapshot: Snapshot.Builder) {
-    let capturedValue = ref.value.withLock { $0 }
-    snapshot.save {
-      ref.value.withLock { $0 = capturedValue }
-    }
+    // PLRM 3.7.3 explicitly excludes string contents from restore rollback.
   }
 
   /// Executes this value in the supplied interpreter context.

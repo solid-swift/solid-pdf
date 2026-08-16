@@ -18,8 +18,14 @@ public actor Context {
     let persistent: Bool
     let snapshot: Snapshot?
     let startSaveDepth: Int
-    let fileGeneration: Int
+    let localBoundary: VMGenerationBoundary
+    let globalBoundary: VMGenerationBoundary
     let resourceTransactionIndex: Int
+  }
+
+  private struct OpenedFile {
+    let allocation: VMAllocation
+    let file: WeakFile
   }
 
   struct ErrorInvocation {
@@ -62,6 +68,7 @@ public actor Context {
   let environment: InterpreterEnvironment
   let fileDevices: FileDevices
   let userTime: Stopwatch
+  let localVMAllocationSpace: VMAllocationSpace
   private let vmAccountingID = UUID()
 
   var operands = OperandStack()
@@ -83,39 +90,51 @@ public actor Context {
   let jobServerEnabled: Bool
   var jobLifecycle: JobLifecycle?
   private var executivePendingInput = Data()
-  private var fileGeneration = 0
-  private var openedLocalFiles: [(generation: Int, file: WeakFile)] = []
+  private var snapshotSequence: UInt64 = 0
+  private var openedFiles: [OpenedFile] = []
   private var standardFiles: [String: any File] = [:]
   var fileReadAhead: [ObjectIdentifier: FileReadAhead] = [:]
   private var executionTimingDepth = 0
   private var hostSuspensionDepth = 0
 
   init(environment: InterpreterEnvironment = InterpreterEnvironment(), jobServerEnabled: Bool = false) {
+    let localVMAllocationSpace = VMAllocationSpace(vm: .local)
     self.environment = environment
     self.fileDevices = environment.fileDevices
     self.userTime = Stopwatch(source: environment.monotonicInstantSource)
+    self.localVMAllocationSpace = localVMAllocationSpace
     self.jobServerEnabled = jobServerEnabled
     let userParameters = environment.userParameters()
     self.userParameters = userParameters
-    self.dictionaries = DictionaryStack(
-      Self.defaultDictionaries(
-        interactiveExecutiveEnabled: environment.hostConfiguration.interactiveExecutiveEnabled,
-        jobServerEnabled: jobServerEnabled
-      )
+    let dictionaries = Self.defaultDictionaries(
+      interactiveExecutiveEnabled: environment.hostConfiguration.interactiveExecutiveEnabled,
+      jobServerEnabled: jobServerEnabled
     )
+    self.dictionaries = DictionaryStack(dictionaries)
+    neverThrow(try Self.adopt(dictionaries, into: VMAllocationSpaces(
+      local: localVMAllocationSpace,
+      global: environment.globalVMAllocationSpace
+    )))
     self.operands.setMaximumDepth(Int(userParameters.integer("MaxOpStack")))
     self.dictionaries.setMaximumDepth(Int(userParameters.integer("MaxDictStack")))
   }
 
   init(fileDevices: FileDevices) {
     let environment = InterpreterEnvironment(fileDevices: fileDevices)
+    let localVMAllocationSpace = VMAllocationSpace(vm: .local)
     self.environment = environment
     self.fileDevices = fileDevices
     self.userTime = Stopwatch(source: environment.monotonicInstantSource)
+    self.localVMAllocationSpace = localVMAllocationSpace
     self.jobServerEnabled = false
     let userParameters = environment.userParameters()
     self.userParameters = userParameters
-    self.dictionaries = DictionaryStack(Self.defaultDictionaries())
+    let dictionaries = Self.defaultDictionaries()
+    self.dictionaries = DictionaryStack(dictionaries)
+    neverThrow(try Self.adopt(dictionaries, into: VMAllocationSpaces(
+      local: localVMAllocationSpace,
+      global: environment.globalVMAllocationSpace
+    )))
     self.operands.setMaximumDepth(Int(userParameters.integer("MaxOpStack")))
     self.dictionaries.setMaximumDepth(Int(userParameters.integer("MaxDictStack")))
   }
@@ -125,6 +144,47 @@ public actor Context {
   }
 
   var stackLimitsBypassed: Bool { stackLimitBypassDepth > 0 }
+
+  private var allocationSpaces: VMAllocationSpaces {
+    VMAllocationSpaces(local: localVMAllocationSpace, global: environment.globalVMAllocationSpace)
+  }
+
+  func adopt(_ object: Object) throws {
+    try Self.adopt([object], into: allocationSpaces)
+  }
+
+  private nonisolated static func adopt(_ objects: some Sequence<Object>, into spaces: VMAllocationSpaces) throws {
+    var visited = Set<ObjectIdentifier>()
+
+    func visit(_ object: Object) throws {
+      guard let composite = object.value as? VMAllocatedCompositeValue else { return }
+      let allocation = composite.allocation
+      guard visited.insert(allocation.identity).inserted else { return }
+      try spaces.space(for: composite.vm).adopt(allocation)
+
+      switch object.value {
+      case let dictionary as DictionaryValue:
+        try dictionary.forEachUnchecked { key, value in
+          try visit(key)
+          try visit(value)
+        }
+      case let collection as any CollectionValue:
+        try collection.forEachUnchecked(visit)
+      default:
+        break
+      }
+    }
+
+    for object in objects {
+      try visit(object)
+    }
+  }
+
+  func takeSnapshotSequence() -> UInt64 {
+    precondition(snapshotSequence < .max, "PostScript snapshot sequence exhausted")
+    snapshotSequence += 1
+    return snapshotSequence
+  }
 
   func recordGlobalResourceMutation(_ mutation: GlobalResourceMutation) {
     for index in resourceLoadTransactions.indices {
@@ -203,9 +263,11 @@ public actor Context {
   func withUserTimeAccounting<Result>(
     _ operation: () async throws -> Result
   ) async rethrows -> Result {
-    beginUserTimeAccounting()
-    defer { endUserTimeAccounting() }
-    return try await operation()
+    try await VMAllocationContext.$spaces.withValue(allocationSpaces) {
+      beginUserTimeAccounting()
+      defer { endUserTimeAccounting() }
+      return try await operation()
+    }
   }
 
   func withUserTimeSuspended<Result>(
@@ -698,8 +760,7 @@ public actor Context {
   }
 
   internal func snapshot(scope: Snapshot.Scope = .local) throws -> Snapshot {
-    let builder = Snapshot.builder(for: self, fileGeneration: fileGeneration, scope: scope)
-    fileGeneration += 1
+    let builder = Snapshot.builder(for: self, scope: scope)
 
     if scope == .local {
       let systemDictionary = try systemDictionary()
@@ -723,10 +784,13 @@ public actor Context {
     return builder.build()
   }
 
-  func register(file: any File, vm: VM) {
-    guard vm == .local else { return }
-    openedLocalFiles.removeAll { $0.file.value == nil }
-    openedLocalFiles.append((fileGeneration, WeakFile(file)))
+  @discardableResult
+  func register(file: any File, vm: VM) -> VMAllocation {
+    let allocation = VMAllocationContext.allocation(in: vm)
+    neverThrow(try allocationSpaces.space(for: vm).adopt(allocation))
+    openedFiles.removeAll { $0.file.value == nil }
+    openedFiles.append(OpenedFile(allocation: allocation, file: WeakFile(file)))
+    return allocation
   }
 
   func openFile(name: String, mode modeString: String) throws -> any File {
@@ -757,7 +821,8 @@ public actor Context {
 
   func beginJob(persistent: Bool) throws {
     precondition(jobLifecycle == nil)
-    let jobFileGeneration = fileGeneration
+    let localBoundary = localVMAllocationSpace.boundary()
+    let globalBoundary = environment.globalVMAllocationSpace.boundary()
     let snapshot = persistent ? nil : try snapshot(scope: .job)
     let resourceTransactionIndex = resourceLoadTransactions.count
     resourceLoadTransactions.append([])
@@ -765,7 +830,8 @@ public actor Context {
       persistent: persistent,
       snapshot: snapshot,
       startSaveDepth: saveDepth,
-      fileGeneration: jobFileGeneration,
+      localBoundary: localBoundary,
+      globalBoundary: globalBoundary,
       resourceTransactionIndex: resourceTransactionIndex
     )
     resetForJob()
@@ -776,7 +842,7 @@ public actor Context {
     operands = OperandStack()
     execution = ExecutionStack()
     dictionaries.clear()
-    await closeFilesForJob(openedAfter: job.fileGeneration)
+    await closeFilesForJob(allocatedAfter: job.localBoundary, globalBoundary: job.globalBoundary)
     if job.persistent, let pendingSave = languageSaves.first {
       try pendingSave.restore(to: self)
     }
@@ -790,7 +856,7 @@ public actor Context {
     if !job.persistent {
       try environment.rollbackGlobalResourceMutations(mutations)
     }
-    closeFiles(openedAfter: 0)
+    closeFiles(allocatedAfter: job.localBoundary, globalBoundary: job.globalBoundary)
     resetStandardFiles()
     jobLifecycle = nil
     languageSaves.removeAll()
@@ -831,6 +897,9 @@ public actor Context {
 
   func didRestore(_ snapshot: Snapshot) {
     guard let index = languageSaves.firstIndex(where: { $0 === snapshot }) else { return }
+    for invalidated in languageSaves[index...] where invalidated !== snapshot {
+      invalidated.invalidate()
+    }
     languageSaves.removeSubrange(index...)
   }
 
@@ -1036,23 +1105,41 @@ public actor Context {
     return delimiters.isEmpty
   }
 
-  func closeFiles(openedAfter generation: Int) {
-    for tracked in openedLocalFiles where tracked.generation > generation {
+  func closeFiles(
+    allocatedAfter localBoundary: VMGenerationBoundary,
+    globalBoundary: VMGenerationBoundary?
+  ) {
+    for tracked in openedFiles where isAllocated(tracked.allocation, after: localBoundary, globalBoundary: globalBoundary) {
       if let file = tracked.file.value {
         clearReadAhead(for: file)
         try? file.close()
       }
     }
-    openedLocalFiles.removeAll { $0.generation > generation || $0.file.value == nil }
+    openedFiles.removeAll {
+      $0.file.value == nil || isAllocated($0.allocation, after: localBoundary, globalBoundary: globalBoundary)
+    }
   }
 
-  private func closeFilesForJob(openedAfter generation: Int) async {
-    let files = openedLocalFiles
-      .filter { $0.generation > generation }
+  private func closeFilesForJob(
+    allocatedAfter localBoundary: VMGenerationBoundary,
+    globalBoundary: VMGenerationBoundary
+  ) async {
+    let files = openedFiles
+      .filter { isAllocated($0.allocation, after: localBoundary, globalBoundary: globalBoundary) }
       .compactMap(\.file.value)
     for file in files {
       try? await file.close(context: self)
     }
+  }
+
+  private func isAllocated(
+    _ allocation: VMAllocation,
+    after localBoundary: VMGenerationBoundary,
+    globalBoundary: VMGenerationBoundary?
+  ) -> Bool {
+    let boundary = allocation.vm == .local ? localBoundary : globalBoundary
+    guard let boundary, let membership = allocation.membership(in: boundary.space) else { return false }
+    return membership.generation > boundary.generation
   }
 
   /// Performs the ``results`` operation.

@@ -17,11 +17,13 @@ public final class CompositeShared<T: Sendable>: Sendable {
   private let state: Mutex<State>
   private let revision = Mutex<UInt64>(0)
   let vm: VM
+  let allocation: VMAllocation
 
   /// Creates an instance.
   public init(value: T, access: ObjectAccess, vm: VM) {
     self.state = Mutex((value, access))
     self.vm = vm
+    self.allocation = VMAllocationContext.allocation(in: vm)
   }
 
   /// Performs the ``uncheckedRead`` operation.

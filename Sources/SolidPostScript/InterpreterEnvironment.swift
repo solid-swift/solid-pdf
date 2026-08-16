@@ -7,6 +7,7 @@ import Synchronization
 public final class InterpreterEnvironment: Sendable {
   let state = Mutex(SystemParameterState())
   private let globalVMUsage = Mutex<[UUID: Int]>([:])
+  let globalVMAllocationSpace = VMAllocationSpace(vm: .global)
   private let globalResources = Mutex(ResourceStore())
   private let resourcesInitialized = Mutex(false)
   let resourceCategories: [Object: any ResourceCategory]

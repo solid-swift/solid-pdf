@@ -13,6 +13,7 @@ typealias ExecutionStack = Stack<(source: Object, iterator: ObjectIterator?)>
 extension ExecutionStack {
 
   mutating func push(source: Object, in context: isolated Context) throws {
+    try context.adopt(source)
     try (source.value as? any CompositeValue)?.access.check(.execute)
     guard context.stackLimitsBypassed || depth < Int(context.userParameters.integer("MaxExecStack")) else {
       throw Error.executionStackOverflow

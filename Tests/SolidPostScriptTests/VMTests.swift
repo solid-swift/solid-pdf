@@ -138,26 +138,97 @@ struct VMTests {
     } catch let error as Error {
       expectTrue(error == Error.invalidRestore)
     }
-    do {
-      _ = try await Interpreter.execute(
-        content:
-          """
-          /a 10 def
-          /b 20 def
-          save
-          /b 15 def
-          /c 25 def
-          save
-          /saved
-          exch
-          def
-          restore
-          """
-      )
-      recordIssue("Expected invalidRestore error")
-    } catch let error as Error {
-      expectTrue(error == Error.invalidRestore)
+    _ = try await Interpreter.execute(
+      content:
+        """
+        /a 10 def
+        /b 20 def
+        save
+        /b 15 def
+        /c 25 def
+        save
+        /saved exch def
+        restore
+        """
+    )
+  }
+
+  @Test(arguments: [
+    "save /s exch def 0 array s restore",
+    "save /s exch def 0 string s restore",
+    "save /s exch def 0 dict s restore",
+    "save /s exch def 0 packedarray s restore",
+    "save /s exch def (%stdout) (w) file s restore",
+    "save /s exch def 0 dict begin s restore",
+    "save /s exch def { s restore } exec",
+  ])
+  func restoreRejectsPostSaveLocalCompositesOnInterpreterStacks(_ content: String) async {
+    await #expect(throws: Error.invalidRestore) {
+      try await Interpreter.execute(content: content)
     }
+  }
+
+  @Test
+  func invalidRestoreUsesErrorLifecycleWithoutDiscardingOperands() async throws {
+    let results = try await Interpreter.results(
+      content:
+        """
+        save /s exch def
+        0 array
+        { s restore } stopped
+        $error /errorname get /invalidrestore eq
+        $error /command get /restore load eq
+        """
+    )
+
+    let checks = results.compactMap { ($0.value as? BooleanValue)?.value }
+    #expect(checks == [true, true, true])
+    #expect(results.contains { $0.value is ArrayValue })
+  }
+
+  @Test
+  func restoreAllowsGlobalAndPreSaveIntervalObjects() async throws {
+    let global: BooleanValue = try await Interpreter.result(
+      content: "save /s exch def true setglobal 0 array false setglobal s restore gcheck"
+    )
+    #expect(global.value)
+
+    for content in [
+      "/value [1 2] def value 0 1 getinterval",
+      "/value (ab) def value 0 1 getinterval",
+      "/value 3 4 2 packedarray def value 0 1 getinterval",
+    ] {
+      let restored: BooleanValue = try await Interpreter.result(
+        content: "\(content) save /s exch def s restore pop true"
+      )
+      #expect(restored.value)
+    }
+  }
+
+  @Test
+  func restoreChecksOnlyDirectStackObjects() async throws {
+    let restored: BooleanValue = try await Interpreter.result(
+      content:
+        """
+        /outer 1 array def
+        save /s exch def
+        outer 0 1 array put
+        outer s restore
+        outer 0 get null eq
+        """
+    )
+
+    #expect(restored.value)
+  }
+
+  @Test
+  func saveObjectsAreLocalCompositeValuesWithIdentity() async throws {
+    let checks: [BooleanValue] = try await Interpreter.result(
+      content: "save dup gcheck exch dup eq",
+      count: 2
+    )
+
+    #expect(checks.map(\.value) == [true, false])
   }
 
   @Test
@@ -262,7 +333,7 @@ struct VMTests {
   }
 
   @Test
-  func restoreRevertsLocalStringContentsAndAliases() async throws {
+  func restorePreservesLocalStringContentsAndAliases() async throws {
     let (interval, string) = try await Interpreter.result(
       content:
         """
@@ -274,12 +345,12 @@ struct VMTests {
       as: (StringValue, StringValue).self
     )
 
-    #expect(string.string == "abcdef")
-    #expect(interval.string == "cde")
+    #expect(string.string == "abXdef")
+    #expect(interval.string == "Xde")
   }
 
   @Test
-  func restoreRevertsDistinctEqualStringsIndependently() async throws {
+  func restorePreservesDistinctEqualStringMutations() async throws {
     let (second, first) = try await Interpreter.result(
       content:
         """
@@ -291,8 +362,8 @@ struct VMTests {
       as: (StringValue, StringValue).self
     )
 
-    #expect(first.string == "same")
-    #expect(second.string == "same")
+    #expect(first.string == "Aame")
+    #expect(second.string == "Bame")
   }
 
   @Test

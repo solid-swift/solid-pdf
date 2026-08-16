@@ -14,6 +14,16 @@ extension Object {
     Self(value: FileValue(file: file, access: access, vm: vm), kind: kind)
   }
 
+  static func file(
+    _ file: File,
+    access: ObjectAccess,
+    vm: VM,
+    allocation: VMAllocation,
+    kind: ObjectKind
+  ) -> Object {
+    Self(value: FileValue(file: file, access: access, vm: vm, allocation: allocation), kind: kind)
+  }
+
   /// Performs the ``dataFile`` operation.
   public static func dataFile(content: Data, access: ObjectAccess, vm: VM, kind: ObjectKind) -> Object {
     let mode: File.Mode = access == .unlimited ? .readWrite : .read
@@ -29,7 +39,7 @@ extension FileValue: SnapshotIdentifiableValue {
 }
 
 /// A PostScript file value.
-public struct FileValue: CompositeValue, ObjectSource {
+public struct FileValue: CompositeValue, ObjectSource, VMAllocatedCompositeValue {
 
   /// The PostScript object type represented by this value.
   public static let objectType: ObjectType = .file
@@ -42,23 +52,34 @@ public struct FileValue: CompositeValue, ObjectSource {
   public private(set) var access: ObjectAccess
   /// The ``vm`` value.
   public let vm: VM
+  let allocation: VMAllocation
 
   init(file: File, vm: VM) {
     self.file = file
     self.access = file.mode.access
     self.vm = vm
+    self.allocation = VMAllocationContext.allocation(in: vm)
   }
 
   init(file: File, access: ObjectAccess, vm: VM) {
     self.file = file
     self.access = access
     self.vm = vm
+    self.allocation = VMAllocationContext.allocation(in: vm)
+  }
+
+  init(file: File, access: ObjectAccess, vm: VM, allocation: VMAllocation) {
+    self.file = file
+    self.access = access
+    self.vm = vm
+    self.allocation = allocation
   }
 
   init(sharing: FileValue, access: ObjectAccess) {
     self.file = sharing.file
     self.access = access
     self.vm = sharing.vm
+    self.allocation = sharing.allocation
   }
 
   /// The ``name`` value.

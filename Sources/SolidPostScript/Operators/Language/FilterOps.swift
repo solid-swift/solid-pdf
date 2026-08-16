@@ -66,8 +66,8 @@ extension Operators {
           let target = try FilterTarget(destination: source, closeTarget: closeTarget)
           let file = EncodingFilterFile(name: name, codec: codec, target: target)
           let vm = retainedVM([source] + retainedDictionary(name: name, dictionary: dictionary))
-          context.register(file: file, vm: vm)
-          context.operands.push(.file(file, access: .unlimited, vm: vm, kind: .literal))
+          let allocation = context.register(file: file, vm: vm)
+          context.operands.push(.file(file, access: .unlimited, vm: vm, allocation: allocation, kind: .literal))
         } else {
           let closeSource = try dictionary.boolean("CloseSource", default: false)
           let vm = retainedVM([source] + retainedDictionary(name: name, dictionary: dictionary))
@@ -82,8 +82,8 @@ extension Operators {
             source: source,
             closeSource: closeSource
           )
-          context.register(file: file, vm: vm)
-          context.operands.push(.file(file, access: .readOnly, vm: vm, kind: .literal))
+          let allocation = context.register(file: file, vm: vm)
+          context.operands.push(.file(file, access: .readOnly, vm: vm, allocation: allocation, kind: .literal))
         }
       }
     }
@@ -100,8 +100,8 @@ extension Operators {
       let target = try FilterTarget(destination: source, closeTarget: closeTarget)
       let file = EncodingFilterFile(name: "RunLengthEncode", codec: codec, target: target)
       let vm = retainedVM([source])
-      context.register(file: file, vm: vm)
-      context.operands.push(.file(file, access: .unlimited, vm: vm, kind: .literal))
+      let allocation = context.register(file: file, vm: vm)
+      context.operands.push(.file(file, access: .unlimited, vm: vm, allocation: allocation, kind: .literal))
     }
 
     private func makeSubFileDecoder(context: isolated Context) async throws {
@@ -138,8 +138,8 @@ extension Operators {
         source: source,
         closeSource: closeSource
       )
-      context.register(file: file, vm: vm)
-      context.operands.push(.file(file, access: .readOnly, vm: vm, kind: .literal))
+      let allocation = context.register(file: file, vm: vm)
+      context.operands.push(.file(file, access: .readOnly, vm: vm, allocation: allocation, kind: .literal))
     }
 
     private func makeDCTEncoder(context: isolated Context) throws {
@@ -152,8 +152,8 @@ extension Operators {
       let file = EncodingFilterFile(name: "DCTEncode", codec: codec, target: target)
       let dictObject = Object.dictionary(sharing: dictionaryValue, kind: .literal)
       let vm = retainedVM([source, dictObject])
-      context.register(file: file, vm: vm)
-      context.operands.push(.file(file, access: .unlimited, vm: vm, kind: .literal))
+      let allocation = context.register(file: file, vm: vm)
+      context.operands.push(.file(file, access: .unlimited, vm: vm, allocation: allocation, kind: .literal))
     }
 
     private func makeReusableStream(context: isolated Context) async throws {
@@ -181,8 +181,8 @@ extension Operators {
         positionable: true,
         closeAtEnd: false
       )
-      context.register(file: file, vm: vm)
-      context.operands.push(.file(file, access: .readOnly, vm: vm, kind: .literal))
+      let allocation = context.register(file: file, vm: vm)
+      context.operands.push(.file(file, access: .readOnly, vm: vm, allocation: allocation, kind: .literal))
     }
 
     private func popOptionalDictionary(context: isolated Context) throws -> FilterDictionary {

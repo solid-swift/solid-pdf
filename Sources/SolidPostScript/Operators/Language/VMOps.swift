@@ -52,7 +52,6 @@ extension Operators {
       let save: SaveValue = try context.operands.popAs()
 
       try save.snapshot.restore(to: context)
-      context.didRestore(save.snapshot)
     }
   }
 

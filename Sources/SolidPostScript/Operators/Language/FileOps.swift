@@ -60,9 +60,9 @@ extension Operators {
         file = try context.openFile(name: fileNameString, mode: modeString)
       }
 
-      context.register(file: file, vm: context.allocationMode)
-
-      context.operands.push(.init(value: FileValue(file: file, vm: context.allocationMode), kind: .literal))
+      let vm = context.allocationMode
+      let allocation = context.register(file: file, vm: vm)
+      context.operands.push(.file(file, access: file.mode.access, vm: vm, allocation: allocation, kind: .literal))
     }
   }
 

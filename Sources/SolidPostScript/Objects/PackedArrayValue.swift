@@ -24,6 +24,14 @@ extension Object {
   public static func packedArray(_ array: PackedArrayValue, kind: ObjectKind) -> Self {
     Self(value: array, kind: kind)
   }
+
+  static func packedArray(
+    sharing array: PackedArrayValue,
+    subRange: PackedArrayValue.SubRange,
+    kind: ObjectKind
+  ) throws -> Self {
+    Self(value: try PackedArrayValue(sharing: array, subRange: subRange), kind: kind)
+  }
 }
 
 extension PackedArrayValue: SnapshotIdentifiableValue {
@@ -33,7 +41,7 @@ extension PackedArrayValue: SnapshotIdentifiableValue {
 }
 
 /// An immutable PostScript packed-array value.
-public struct PackedArrayValue: CollectionValue, CompositeValue {
+public struct PackedArrayValue: CollectionValue, CompositeValue, VMAllocatedCompositeValue {
 
   /// The PostScript object type represented by this value.
   public static let objectType: ObjectType = .packedArray
@@ -48,19 +56,28 @@ public struct PackedArrayValue: CollectionValue, CompositeValue {
   typealias Shared = CompositeShared<Storage>
 
   private let ref: Shared
+  let refRange: StorageRange
 
   /// The packed array's elements.
-  public var elements: [Object] { ref.uncheckedRead { $0.value } }
+  public var elements: [Object] { ref.uncheckedRead { Array($0.value[refRange]) } }
 
   /// Creates an instance.
   public init(elements: [Object]) {
     self.ref = Shared(value: elements, access: Self.maxAccess, vm: .local)
+    self.refRange = elements.indices
   }
 
   /// Creates an instance in the specified virtual-memory domain.
   public init(elements: [Object], vm: VM) throws {
     try elements.checkStorage(in: vm)
     self.ref = Shared(value: elements, access: Self.maxAccess, vm: vm)
+    self.refRange = elements.indices
+  }
+
+  init(sharing: Self, subRange: SubRange) throws {
+    self.ref = sharing.ref
+    self.refRange = try sharing.refRange.select(subRange: subRange, in: sharing.ref.uncheckedRead { $0.value })
+    self.access = sharing.access
   }
 
   /// Performs the ``setAccess`` operation.
@@ -70,9 +87,10 @@ public struct PackedArrayValue: CollectionValue, CompositeValue {
 
   /// The virtual-memory domain containing this packed array.
   public var vm: VM { ref.vm }
+  var allocation: VMAllocation { ref.allocation }
 
   /// The ``count`` value.
-  public var count: UInt { UInt(ref.uncheckedRead { $0.value.count }) }
+  public var count: UInt { UInt(refRange.count) }
   /// The ``range`` value.
   public var range: SubRange { 0..<count }
 
@@ -80,7 +98,7 @@ public struct PackedArrayValue: CollectionValue, CompositeValue {
   public func object(at position: UInt, for access: Object.Access) throws -> Object {
     try self.access.check(access)
     return try ref.uncheckedRead { state in
-      let index = try state.value.indices.select(subRange: position..<position + 1, in: state.value).lowerBound
+      let index = try refRange.select(subRange: position..<position + 1, in: state.value).lowerBound
       return state.value[index]
     }
   }
@@ -89,20 +107,21 @@ public struct PackedArrayValue: CollectionValue, CompositeValue {
   public func objects(in subRange: SubRange, for access: Object.Access) throws -> ArraySlice<Object> {
     try self.access.check(access)
     return try ref.uncheckedRead { state in
-      let selected = try state.value.indices.select(subRange: subRange, in: state.value)
+      let selected = try refRange.select(subRange: subRange, in: state.value)
       return state.value[selected]
     }
   }
 
   /// Performs the ``forEachUnchecked`` operation.
   public func forEachUnchecked(_ block: (Object) throws -> Void) rethrows {
-    let elements = ref.uncheckedRead { $0.value }
+    let elements = ref.uncheckedRead { Array($0.value[refRange]) }
     try elements.forEach(block)
   }
 
   func replaceElementsForBinding(_ elements: [Object]) throws {
+    guard elements.count == refRange.count else { throw Error.rangeCheck }
     try elements.checkStorage(in: vm)
-    ref.uncheckedWrite { $0.value = elements }
+    ref.uncheckedWrite { $0.value.replaceSubrange(refRange, with: elements) }
   }
 
   /// Records restorable state in a snapshot builder.
