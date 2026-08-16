@@ -5,7 +5,7 @@ extension Operators {
     static let `default`: Object = .init(value: Self(), kind: .executable)
     static let systemDictionaryNames: [Object] = []
 
-    func execute(context: isolated Context) throws {
+    func execute(context: isolated Context) async throws {
       let (scratchObject, key) = try context.operands.pop2()
       let category = try context.dictionaries.object(forKey: "Category")
       let scratch = try scratchObject.value(as: StringValue.self)
@@ -31,8 +31,8 @@ enum ResourceFiles {
     for key: Object,
     in category: Object,
     context: isolated Context
-  ) throws -> Availability? {
-    guard let path = try fileName(for: key, in: category, context: context),
+  ) async throws -> Availability? {
+    guard let path = try await fileName(for: key, in: category, context: context),
           try context.fileDevices.resourceFileMetadata(name: path) != nil
     else {
       return nil
@@ -44,8 +44,8 @@ enum ResourceFiles {
     in category: Object,
     matching template: String,
     context: isolated Context
-  ) throws -> [Object] {
-    let implementation = try ResourceRuntime.categoryDictionary(category, context: context)
+  ) async throws -> [Object] {
+    let implementation = try await ResourceRuntime.categoryDictionary(category, context: context)
       .value(as: DictionaryValue.self)
     guard let fileName = try implementation.object(forKeyIfExists: "ResourceFileName"),
           fileName.value is Operators.ResourceFileName,
@@ -60,7 +60,7 @@ enum ResourceFiles {
     }
   }
 
-  static func load(_ availability: Availability, context: isolated Context) throws {
+  static func load(_ availability: Availability, context: isolated Context) async throws {
     let file: any File
     do {
       file = try context.fileDevices.open(name: availability.path, mode: "r")
@@ -68,7 +68,7 @@ enum ResourceFiles {
       throw Error.undefinedResource
     }
     let source: Object = .file(file, access: .readOnly, vm: .global, kind: .executable)
-    guard try context.execute(proc: source) else { throw Error.invalidExit }
+    guard try await context.execute(proc: source) else { throw Error.invalidExit }
   }
 
   static func defaultPath(
@@ -112,8 +112,8 @@ enum ResourceFiles {
     for key: Object,
     in category: Object,
     context: isolated Context
-  ) throws -> String? {
-    let implementation = try ResourceRuntime.categoryDictionary(category, context: context)
+  ) async throws -> String? {
+    let implementation = try await ResourceRuntime.categoryDictionary(category, context: context)
       .value(as: DictionaryValue.self)
     guard let procedure = try implementation.object(forKeyIfExists: "ResourceFileName") else { return nil }
     if procedure.value is Operators.ResourceFileName {
@@ -123,7 +123,7 @@ enum ResourceFiles {
     let savedOperands = context.operands
     defer { context.operands = savedOperands }
     let scratch = Object.string(Data(repeating: 0, count: 4096), access: .unlimited, vm: .local, kind: .literal)
-    guard try context.execute(proc: procedure, ops: [key, scratch]) else { throw Error.invalidExit }
+    guard try await context.execute(proc: procedure, ops: [key, scratch]) else { throw Error.invalidExit }
     let result: StringValue = try context.operands.popAs()
     try result.access.check(.read)
     return result.string

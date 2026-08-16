@@ -3,14 +3,14 @@ import Foundation
 enum ResourceRuntime {
   static let categoryCategory: Object = "Category"
 
-  static func categoryDictionary(_ category: Object, context: isolated Context) throws -> Object {
+  static func categoryDictionary(_ category: Object, context: isolated Context) async throws -> Object {
     let category = try categoryName(category)
     if let entry = try context.environment.globalResource(for: category, in: categoryCategory) {
       return entry.instance
     }
     guard category != categoryCategory else { throw Error.undefined }
     do {
-      return try find(category, in: categoryCategory, context: context)
+      return try await find(category, in: categoryCategory, context: context)
     } catch Error.undefinedResource {
       throw Error.undefined
     }
@@ -42,10 +42,10 @@ enum ResourceRuntime {
     size: Int32 = -1,
     implementationExtension: (any Operators.ResourceCategoryExtension)? = nil,
     context: isolated Context
-  ) throws -> Object {
+  ) async throws -> Object {
     let category = try categoryName(category)
     let canonicalKey = try canonicalResourceKey(key)
-    let categoryDictionary = try categoryDictionary(category, context: context)
+    let categoryDictionary = try await categoryDictionary(category, context: context)
     let implementation = try categoryDictionary.value(as: DictionaryValue.self)
 
     try validateInstanceType(instance, implementation: implementation)
@@ -110,9 +110,9 @@ enum ResourceRuntime {
     in category: Object,
     implementationExtension: (any Operators.ResourceCategoryExtension)? = nil,
     context: isolated Context
-  ) throws -> Object {
+  ) async throws -> Object {
     let category = try categoryName(category)
-    let implementation = try categoryDictionary(category, context: context).value(as: DictionaryValue.self)
+    let implementation = try await categoryDictionary(category, context: context).value(as: DictionaryValue.self)
     if let entry = try visibleEntry(for: key, in: category, context: context) {
       return entry.instance
     }
@@ -120,7 +120,7 @@ enum ResourceRuntime {
     if let provider = try provider(category, context: context),
        let availability = try provider.statusOfResource(forKey: key)
     {
-      let instance = try provider.loadResource(forKey: key, in: context)
+      let instance = try await provider.loadResource(forKey: key, in: context)
       try validateInstanceType(instance, implementation: implementation)
       try provider.resourceExtension?.validateLoaded(key: key, instance: instance, context: context)
       if let implementationExtension,
@@ -136,7 +136,7 @@ enum ResourceRuntime {
       let savedMode = context.allocationMode
       context.allocationMode = .global
       defer { context.allocationMode = savedMode }
-      return try define(
+      return try await define(
         instance,
         for: key,
         in: category,
@@ -145,7 +145,7 @@ enum ResourceRuntime {
         context: context
       )
     }
-    if let loaded = try loadExternal(key, in: category, context: context) { return loaded }
+    if let loaded = try await loadExternal(key, in: category, context: context) { return loaded }
     throw Error.undefinedResource
   }
 
@@ -154,9 +154,9 @@ enum ResourceRuntime {
     from category: Object,
     implementationExtension: (any Operators.ResourceCategoryExtension)? = nil,
     context: isolated Context
-  ) throws {
+  ) async throws {
     let category = try categoryName(category)
-    _ = try categoryDictionary(category, context: context)
+    _ = try await categoryDictionary(category, context: context)
     let categoryExtension = try provider(category, context: context)?.resourceExtension
 
     if try visibleEntry(for: key, in: category, context: context) == nil,
@@ -164,7 +164,7 @@ enum ResourceRuntime {
        let availability = try provider.statusOfResource(forKey: key),
        availability.isLoaded
     {
-      let instance = try provider.loadResource(forKey: key, in: context)
+      let instance = try await provider.loadResource(forKey: key, in: context)
       try categoryExtension?.willUndefine(key: key, instance: instance, context: context)
       try implementationExtension?.willUndefine(key: key, instance: instance, context: context)
       return
@@ -234,16 +234,16 @@ enum ResourceRuntime {
     for key: Object,
     in category: Object,
     context: isolated Context
-  ) throws -> ResourceFiles.Availability? {
-    try ResourceFiles.availability(for: key, in: categoryName(category), context: context)
+  ) async throws -> ResourceFiles.Availability? {
+    try await ResourceFiles.availability(for: key, in: categoryName(category), context: context)
   }
 
   private static func loadExternal(
     _ key: Object,
     in category: Object,
     context: isolated Context
-  ) throws -> Object? {
-    guard let availability = try ResourceFiles.availability(
+  ) async throws -> Object? {
+    guard let availability = try await ResourceFiles.availability(
       for: key,
       in: category,
       context: context
@@ -260,7 +260,7 @@ enum ResourceRuntime {
     context.resourceLoadTransactions.append([])
     context.allocationMode = .global
     do {
-      try ResourceFiles.load(availability, context: context)
+      try await ResourceFiles.load(availability, context: context)
       let loaded: ResourceEntry?
       if let global = try context.environment.globalResource(for: canonicalKey, in: category),
          global.id != previousGlobal?.id

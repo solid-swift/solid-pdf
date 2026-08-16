@@ -25,7 +25,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["and"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op1, op2) = try context.operands.pop2()
 
@@ -50,7 +50,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["not"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op1 = try context.operands.pop()
 
@@ -75,7 +75,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["or"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op1, op2) = try context.operands.pop2()
 
@@ -100,7 +100,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["xor"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op1, op2) = try context.operands.pop2()
 
@@ -125,7 +125,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["bitshift"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (shift, int) = try context.operands.popAs((IntegerValue, IntegerValue).self)
 

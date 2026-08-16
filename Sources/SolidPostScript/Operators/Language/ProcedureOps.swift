@@ -23,7 +23,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["}"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       _ = context.executionModes.pop()
       let deferred = try context.operands.popToMark().reversed()
@@ -46,7 +46,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["bind"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let proc = try context.operands.pop().value(as: (any CollectionValue).self)
 

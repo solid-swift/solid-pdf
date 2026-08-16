@@ -35,6 +35,7 @@ let package = Package(
       dependencies: [
         "SolidPostScript",
         .product(name: "SolidCore", package: "solid-foundation"),
+        .product(name: "SolidIO", package: "solid-foundation"),
       ],
       plugins: lintPlugins
     ),

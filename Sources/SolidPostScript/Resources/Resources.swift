@@ -59,13 +59,13 @@ public enum Resources {
   }
 
   /// Performs the ``loadInstance`` operation.
-  public static func loadInstance(forKey key: Object, in categoryKey: Object, context: isolated Context) throws
+  public static func loadInstance(forKey key: Object, in categoryKey: Object, context: isolated Context) async throws
     -> Object
   {
     guard let resourceCategory = try context.environment.resourceCategory(for: categoryKey) else {
       throw Error.undefined
     }
-    return try resourceCategory.loadResource(forKey: key, in: context)
+    return try await resourceCategory.loadResource(forKey: key, in: context)
   }
 
 }

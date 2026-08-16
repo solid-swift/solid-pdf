@@ -94,7 +94,7 @@ public struct FileValue: CompositeValue, ObjectSource {
   }
 
   /// Executes this value in the supplied interpreter context.
-  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
+  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
     try access.check(.execute)
     guard mode != .write else { throw Error.invalidAccess }
     try context.execution.push(source: Object(value: self, kind: kind), in: context)

@@ -209,7 +209,7 @@ public struct DictionaryValue: CompositeValue {
   }
 
   /// Executes this value in the supplied interpreter context.
-  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
+  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
     try access.check(.execute)
     context.operands.push(.init(value: self, kind: kind))
   }

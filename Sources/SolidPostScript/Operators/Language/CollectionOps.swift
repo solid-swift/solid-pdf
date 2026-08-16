@@ -26,7 +26,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["length"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 
@@ -56,7 +56,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["get"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (indexOrKey, source) = try context.operands.pop2()
 
@@ -83,7 +83,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["put"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (value, indexOrKey, target) = try context.operands.pop3()
 
@@ -112,7 +112,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["getinterval"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (count, index, source) = try context.operands.pop3()
 
@@ -147,7 +147,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["putinterval"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (source, index, target) = try context.operands.pop3()
 
@@ -173,14 +173,14 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["forall"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (proc, source) = try context.operands.pop2()
 
       switch (source.value, proc.value) {
       case (let coll as CollectionValue, is CollectionValue):
         for idx in 0..<coll.count {
-          let result = try context.execute(proc: proc, ops: [try coll.object(at: idx)])
+          let result = try await context.execute(proc: proc, ops: [try coll.object(at: idx)])
           if !result {
             break
           }
@@ -189,7 +189,7 @@ extension Operators {
       case (let dict as DictionaryValue, is CollectionValue):
         for key in dict.keys {
           let value = try dict.object(forKey: key)
-          let result = try context.execute(proc: proc, ops: [value, key])
+          let result = try await context.execute(proc: proc, ops: [value, key])
           if !result {
             break
           }
@@ -197,7 +197,7 @@ extension Operators {
 
       case (let string as StringValue, is CollectionValue):
         for idx in 0..<string.count {
-          let result = try context.execute(proc: proc, ops: [.integer(Int32(string.character(at: idx)))])
+          let result = try await context.execute(proc: proc, ops: [.integer(Int32(string.character(at: idx)))])
           if !result {
             break
           }

@@ -22,7 +22,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["copy"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let opObj = try context.operands.pop()
       switch opObj.type {
 
@@ -70,7 +70,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["token"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 

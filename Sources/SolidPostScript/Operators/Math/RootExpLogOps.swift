@@ -24,7 +24,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["sqrt"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
       guard let number = arg.value as? NumericConvertible else {
         throw Error.typeCheck
@@ -45,7 +45,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["exp"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let args = try context.operands.pop(count: 2)
       guard let base = args[1].value as? NumericConvertible,
         let exponent = args[0].value as? NumericConvertible
@@ -65,7 +65,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["ln"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
       guard let number = arg.value as? NumericConvertible else {
         throw Error.typeCheck
@@ -86,7 +86,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["log"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
       guard let number = arg.value as? NumericConvertible else {
         throw Error.typeCheck

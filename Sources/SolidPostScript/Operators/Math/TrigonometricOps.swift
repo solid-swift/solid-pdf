@@ -23,7 +23,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["sin"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
       guard let angle = arg.value as? NumericConvertible else {
         throw Error.typeCheck
@@ -41,7 +41,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cos"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
       guard let angle = arg.value as? NumericConvertible else {
         throw Error.typeCheck
@@ -59,7 +59,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["atan"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let args = try context.operands.pop(count: 2)
       guard let numerator = args[1].value as? NumericConvertible,
         let denominator = args[0].value as? NumericConvertible

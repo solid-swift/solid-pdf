@@ -176,7 +176,7 @@ struct InterpreterParameterTests {
         """,
       environment: environment
     )
-    #expect(count.value == 1)
+    #expect(count.value == 2)
   }
 
   @Test
@@ -231,7 +231,7 @@ struct InterpreterParameterTests {
         """
         /overflow { 1 2 3 4 5 } def
         << /MaxOpStack 4 >> setuserparams
-        overflow stopped clear
+        /overflow load stopped clear
         $error /errorname get
         """
     )
@@ -263,7 +263,7 @@ struct InterpreterParameterTests {
         """
         /allocate { 10 string } def
         << /MaxLocalVM 1 >> setuserparams
-        allocate stopped clear
+        /allocate load stopped clear
         $error /errorname get
         """
     )

@@ -18,7 +18,7 @@ struct IODeviceResources: ResourceCategory {
     return (true, 0)
   }
 
-  func loadResource(forKey key: Object, in context: isolated Context) throws -> Object {
+  func loadResource(forKey key: Object, in context: isolated Context) async throws -> Object {
     guard let identifier = try identifier(for: key), contains(identifier) else {
       throw Error.undefinedResource
     }

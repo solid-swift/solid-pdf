@@ -35,7 +35,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["dict"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let capacity: IntegerValue = try context.operands.popAs()
 
       let capacityValue = Int(capacity.value)
@@ -54,7 +54,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = [">>"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let elements = try context.operands.popToMark().reversed()
       guard elements.count.isMultiple(of: 2) else {
         throw Error.rangeCheck
@@ -80,7 +80,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["maxlength"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op: DictionaryValue = try context.operands.peekAs()
       context.operands.push(try NumericSemantics.integer(validating: op.capacity))
@@ -95,7 +95,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["begin"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 
@@ -111,7 +111,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["end"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       _ = try context.dictionaries.pop()
     }
@@ -125,7 +125,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["def"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (value, key) = try context.operands.pop2()
 
@@ -143,7 +143,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["load"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let key = try context.operands.pop()
       let value = try context.dictionaries.object(forKey: key)
@@ -160,7 +160,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["store"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (value, key) = try context.operands.pop2()
 
@@ -179,7 +179,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["undef"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (key, op) = try context.operands.pop2()
 
@@ -199,7 +199,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["known"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (key, op) = try context.operands.pop2()
 
@@ -221,7 +221,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["where"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let key = try context.operands.pop()
 
@@ -241,7 +241,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["currentdict"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       context.operands.push(try context.dictionaries.current())
     }
   }
@@ -254,7 +254,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["countdictstack"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       context.operands.push(try NumericSemantics.integer(validating: context.dictionaries.depth))
     }
   }
@@ -267,7 +267,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["dictstack"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arrayObj = try context.operands.pop()
       let array = try arrayObj.value(as: ArrayValue.self)
       guard array.count >= context.dictionaries.depth else {
@@ -287,7 +287,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cleardictstack"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       context.dictionaries.clear()
     }
   }

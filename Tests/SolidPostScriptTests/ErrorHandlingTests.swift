@@ -288,7 +288,7 @@ private struct ExternalErrorOperator: OperatorValue {
 
   let error: Error
 
-  func execute(context: isolated Context) throws {
+  func execute(context: isolated Context) async throws {
     _ = try context.operands.pop()
     throw error
   }
@@ -302,9 +302,9 @@ private struct ExternalErrorOperator: OperatorValue {
 }
 
 extension Context {
-  fileprivate func executeForTesting(content: String, operatorValue: any OperatorValue) throws -> [Object] {
+  fileprivate func executeForTesting(content: String, operatorValue: any OperatorValue) async throws -> [Object] {
     try dictionaries.userDictionary().updateObject(.init(value: operatorValue), forKey: "externalerror")
-    try pushAndRun(
+    try await pushAndRun(
       source: .dataFile(
         content: Data(content.utf8),
         access: .readOnly,

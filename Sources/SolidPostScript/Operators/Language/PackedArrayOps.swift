@@ -23,7 +23,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["packedarray"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let count: IntegerValue = try context.operands.popAs()
       guard count.value >= 0 else {
         throw Error.rangeCheck
@@ -41,7 +41,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["setpacking"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let mode: BooleanValue = try context.operands.popAs()
       context.packingMode = mode.value ? .packed : .unpacked
     }
@@ -55,7 +55,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["currentpacking"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       context.operands.push(.boolean(context.packingMode == .packed))
     }
   }

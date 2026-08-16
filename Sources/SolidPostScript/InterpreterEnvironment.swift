@@ -1,4 +1,5 @@
 import Foundation
+import SolidIO
 import Synchronization
 
 /// Shared system and device state for one PostScript interpreter environment.
@@ -8,6 +9,7 @@ public final class InterpreterEnvironment: Sendable {
   private let globalResources = Mutex(ResourceStore())
   private let resourcesInitialized = Mutex(false)
   let resourceCategories: [Object: any ResourceCategory]
+  let standardOutput: StandardOutputChannel
 
   /// The file devices available to contexts created in this environment.
   public let fileDevices: FileDevices
@@ -21,11 +23,31 @@ public final class InterpreterEnvironment: Sendable {
     fileDevices: FileDevices = FileDevices(),
     resourceCategories: [Object: any ResourceCategory] = [:]
   ) {
-    self.fileDevices = fileDevices
+    self.standardOutput = StandardOutputChannel(sink: FileSink(fileHandle: .standardOutput))
+    self.fileDevices = fileDevices.replacing(StandardOutputFileDevice(channel: standardOutput))
     var categories = Resources.resources
     categories.merge(resourceCategories) { _, replacement in replacement }
     if resourceCategories["IODevice"] == nil {
-      categories["IODevice"] = IODeviceResources(fileDevices: fileDevices)
+      categories["IODevice"] = IODeviceResources(fileDevices: self.fileDevices)
+    }
+    self.resourceCategories = categories
+  }
+
+  /// Creates an interpreter environment whose `%stdout` device writes to `standardOutput`.
+  ///
+  /// The environment borrows the stream. Closing a PostScript `%stdout` file or destroying
+  /// the environment does not close it.
+  public init(
+    standardOutput: any Sink,
+    fileDevices: FileDevices = FileDevices(),
+    resourceCategories: [Object: any ResourceCategory] = [:]
+  ) {
+    self.standardOutput = StandardOutputChannel(sink: standardOutput)
+    self.fileDevices = fileDevices.replacing(StandardOutputFileDevice(channel: self.standardOutput))
+    var categories = Resources.resources
+    categories.merge(resourceCategories) { _, replacement in replacement }
+    if resourceCategories["IODevice"] == nil {
+      categories["IODevice"] = IODeviceResources(fileDevices: self.fileDevices)
     }
     self.resourceCategories = categories
   }

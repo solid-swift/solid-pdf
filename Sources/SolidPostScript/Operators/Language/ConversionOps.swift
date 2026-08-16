@@ -26,7 +26,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cvi"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 
@@ -61,7 +61,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cvr"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 
@@ -99,12 +99,17 @@ extension Operators {
     public static let defaultValue = "--nostringval--".data(using: .isoLatin1).neverNil()
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (stringObj, anyObj) = try context.operands.pop2()
       let string = try stringObj.value(as: StringValue.self)
+      try string.access.check(.write)
+      if let source = anyObj.value as? StringValue {
+        try source.access.check(.read)
+      }
 
-      let valueString = anyObj.valueString?.data(using: .isoLatin1) ?? Self.defaultValue
+      var formatter = PostScriptTextFormatter(mode: .value)
+      let valueString = formatter.format(anyObj)
       guard string.count >= valueString.count else {
         throw Error.rangeCheck
       }
@@ -124,7 +129,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cvrs"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (stringObj, radixObj, numObj) = try context.operands.pop3()
       let string = try stringObj.value(as: StringValue.self)
@@ -165,7 +170,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cvn"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let string: StringValue = try context.operands.popAs()
 

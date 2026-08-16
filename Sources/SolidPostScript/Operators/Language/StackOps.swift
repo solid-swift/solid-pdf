@@ -31,7 +31,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["pop"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       _ = try context.operands.pop()
     }
   }
@@ -44,7 +44,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["exch"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let (arg2, arg1) = try context.operands.pop2()
       context.operands.push(arg1, arg2)
     }
@@ -58,7 +58,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["dup"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg1 = try context.operands.pop()
       context.operands.push(arg1, arg1)
     }
@@ -72,7 +72,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["index"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let index: IntegerValue = try context.operands.popAs()
       let op = try context.operands.peek(at: Int(index.value))
       context.operands.push(op)
@@ -87,7 +87,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["roll"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let (times, count): (IntegerValue, IntegerValue) = try context.operands.popAs()
       guard count.value >= 0 else {
         throw Error.rangeCheck
@@ -111,7 +111,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["clear"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       _ = try context.operands.pop(count: context.operands.depth)
     }
   }
@@ -124,7 +124,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["count"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       context.operands.push(try NumericSemantics.integer(validating: context.operands.depth))
     }
   }
@@ -137,7 +137,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["mark", "[", "<<"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) {
+    public func execute(context: isolated Context) async {
       context.operands.push(.mark)
     }
   }
@@ -150,7 +150,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["counttomark"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       context.operands.push(try NumericSemantics.integer(validating: context.operands.countToMark()))
     }
   }
@@ -163,7 +163,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cleartomark"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       _ = try context.operands.pop(count: context.operands.countToMark())
     }
   }

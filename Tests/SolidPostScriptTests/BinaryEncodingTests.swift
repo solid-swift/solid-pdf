@@ -1,4 +1,5 @@
 import Foundation
+import SolidIO
 @testable import SolidPostScript
 import Testing
 
@@ -357,20 +358,17 @@ struct BinaryEncodingTests {
 
   @Test
   func binaryHandleErrorIsOptInAndUsesTag250() async throws {
-    let silentOutput = DataFile(data: Data(), mode: .readWrite)
-    let silentContext = Context(fileDevices: FileDevices(devices: [TestOutputDevice(file: silentOutput)]))
+    let silentOutput = DataSink()
+    let silentContext = Context(environment: InterpreterEnvironment(standardOutput: silentOutput))
     try await silentContext.executeForTest("1 setobjectformat {doesnotexist} stopped pop errordict /handleerror get exec")
-    #expect(try silentOutput.size == 0)
+    #expect(silentOutput.data.isEmpty)
 
-    let binaryOutput = DataFile(data: Data(), mode: .readWrite)
-    let binaryContext = Context(fileDevices: FileDevices(devices: [TestOutputDevice(file: binaryOutput)]))
+    let binaryOutput = DataSink()
+    let binaryContext = Context(environment: InterpreterEnvironment(standardOutput: binaryOutput))
     try await binaryContext.executeForTest(
       "1 setobjectformat $error /binary true put {doesnotexist} stopped pop errordict /handleerror get exec"
     )
-    try binaryOutput.setOffset(0)
-    let binarySize = try binaryOutput.size
-    let binaryData = try binaryOutput.read(max: binarySize)
-    let bytes = try #require(binaryData)
+    let bytes = binaryOutput.data
     #expect(bytes[0] == 128)
     #expect(bytes[5] == 250)
 
@@ -392,13 +390,10 @@ struct BinaryEncodingTests {
 
   @Test
   func printObjectUsesStandardOutputAndStructuredOutputValidatesOperands() async throws {
-    let output = DataFile(data: Data(), mode: .readWrite)
-    let context = Context(fileDevices: FileDevices(devices: [TestOutputDevice(file: output)]))
+    let output = DataSink()
+    let context = Context(environment: InterpreterEnvironment(standardOutput: output))
     try await context.executeForTest("1 setobjectformat 42 7 printobject")
-    try output.setOffset(0)
-    let size = try output.size
-    let outputData = try output.read(max: size)
-    let data = try #require(outputData)
+    let data = output.data
     #expect(data[5] == 7)
 
     await #expect(throws: Error.rangeCheck) {
@@ -523,8 +518,8 @@ private extension Context {
     tag: UInt8,
     format: ObjectFormat,
     file: DataFile
-  ) throws {
-    try writeObjectForTest(object, rawTag: Int32(tag), format: format, file: file)
+  ) async throws {
+    try await writeObjectForTest(object, rawTag: Int32(tag), format: format, file: file)
   }
 
   func writeObjectForTest(
@@ -533,41 +528,27 @@ private extension Context {
     format: ObjectFormat,
     file: DataFile,
     access: ObjectAccess = .unlimited
-  ) throws {
+  ) async throws {
     objectFormat = format
     operands.push(contentsOf: [
       .integer(rawTag),
       object,
       .file(file, access: access, vm: .local, kind: .literal),
     ])
-    try Operators.WriteObject.instance.execute(context: self)
+    try await Operators.WriteObject.instance.execute(context: self)
   }
 
-  func executeForTest(_ content: String) throws {
+  func executeForTest(_ content: String) async throws {
     let source = Object.file(
       DataFile(data: Data(content.utf8), mode: .read),
       access: .readOnly,
       vm: .local,
       kind: .executable
     )
-    try pushAndRun(source: source)
+    try await pushAndRun(source: source)
   }
 
   func errorStateForTest() throws -> DictionaryValue {
     try dictionaries.systemDictionary().objectValue(forKey: "$error", as: DictionaryValue.self)
-  }
-}
-
-private struct TestOutputDevice: FileDevice {
-  let file: DataFile
-
-  var searched: Bool { false }
-  var name: String { "stdout" }
-
-  func open(name: String, mode: File.Mode, openMethod: OpenMethod) throws -> any File {
-    guard name.isEmpty, mode == .write else {
-      throw Error.invalidFileAccess
-    }
-    return file
   }
 }

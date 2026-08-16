@@ -51,7 +51,7 @@ extension Operators {
     }()
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let nameObject = try context.operands.pop()
       let name = try nameObject.value(as: NameValue.self).value
       guard Self.availableNames.contains(name) else { throw Error.undefined }
@@ -60,11 +60,11 @@ extension Operators {
       case "RunLengthEncode":
         try makeRunLengthEncoder(context: context)
       case "SubFileDecode":
-        try makeSubFileDecoder(context: context)
+        try await makeSubFileDecoder(context: context)
       case "DCTEncode":
         try makeDCTEncoder(context: context)
       case "ReusableStreamDecode":
-        try makeReusableStream(context: context)
+        try await makeReusableStream(context: context)
       default:
         let dictionary = try popOptionalDictionary(context: context)
         let source = try context.operands.pop()
@@ -79,7 +79,7 @@ extension Operators {
         } else {
           let closeSource = try dictionary.boolean("CloseSource", default: false)
           let codec = try decoder(named: name, dictionary: dictionary)
-          let data = try decode(codec: codec, source: source, closeSource: closeSource, context: context)
+          let data = try await decode(codec: codec, source: source, closeSource: closeSource, context: context)
           let vm = retainedVM([source] + retainedDictionary(name: name, dictionary: dictionary))
           let file = MaterializedFilterFile(
             data: data,
@@ -109,7 +109,7 @@ extension Operators {
       context.operands.push(.file(file, access: .unlimited, vm: vm, kind: .literal))
     }
 
-    private func makeSubFileDecoder(context: isolated Context) throws {
+    private func makeSubFileDecoder(context: isolated Context) async throws {
       let dictionary: FilterDictionary
       let source: Object
       let count: Int
@@ -135,7 +135,7 @@ extension Operators {
       guard count == 0 || !marker.isEmpty else { throw Error.rangeCheck }
       let closeSource = try dictionary.boolean("CloseSource", default: false)
       let codec = try SubFileDecoder(eodCount: count, eodString: marker)
-      let data = try decode(codec: codec, source: source, closeSource: closeSource, context: context)
+      let data = try await decode(codec: codec, source: source, closeSource: closeSource, context: context)
       let markerObject = Object.string(marker, access: .readOnly, vm: source.vmIfComposite, kind: .literal)
       let vm = retainedVM([source, markerObject])
       let file = MaterializedFilterFile(
@@ -162,10 +162,10 @@ extension Operators {
       context.operands.push(.file(file, access: .unlimited, vm: vm, kind: .literal))
     }
 
-    private func makeReusableStream(context: isolated Context) throws {
+    private func makeReusableStream(context: isolated Context) async throws {
       let dictionary = try popOptionalDictionary(context: context)
       let source = try context.operands.pop()
-      var data = try readAll(source: source, context: context)
+      var data = try await readAll(source: source, context: context)
 
       if let filterObject = try dictionary.object("Filter") {
         let filters = try filterNames(filterObject)
@@ -337,12 +337,12 @@ extension Operators {
       source: Object,
       closeSource: Bool,
       context: isolated Context
-    ) throws -> Data {
+    ) async throws -> Data {
       var provider = try FilterSource(object: source)
       var output = Data()
       var reachedEnd = false
 
-      while let chunk = try provider.next(context: context) {
+      while let chunk = try await provider.next(context: context) {
         var remaining = chunk
         while !remaining.isEmpty {
           let result = try translateCodecError { try codec.process(input: remaining) }
@@ -361,7 +361,7 @@ extension Operators {
       if !reachedEnd {
         output.append(try translateCodecError { try codec.finish() ?? Data() })
       }
-      if closeSource { try provider.close(context: context) }
+      if closeSource { try await provider.close(context: context) }
       return output
     }
 
@@ -371,10 +371,10 @@ extension Operators {
       return result.output + (try translateCodecError { try codec.finish() ?? Data() })
     }
 
-    private func readAll(source: Object, context: isolated Context) throws -> Data {
+    private func readAll(source: Object, context: isolated Context) async throws -> Data {
       var provider = try FilterSource(object: source)
       var output = Data()
-      while let chunk = try provider.next(context: context) { output.append(chunk) }
+      while let chunk = try await provider.next(context: context) { output.append(chunk) }
       return output
     }
 
@@ -519,7 +519,7 @@ private struct FilterSource {
     }
   }
 
-  mutating func next(context: isolated Context) throws -> Data? {
+  mutating func next(context: isolated Context) async throws -> Data? {
     switch source {
     case .file(let file):
       return try file.file.read(max: 1)
@@ -529,7 +529,7 @@ private struct FilterSource {
       return try string.characters(in: string.range)
     case .procedure(let procedure):
       let originalDepth = context.operands.depth
-      guard try context.execute(proc: procedure) else { throw Error.invalidExit }
+      guard try await context.execute(proc: procedure) else { throw Error.invalidExit }
       guard context.operands.depth == originalDepth + 1 else { throw Error.typeCheck }
       let string: StringValue = try context.operands.popAs()
       try string.access.check(.read)
@@ -538,9 +538,9 @@ private struct FilterSource {
     }
   }
 
-  func close(context: isolated Context) throws {
+  func close(context: isolated Context) async throws {
     if case .file(let file) = source {
-      try file.file.close(context: context)
+      try await file.file.close(context: context)
     }
   }
 

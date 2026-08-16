@@ -18,6 +18,10 @@ public final class FileDevices: Sendable {
     self.registeredDevices = devices
   }
 
+  func replacing(_ device: any FileDevice) -> FileDevices {
+    FileDevices(devices: registeredDevices.filter { $0.name != device.name } + [device])
+  }
+
   func device(named name: String) throws -> any FileDevice {
     guard let device = registeredDevices.first(where: { $0.name == name }) else {
       throw Error.undefined

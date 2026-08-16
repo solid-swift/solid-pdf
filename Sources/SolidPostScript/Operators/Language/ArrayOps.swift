@@ -24,7 +24,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["array"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let count: IntegerValue = try context.operands.popAs()
 
       let countValue = Int(count.value)
@@ -43,7 +43,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["]"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let ops = try context.operands.popToMark().reversed()
       try context.limitCheck(size: ops.count, objectType: .array)
       context.operands.push(try .array(ops, access: .unlimited, vm: context.allocationMode, kind: .literal))
@@ -58,7 +58,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["astore"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arrayObj = try context.operands.pop()
       let array = try arrayObj.value(as: ArrayValue.self)
       let items = try context.operands.pop(count: array.count.signed)
@@ -77,7 +77,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["aload"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arrayObj = try context.operands.pop()
       let array = try arrayObj.value(as: CollectionValue.self)
 

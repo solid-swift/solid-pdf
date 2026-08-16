@@ -98,9 +98,9 @@ public actor Context {
     executionModes.peek().neverNil("Mode stack overflow")
   }
 
-  internal func pushAndRun(source: Object) throws {
+  internal func pushAndRun(source: Object) async throws {
     try execution.push(source: source, in: self)
-    try run(untilExecutionDepth: 0)
+    try await run(untilExecutionDepth: 0)
   }
 
   nonisolated static let deferredExecutionNames = [
@@ -119,7 +119,7 @@ public actor Context {
     "userdict",
   ]
 
-  internal func run(untilExecutionDepth targetDepth: Int) throws {
+  internal func run(untilExecutionDepth targetDepth: Int) async throws {
 
     try Task<Never, Never>.checkCancellation()
     var iterationsUntilCancellationCheck = 256
@@ -149,7 +149,7 @@ public actor Context {
 
         scanned = nextObject
       } catch let failure as ScannerFailure {
-        try initiate(
+        try await initiate(
           error: failure.error,
           command: scannerCommand(failure.command),
           savedOperands: savedOperands
@@ -161,39 +161,39 @@ public actor Context {
         }
 
         let command = execution.peek()?.source ?? .null
-        try initiate(error: error, command: command, savedOperands: savedOperands)
+        try await initiate(error: error, command: command, savedOperands: savedOperands)
         continue
       }
 
       let object = scanned.object
 
       if scanned.implicitlyExecutable && executionMode == .immediate {
-        try object.execute(context: self, method: .indirect)
+        try await object.execute(context: self, method: .indirect)
       } else if executionMode == .immediate || Self.deferredExecutionNames.contains(object) {
-        try object.execute(context: self, method: .direct)
+        try await object.execute(context: self, method: .direct)
       } else {
         operands.push(object)
         do {
           try operands.throwIfOverflowed()
         } catch let error as Error {
-          try initiate(error: error, command: object, savedOperands: savedOperands)
+          try await initiate(error: error, command: object, savedOperands: savedOperands)
         }
       }
     }
   }
 
-  internal func execute(object: Object, method: Object.AccessMethod) throws {
+  internal func execute(object: Object, method: Object.AccessMethod) async throws {
     let savedOperands = operands
 
     do {
       if object.kind == .executable {
-        try object.value.execute(context: self, kind: object.kind, method: method)
+        try await object.value.execute(context: self, kind: object.kind, method: method)
       } else {
         operands.push(object)
       }
       try operands.throwIfOverflowed()
     } catch let failure as ScannerFailure {
-      try initiate(
+      try await initiate(
         error: failure.error,
         command: scannerCommand(failure.command),
         savedOperands: savedOperands
@@ -203,7 +203,7 @@ public actor Context {
         throw error
       }
 
-      try initiate(error: error, command: object, savedOperands: savedOperands)
+      try await initiate(error: error, command: object, savedOperands: savedOperands)
     }
   }
 
@@ -216,7 +216,7 @@ public actor Context {
     }
   }
 
-  private func initiate(error: Error, command: Object, savedOperands: OperandStack) throws {
+  private func initiate(error: Error, command: Object, savedOperands: OperandStack) async throws {
     let invocation = try makeErrorInvocation(error: error, command: error.isExternal ? .null : command)
 
     if !error.isExternal {
@@ -224,14 +224,14 @@ public actor Context {
       operands.pushUnchecked(command)
     }
 
-    guard let handler = try resolveErrorHandler(for: error) else {
+    guard let handler = try await resolveErrorHandler(for: error) else {
       return
     }
 
     activeErrors.append(invocation)
     defer { _ = activeErrors.popLast() }
 
-    try executeErrorHandler(handler)
+    try await executeErrorHandler(handler)
   }
 
   private func makeErrorInvocation(error: Error, command: Object) throws -> ErrorInvocation {
@@ -248,7 +248,7 @@ public actor Context {
     )
   }
 
-  private func resolveErrorHandler(for error: Error) throws -> Object? {
+  private func resolveErrorHandler(for error: Error) async throws -> Object? {
     let errorName = error.postScriptName.neverNil("Control errors do not have PostScript handlers")
 
     guard resolvingErrorNames.insert(errorName).inserted else {
@@ -265,25 +265,25 @@ public actor Context {
       }
 
       let savedOperands = operands
-      try initiate(error: resolutionError, command: .literalName(errorName), savedOperands: savedOperands)
+      try await initiate(error: resolutionError, command: .literalName(errorName), savedOperands: savedOperands)
       return nil
     }
   }
 
-  private func executeErrorHandler(_ handler: Object) throws {
+  private func executeErrorHandler(_ handler: Object) async throws {
     let savedExecution = execution
     let targetDepth = execution.depth
     defer { execution = savedExecution }
 
     stackLimitBypassDepth += 1
     do {
-      try handler.execute(context: self, method: .indirect)
+      try await handler.execute(context: self, method: .indirect)
     } catch {
       stackLimitBypassDepth -= 1
       throw error
     }
     stackLimitBypassDepth -= 1
-    try run(untilExecutionDepth: targetDepth)
+    try await run(untilExecutionDepth: targetDepth)
   }
 
   func executeDefaultErrorHandler(named errorName: String) throws {
@@ -310,7 +310,7 @@ public actor Context {
     throw ErrorStop(error: invocation.error)
   }
 
-  func executeHandleError() throws {
+  func executeHandleError() async throws {
     let errorState = try systemDictionary().objectValue(forKey: "$error", as: DictionaryValue.self)
     let newError = try errorState.objectValue(forKey: "newerror", as: BooleanValue.self).value
     let binary = try errorState.objectValue(forKey: "binary", as: BooleanValue.self).value
@@ -332,7 +332,7 @@ public actor Context {
       kind: .literal
     )
     var encoder = BinaryObjectSequenceEncoder(format: objectFormat, tag: 250)
-    try standardOutput().write(contentsOf: encoder.encode(report), context: self)
+    try await writeStandardOutput(encoder.encode(report))
   }
 
   private func binaryErrorCommand(_ command: Object) -> Object {
@@ -359,15 +359,15 @@ public actor Context {
     try .array(objects, access: .unlimited, vm: .local, kind: .literal)
   }
 
-  internal func executeIsolated(proc: Object, ops: [Object] = []) throws -> Bool {
+  internal func executeIsolated(proc: Object, ops: [Object] = []) async throws -> Bool {
 
     let savedDictionaries = dictionaries
     defer { dictionaries = savedDictionaries }
 
-    return try execute(proc: proc, ops: ops)
+    return try await execute(proc: proc, ops: ops)
   }
 
-  internal func execute(proc: Object, ops: [Object] = []) throws -> Bool {
+  internal func execute(proc: Object, ops: [Object] = []) async throws -> Bool {
 
     let saved = execution
     let targetDepth = execution.depth
@@ -378,7 +378,7 @@ public actor Context {
       operands.push(contentsOf: ops)
       try operands.throwIfOverflowed()
 
-      try run(untilExecutionDepth: targetDepth)
+      try await run(untilExecutionDepth: targetDepth)
 
       return true
     } catch Error.control(.exit) {
@@ -529,6 +529,14 @@ public actor Context {
     try fileDevices.open(device: "stdout", name: "", mode: .write, openMethod: .truncateOrCreate)
   }
 
+  func writeStandardOutput(_ data: Data) async throws {
+    try await environment.standardOutput.write(data)
+  }
+
+  func flushStandardOutput() async throws {
+    try await environment.standardOutput.flush()
+  }
+
   func closeFiles(openedAfter generation: Int) {
     for tracked in openedLocalFiles where tracked.generation > generation {
       try? tracked.file.value?.close()
@@ -597,6 +605,8 @@ public actor Context {
         dict[name] = .init(value: op)
       }
     }
+    dict["="] = Operators.equalsProcedure
+    dict["=="] = Operators.doubleEqualsProcedure
 
     let dictValue = neverThrow(
       try DictionaryValue(

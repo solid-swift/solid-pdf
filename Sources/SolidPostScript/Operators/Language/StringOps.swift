@@ -23,7 +23,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["string"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let count: IntegerValue = try context.operands.popAs()
       let countValue = Int(count.value)
       try context.limitCheck(size: countValue, objectType: .string)
@@ -40,7 +40,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["anchorsearch"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (seekObj, stringObj) = try context.operands.pop2()
       let string = try stringObj.value(as: StringValue.self)
@@ -65,7 +65,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["search"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let (seekObj, stringObj) = try context.operands.pop2()
       let string = try stringObj.value(as: StringValue.self)
       let seek = try seekObj.value(as: StringValue.self)

@@ -37,31 +37,31 @@ extension Operators {
     }
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let savedOperands = context.operands
       let savedDictionaries = context.dictionaries
 
       do {
         let categoryKey = try context.operands.pop()
-        let category = try ResourceRuntime.categoryDictionary(categoryKey, context: context)
+        let category = try await ResourceRuntime.categoryDictionary(categoryKey, context: context)
         context.operands.push(category)
 
-        try Begin.instance.execute(context: context)
+        try await Begin.instance.execute(context: context)
 
         let implementationProc = try category.value(as: DictionaryValue.self).object(forKey: implementationKey)
 
         let result: Bool
         if let implementation = implementationProc.value as? any OperatorValue {
-          try implementation.execute(context: context)
+          try await implementation.execute(context: context)
           result = true
         } else if isolated {
-          result = try context.executeIsolated(proc: implementationProc)
+          result = try await context.executeIsolated(proc: implementationProc)
         } else {
-          result = try context.execute(proc: implementationProc)
+          result = try await context.execute(proc: implementationProc)
         }
 
-        try End.instance.execute(context: context)
+        try await End.instance.execute(context: context)
         if !result {
           throw Error.control(.exit)
         }
@@ -125,12 +125,12 @@ extension Operators {
     }
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (instance, key) = try context.operands.pop2()
       let categoryKey = try context.dictionaries.object(forKey: "Category")
       context.operands.push(
-        try ResourceRuntime.define(
+        try await ResourceRuntime.define(
           instance,
           for: key,
           in: categoryKey,
@@ -166,12 +166,12 @@ extension Operators {
     }
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let key = try context.operands.pop()
       let categoryKey = try context.dictionaries.object(forKey: "Category")
       context.operands.push(
-        try ResourceRuntime.find(
+        try await ResourceRuntime.find(
           key,
           in: categoryKey,
           implementationExtension: self.extension,
@@ -205,11 +205,11 @@ extension Operators {
     }
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let key = try context.operands.pop()
       let categoryKey = try context.dictionaries.object(forKey: "Category")
-      try ResourceRuntime.remove(
+      try await ResourceRuntime.remove(
         key,
         from: categoryKey,
         implementationExtension: self.extension,
@@ -242,7 +242,7 @@ extension Operators {
     }
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let key = try context.operands.pop()
       let categoryKey = try context.dictionaries.object(forKey: "Category")
@@ -263,7 +263,7 @@ extension Operators {
             try NumericSemantics.integer(validating: status.size),
             .integer(status.isLoaded ? 0 : 2)
           )
-      } else if let availability = try ResourceRuntime.externalAvailability(
+      } else if let availability = try await ResourceRuntime.externalAvailability(
         for: key,
         in: categoryKey,
         context: context
@@ -303,7 +303,7 @@ extension Operators {
     }
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (scratchObj, proc, templateObj) = try context.operands.pop3()
       let categoryKey = try context.dictionaries.object(forKey: "Category")
@@ -330,7 +330,7 @@ extension Operators {
       resourceKeys.append(contentsOf: stored.filter { $0.entry.origin == .automatic }.map(\.key))
       resourceKeys.append(contentsOf: providerAvailable)
       resourceKeys.append(
-        contentsOf: try ResourceFiles.externalKeys(
+        contentsOf: try await ResourceFiles.externalKeys(
           in: categoryKey,
           matching: template,
           context: context
@@ -346,7 +346,7 @@ extension Operators {
         return (try? regex.wholeMatch(in: name.nameString)) != nil
       }
 
-      try End.instance.execute(context: context)
+      try await End.instance.execute(context: context)
       do {
         for resourceKey in resourceKeys {
 
@@ -361,17 +361,17 @@ extension Operators {
             procArg = resourceKey
           }
 
-          if try !context.execute(proc: proc, ops: [procArg]) {
+          if try await !context.execute(proc: proc, ops: [procArg]) {
             break
           }
         }
       } catch {
-        context.operands.push(try ResourceRuntime.categoryDictionary(categoryKey, context: context))
-        try Begin.instance.execute(context: context)
+        context.operands.push(try await ResourceRuntime.categoryDictionary(categoryKey, context: context))
+        try await Begin.instance.execute(context: context)
         throw error
       }
-      context.operands.push(try ResourceRuntime.categoryDictionary(categoryKey, context: context))
-      try Begin.instance.execute(context: context)
+      context.operands.push(try await ResourceRuntime.categoryDictionary(categoryKey, context: context))
+      try await Begin.instance.execute(context: context)
     }
   }
 }

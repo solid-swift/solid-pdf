@@ -22,7 +22,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["realtime"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let time = Int64(Date.timeIntervalSinceReferenceDate * 1000)
 
@@ -38,7 +38,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["usertime"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let time = Int64((Date.timeIntervalSinceReferenceDate - context.start) * 1000)
 

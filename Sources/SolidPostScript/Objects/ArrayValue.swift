@@ -133,7 +133,7 @@ public struct ArrayValue: CollectionValue {
   }
 
   /// Executes this value in the supplied interpreter context.
-  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
+  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
     let obj = Object(value: self, kind: kind)
     switch method {
     case .indirect:

@@ -14,7 +14,7 @@ public protocol ObjectValue: CustomDebugStringConvertible, Sendable {
 
   static var defaultKind: ObjectKind { get }
 
-  func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws
+  func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws
 
   func equals(_ other: any ObjectValue) throws -> Bool
   func hash(into hasher: inout Hasher)

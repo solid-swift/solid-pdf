@@ -11,12 +11,12 @@ enum ErrorHandlerValue: ObjectValue, Equatable {
   static let objectType: ObjectType = .operator
   static let defaultKind: ObjectKind = .executable
 
-  func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
+  func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
     switch self {
     case .standard(let name):
       try context.executeDefaultErrorHandler(named: name)
     case .handle:
-      try context.executeHandleError()
+      try await context.executeHandleError()
     }
   }
 

@@ -60,8 +60,8 @@ public struct Object: Equatable, Hashable, Sendable {
     snapshot.save(self)
   }
 
-  func execute(context: isolated Context, method: AccessMethod) throws {
-    try context.execute(object: self, method: method)
+  func execute(context: isolated Context, method: AccessMethod) async throws {
+    try await context.execute(object: self, method: method)
   }
 
   func makeIterator(context: isolated Context) throws -> ObjectIterator {

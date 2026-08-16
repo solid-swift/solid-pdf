@@ -14,7 +14,7 @@ public protocol OperatorValue: ObjectValue {
 
   var systemDictionaryNames: [Object] { get }
 
-  func execute(context: isolated Context) throws
+  func execute(context: isolated Context) async throws
 }
 
 extension OperatorValue {
@@ -33,8 +33,8 @@ extension OperatorValue {
   }
 
   /// Executes this value in the supplied interpreter context.
-  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
-    try execute(context: context)
+  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
+    try await execute(context: context)
   }
 
   /// A debug representation of this value.

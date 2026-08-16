@@ -18,7 +18,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["currentuserparams"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       context.operands.push(try context.parameterDictionary(context.userParameters.values))
     }
   }
@@ -31,7 +31,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["setuserparams"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let dictionary: DictionaryValue = try context.operands.popAs()
       try context.userParameters.update(from: dictionary)
       context.applyUserParameterLimits()
@@ -46,7 +46,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["currentsystemparams"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       context.operands.push(try context.parameterDictionary(context.environment.systemParameters()))
     }
   }
@@ -59,7 +59,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["setsystemparams"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let dictionary: DictionaryValue = try context.operands.popAs()
       try context.environment.updateSystemParameters(from: dictionary)
     }
@@ -73,7 +73,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["currentdevparams"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let identifier: StringValue = try context.operands.popAs()
       let device = try context.fileDevices.device(named: deviceName(identifier))
       let values = try (device as? any ParameterizedFileDevice)?.currentParameters() ?? [:]
@@ -92,7 +92,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["setdevparams"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let (dictionaryObject, identifierObject) = try context.operands.pop2()
       let dictionary = try dictionaryObject.value(as: DictionaryValue.self)
       let identifier = try identifierObject.value(as: StringValue.self)

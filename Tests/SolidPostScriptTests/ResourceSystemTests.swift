@@ -393,7 +393,7 @@ private enum SyntheticProcSetResources: ResourceCategory {
     try canonicalResourceKey(key) == "Synthetic" ? (false, 64) : nil
   }
 
-  func loadResource(forKey key: Object, in context: isolated Context) throws -> Object {
+  func loadResource(forKey key: Object, in context: isolated Context) async throws -> Object {
     guard try canonicalResourceKey(key) == "Synthetic" else { throw Error.undefinedResource }
     return try .dictionary(["answer": 42], access: .unlimited, vm: .global, kind: .literal)
   }
@@ -402,7 +402,7 @@ private enum SyntheticProcSetResources: ResourceCategory {
 private extension Context {
   func peekOperandAfterExecuting(_ content: String) async throws -> StringValue {
     let file = DataFile(data: Data(content.utf8), mode: .read)
-    try pushAndRun(source: .file(file, access: .readOnly, vm: .local, kind: .executable))
+    try await pushAndRun(source: .file(file, access: .readOnly, vm: .local, kind: .executable))
     return try peekOperand().value(as: StringValue.self)
   }
 }

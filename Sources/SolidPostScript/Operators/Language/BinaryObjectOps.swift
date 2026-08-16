@@ -16,7 +16,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["setobjectformat"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let value: IntegerValue = try context.operands.popAs()
       context.objectFormat = try ObjectFormat(validating: value.value)
     }
@@ -30,7 +30,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["currentobjectformat"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       context.operands.push(.integer(context.objectFormat.rawValue))
     }
   }
@@ -43,12 +43,12 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["printobject"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let (tagObject, object) = try context.operands.pop2()
       let tag = try Operators.validatedTag(tagObject)
       var encoder = BinaryObjectSequenceEncoder(format: context.objectFormat, tag: tag)
       let data = try encoder.encode(object)
-      try context.standardOutput().write(contentsOf: data, context: context)
+      try await context.writeStandardOutput(data)
     }
   }
 
@@ -60,7 +60,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["writeobject"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let (tagObject, object, fileObject) = try context.operands.pop3()
       let tag = try Operators.validatedTag(tagObject)
       let file = try fileObject.value(as: FileValue.self)
@@ -68,7 +68,7 @@ extension Operators {
 
       var encoder = BinaryObjectSequenceEncoder(format: context.objectFormat, tag: tag)
       let data = try encoder.encode(object)
-      try file.file.write(contentsOf: data, context: context)
+      try await file.file.write(contentsOf: data, context: context)
     }
   }
 

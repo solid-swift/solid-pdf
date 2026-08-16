@@ -129,33 +129,33 @@ extension File {
 
 protocol ContextualFile: File {
 
-  func write(contentsOf data: Data, context: isolated Context) throws
-  func close(context: isolated Context) throws
-  func flush(context: isolated Context) throws
+  func write(contentsOf data: Data, context: isolated Context) async throws
+  func close(context: isolated Context) async throws
+  func flush(context: isolated Context) async throws
 
 }
 
 extension File {
 
-  func write(contentsOf data: Data, context: isolated Context) throws {
+  func write(contentsOf data: Data, context: isolated Context) async throws {
     if let contextual = self as? any ContextualFile {
-      try contextual.write(contentsOf: data, context: context)
+      try await contextual.write(contentsOf: data, context: context)
     } else {
       try write(contentsOf: data)
     }
   }
 
-  func close(context: isolated Context) throws {
+  func close(context: isolated Context) async throws {
     if let contextual = self as? any ContextualFile {
-      try contextual.close(context: context)
+      try await contextual.close(context: context)
     } else {
       try close()
     }
   }
 
-  func flush(context: isolated Context) throws {
+  func flush(context: isolated Context) async throws {
     if let contextual = self as? any ContextualFile {
-      try contextual.flush(context: context)
+      try await contextual.flush(context: context)
     } else {
       try flush()
     }

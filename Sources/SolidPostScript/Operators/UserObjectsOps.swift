@@ -49,7 +49,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["defineuserobject"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (obj, indexObj) = try context.operands.pop2()
       let index = Int(try indexObj.value(as: IntegerValue.self).value)
@@ -67,7 +67,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["undefineuserobject"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let indexValue = try context.operands.popAs(IntegerValue.self).value
       let index = Int(indexValue)
@@ -92,7 +92,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["execuserobject"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let indexValue = try context.operands.popAs(IntegerValue.self).value
       let index = Int(indexValue)

@@ -27,7 +27,7 @@ public final class ProcSetResources: ResourceCategory {
   }
 
   /// Performs the ``loadResource`` operation.
-  public func loadResource(forKey key: Object, in context: isolated Context) throws -> Object {
+  public func loadResource(forKey key: Object, in context: isolated Context) async throws -> Object {
 
     guard
       let keyString = key.value as? NameStringConvertible,
@@ -38,7 +38,7 @@ public final class ProcSetResources: ResourceCategory {
 
     let source = procSet.load()
     let file = DataFile(data: source.data(using: .isoLatin1).neverNil(), mode: .read)
-    try context.pushAndRun(source: .file(file, access: .readOnly, vm: .local, kind: .executable))
+    try await context.pushAndRun(source: .file(file, access: .readOnly, vm: .local, kind: .executable))
 
     return try context.dictionaries.object(forKey: key)
   }

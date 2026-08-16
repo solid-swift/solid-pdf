@@ -20,7 +20,7 @@ enum IdiomSetResources: ResourceCategory {
     nil
   }
 
-  func loadResource(forKey key: Object, in context: isolated Context) throws -> Object {
+  func loadResource(forKey key: Object, in context: isolated Context) async throws -> Object {
     throw Error.undefinedResource
   }
 

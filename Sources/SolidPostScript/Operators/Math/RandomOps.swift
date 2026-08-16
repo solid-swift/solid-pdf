@@ -22,7 +22,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["rand"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let value = Int32(context.random.next() & 0x7FFF_FFFF)
       context.operands.push(.integer(value))
     }
@@ -36,7 +36,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["rrand"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       context.operands.push(.integer(context.random.seed))
     }
   }
@@ -49,7 +49,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["srand"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg: IntegerValue = try context.operands.popAs()
       context.random = Context.RandomGenerator(seed: arg.value)
     }

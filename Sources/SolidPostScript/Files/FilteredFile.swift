@@ -187,11 +187,11 @@ final class EncodingFilterFile: ContextualFile, Sendable {
     try target.writeWithoutContext(result.output)
   }
 
-  func write(contentsOf data: Data, context: isolated Context) throws {
+  func write(contentsOf data: Data, context: isolated Context) async throws {
     try checkOpen()
-    try target.initialize(context: context)
+    try await target.initialize(context: context)
     let result = try translateCodecError { try codec.process(input: data) }
-    try target.write(result.output, context: context)
+    try await target.write(result.output, context: context)
   }
 
   func close() throws {
@@ -205,11 +205,11 @@ final class EncodingFilterFile: ContextualFile, Sendable {
     }
   }
 
-  func close(context: isolated Context) throws {
+  func close(context: isolated Context) async throws {
     guard state.withLock({ !$0.closed }) else { return }
-    try target.initialize(context: context)
+    try await target.initialize(context: context)
     let output = try translateCodecError { try codec.finish() ?? Data() }
-    try target.finish(output, context: context)
+    try await target.finish(output, context: context)
     state.withLock { $0.closed = true }
   }
 
@@ -228,12 +228,12 @@ final class EncodingFilterFile: ContextualFile, Sendable {
     try target.writeWithoutContext(output)
   }
 
-  func flush(context: isolated Context) throws {
+  func flush(context: isolated Context) async throws {
     try checkOpen()
-    try target.initialize(context: context)
+    try await target.initialize(context: context)
     let output = try translateCodecError { try codec.flush() }
-    try target.write(output, context: context)
-    try target.flush(context: context)
+    try await target.write(output, context: context)
+    try await target.flush(context: context)
   }
 
   func reset() throws {}
@@ -285,11 +285,11 @@ final class FilterTarget: Sendable {
     self.closeTarget = closeTarget
   }
 
-  func initialize(context: isolated Context) throws {
+  func initialize(context: isolated Context) async throws {
     guard case .procedure(let procedure) = destination else { return }
     guard state.withLock({ !$0.initialized }) else { return }
     let empty = Object.string(Data(), access: .unlimited, vm: .local, kind: .literal)
-    let buffer = try invoke(procedure, data: empty, more: true, context: context)
+    let buffer = try await invoke(procedure, data: empty, more: true, context: context)
     guard buffer.count > 0 else { throw Error.rangeCheck }
     state.withLock { state in
       state.procedureBuffer = buffer
@@ -309,21 +309,21 @@ final class FilterTarget: Sendable {
     }
   }
 
-  func write(_ data: Data, context: isolated Context) throws {
+  func write(_ data: Data, context: isolated Context) async throws {
     guard !data.isEmpty else { return }
     switch destination {
     case .file(let file):
-      try file.file.write(contentsOf: data, context: context)
+      try await file.file.write(contentsOf: data, context: context)
     case .string(let string):
       try write(data, to: string)
     case .procedure(let procedure):
-      try write(data, to: procedure, context: context)
+      try await write(data, to: procedure, context: context)
     }
   }
 
-  func flush(context: isolated Context) throws {
+  func flush(context: isolated Context) async throws {
     if case .file(let file) = destination {
-      try file.file.flush(context: context)
+      try await file.file.flush(context: context)
     }
   }
 
@@ -332,12 +332,12 @@ final class FilterTarget: Sendable {
     try file.file.close()
   }
 
-  func finish(_ data: Data, context: isolated Context) throws {
+  func finish(_ data: Data, context: isolated Context) async throws {
     guard state.withLock({ !$0.finished }) else { return }
-    try write(data, context: context)
+    try await write(data, context: context)
     switch destination {
     case .file(let file):
-      if closeTarget { try file.file.close(context: context) }
+      if closeTarget { try await file.file.close(context: context) }
     case .string:
       break
     case .procedure(let procedure):
@@ -345,7 +345,7 @@ final class FilterTarget: Sendable {
         guard let buffer = state.procedureBuffer else { throw Error.ioError }
         return try .string(sharing: buffer, subRange: 0..<UInt(state.offset), kind: .literal)
       }
-      _ = try invoke(procedure, data: finalObject, more: false, context: context)
+      _ = try await invoke(procedure, data: finalObject, more: false, context: context)
     }
     state.withLock { $0.finished = true }
   }
@@ -358,7 +358,7 @@ final class FilterTarget: Sendable {
     }
   }
 
-  private func write(_ data: Data, to procedure: Object, context: isolated Context) throws {
+  private func write(_ data: Data, to procedure: Object, context: isolated Context) async throws {
     var remaining = data
     while !remaining.isEmpty {
       let transfer = try state.withLock { state -> (StringValue, Int) in
@@ -373,7 +373,7 @@ final class FilterTarget: Sendable {
       let isFull = state.withLock { $0.offset == transfer.0.count }
       if isFull {
         let object = Object(value: transfer.0, kind: .literal)
-        let next = try invoke(procedure, data: object, more: true, context: context)
+        let next = try await invoke(procedure, data: object, more: true, context: context)
         guard next.count > 0 else { throw Error.rangeCheck }
         state.withLock { state in
           state.procedureBuffer = next
@@ -388,9 +388,9 @@ final class FilterTarget: Sendable {
     data: Object,
     more: Bool,
     context: isolated Context
-  ) throws -> StringValue {
+  ) async throws -> StringValue {
     let originalDepth = context.operands.depth
-    guard try context.execute(proc: procedure, ops: [.boolean(more), data]) else {
+    guard try await context.execute(proc: procedure, ops: [.boolean(more), data]) else {
       throw Error.invalidExit
     }
     guard context.operands.depth == originalDepth + 1 else { throw Error.typeCheck }

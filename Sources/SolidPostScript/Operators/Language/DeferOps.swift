@@ -21,7 +21,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["{"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       context.operands.push(.mark)
       context.executionModes.push(.deferred)

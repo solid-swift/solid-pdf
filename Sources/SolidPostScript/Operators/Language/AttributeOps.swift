@@ -29,7 +29,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["type"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
       let typeName = op.type.name
@@ -58,7 +58,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["executeonly"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       try reduceAccess(to: .executeOnly, context: context)
     }
   }
@@ -71,7 +71,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["readonly"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       try reduceAccess(to: .readOnly, context: context)
     }
   }
@@ -84,7 +84,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["noaccess"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       try reduceAccess(to: .noAccess, context: context)
     }
   }
@@ -97,7 +97,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["xcheck"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 
@@ -137,7 +137,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["rcheck"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       try test(\.isReadAllowed, context: context)
     }
   }
@@ -150,7 +150,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["wcheck"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       try test(\.isWriteAllowed, context: context)
     }
   }
@@ -163,7 +163,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cvlit"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 
@@ -179,7 +179,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cvx"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 

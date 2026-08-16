@@ -27,7 +27,7 @@ enum FilterResources: ResourceCategory {
     return (true, 0)
   }
 
-  func loadResource(forKey key: Object, in context: isolated Context) throws -> Object {
+  func loadResource(forKey key: Object, in context: isolated Context) async throws -> Object {
     guard try statusOfResource(forKey: key) != nil else { throw Error.undefinedResource }
     return key
   }

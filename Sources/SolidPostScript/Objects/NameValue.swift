@@ -53,9 +53,9 @@ public struct NameValue: ObjectValue {
   }
 
   /// Executes this value in the supplied interpreter context.
-  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
+  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
     let object = try lookup(in: context)
-    try object.execute(context: context, method: method)
+    try await object.execute(context: context, method: .indirect)
   }
 
   /// Returns whether this value equals another PostScript value.

@@ -26,7 +26,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["eq"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op2, op1) = try context.operands.pop2()
 
@@ -42,7 +42,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["ne"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op2, op1) = try context.operands.pop2()
 
@@ -58,7 +58,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["ge"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op2, op1) = try context.operands.pop2()
 
@@ -90,7 +90,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["gt"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op2, op1) = try context.operands.pop2()
 
@@ -121,7 +121,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["le"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op2, op1) = try context.operands.pop2()
 
@@ -153,7 +153,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["lt"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op2, op1) = try context.operands.pop2()
 

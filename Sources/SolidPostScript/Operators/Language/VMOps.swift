@@ -28,7 +28,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["save"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let snapshot = try context.snapshot()
       let save = SaveValue(snapshot: snapshot)
@@ -46,7 +46,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["restore"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let save: SaveValue = try context.operands.popAs()
 
@@ -62,7 +62,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["setglobal"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let mode: BooleanValue = try context.operands.popAs()
 
@@ -78,7 +78,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["currentglobal"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       context.operands.push(.boolean(context.allocationMode == .global))
     }
@@ -92,7 +92,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["gcheck"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let obj = try context.operands.pop()
 
@@ -115,7 +115,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["vmstatus"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let used = min(try context.estimatedVMUsage(in: context.allocationMode), Int(Int32.max))
       let maximum = context.allocationMode == .local
         ? context.userParameters.integer("MaxLocalVM")
@@ -136,7 +136,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["vmreclaim"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let value: IntegerValue = try context.operands.popAs()
       switch value.value {
       case -2 ... 0:
@@ -162,7 +162,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["setvmthreshold"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let value: IntegerValue = try context.operands.popAs()
       guard value.value >= -1 else { throw Error.rangeCheck }
       context.userParameters.setInteger(

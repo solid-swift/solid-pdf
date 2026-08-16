@@ -32,7 +32,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["add"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let args = try context.operands.pop(count: 2)
       let result: Object =
         switch (args[1].value, args[0].value) {
@@ -55,7 +55,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["sub"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let args = try context.operands.pop(count: 2)
       let result: Object =
         switch (args[1].value, args[0].value) {
@@ -78,7 +78,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["mul"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let args = try context.operands.pop(count: 2)
       let result: Object =
         switch (args[1].value, args[0].value) {
@@ -101,7 +101,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["div"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let args = try context.operands.pop(count: 2)
       let result: Object =
         switch (args[1].value, args[0].value) {
@@ -122,7 +122,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["idiv"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let args = try context.operands.pop(count: 2)
       guard let dividend = args[1].value as? IntegerValue,
         let divisor = args[0].value as? IntegerValue
@@ -149,7 +149,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["mod"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let args = try context.operands.pop(count: 2)
       guard let dividend = args[1].value as? IntegerValue,
         let divisor = args[0].value as? IntegerValue
@@ -172,7 +172,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["abs"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
       let result: Object =
         switch arg.value {
@@ -199,7 +199,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["neg"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
       let result: Object =
         switch arg.value {
@@ -226,7 +226,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["ceiling"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
       let result: Object =
         switch arg.value {
@@ -249,7 +249,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["floor"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
       let result: Object =
         switch arg.value {
@@ -272,7 +272,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["round"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
       let result: Object =
         switch arg.value {
@@ -295,7 +295,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["truncate"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
       let result: Object =
         switch arg.value {

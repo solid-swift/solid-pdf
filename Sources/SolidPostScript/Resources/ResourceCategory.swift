@@ -19,7 +19,7 @@ public protocol ResourceCategory: Sendable {
   /// Reports whether a provider can supply a resource and its known VM size.
   func statusOfResource(forKey key: Object) throws -> (isLoaded: Bool, size: Int)?
   /// Loads a provider-backed resource instance.
-  func loadResource(forKey key: Object, in context: isolated Context) throws -> Object
+  func loadResource(forKey key: Object, in context: isolated Context) async throws -> Object
   /// Reports the instance's known VM size, or `-1` when it is unknown.
   func sizeOfResource(_ instance: Object) throws -> Int
   /// Enumerates provider-backed resource keys matching a PLRM wildcard template.
@@ -35,7 +35,7 @@ extension ResourceCategory {
   public func statusOfResource(forKey key: Object) throws -> (isLoaded: Bool, size: Int)? { nil }
 
   /// Categories without an external provider cannot load an instance.
-  public func loadResource(forKey key: Object, in context: isolated Context) throws -> Object {
+  public func loadResource(forKey key: Object, in context: isolated Context) async throws -> Object {
     throw Error.undefinedResource
   }
 
