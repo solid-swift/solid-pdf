@@ -31,7 +31,35 @@ extension Scanner {
       return ScannedObject(try object(from: token, context: context))
     case .binary(let type):
       return try binaryObject(type: type, context: context)
+    case .procedureOpen:
+      return ScannedObject(try procedure(context: context))
+    case .procedureClose, .unmatchedClose:
+      throw Error.syntaxError
     }
+  }
+
+  private func procedure(context: isolated Context) throws -> Object {
+    var objects: [Object] = []
+
+    while let lexeme = try nextLexeme(binaryEnabled: context.objectFormat.binaryEnabled) {
+      switch lexeme {
+      case .token(let token):
+        objects.append(try object(from: token, context: context))
+      case .binary(let type):
+        objects.append(try binaryObject(type: type, context: context).object)
+      case .procedureOpen:
+        objects.append(try procedure(context: context))
+      case .procedureClose:
+        try context.limitCheck(size: objects.count, objectType: .array)
+        return try context.packingMode == .packed
+          ? .packedArray(objects, vm: context.allocationMode, kind: .executable)
+          : .array(objects, access: .unlimited, vm: context.allocationMode, kind: .executable)
+      case .unmatchedClose:
+        throw Error.syntaxError
+      }
+    }
+
+    throw Error.syntaxError
   }
 
   private func object(from token: Token, context: isolated Context) throws -> Object {

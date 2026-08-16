@@ -36,14 +36,7 @@ extension Operators {
           try num.integer
 
         case let str as StringValue:
-          switch try Scanner.number(string: str.readableString) {
-          case .integer(let int):
-            int
-          case .real(let real):
-            try RealValue(validating: real, error: .undefinedResult).integer
-          default:
-            throw Error.syntaxError
-          }
+          try scanNumericObject(from: str, context: context).value(as: NumericConvertible.self).integer
 
         default:
           throw Error.typeCheck
@@ -71,14 +64,7 @@ extension Operators {
           num.real
 
         case let str as StringValue:
-          switch try Scanner.number(string: str.readableString) {
-          case .integer(let int):
-            IntegerValue(value: int).real
-          case .real(let real):
-            real
-          default:
-            throw Error.syntaxError
-          }
+          try scanNumericObject(from: str, context: context).value(as: NumericConvertible.self).real
 
         default:
           throw Error.typeCheck
@@ -178,4 +164,15 @@ extension Operators {
       context.operands.push(.name(try string.readableString, kind: stringObject.kind))
     }
   }
+}
+
+private func scanNumericObject(from string: StringValue, context: isolated Context) throws -> Object {
+  let scanner = try Scanner(content: string.characters(in: string.range))
+  guard let object = try scanner.nextObject(context: context)?.object else {
+    throw Error.syntaxError
+  }
+  guard object.value is NumericConvertible else {
+    throw Error.typeCheck
+  }
+  return object
 }

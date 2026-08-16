@@ -9,22 +9,17 @@ import Foundation
 
 extension Operators {
 
-  static let deferOps: [OperatorValue] = [
-    Defer.instance
-  ]
-
-  /// Implements the PostScript `{` operator.
+  /// A legacy representation of the former PostScript `{` operator.
+  @available(*, deprecated, message: "Procedure literals are constructed by the scanner")
   public enum Defer: OperatorValue {
     case instance
 
-    /// The names that register this operator in the system dictionary.
+    /// The legacy system-dictionary names for this value.
     public static let systemDictionaryNames: [Object] = ["{"]
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
-
-      context.operands.push(.mark)
-      context.executionModes.push(.deferred)
+      throw Error.syntaxError
     }
   }
 

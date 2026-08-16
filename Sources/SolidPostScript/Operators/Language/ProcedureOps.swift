@@ -11,30 +11,20 @@ import SolidCore
 extension Operators {
 
   static let procedureOps: [OperatorValue] = [
-    ConstructProcedure.instance,
     Bind.instance,
   ]
 
-  /// Implements the PostScript `}` operator.
+  /// A legacy representation of the former PostScript `}` operator.
+  @available(*, deprecated, message: "Procedure literals are constructed by the scanner")
   public enum ConstructProcedure: OperatorValue {
     case instance
 
-    /// The names that register this operator in the system dictionary.
+    /// The legacy system-dictionary names for this value.
     public static let systemDictionaryNames: [Object] = ["}"]
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
-
-      _ = context.executionModes.pop()
-      let deferred = try context.operands.popToMark().reversed()
-      try context.limitCheck(size: deferred.count, objectType: .array)
-
-      let array: Object =
-        try context.packingMode == .packed
-        ? .packedArray(deferred, vm: context.allocationMode, kind: .executable)
-        : .array(deferred, access: .unlimited, vm: context.allocationMode, kind: .executable)
-
-      context.operands.push(array)
+      throw Error.syntaxError
     }
   }
 

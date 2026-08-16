@@ -149,6 +149,8 @@ struct ScannerTests {
   @Test
   func testHexEncodedStrings() async throws {
 
+    #expect(try scan("<>") == [.string(Data())])
+    #expect(try scan("< 41\t42\r\n>") == [.string(Data("AB".utf8))])
     #expect(try scan("<4142>") == [.string(Data("AB".utf8))])
     #expect(try scan("<A>") == [.string(Data([0xA0]))])
 
@@ -364,54 +366,12 @@ struct ScannerTests {
       ]
     )
 
-    // Ensure < & << are distinctly recognized
-    expectEqual(
-      try scan(
-        """
-        <q <$ <\\ <%
-        q> $> \\> >%
-        <
-        <<
-        >>
-        < < > >
-        """
-      ),
-      [
-        .name("<", kind: .executable),
-        .name("q", kind: .executable),
-        .name("<", kind: .executable),
-        .name("$", kind: .executable),
-        .name("<", kind: .executable),
-        .name("\\", kind: .executable),
-        .name("<", kind: .executable),
-        .name("q", kind: .executable),
-        .name(">", kind: .executable),
-        .name("$", kind: .executable),
-        .name(">", kind: .executable),
-        .name("\\", kind: .executable),
-        .name(">", kind: .executable),
-        .name(">", kind: .executable),
-        .name("<", kind: .executable),
-        .name("<<", kind: .executable),
-        .name(">>", kind: .executable),
-        .name("<", kind: .executable),
-        .name("<", kind: .executable),
-        .name(">", kind: .executable),
-        .name(">", kind: .executable),
-      ]
-    )
-
-    // Ensure < & << are distinctly recognized
-    expectEqual(
-      try scan(
-        """
-        <
-        """
-      ),
-      [
-        .name("<", kind: .executable)
-      ]
-    )
+    expectEqual(try scan("<< >>"), [.name("<<", kind: .executable), .name(">>", kind: .executable)])
+    for malformed in ["<", "<q>", "<41"] {
+      #expect(throws: Error.syntaxError) {
+        try scan(malformed)
+      }
+    }
 
   }
 

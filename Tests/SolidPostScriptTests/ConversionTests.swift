@@ -44,6 +44,30 @@ struct ConversionTests {
   }
 
   @Test
+  func stringNumericConversionsUseTokenSemantics() async throws {
+    let integer: IntegerValue = try await Interpreter.result(content: "(  16#ff trailing tokens) cvi")
+    #expect(integer.value == 255)
+
+    let malformedRemainder: IntegerValue = try await Interpreter.result(content: "(123 {) cvi")
+    #expect(malformedRemainder.value == 123)
+
+    let real: RealValue = try await Interpreter.result(content: "(\t1.25 another) cvr")
+    #expect(real.value == 1.25)
+
+    for operation in ["cvi", "cvr"] {
+      await #expect(throws: Error.typeCheck) {
+        try await Interpreter.execute(content: "(not-a-number) \(operation)")
+      }
+      await #expect(throws: Error.syntaxError) {
+        try await Interpreter.execute(content: "(   ) \(operation)")
+      }
+      await #expect(throws: Error.syntaxError) {
+        try await Interpreter.execute(content: "({1) \(operation)")
+      }
+    }
+  }
+
+  @Test
   func testConvertToReal() async throws {
     let res1 = try await Interpreter.results(content: "123 cvr")
     expectEqual(res1.count, 1)

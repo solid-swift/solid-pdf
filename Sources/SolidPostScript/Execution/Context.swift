@@ -52,7 +52,8 @@ public actor Context {
     case ascii85String
   }
 
-  /// An PostScript execution mode.
+  /// A legacy PostScript execution mode.
+  @available(*, deprecated, message: "Procedure literals are constructed by the scanner")
   public enum ExecutionMode: Sendable {
     case immediate
     case deferred
@@ -78,7 +79,6 @@ public actor Context {
   var userParameters: UserParameterState
   var allocationMode: VM = .local
   var objectFormat: ObjectFormat = .disabled
-  var executionModes: Stack<ExecutionMode> = [.immediate]
   var packingMode: PackingMode = .unpacked
   var activeErrors: [ErrorInvocation] = []
   var resolvingErrorNames: Set<String> = []
@@ -208,10 +208,6 @@ public actor Context {
     dictionaries.setMaximumDepth(Int(userParameters.integer("MaxDictStack")))
   }
 
-  internal var executionMode: ExecutionMode {
-    executionModes.peek().neverNil("Mode stack overflow")
-  }
-
   internal func pushAndRun(source: Object) async throws {
     try await withUserTimeAccounting {
       try execution.push(source: source, in: self)
@@ -322,12 +318,6 @@ public actor Context {
     userTime.start()
   }
 
-  nonisolated static let deferredExecutionNames = [
-    Operators.Defer.systemDictionaryNames,
-    Operators.ConstructProcedure.systemDictionaryNames,
-  ]
-  .flatMap { $0 }
-
   nonisolated static let targetLanguageLevel: Int32 = 3
 
   // These are the PLRM-defined local roots that a global system dictionary may retain.
@@ -390,17 +380,10 @@ public actor Context {
 
       let object = scanned.object
 
-      if scanned.implicitlyExecutable && executionMode == .immediate {
+      if scanned.implicitlyExecutable {
         try await object.execute(context: self, method: .indirect)
-      } else if executionMode == .immediate || Self.deferredExecutionNames.contains(object) {
-        try await object.execute(context: self, method: .direct)
       } else {
-        operands.push(object)
-        do {
-          try operands.throwIfOverflowed()
-        } catch let error as Error {
-          try await initiate(error: error, command: object, savedOperands: savedOperands)
-        }
+        try await object.execute(context: self, method: .direct)
       }
     }
   }
@@ -893,7 +876,6 @@ public actor Context {
     allocationMode = .local
     objectFormat = .disabled
     packingMode = .unpacked
-    executionModes = [.immediate]
     userParameters = environment.userParameters()
     saveDepth = 0
     languageSaves.removeAll()

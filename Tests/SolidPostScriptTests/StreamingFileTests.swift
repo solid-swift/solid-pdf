@@ -33,6 +33,46 @@ struct StreamingFileTests {
   }
 
   @Test(.timeLimit(.minutes(1)))
+  func standardInputScansNestedProceduresAcrossChunks() async throws {
+    let input = StreamingSource()
+    let output = WaitingSink()
+    let environment = InterpreterEnvironment(
+      hostConfiguration: InterpreterHostConfiguration(
+        standardInput: input,
+        standardOutput: output
+      )
+    )
+    let execution = Task {
+      try await Interpreter.execute(
+        content: "(%stdin) (r) file cvx exec",
+        environment: environment
+      )
+    }
+
+    input.send(Data("{1 {".utf8))
+    await input.waitUntilReadStarted()
+    input.send(Data("2} 3} length == flush".utf8))
+    await output.waitForBytes(count: 2)
+    #expect(await output.data == Data("3\n".utf8))
+
+    input.finish()
+    _ = try await execution.value
+  }
+
+  @Test
+  func fileTokenReturnsACompleteProcedure() async throws {
+    let results = try await Interpreter.results(
+      content: "(%stdin) (r) file token",
+      environment: environment(standardInput: Data("{1 {2} 3}".utf8))
+    )
+
+    #expect(try results[0].value(as: BooleanValue.self).value)
+    let procedure = try results[1].value(as: ArrayValue.self)
+    #expect(procedure.count == 3)
+    #expect(try procedure.object(at: 1).value(as: ArrayValue.self).count == 1)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
   func cancellationStopsAPendingStandardInputRead() async throws {
     let input = StreamingSource()
     let environment = InterpreterEnvironment(

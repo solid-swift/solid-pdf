@@ -14,6 +14,9 @@ public class Scanner {
   enum Lexeme {
     case token(Token)
     case binary(UInt8)
+    case procedureOpen
+    case procedureClose
+    case unmatchedClose(Chars)
   }
 
   typealias Char = UInt8
@@ -91,15 +94,26 @@ public class Scanner {
     self.file = file
   }
 
-  /// Performs the ``nextToken`` operation.
+  /// Returns the next context-free lexical token.
+  ///
+  /// Procedure construction requires interpreter allocation and packing state, so it is performed by the
+  /// context-aware scanner used during execution.
   public func nextToken() throws -> Token? {
     guard let lexeme = try nextLexeme(binaryEnabled: false) else {
       return nil
     }
-    guard case .token(let token) = lexeme else {
+    switch lexeme {
+    case .token(let token):
+      return token
+    case .procedureOpen:
+      return .name("{", kind: .executable)
+    case .procedureClose:
+      return .name("}", kind: .executable)
+    case .unmatchedClose(let chars):
+      return try .name(String(bytes: chars, encoding: .isoLatin1).unwrap(), kind: .executable)
+    case .binary:
       throw Error.unregistered(.internalScannerError)
     }
-    return token
   }
 
   func nextContextualObject(context: isolated Context) async throws -> ScannedObject? {
@@ -179,14 +193,23 @@ public class Scanner {
       case Self.literalStringDelims.open:
         return try token(chars).map(Lexeme.token) ?? .token(literalString())
 
-      case Self.angleDelims.open where try peek().map { $0 == Self.ascii85Marker || $0.isHexDigit } ?? false:
-        return try token(chars).map(Lexeme.token) ?? .token(encodedString())
-
       case Self.angleDelims.open where try peek() == Self.angleDelims.open,
         Self.angleDelims.close where try peek() == Self.angleDelims.close:
         return try token(chars).map(Lexeme.token) ?? .token(token([char] + take(1), putBack: 0).neverNil())
 
-      case Self.arrayDelims, Self.procedureDelims, Self.angleDelims.open, Self.angleDelims.close:
+      case Self.angleDelims.open:
+        return try token(chars).map(Lexeme.token) ?? .token(encodedString())
+
+      case Self.literalStringDelims.close, Self.angleDelims.close:
+        return try token(chars).map(Lexeme.token) ?? .unmatchedClose([char])
+
+      case Self.procedureDelims:
+        if let token = try token(chars) {
+          return .token(token)
+        }
+        return char == Self.char("{") ? .procedureOpen : .procedureClose
+
+      case Self.arrayDelims:
         return try token(chars).map(Lexeme.token) ?? .token(name(char))
 
       case Self.nameDelim:
@@ -211,6 +234,13 @@ public class Scanner {
           return .token(try token(chars, putBack: 0).neverNil())
         }
         try comment()
+
+      case Self.ascii85Marker where try peek() == Self.angleDelims.close:
+        if let token = try token(chars) {
+          return .token(token)
+        }
+        try skip()
+        return .unmatchedClose([char, Self.angleDelims.close])
 
       default:
         chars.append(char)
