@@ -11,12 +11,29 @@ import SolidCore
 /// Actor-isolated state for a PostScript interpreter execution.
 public actor Context {
 
+  struct JobLifecycle {
+    let persistent: Bool
+    let snapshot: Snapshot?
+    let startSaveDepth: Int
+    let fileGeneration: Int
+    let resourceTransactionIndex: Int
+  }
+
   struct ErrorInvocation {
     let error: Error
     let command: Object
     let operandStack: [Object]
     let executionStack: [Object]
     let dictionaryStack: [Object]
+  }
+
+  private enum StatementDelimiter {
+    case literalString
+    case procedure
+    case array
+    case dictionary
+    case hexadecimalString
+    case ascii85String
   }
 
   /// An PostScript execution mode.
@@ -53,15 +70,27 @@ public actor Context {
   var resourceLoadTransactions: [[GlobalResourceMutation]] = []
   var stackLimitBypassDepth = 0
   var saveDepth = 0
+  var languageSaves: [Snapshot] = []
+  var echoEnabled = true
+  let jobServerEnabled: Bool
+  var jobLifecycle: JobLifecycle?
+  private var executivePendingInput = Data()
   private var fileGeneration = 0
   private var openedLocalFiles: [(generation: Int, file: WeakFile)] = []
+  private var standardFiles: [String: any File] = [:]
 
-  init(environment: InterpreterEnvironment = InterpreterEnvironment()) {
+  init(environment: InterpreterEnvironment = InterpreterEnvironment(), jobServerEnabled: Bool = false) {
     self.environment = environment
     self.fileDevices = environment.fileDevices
+    self.jobServerEnabled = jobServerEnabled
     let userParameters = environment.userParameters()
     self.userParameters = userParameters
-    self.dictionaries = DictionaryStack(Self.defaultDictionaries())
+    self.dictionaries = DictionaryStack(
+      Self.defaultDictionaries(
+        interactiveExecutiveEnabled: environment.hostConfiguration.interactiveExecutiveEnabled,
+        jobServerEnabled: jobServerEnabled
+      )
+    )
     self.operands.setMaximumDepth(Int(userParameters.integer("MaxOpStack")))
     self.dictionaries.setMaximumDepth(Int(userParameters.integer("MaxDictStack")))
   }
@@ -70,6 +99,7 @@ public actor Context {
     let environment = InterpreterEnvironment(fileDevices: fileDevices)
     self.environment = environment
     self.fileDevices = fileDevices
+    self.jobServerEnabled = false
     let userParameters = environment.userParameters()
     self.userParameters = userParameters
     self.dictionaries = DictionaryStack(Self.defaultDictionaries())
@@ -101,6 +131,30 @@ public actor Context {
   internal func pushAndRun(source: Object) async throws {
     try execution.push(source: source, in: self)
     try await run(untilExecutionDepth: 0)
+  }
+
+  func executeStart() async throws {
+    let targetDepth = execution.depth
+    try await execute(object: .executableName("start"), method: .direct)
+    try await run(untilExecutionDepth: targetDepth)
+  }
+
+  func beginSessionJob() throws {
+    try beginJob(persistent: false)
+  }
+
+  func finishSessionJob() async throws {
+    try await finishJob()
+  }
+
+  var currentJobPersistent: Bool { jobLifecycle?.persistent ?? false }
+
+  func reportCurrentError() async throws {
+    try await executeHandleError()
+  }
+
+  func flush(file: any File) async throws {
+    try await file.flush(context: self)
   }
 
   nonisolated static let deferredExecutionNames = [
@@ -495,13 +549,15 @@ public actor Context {
     }
   }
 
-  internal func snapshot() throws -> Snapshot {
-    let builder = Snapshot.builder(for: self, fileGeneration: fileGeneration)
+  internal func snapshot(scope: Snapshot.Scope = .local) throws -> Snapshot {
+    let builder = Snapshot.builder(for: self, fileGeneration: fileGeneration, scope: scope)
     fileGeneration += 1
 
-    let systemDictionary = try systemDictionary()
-    for name in Self.localSystemDictionaryNames {
-      try systemDictionary.object(forKey: name).save(to: builder)
+    if scope == .local {
+      let systemDictionary = try systemDictionary()
+      for name in Self.localSystemDictionaryNames {
+        try systemDictionary.object(forKey: name).save(to: builder)
+      }
     }
 
     for op in try operands.peek(count: operands.depth) {
@@ -525,8 +581,116 @@ public actor Context {
     openedLocalFiles.append((fileGeneration, WeakFile(file)))
   }
 
+  func openFile(name: String, mode modeString: String) throws -> any File {
+    let parsed = PostScriptFileName(name)
+    if let device = parsed.device, parsed.name.isEmpty, ["stdin", "stdout", "stderr"].contains(device) {
+      let mode = try FileMode(string: modeString)
+      let openMethod = try FileOpenMethod(string: modeString)
+      switch (device, mode, openMethod) {
+      case ("stdin", .read, .existingOnly),
+        ("stdout", .write, .truncateOrCreate),
+        ("stderr", .write, .truncateOrCreate):
+        break
+      default:
+        throw Error.invalidFileAccess
+      }
+      if let file = standardFiles[device] { return file }
+      let file = try fileDevices.open(device: device, name: "", mode: mode, openMethod: openMethod)
+      standardFiles[device] = file
+      return file
+    }
+    return try fileDevices.open(name: name, mode: modeString)
+  }
+
+  func resetStandardFiles() {
+    standardFiles.removeAll()
+  }
+
+  func beginJob(persistent: Bool) throws {
+    precondition(jobLifecycle == nil)
+    let jobFileGeneration = fileGeneration
+    let snapshot = persistent ? nil : try snapshot(scope: .job)
+    let resourceTransactionIndex = resourceLoadTransactions.count
+    resourceLoadTransactions.append([])
+    jobLifecycle = JobLifecycle(
+      persistent: persistent,
+      snapshot: snapshot,
+      startSaveDepth: saveDepth,
+      fileGeneration: jobFileGeneration,
+      resourceTransactionIndex: resourceTransactionIndex
+    )
+    resetForJob()
+  }
+
+  func finishJob() async throws {
+    guard let job = jobLifecycle else { return }
+    operands = OperandStack()
+    execution = ExecutionStack()
+    dictionaries.clear()
+    await closeFilesForJob(openedAfter: job.fileGeneration)
+    if job.persistent, let pendingSave = languageSaves.first {
+      try pendingSave.restore(to: self)
+    }
+    if let snapshot = job.snapshot {
+      try snapshot.restore(to: self)
+    }
+    guard job.resourceTransactionIndex < resourceLoadTransactions.count else {
+      throw Error.invalidRestore
+    }
+    let mutations = resourceLoadTransactions.remove(at: job.resourceTransactionIndex)
+    if !job.persistent {
+      try environment.rollbackGlobalResourceMutations(mutations)
+    }
+    closeFiles(openedAfter: 0)
+    resetStandardFiles()
+    jobLifecycle = nil
+    languageSaves.removeAll()
+  }
+
+  func transitionJob(persistent: Bool) async throws {
+    let rootExecution = Array(execution).last
+    try await finishJob()
+    try beginJob(persistent: persistent)
+    if let rootExecution {
+      execution = ExecutionStack([rootExecution])
+    }
+  }
+
+  private func resetForJob() {
+    operands = OperandStack()
+    execution = ExecutionStack()
+    dictionaries.clear()
+    allocationMode = .local
+    objectFormat = .disabled
+    packingMode = .unpacked
+    executionModes = [.immediate]
+    userParameters = environment.userParameters()
+    saveDepth = 0
+    languageSaves.removeAll()
+    echoEnabled = true
+    activeErrors.removeAll()
+    resolvingErrorNames.removeAll()
+    localResources = ResourceStore()
+    applyUserParameterLimits()
+    resetStandardFiles()
+  }
+
+  func registerLanguageSave(_ snapshot: Snapshot) {
+    languageSaves.append(snapshot)
+  }
+
+  func didRestore(_ snapshot: Snapshot) {
+    guard let index = languageSaves.firstIndex(where: { $0 === snapshot }) else { return }
+    languageSaves.removeSubrange(index...)
+  }
+
   func standardOutput() throws -> any File {
-    try fileDevices.open(device: "stdout", name: "", mode: .write, openMethod: .truncateOrCreate)
+    try openFile(name: "%stdout", mode: "w")
+  }
+
+  func binaryErrorReportingEnabled() throws -> Bool {
+    let state = try systemDictionary().objectValue(forKey: "$error", as: DictionaryValue.self)
+    return try state.objectValue(forKey: "binary", as: BooleanValue.self).value
   }
 
   func writeStandardOutput(_ data: Data) async throws {
@@ -537,11 +701,199 @@ public actor Context {
     try await environment.standardOutput.flush()
   }
 
+  func openInteractiveFile(statement: Bool) async throws -> any File {
+    guard environment.hostConfiguration.interactiveExecutiveEnabled else {
+      throw Error.undefinedFilename
+    }
+    guard let data = try await readInteractiveInput(statement: statement) else {
+      throw Error.undefinedFilename
+    }
+    return DataFile(data: data, mode: .read)
+  }
+
+  func runExecutive() async throws {
+    guard environment.hostConfiguration.interactiveExecutiveEnabled else {
+      throw Error.undefined
+    }
+
+    while true {
+      do {
+        let prompt = try dictionaries.object(forKey: "prompt")
+        _ = try await execute(proc: prompt)
+
+        guard let statement = try await readInteractiveInput(statement: true) else { return }
+        let file = DataFile(data: statement, mode: .read)
+        let source = Object.file(file, access: .readOnly, vm: .local, kind: .executable)
+        _ = try await execute(proc: source)
+      } catch Error.control(.quit) {
+        return
+      } catch is ErrorStop {
+        try await executeHandleError()
+        operands = OperandStack()
+        dictionaries.clear()
+      } catch Error.interrupt {
+        do {
+          try await initiate(error: .interrupt, command: .executableName("executive"), savedOperands: operands)
+        } catch is ErrorStop {
+          try await executeHandleError()
+          operands = OperandStack()
+          dictionaries.clear()
+        }
+      }
+    }
+  }
+
+  private func readInteractiveInput(statement: Bool) async throws -> Data? {
+    var result = Data()
+
+    while true {
+      if executivePendingInput.isEmpty {
+        let event: InteractiveExecutiveEvent
+        do {
+          event = try await environment.nextExecutiveEvent()
+        } catch is CancellationError {
+          throw CancellationError()
+        } catch let error as Error {
+          throw error
+        } catch {
+          throw Error.ioError
+        }
+        switch event {
+        case .data(let data):
+          executivePendingInput.append(data)
+        case .interrupt:
+          throw Error.interrupt
+        case .endOfFile:
+          return result.isEmpty ? nil : result
+        }
+      }
+
+      guard !executivePendingInput.isEmpty else { continue }
+      let byte = executivePendingInput.removeFirst()
+
+      switch byte {
+      case 0x03:
+        throw Error.interrupt
+      case Scanner.backSpace, 0x7F:
+        if !result.isEmpty { result.removeLast() }
+      case 0x15:
+        while let last = result.last, last != Scanner.lineFeed, last != Scanner.carriageReturn {
+          result.removeLast()
+        }
+      case 0x12:
+        if echoEnabled {
+          let line = result.suffix { $0 != Scanner.lineFeed && $0 != Scanner.carriageReturn }
+          try await writeStandardOutput(Data(line))
+        }
+      default:
+        result.append(byte)
+      }
+
+      if echoEnabled, byte != 0x12 {
+        try await writeStandardOutput(Data([byte]))
+      }
+
+      guard byte == Scanner.lineFeed || byte == Scanner.carriageReturn else { continue }
+      if !statement || Self.isCompleteStatement(result) { return result }
+    }
+  }
+
+  private nonisolated static func isCompleteStatement(_ data: Data) -> Bool {
+    let bytes = Array(data)
+    var delimiters: [StatementDelimiter] = []
+    var escaped = false
+    var comment = false
+    var index = 0
+
+    while index < bytes.count {
+      let byte = bytes[index]
+      if comment {
+        if byte == Scanner.lineFeed || byte == Scanner.carriageReturn { comment = false }
+        index += 1
+        continue
+      }
+      if delimiters.last == .literalString {
+        if escaped {
+          escaped = false
+        } else if byte == Scanner.escapeMarker {
+          escaped = true
+        } else if byte == Scanner.literalStringDelims.open {
+          delimiters.append(.literalString)
+        } else if byte == Scanner.literalStringDelims.close {
+          _ = delimiters.popLast()
+        }
+        index += 1
+        continue
+      }
+      if delimiters.last == .hexadecimalString {
+        if byte == Scanner.char(">") { _ = delimiters.popLast() }
+        index += 1
+        continue
+      }
+      if delimiters.last == .ascii85String {
+        if byte == Scanner.char("~"), bytes.indices.contains(index + 1), bytes[index + 1] == Scanner.char(">") {
+          _ = delimiters.popLast()
+          index += 2
+        } else {
+          index += 1
+        }
+        continue
+      }
+      switch byte {
+      case Scanner.commentDelim:
+        comment = true
+      case Scanner.literalStringDelims.open:
+        delimiters.append(.literalString)
+      case Scanner.char("{"):
+        delimiters.append(.procedure)
+      case Scanner.char("["):
+        delimiters.append(.array)
+      case Scanner.char("<"):
+        if bytes.indices.contains(index + 1), bytes[index + 1] == Scanner.char("<") {
+          delimiters.append(.dictionary)
+          index += 1
+        } else if bytes.indices.contains(index + 1), bytes[index + 1] == Scanner.char("~") {
+          delimiters.append(.ascii85String)
+          index += 1
+        } else {
+          delimiters.append(.hexadecimalString)
+        }
+      case Scanner.literalStringDelims.close:
+        if delimiters.last == .literalString { _ = delimiters.popLast() }
+      case Scanner.char("}"):
+        if delimiters.last == .procedure { _ = delimiters.popLast() }
+      case Scanner.char("]"):
+        if delimiters.last == .array { _ = delimiters.popLast() }
+      case Scanner.char(">"):
+        if delimiters.last == .dictionary,
+          bytes.indices.contains(index + 1),
+          bytes[index + 1] == Scanner.char(">")
+        {
+          _ = delimiters.popLast()
+          index += 1
+        }
+      default:
+        break
+      }
+      index += 1
+    }
+    return delimiters.isEmpty
+  }
+
   func closeFiles(openedAfter generation: Int) {
     for tracked in openedLocalFiles where tracked.generation > generation {
       try? tracked.file.value?.close()
     }
     openedLocalFiles.removeAll { $0.generation > generation || $0.file.value == nil }
+  }
+
+  private func closeFilesForJob(openedAfter generation: Int) async {
+    let files = openedLocalFiles
+      .filter { $0.generation > generation }
+      .compactMap(\.file.value)
+    for file in files {
+      try? await file.close(context: self)
+    }
   }
 
   /// Performs the ``results`` operation.
@@ -561,14 +913,40 @@ public actor Context {
 
   /// Performs the ``defaultDictionaries`` operation.
   nonisolated public static func defaultDictionaries() -> [Object] {
-    let userDict = defaultUserDictionary()
+    defaultDictionaries(interactiveExecutiveEnabled: true, jobServerEnabled: false)
+  }
+
+  nonisolated static func defaultDictionaries(
+    interactiveExecutiveEnabled: Bool,
+    jobServerEnabled: Bool
+  ) -> [Object] {
+    let userDict = defaultUserDictionary(jobServerEnabled: jobServerEnabled)
     let globalDict = defaultGlobalDictionary()
-    let sysDict = defaultSystemDictionary(userDict: userDict, globalDict: globalDict)
+    let sysDict = defaultSystemDictionary(
+      userDict: userDict,
+      globalDict: globalDict,
+      interactiveExecutiveEnabled: interactiveExecutiveEnabled,
+      jobServerEnabled: jobServerEnabled
+    )
     return [userDict, globalDict, sysDict]
   }
 
   /// Performs the ``defaultSystemDictionary`` operation.
   nonisolated public static func defaultSystemDictionary(userDict: Object, globalDict: Object) -> Object {
+    defaultSystemDictionary(
+      userDict: userDict,
+      globalDict: globalDict,
+      interactiveExecutiveEnabled: true,
+      jobServerEnabled: false
+    )
+  }
+
+  nonisolated static func defaultSystemDictionary(
+    userDict: Object,
+    globalDict: Object,
+    interactiveExecutiveEnabled: Bool,
+    jobServerEnabled: Bool
+  ) -> Object {
     let errorDictionary = defaultErrorDictionary()
     let errorState = defaultErrorState()
     let statusDictionary = neverThrow(
@@ -602,11 +980,21 @@ public actor Context {
 
     for op in Operators.all {
       for name in op.systemDictionaryNames {
+        if !interactiveExecutiveEnabled, name == "executive" || name == "echo" {
+          continue
+        }
         dict[name] = .init(value: op)
       }
     }
     dict["="] = Operators.equalsProcedure
     dict["=="] = Operators.doubleEqualsProcedure
+    dict["start"] = Operators.startProcedure
+    if interactiveExecutiveEnabled {
+      dict["prompt"] = Operators.promptProcedure
+    }
+    if jobServerEnabled {
+      dict["serverdict"] = Operators.serverDictionary
+    }
 
     let dictValue = neverThrow(
       try DictionaryValue(
@@ -658,7 +1046,11 @@ public actor Context {
 
   /// Performs the ``defaultUserDictionary`` operation.
   nonisolated public static func defaultUserDictionary() -> Object {
-    let dict: [Object: Object] = [:]
+    defaultUserDictionary(jobServerEnabled: false)
+  }
+
+  nonisolated static func defaultUserDictionary(jobServerEnabled: Bool) -> Object {
+    let dict: [Object: Object] = jobServerEnabled ? ["quit": Operators.quitMaskProcedure] : [:]
     return neverThrow(try .dictionary(dict, access: .unlimited, vm: .local, kind: .literal))
   }
 

@@ -273,6 +273,9 @@ extension Operators {
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
+      if context.jobServerEnabled, context.jobLifecycle?.persistent != true {
+        throw Error.invalidAccess
+      }
       throw Error.control(.quit)
     }
   }

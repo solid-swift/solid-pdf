@@ -48,7 +48,17 @@ extension Operators {
       try mode.access.check(.read)
       try fileName.access.check(.read)
 
-      let file = try context.fileDevices.open(name: fileName.string, mode: mode.string)
+      let file: any File
+      switch fileName.string {
+      case "%lineedit":
+        guard mode.string == "r" else { throw Error.invalidFileAccess }
+        file = try await context.openInteractiveFile(statement: false)
+      case "%statementedit":
+        guard mode.string == "r" else { throw Error.invalidFileAccess }
+        file = try await context.openInteractiveFile(statement: true)
+      default:
+        file = try context.openFile(name: fileName.string, mode: mode.string)
+      }
 
       context.register(file: file, vm: context.allocationMode)
 
@@ -86,7 +96,7 @@ extension Operators {
 
       try file.checkReadable()
 
-      if let byte = try file.file.read(max: 1)?.first {
+      if let byte = try await file.file.read(max: 1, context: context)?.first {
         context.operands.push(.integer(Int32(byte)), .boolean(true))
       } else {
         context.operands.push(.boolean(false))
@@ -114,7 +124,7 @@ extension Operators {
         throw Error.rangeCheck
       }
 
-      let bytes = try fileValue.file.read(max: Int(string.count)) ?? Data()
+      let bytes = try await fileValue.file.read(max: Int(string.count), context: context) ?? Data()
 
       try string.updateCharacters(bytes, startingAt: 0)
       let subRange = 0..<UInt(bytes.count)
@@ -142,7 +152,7 @@ extension Operators {
       try fileValue.checkReadable()
       try string.access.check(.write)
 
-      let (bytes, eof) = try fileValue.file.readHex(max: Int(string.count))
+      let (bytes, eof) = try await fileValue.file.readHex(max: Int(string.count), context: context)
 
       try string.updateCharacters(bytes, startingAt: 0)
       let subRange = 0..<UInt(bytes.count)
@@ -168,7 +178,7 @@ extension Operators {
       try fileValue.checkReadable()
       try string.access.check(.write)
 
-      let (line, eof) = try fileValue.file.readLine()
+      let (line, eof) = try await fileValue.file.readLine(context: context)
       guard line.count <= string.count else {
         throw Error.rangeCheck
       }
@@ -253,7 +263,7 @@ extension Operators {
 
       try file.checkReadable()
 
-      context.operands.push(try NumericSemantics.integer(validating: file.file.available))
+      context.operands.push(try NumericSemantics.integer(validating: await file.file.available(context: context)))
     }
   }
 

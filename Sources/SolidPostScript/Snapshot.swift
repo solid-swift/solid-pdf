@@ -11,6 +11,11 @@ import Synchronization
 /// A restorable snapshot of local PostScript virtual memory.
 public final class Snapshot: Sendable {
 
+  enum Scope: Sendable {
+    case local
+    case job
+  }
+
   /// The type used to represent ``RestoreOperation``.
   public typealias RestoreOperation = @Sendable () throws -> Void
 
@@ -35,6 +40,7 @@ public final class Snapshot: Sendable {
     var localResources: ResourceStore
     let saveDepth: Int
     let fileGeneration: Int
+    private let scope: Scope
 
     /// The ``objects`` value.
     public private(set) var objects: Set<Object> = []
@@ -50,7 +56,8 @@ public final class Snapshot: Sendable {
       userParameters: UserParameterState,
       localResources: ResourceStore,
       saveDepth: Int,
-      fileGeneration: Int
+      fileGeneration: Int,
+      scope: Scope
     ) {
       self.packingMode = packingMode
       self.allocationMode = allocationMode
@@ -59,11 +66,14 @@ public final class Snapshot: Sendable {
       self.localResources = localResources
       self.saveDepth = saveDepth
       self.fileGeneration = fileGeneration
+      self.scope = scope
     }
 
     /// Records restorable state in a snapshot builder.
     public func save(_ object: Object) {
-      guard let composite = object.value as? CompositeValue, composite.vm == .local else {
+      guard let composite = object.value as? CompositeValue,
+        composite.vm == .local || scope == .job
+      else {
         return
       }
 
@@ -102,10 +112,10 @@ public final class Snapshot: Sendable {
 
   /// Performs the ``builder`` operation.
   public static func builder(for context: isolated Context) -> Builder {
-    builder(for: context, fileGeneration: 0)
+    builder(for: context, fileGeneration: 0, scope: .local)
   }
 
-  static func builder(for context: isolated Context, fileGeneration: Int) -> Builder {
+  static func builder(for context: isolated Context, fileGeneration: Int, scope: Scope = .local) -> Builder {
     return Builder(
       packingMode: context.packingMode,
       allocationMode: context.allocationMode,
@@ -113,7 +123,8 @@ public final class Snapshot: Sendable {
       userParameters: context.userParameters,
       localResources: context.localResources,
       saveDepth: context.saveDepth,
-      fileGeneration: fileGeneration
+      fileGeneration: fileGeneration,
+      scope: scope
     )
   }
 

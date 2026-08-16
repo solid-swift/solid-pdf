@@ -176,7 +176,7 @@ struct InterpreterParameterTests {
         """,
       environment: environment
     )
-    #expect(count.value == 2)
+    #expect(count.value == 4)
   }
 
   @Test

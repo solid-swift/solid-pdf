@@ -17,6 +17,6 @@ public enum Operators {
     + collectionOps
     + arrayOps + packedArrayOps + dictionaryOps + stringOps + arithmeticOps + trigonometricOps + mathOps + randomOps
     + relationalOps + logicalBitwiseOps + fileOps + binaryObjectOps + filterOps + parameterOps + resourceOperators
-    + timeOps + vmOps + userObjectsOps
+    + timeOps + vmOps + userObjectsOps + hostLifecycleOps
 
 }

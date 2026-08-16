@@ -9,7 +9,12 @@ public final class InterpreterEnvironment: Sendable {
   private let globalResources = Mutex(ResourceStore())
   private let resourcesInitialized = Mutex(false)
   let resourceCategories: [Object: any ResourceCategory]
+  let standardInput: StandardInputChannel
   let standardOutput: StandardOutputChannel
+  let standardError: StandardOutputChannel
+
+  /// The application integration used by this environment.
+  public let hostConfiguration: InterpreterHostConfiguration
 
   /// The file devices available to contexts created in this environment.
   public let fileDevices: FileDevices
@@ -19,12 +24,47 @@ public final class InterpreterEnvironment: Sendable {
   /// - Parameters:
   ///   - fileDevices: The file devices shared by contexts in this environment.
   ///   - resourceCategories: Category providers that augment or replace the standard registry.
-  public init(
+  public convenience init(
     fileDevices: FileDevices = FileDevices(),
     resourceCategories: [Object: any ResourceCategory] = [:]
   ) {
-    self.standardOutput = StandardOutputChannel(sink: FileSink(fileHandle: .standardOutput))
-    self.fileDevices = fileDevices.replacing(StandardOutputFileDevice(channel: standardOutput))
+    self.init(
+      hostConfiguration: InterpreterHostConfiguration(),
+      fileDevices: fileDevices,
+      resourceCategories: resourceCategories
+    )
+  }
+
+  /// Creates an interpreter environment whose `%stdout` device writes to `standardOutput`.
+  ///
+  /// The environment borrows the stream. Closing a PostScript `%stdout` file or destroying
+  /// the environment does not close it.
+  public convenience init(
+    standardOutput: any Sink,
+    fileDevices: FileDevices = FileDevices(),
+    resourceCategories: [Object: any ResourceCategory] = [:]
+  ) {
+    self.init(
+      hostConfiguration: InterpreterHostConfiguration(standardOutput: standardOutput),
+      fileDevices: fileDevices,
+      resourceCategories: resourceCategories
+    )
+  }
+
+  /// Creates an interpreter environment using `hostConfiguration`.
+  public init(
+    hostConfiguration: InterpreterHostConfiguration,
+    fileDevices: FileDevices = FileDevices(),
+    resourceCategories: [Object: any ResourceCategory] = [:]
+  ) {
+    self.hostConfiguration = hostConfiguration
+    self.standardInput = StandardInputChannel(source: hostConfiguration.standardInput)
+    self.standardOutput = StandardOutputChannel(sink: hostConfiguration.standardOutput)
+    self.standardError = StandardOutputChannel(sink: hostConfiguration.standardError)
+    self.fileDevices = fileDevices
+      .replacing(StandardInputFileDevice(channel: self.standardInput))
+      .replacing(StandardOutputFileDevice(channel: self.standardOutput, deviceName: "stdout"))
+      .replacing(StandardOutputFileDevice(channel: self.standardError, deviceName: "stderr"))
     var categories = Resources.resources
     categories.merge(resourceCategories) { _, replacement in replacement }
     if resourceCategories["IODevice"] == nil {
@@ -33,23 +73,38 @@ public final class InterpreterEnvironment: Sendable {
     self.resourceCategories = categories
   }
 
-  /// Creates an interpreter environment whose `%stdout` device writes to `standardOutput`.
-  ///
-  /// The environment borrows the stream. Closing a PostScript `%stdout` file or destroying
-  /// the environment does not close it.
-  public init(
-    standardOutput: any Sink,
-    fileDevices: FileDevices = FileDevices(),
-    resourceCategories: [Object: any ResourceCategory] = [:]
-  ) {
-    self.standardOutput = StandardOutputChannel(sink: standardOutput)
-    self.fileDevices = fileDevices.replacing(StandardOutputFileDevice(channel: self.standardOutput))
-    var categories = Resources.resources
-    categories.merge(resourceCategories) { _, replacement in replacement }
-    if resourceCategories["IODevice"] == nil {
-      categories["IODevice"] = IODeviceResources(fileDevices: self.fileDevices)
+  func startupProgram() async throws -> Data? {
+    let mode = state.withLock { state -> Int32 in
+      guard case .integer(let mode) = state.values["StartupMode"] else { return 0 }
+      return mode
     }
-    self.resourceCategories = categories
+    guard mode != 0 else { return nil }
+    return try await hostConfiguration.startupProgramProvider.startupProgram(for: mode)
+  }
+
+  func authorize(_ request: JobAuthorizationRequest) async throws -> Bool {
+    if let provider = hostConfiguration.jobAuthorizationProvider {
+      return try await provider.authorize(request)
+    }
+    return state.withLock { state in
+      request.candidate == state.startJobPassword || request.candidate == state.systemPassword
+    }
+  }
+
+  func nextExecutiveEvent() async throws -> InteractiveExecutiveEvent {
+    if let provider = hostConfiguration.interactiveExecutiveProvider {
+      return try await provider.nextEvent()
+    }
+    guard let data = try await standardInput.read(max: 1024) else { return .endOfFile }
+    return .data(data)
+  }
+
+  func emit(_ event: InterpreterLifecycleEvent) async throws {
+    let observer = hostConfiguration.lifecycleObserver
+    await observer.interpreter(didEmit: event)
+    if let notice = await observer.notice(for: event) {
+      try await standardOutput.write(notice)
+    }
   }
 
   func ensureResourcesInitialized() throws {

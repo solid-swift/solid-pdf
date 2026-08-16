@@ -68,15 +68,16 @@ actor StandardOutputChannel {
 
 struct StandardOutputFileDevice: FileDevice {
   let channel: StandardOutputChannel
+  let deviceName: String
 
   var searched: Bool { false }
-  var name: String { "stdout" }
+  var name: String { deviceName }
 
   func open(name: String, mode: FileMode, openMethod: FileOpenMethod) throws -> any File {
     guard name.isEmpty, mode == .write, openMethod == .truncateOrCreate else {
       throw Error.invalidFileAccess
     }
-    return StandardOutputFile(channel: channel)
+    return StandardOutputFile(channel: channel, name: deviceName)
   }
 }
 
@@ -85,12 +86,13 @@ final class StandardOutputFile: ContextualFile, Sendable {
   private let channel: StandardOutputChannel
   private let closed = Mutex(false)
 
-  let name = "stdout"
+  let name: String
   let mode: Mode = .write
   let isPositionable = false
 
-  init(channel: StandardOutputChannel) {
+  init(channel: StandardOutputChannel, name: String = "stdout") {
     self.channel = channel
+    self.name = name
   }
 
   var isClosed: Bool { closed.withLock { $0 } }
@@ -102,6 +104,19 @@ final class StandardOutputFile: ContextualFile, Sendable {
   }
 
   func read(max: Int) throws -> Data? { throw Error.ioError }
+
+  func readByte(context: isolated Context) async throws -> UInt8? { throw Error.ioError }
+
+  func readByte(
+    ifMatches predicate: (UInt8) -> Bool,
+    context: isolated Context
+  ) async throws -> (matched: UInt8?, eof: Bool) {
+    throw Error.ioError
+  }
+
+  func read(max: Int, context: isolated Context) async throws -> Data? { throw Error.ioError }
+
+  func available(context: isolated Context) async throws -> Int { throw Error.ioError }
 
   func write(contentsOf data: Data) throws { throw Error.ioError }
 

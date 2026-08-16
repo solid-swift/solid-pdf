@@ -34,6 +34,7 @@ public enum Interpreter {
     let source: Object = .file(file, access: .readOnly, vm: .local, kind: .executable)
     let context = Context(environment: environment)
     do {
+      try await context.executeStart()
       try await context.pushAndRun(source: source)
     } catch let stop as ErrorStop {
       throw stop.error

@@ -82,14 +82,16 @@ struct TextOutputTests {
   }
 
   @Test
-  func closingOneStdoutHandleDoesNotCloseTheBorrowedSink() async throws {
+  func closingStdoutDoesNotCloseTheBorrowedSinkAndKeepsJobIdentity() async throws {
     let sink = RecordingSink()
-    _ = try await Interpreter.execute(
-      content: "(%stdout) (w) file dup (a) writestring closefile (b) print (%stdout) (w) file (c) writestring",
+    let results = try await Interpreter.results(
+      content:
+        "(%stdout) (w) file dup (a) writestring closefile (b) print {(%stdout) (w) file (c) writestring} stopped",
       environment: InterpreterEnvironment(standardOutput: sink)
     )
-    #expect(sink.data == Data("abc".utf8))
+    #expect(sink.data == Data("ab".utf8))
     #expect(!sink.closed)
+    #expect(try results[0].value(as: BooleanValue.self).value)
   }
 
   @Test

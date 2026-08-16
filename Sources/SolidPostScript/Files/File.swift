@@ -129,13 +129,101 @@ extension File {
 
 protocol ContextualFile: File {
 
+  func readByte(context: isolated Context) async throws -> UInt8?
+  func readByte(
+    ifMatches predicate: (UInt8) -> Bool,
+    context: isolated Context
+  ) async throws -> (matched: UInt8?, eof: Bool)
+  func read(max: Int, context: isolated Context) async throws -> Data?
+  func available(context: isolated Context) async throws -> Int
   func write(contentsOf data: Data, context: isolated Context) async throws
   func close(context: isolated Context) async throws
   func flush(context: isolated Context) async throws
 
 }
 
+extension ContextualFile {
+
+  func readByte(context: isolated Context) async throws -> UInt8? { try readByte() }
+
+  func readByte(
+    ifMatches predicate: (UInt8) -> Bool,
+    context: isolated Context
+  ) async throws -> (matched: UInt8?, eof: Bool) {
+    try readByte(ifMatches: predicate)
+  }
+
+  func read(max: Int, context: isolated Context) async throws -> Data? { try read(max: max) }
+
+  func available(context: isolated Context) async throws -> Int { try available }
+}
+
 extension File {
+
+  func readByte(context: isolated Context) async throws -> UInt8? {
+    if let contextual = self as? any ContextualFile {
+      return try await contextual.readByte(context: context)
+    }
+    return try readByte()
+  }
+
+  func readByte(
+    ifMatches predicate: (UInt8) -> Bool,
+    context: isolated Context
+  ) async throws -> (matched: UInt8?, eof: Bool) {
+    if let contextual = self as? any ContextualFile {
+      return try await contextual.readByte(ifMatches: predicate, context: context)
+    }
+    return try readByte(ifMatches: predicate)
+  }
+
+  func read(max: Int, context: isolated Context) async throws -> Data? {
+    if let contextual = self as? any ContextualFile {
+      return try await contextual.read(max: max, context: context)
+    }
+    return try read(max: max)
+  }
+
+  func available(context: isolated Context) async throws -> Int {
+    if let contextual = self as? any ContextualFile {
+      return try await contextual.available(context: context)
+    }
+    return try available
+  }
+
+  func readHex(max: Int, context: isolated Context) async throws -> (data: Data, eof: Bool) {
+    func nextHexDigit() async throws -> UInt8? {
+      while let byte = try await readByte(context: context) {
+        if isxdigit(Int32(byte)) != 0 { return byte }
+      }
+      return nil
+    }
+
+    var result = Data(capacity: max)
+    while result.count < max {
+      guard let first = try await nextHexDigit(), let second = try await nextHexDigit() else {
+        try await close(context: context)
+        return (result, true)
+      }
+      let firstIndex = Int(first & 0x1F ^ 0x10)
+      let secondIndex = Int(second & 0x1F ^ 0x10)
+      result.append(hexCharTable[firstIndex] << 4 | hexCharTable[secondIndex])
+    }
+    return (result, false)
+  }
+
+  func readLine(context: isolated Context) async throws -> (line: Data, eof: Bool) {
+    var result = Data()
+    while let byte = try await readByte(context: context) {
+      if byte == Scanner.lineFeed { return (result, false) }
+      if byte == Scanner.carriageReturn {
+        let lookahead = try await readByte(ifMatches: { $0 == Scanner.lineFeed }, context: context)
+        return (result, lookahead.eof)
+      }
+      result.append(byte)
+    }
+    return (result, true)
+  }
 
   func write(contentsOf data: Data, context: isolated Context) async throws {
     if let contextual = self as? any ContextualFile {
