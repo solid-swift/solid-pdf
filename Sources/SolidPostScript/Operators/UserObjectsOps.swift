@@ -16,29 +16,44 @@ extension Operators {
   ]
 
   private static func userObjects(in context: isolated Context) throws -> ArrayValue? {
-
-    return try context.dictionaries.userDictionary()
-      .object(forKeyIfExists: "UserObjects")?
-      .value(as: ArrayValue.self)
+    try userObjects(in: context.dictionaries.userDictionary())
   }
 
-  private static func userObjects(in context: isolated Context, for index: Int) throws -> ArrayValue {
+  private static func userObjects(in userDictionary: DictionaryValue) throws -> ArrayValue? {
+    try userDictionary.object(forKeyIfExists: "UserObjects")?.value(as: ArrayValue.self)
+  }
 
-    let current = try userObjects(in: context)
-    guard let current, index < current.count else {
-
-      let count = max(50, index * 2)
-      let new = try ArrayValue(elements: .init(repeating: nil, count: count), access: .unlimited, vm: .local)
-      if let current {
-        try new.updateObjects(current.objects(in: current.range), startingAt: 0)
-      }
-
-      _ = try context.dictionaries.updateObject(.init(value: new, kind: .literal), forKey: "UserObjects")
-
-      return new
+  private static func define(
+    _ object: Object,
+    at index: Int,
+    in context: isolated Context
+  ) throws {
+    let userDictionary = try context.dictionaries.userDictionary()
+    let current = try userObjects(in: userDictionary)
+    let position = try index.unsigned
+    if let current, position < current.count {
+      try current.updateObject(object, at: position)
+      return
     }
 
-    return current
+    let (doubledIndex, overflow) = index.multipliedReportingOverflow(by: 2)
+    let count = max(50, overflow ? Int.max : doubledIndex)
+    try context.limitCheck(
+      size: count,
+      objectType: .array,
+      vm: .local,
+      additionalDictionaryEntries: current == nil ? 1 : 0
+    )
+
+    var elements = Array(repeating: Object.null, count: count)
+    if let current {
+      let currentElements = try current.objects(in: current.range)
+      elements.replaceSubrange(0..<currentElements.count, with: currentElements)
+    }
+    elements[index] = object
+
+    let new = try ArrayValue(elements: elements, access: .unlimited, vm: .local)
+    _ = try userDictionary.updateObject(.init(value: new, kind: .literal), forKey: "UserObjects")
   }
 
   /// Implements the PostScript `defineuserobject` operator.
@@ -53,9 +68,9 @@ extension Operators {
 
       let (obj, indexObj) = try context.operands.pop2()
       let index = Int(try indexObj.value(as: IntegerValue.self).value)
+      guard index >= 0 else { throw Error.rangeCheck }
 
-      let userObjects = try userObjects(in: context, for: index)
-      try userObjects.updateObject(obj, at: index.unsigned)
+      try define(obj, at: index, in: context)
     }
   }
 
@@ -107,7 +122,7 @@ extension Operators {
 
       let obj = try userObjects.object(at: index.unsigned)
 
-      context.operands.push(obj)
+      try await obj.execute(context: context, method: .indirect)
     }
   }
 }

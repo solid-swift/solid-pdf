@@ -11,6 +11,8 @@ import SolidCore
 /// Actor-isolated state for a PostScript interpreter execution.
 public actor Context {
 
+  private static let estimatedDictionaryEntryAllocationSize = 16
+
   struct JobLifecycle {
     let persistent: Bool
     let snapshot: Snapshot?
@@ -456,10 +458,16 @@ public actor Context {
     }
   }
 
-  internal func limitCheck(size: Int, objectType: ObjectType) throws {
+  internal func limitCheck(
+    size: Int,
+    objectType: ObjectType,
+    vm: VM? = nil,
+    additionalDictionaryEntries: Int = 0
+  ) throws {
     guard size >= 0 else {
       throw Error.rangeCheck
     }
+    precondition(additionalDictionaryEntries >= 0)
     let allowed =
       switch objectType {
       case .array, .packedArray, .dictionary:
@@ -474,7 +482,8 @@ public actor Context {
     }
 
     let requested = estimatedAllocationSize(count: size, objectType: objectType)
-    try preflightAllocation(bytes: requested)
+      .saturatingAdd(additionalDictionaryEntries.saturatingMultiply(Self.estimatedDictionaryEntryAllocationSize))
+    try preflightAllocation(bytes: requested, vm: vm)
   }
 
   func estimatedVMUsage(in vm: VM) throws -> Int {
@@ -491,7 +500,7 @@ public actor Context {
 
   func preflightDictionaryGrowth(_ dictionary: DictionaryValue, key: Object) throws {
     guard try dictionary.object(forKeyIfExists: key) == nil else { return }
-    try preflightAllocation(bytes: 16, vm: dictionary.vm)
+    try preflightAllocation(bytes: Self.estimatedDictionaryEntryAllocationSize, vm: dictionary.vm)
   }
 
   func preflightAllocation(bytes: Int, vm: VM? = nil) throws {
