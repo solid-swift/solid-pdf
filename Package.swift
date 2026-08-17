@@ -52,6 +52,30 @@ let package = Package(
       dependencies: ["SolidPostScript", "SolidPostScriptCoreGraphics"],
       plugins: lintPlugins
     ),
+    .target(
+      name: "CPlutoVG",
+      path: "Vendor/PlutoVG",
+      sources: [
+        "source/plutovg-blend.c",
+        "source/plutovg-canvas.c",
+        "source/plutovg-font.c",
+        "source/plutovg-ft-math.c",
+        "source/plutovg-ft-raster.c",
+        "source/plutovg-ft-stroker.c",
+        "source/plutovg-matrix.c",
+        "source/plutovg-paint.c",
+        "source/plutovg-path.c",
+        "source/plutovg-rasterize.c",
+        "source/plutovg-surface.c",
+      ],
+      publicHeadersPath: "include",
+      cSettings: [
+        .define("PLUTOVG_BUILD_STATIC"),
+        .define("PLUTOVG_DISABLE_FONT_FACE_CACHE_LOAD"),
+        .headerSearchPath("source"),
+      ],
+      linkerSettings: [.linkedLibrary("m")]
+    ),
   ],
   swiftLanguageModes: [.v6]
 )
