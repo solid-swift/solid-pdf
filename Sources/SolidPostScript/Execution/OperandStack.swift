@@ -193,6 +193,11 @@ struct OperandStack {
     storage.push(element)
   }
 
+  mutating func recoverFromOverflow(with element: Object) {
+    storage = Stack([element])
+    overflowed = false
+  }
+
   subscript(position: Storage.Index) -> Object {
     storage[storage.index(storage.startIndex, offsetBy: position)]
   }

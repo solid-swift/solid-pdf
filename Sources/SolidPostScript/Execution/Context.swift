@@ -458,7 +458,12 @@ public actor Context {
       command: error.isExternal ? .null : command
     )
 
-    if !error.isExternal {
+    if error == .stackOverflow {
+      // PLRM 8.2 requires stackoverflow to expose the failure-time operand stack as
+      // one local array instead of applying the ordinary error-initiation rollback.
+      let recoveryStack = try makeLocalArray(invocation.operandStack)
+      operands.recoverFromOverflow(with: recoveryStack)
+    } else if !error.isExternal {
       operands = savedOperands
       operands.pushUnchecked(command)
     }

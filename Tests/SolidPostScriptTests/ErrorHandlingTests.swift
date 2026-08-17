@@ -384,6 +384,134 @@ struct ErrorHandlingTests {
     expectEqual(standardErrorName.value, "undefined")
   }
 
+  @Test
+  func `stackoverflow handler receives the operand stack as one array`() async throws {
+    let results = try await Interpreter.results(
+      content:
+        """
+        /handlerDepth null def
+        /recovery null def
+        errordict /stackoverflow {
+          count /handlerDepth exch store
+          /recovery exch store
+        } put
+        /overflow { 1 2 3 4 5 } def
+        << /MaxOpStack 4 >> setuserparams
+        overflow
+        handlerDepth recovery
+        """
+    )
+
+    let recovery = try results[0].value(as: ArrayValue.self)
+    expectEqual(try recoveryIntegers(recovery), [1, 2, 3, 4])
+    expectEqual(try results[1].value(as: IntegerValue.self).value, 1)
+  }
+
+  @Test
+  func `default stackoverflow recovery preserves command and stack metadata`() async throws {
+    let results = try await Interpreter.results(
+      content:
+        """
+        /defaultStackOverflow errordict /stackoverflow get def
+        errordict /stackoverflow {
+          << /MaxOpStack 100 >> setuserparams
+          defaultStackOverflow exec
+        } put
+        /overflow { 1 2 3 4 5 } def
+        << /MaxOpStack 4 >> setuserparams
+        /overflow load stopped
+        $error /command get
+        $error /ostack get
+        """
+    )
+
+    let recorded = try results[0].value(as: ArrayValue.self)
+    expectEqual(try recoveryIntegers(recorded), [1, 2, 3, 4])
+    expectEqual(try results[1].value(as: IntegerValue.self).value, 5)
+    expectEqual(try results[2].value(as: BooleanValue.self).value, true)
+    let recovery = try results[3].value(as: ArrayValue.self)
+    expectEqual(try recoveryIntegers(recovery), [1, 2, 3, 4])
+  }
+
+  @Test
+  func `stackoverflow recovery bypasses tiny stack and local VM limits`() async throws {
+    let results = try await Interpreter.results(
+      content:
+        """
+        $error /recordstacks false put
+        /overflow { 1 2 } def
+        << /MaxLocalVM 0 /MaxOpStack 1 >> setuserparams
+        /overflow load stopped
+        """
+    )
+
+    expectEqual(try results[0].value(as: BooleanValue.self).value, true)
+    let recovery = try results[1].value(as: ArrayValue.self)
+    expectEqual(try recoveryIntegers(recovery), [1])
+  }
+
+  @Test
+  func `bulk push stackoverflow recovery remains atomic`() async throws {
+    let recovery: ArrayValue = try await Interpreter.result(
+      content:
+        """
+        /recovery null def
+        errordict /stackoverflow { /recovery exch store } put
+        << /MaxOpStack 3 >> setuserparams
+        1 2 2 copy
+        recovery
+        """
+    )
+
+    expectEqual(try recoveryIntegers(recovery), [1, 2])
+  }
+
+  @Test
+  func `nested stackoverflow handlers receive fresh recovery arrays`() async throws {
+    let recovery: ArrayValue = try await Interpreter.result(
+      content:
+        """
+        /handling false def
+        /recovery null def
+        errordict /stackoverflow {
+          handling
+            { /recovery exch store }
+            {
+              /handling true store
+              pop
+              1 2 3 4 5
+            }
+          ifelse
+        } put
+        << /MaxOpStack 4 >> setuserparams
+        1 2 3 4 5
+        recovery
+        """
+    )
+
+    expectEqual(try recoveryIntegers(recovery), [1, 2, 3, 4])
+  }
+
+  @Test
+  func `uncaught stackoverflow preserves the Swift error contract`() async {
+    await #expect(throws: Error.stackOverflow) {
+      try await Interpreter.execute(
+        content:
+          """
+          /overflow { 1 2 } def
+          << /MaxOpStack 1 >> setuserparams
+          overflow
+          """
+      )
+    }
+  }
+
+  private func recoveryIntegers(_ array: ArrayValue) throws -> [Int32] {
+    try (0..<array.count).map {
+      try array.object(at: $0).value(as: IntegerValue.self).value
+    }
+  }
+
   private func execute(content: String, throwing error: Error) async throws -> [Object] {
     let context = Context()
     return try await context.executeForTesting(
