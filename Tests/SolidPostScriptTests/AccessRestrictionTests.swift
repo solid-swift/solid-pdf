@@ -56,15 +56,28 @@ struct AccessRestrictionTests {
 
   @Test
   func `anchorsearch uses the selected receiver and needle intervals`() async throws {
-    typealias Result = (BooleanValue, StringValue, StringValue)
-    let (found, match, suffix) = try await Interpreter.result(
-      content: "(XabcY) 1 3 getinterval (ZabQ) 1 2 getinterval anchorsearch",
+    typealias Result = (StringValue, StringValue, StringValue, StringValue)
+    let (suffix, match, needle, source) = try await Interpreter.result(
+      content:
+        """
+        /source (XabcY) def
+        /searched source 1 3 getinterval def
+        /needleBacking (ZabQ) def
+        /needle needleBacking 1 2 getinterval def
+        searched needle anchorsearch
+        pop /match exch def /suffix exch def
+        match 0 81 put
+        source needle match suffix
+        """,
       as: Result.self
     )
 
-    #expect(found.value)
-    #expect(match.string == "ab")
+    #expect(source.string == "XQbcY")
+    #expect(needle.string == "ab")
+    #expect(match.string == "Qb")
     #expect(suffix.string == "c")
+    #expect(match.allocation === source.allocation)
+    #expect(match.allocation !== needle.allocation)
   }
 
   @Test

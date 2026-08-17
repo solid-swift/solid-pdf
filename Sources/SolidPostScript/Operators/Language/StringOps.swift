@@ -50,9 +50,10 @@ extension Operators {
 
       if string.count >= seek.count, try string.characters(in: 0..<seek.count) == seek.characters(in: seek.range) {
 
+        let matchObj: Object = try .string(sharing: string, subRange: ..<seek.count, kind: stringObj.kind)
         let postObj: Object = try .string(sharing: string, subRange: seek.count..., kind: stringObj.kind)
 
-        context.operands.push(contentsOf: [.boolean(true), seekObj, postObj])
+        context.operands.push(contentsOf: [.boolean(true), matchObj, postObj])
       } else {
         context.operands.push(contentsOf: [.boolean(false), stringObj])
       }
