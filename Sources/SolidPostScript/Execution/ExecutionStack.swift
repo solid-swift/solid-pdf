@@ -39,6 +39,11 @@ enum ExecutionFrame {
     guard case .boundary(_, let boundary) = self else { return nil }
     return boundary
   }
+
+  var isProcedure: Bool {
+    guard case .object(let source, _) = self, source.kind == .executable else { return false }
+    return source.value is ArrayValue || source.value is PackedArrayValue
+  }
 }
 
 typealias ExecutionStack = Stack<ExecutionFrame>

@@ -4,6 +4,7 @@
 
 import Foundation
 @testable import SolidPostScript
+import Synchronization
 import Testing
 
 @Suite
@@ -25,6 +26,54 @@ struct ManagedVMTests {
     local.pruneWeakGarbage()
     #expect(local.chargedBytes == 0)
     _ = object
+  }
+
+  @Test
+  func disabledAutomaticReclamationDoesNotPruneWeakGarbage() {
+    let local = VMAllocationSpace(vm: .local)
+    var allocation: VMAllocation? = local.allocate(bytes: 32)
+    allocation = nil
+
+    #expect(!local.prepareForAllocation(bytes: 1, maximum: 32, automaticCollection: false, threshold: 0))
+    #expect(local.chargedBytes == 32)
+
+    local.pruneWeakGarbage()
+    #expect(local.prepareForAllocation(bytes: 1, maximum: 32, automaticCollection: false, threshold: 0))
+    _ = allocation
+  }
+
+  @Test
+  func detachedCompositeAdoptionHonorsMaxLocalVM() async throws {
+    let object = try Object.array([.null], access: .unlimited, vm: .local, kind: .literal)
+    let allocation = try object.value(as: ArrayValue.self).allocation
+    let context = Context()
+
+    await #expect(throws: Error.vmError) {
+      try await context.adoptAtCurrentLocalVMLimit(object)
+    }
+    let local = await context.localVMAllocationSpace
+    #expect(allocation.membership(in: local) == nil)
+  }
+
+  @Test
+  func fileCreationPreflightsBeforeOpeningTheDevice() async throws {
+    let device = CountingFileDevice()
+    let context = Context(fileDevices: FileDevices(devices: [device]))
+
+    await #expect(throws: Error.vmError) {
+      try await context.openFileAtCurrentLocalVMLimit()
+    }
+    #expect(device.openCount == 0)
+  }
+
+  @Test
+  func saveCreationHonorsMaxLocalVMTransactionally() async throws {
+    let context = Context()
+
+    await #expect(throws: Error.vmError) {
+      try await context.saveAtCurrentLocalVMLimit()
+    }
+    #expect(await context.saveDepth == 0)
   }
 
   @Test
@@ -260,6 +309,24 @@ struct ManagedVMTests {
 }
 
 private extension Context {
+  func adoptAtCurrentLocalVMLimit(_ object: Object) throws {
+    userParameters.setInteger(Int32(localVMAllocationSpace.chargedBytes), for: "MaxLocalVM")
+    userParameters.setInteger(-1, for: "VMReclaim")
+    try adopt(object)
+  }
+
+  func openFileAtCurrentLocalVMLimit() throws {
+    userParameters.setInteger(Int32(localVMAllocationSpace.chargedBytes), for: "MaxLocalVM")
+    userParameters.setInteger(-1, for: "VMReclaim")
+    _ = try openFileObject(name: "%counting%input", mode: "r")
+  }
+
+  func saveAtCurrentLocalVMLimit() async throws {
+    userParameters.setInteger(Int32(localVMAllocationSpace.chargedBytes), for: "MaxLocalVM")
+    userParameters.setInteger(-1, for: "VMReclaim")
+    try await Operators.Save.instance.execute(context: self)
+  }
+
   func constructParameterDictionaryAtDictionaryOnlyLimit() throws {
     let values = ["Retained": ParameterValue.string(Data(repeating: 0, count: 64))]
     let dictionaryBytes = estimatedAllocationSize(count: values.count, objectType: .dictionary)
@@ -268,5 +335,18 @@ private extension Context {
     userParameters.setInteger(-1, for: "VMReclaim")
 
     _ = try parameterDictionary(values)
+  }
+}
+
+private final class CountingFileDevice: FileDevice, Sendable {
+  let name = "counting"
+  let searched = false
+  private let state = Mutex<Int>(0)
+
+  var openCount: Int { state.withLock { $0 } }
+
+  func open(name: String, mode: FileMode, openMethod: FileOpenMethod) throws -> any File {
+    state.withLock { $0 += 1 }
+    return DataFile(data: Data(), mode: .read)
   }
 }

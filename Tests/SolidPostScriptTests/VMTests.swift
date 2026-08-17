@@ -160,12 +160,17 @@ struct VMTests {
     "save /s exch def 0 packedarray s restore",
     "save /s exch def (%stdout) (w) file /ASCIIHexEncode filter s restore",
     "save /s exch def 0 dict begin s restore",
-    "save /s exch def { s restore } exec",
+    "save /s exch def { s restore 0 } exec",
   ])
   func restoreRejectsPostSaveLocalCompositesOnInterpreterStacks(_ content: String) async {
     await #expect(throws: Error.invalidRestore) {
       try await Interpreter.execute(content: content)
     }
+  }
+
+  @Test
+  func tailPositionRestoreDoesNotRetainItsProcedureOnTheExecutionStack() async throws {
+    _ = try await Interpreter.execute(content: "save /s exch def {s restore} exec")
   }
 
   @Test

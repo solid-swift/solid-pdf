@@ -66,7 +66,7 @@ extension Operators {
           let target = try FilterTarget(destination: source, closeTarget: closeTarget)
           let file = EncodingFilterFile(name: name, codec: codec, target: target)
           let vm = retainedVM([source] + retainedDictionary(name: name, dictionary: dictionary))
-          let allocation = context.register(file: file, vm: vm)
+          let allocation = try context.register(file: file, vm: vm)
           context.operands.push(.file(file, access: .unlimited, vm: vm, allocation: allocation, kind: .literal))
         } else {
           let closeSource = try dictionary.boolean("CloseSource", default: false)
@@ -82,7 +82,7 @@ extension Operators {
             source: source,
             closeSource: closeSource
           )
-          let allocation = context.register(file: file, vm: vm)
+          let allocation = try context.register(file: file, vm: vm)
           context.operands.push(.file(file, access: .readOnly, vm: vm, allocation: allocation, kind: .literal))
         }
       }
@@ -100,7 +100,7 @@ extension Operators {
       let target = try FilterTarget(destination: source, closeTarget: closeTarget)
       let file = EncodingFilterFile(name: "RunLengthEncode", codec: codec, target: target)
       let vm = retainedVM([source])
-      let allocation = context.register(file: file, vm: vm)
+      let allocation = try context.register(file: file, vm: vm)
       context.operands.push(.file(file, access: .unlimited, vm: vm, allocation: allocation, kind: .literal))
     }
 
@@ -138,7 +138,7 @@ extension Operators {
         source: source,
         closeSource: closeSource
       )
-      let allocation = context.register(file: file, vm: vm)
+      let allocation = try context.register(file: file, vm: vm)
       context.operands.push(.file(file, access: .readOnly, vm: vm, allocation: allocation, kind: .literal))
     }
 
@@ -152,7 +152,7 @@ extension Operators {
       let file = EncodingFilterFile(name: "DCTEncode", codec: codec, target: target)
       let dictObject = Object.dictionary(sharing: dictionaryValue, kind: .literal)
       let vm = retainedVM([source, dictObject])
-      let allocation = context.register(file: file, vm: vm)
+      let allocation = try context.register(file: file, vm: vm)
       context.operands.push(.file(file, access: .unlimited, vm: vm, allocation: allocation, kind: .literal))
     }
 
@@ -181,7 +181,7 @@ extension Operators {
         positionable: true,
         closeAtEnd: false
       )
-      let allocation = context.register(file: file, vm: vm)
+      let allocation = try context.register(file: file, vm: vm)
       context.operands.push(.file(file, access: .readOnly, vm: vm, allocation: allocation, kind: .literal))
     }
 

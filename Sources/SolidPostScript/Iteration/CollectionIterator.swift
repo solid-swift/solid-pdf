@@ -19,6 +19,10 @@ public class CollectionIterator: ObjectIterator {
     self.currentIndex = currentIndex
   }
 
+  var isExhausted: Bool {
+    currentIndex >= Int(collection.count) - 1
+  }
+
   /// Returns the next PostScript object, when available.
   public func next(context: isolated Context) throws -> Object? {
     currentIndex += 1

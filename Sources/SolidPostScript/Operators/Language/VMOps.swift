@@ -30,6 +30,7 @@ extension Operators {
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
 
+      try context.preflightAllocation(bytes: 32, vm: .local)
       let snapshot = try context.snapshot(scope: context.languageSaveScope)
       let save = SaveValue(snapshot: snapshot)
       context.saveDepth += 1

@@ -163,7 +163,51 @@ public actor Context {
   }
 
   func adopt(_ object: Object) throws {
+    let footprints = try Self.unadoptedAllocationFootprints([object], in: allocationSpaces)
+    for (vm, bytes) in footprints where bytes > 0 {
+      try preflightAllocation(bytes: bytes, vm: vm)
+    }
     try Self.adopt([object], into: allocationSpaces)
+  }
+
+  private nonisolated static func unadoptedAllocationFootprints(
+    _ objects: some Sequence<Object>,
+    in spaces: VMAllocationSpaces
+  ) throws -> [VM: Int] {
+    var footprints: [VM: Int] = [:]
+    var visited = Set<ObjectIdentifier>()
+
+    func visit(_ object: Object) throws {
+      guard let composite = object.value as? VMAllocatedCompositeValue else { return }
+      let allocation = composite.allocation
+      guard visited.insert(allocation.identity).inserted else { return }
+
+      if let membership = allocation.membership(in: spaces.space(for: composite.vm)) {
+        guard membership.isValid else { throw Error.invalidAccess }
+      } else {
+        footprints[composite.vm, default: 0] = footprints[composite.vm, default: 0]
+          .saturatingAdd(composite.allocationFootprint)
+      }
+
+      switch object.value {
+      case let dictionary as DictionaryValue:
+        try dictionary.forEachUnchecked { key, value in
+          try visit(key)
+          try visit(value)
+        }
+      case let collection as any SharedBackingArrayValue:
+        try collection.forEachBackingUnchecked(visit)
+      case let collection as any CollectionValue:
+        try collection.forEachUnchecked(visit)
+      default:
+        break
+      }
+    }
+
+    for object in objects {
+      try visit(object)
+    }
+    return footprints
   }
 
   private nonisolated static func adopt(_ objects: some Sequence<Object>, into spaces: VMAllocationSpaces) throws {
@@ -374,6 +418,13 @@ public actor Context {
         }
 
         scanned = nextObject
+
+        if let collectionIterator = iterator as? CollectionIterator,
+          collectionIterator.isExhausted,
+          execution.peek()?.isProcedure == true
+        {
+          _ = execution.pop()
+        }
       } catch let failure as ScannerFailure {
         try await initiate(
           error: failure.error,
@@ -882,7 +933,12 @@ public actor Context {
   }
 
   @discardableResult
-  func register(file: any File, vm: VM) -> VMAllocation {
+  func register(file: any File, vm: VM) throws -> VMAllocation {
+    try preflightAllocation(bytes: 32, vm: vm)
+    return registerPreflighted(file: file, vm: vm)
+  }
+
+  private func registerPreflighted(file: any File, vm: VM) -> VMAllocation {
     let allocation = VMAllocationContext.allocation(in: vm)
     neverThrow(try allocationSpaces.space(for: vm).adopt(allocation))
     openedFiles.removeAll { $0.file.value == nil }
@@ -908,9 +964,10 @@ public actor Context {
       }
       return file
     }
-    let file = try fileDevices.open(name: name, mode: modeString)
     let vm = allocationMode
-    let allocation = register(file: file, vm: vm)
+    try preflightAllocation(bytes: 32, vm: vm)
+    let file = try fileDevices.open(name: name, mode: modeString)
+    let allocation = registerPreflighted(file: file, vm: vm)
     return .file(file, access: file.mode.access, vm: vm, allocation: allocation, kind: .literal)
   }
 
@@ -933,24 +990,24 @@ public actor Context {
         )
         opened.append((specification.device, file))
       }
+
+      standardFiles = Dictionary(uniqueKeysWithValues: try opened.map { entry in
+        let allocation = try register(file: entry.file, vm: .local)
+        let object = Object.file(
+          entry.file,
+          access: entry.file.mode.access,
+          vm: .local,
+          allocation: allocation,
+          kind: .literal
+        )
+        return (entry.device, object)
+      })
     } catch {
       for entry in opened {
         try? entry.file.close()
       }
       throw error
     }
-
-    standardFiles = Dictionary(uniqueKeysWithValues: opened.map { entry in
-      let allocation = register(file: entry.file, vm: .local)
-      let object = Object.file(
-        entry.file,
-        access: entry.file.mode.access,
-        vm: .local,
-        allocation: allocation,
-        kind: .literal
-      )
-      return (entry.device, object)
-    })
   }
 
   private func retireStandardFiles() {
@@ -1123,6 +1180,14 @@ public actor Context {
       throw Error.undefinedFilename
     }
     return DataFile(data: data, mode: .read)
+  }
+
+  func openInteractiveFileObject(statement: Bool) async throws -> Object {
+    let vm = allocationMode
+    try preflightAllocation(bytes: 32, vm: vm)
+    let file = try await openInteractiveFile(statement: statement)
+    let allocation = registerPreflighted(file: file, vm: vm)
+    return .file(file, access: file.mode.access, vm: vm, allocation: allocation, kind: .literal)
   }
 
   func runExecutive() async throws {

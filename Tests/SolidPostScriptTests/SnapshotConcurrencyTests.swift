@@ -158,7 +158,7 @@ struct SnapshotConcurrencyTests {
       positionable: false,
       closeAtEnd: true
     )
-    let allocation = await context.register(file: file, vm: .local)
+    let allocation = try await context.register(file: file, vm: .local)
     let localSpace = await context.localVMAllocationSpace
     let newerObject = try await context.makeArrayAfterCurrentBoundary()
     await context.pushOperand(newerObject)

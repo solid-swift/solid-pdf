@@ -243,6 +243,43 @@ struct ControlTests {
   }
 
   @Test
+  func tailRecursiveProceduresDoNotGrowTheExecutionStack() async throws {
+    let result: BooleanValue = try await Interpreter.result(
+      content: """
+        /countdown {dup 0 eq {pop 42} {1 sub countdown} ifelse} def
+        << /MaxExecStack 3 >> setuserparams
+        {1000 countdown} stopped not exch 42 eq and
+        """
+    )
+
+    #expect(result.value)
+  }
+
+  @Test
+  func nonTailRecursiveProceduresStillOverflowTheExecutionStack() async throws {
+    let result: BooleanValue = try await Interpreter.result(
+      content: """
+        /recurse {dup 0 eq {pop} {1 sub recurse pop} ifelse} def
+        << /MaxExecStack 3 >> setuserparams
+        {100 recurse} stopped
+        $error /errorname get /execstackoverflow eq and
+        """
+    )
+
+    #expect(result.value)
+  }
+
+  @Test
+  func finalProcedureElementsObserveTheirCallerRemoved() async throws {
+    let results: [IntegerValue] = try await Interpreter.result(
+      content: "{countexecstack} exec true setpacking {countexecstack} exec",
+      count: 2
+    )
+
+    #expect(results.map(\.value) == [1, 1])
+  }
+
+  @Test
   func errorExecutionStackIncludesStoppedBoundary() async throws {
     let result: BooleanValue = try await Interpreter.result(
       content: """

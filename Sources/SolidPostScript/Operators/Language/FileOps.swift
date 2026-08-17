@@ -52,16 +52,10 @@ extension Operators {
       switch fileNameString {
       case "%lineedit":
         guard modeString == "r" else { throw Error.invalidFileAccess }
-        let file = try await context.openInteractiveFile(statement: false)
-        let vm = context.allocationMode
-        let allocation = context.register(file: file, vm: vm)
-        object = .file(file, access: file.mode.access, vm: vm, allocation: allocation, kind: .literal)
+        object = try await context.openInteractiveFileObject(statement: false)
       case "%statementedit":
         guard modeString == "r" else { throw Error.invalidFileAccess }
-        let file = try await context.openInteractiveFile(statement: true)
-        let vm = context.allocationMode
-        let allocation = context.register(file: file, vm: vm)
-        object = .file(file, access: file.mode.access, vm: vm, allocation: allocation, kind: .literal)
+        object = try await context.openInteractiveFileObject(statement: true)
       default:
         object = try context.openFileObject(name: fileNameString, mode: modeString)
       }

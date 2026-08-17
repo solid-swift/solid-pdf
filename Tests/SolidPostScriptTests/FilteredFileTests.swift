@@ -440,7 +440,7 @@ struct FilteredFileTests {
       positionable: false,
       closeAtEnd: true
     )
-    await context.register(file: file, vm: .local)
+    try await context.register(file: file, vm: .local)
 
     try await snapshot.restore(to: context)
 

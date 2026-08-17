@@ -406,13 +406,13 @@ final class VMAllocationSpace: Sendable {
     guard let maximum else { return true }
     if bytes <= maximum - min(chargedBytes, maximum) { return true }
 
+    guard automaticCollection else { return false }
+
     pruneWeakGarbage()
     if bytes <= maximum - min(chargedBytes, maximum) { return true }
 
-    if automaticCollection {
-      beforeFullCollection()
-      collectCycles()
-    }
+    beforeFullCollection()
+    collectCycles()
     return bytes <= maximum - min(chargedBytes, maximum)
   }
 
