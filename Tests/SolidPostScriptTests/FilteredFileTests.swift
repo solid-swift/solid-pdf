@@ -325,6 +325,7 @@ struct FilteredFileTests {
     #expect(results.contains { ($0.value as? NameValue)?.value == "ioerror" })
   }
 
+  #if canImport(ImageIO)
   @Test
   func dctDecodeBudgetUsesRetainedVMDomain() async throws {
     let encodedURL = temporaryURL()
@@ -348,6 +349,7 @@ struct FilteredFileTests {
     #expect(results.contains { ($0.value as? BooleanValue)?.value == true })
     #expect(results.contains { ($0.value as? NameValue)?.value == "limitcheck" })
   }
+  #endif
 
   @Test
   func codecLimitErrorsTranslateToLimitcheck() {
@@ -415,6 +417,7 @@ struct FilteredFileTests {
 
   @Test
   func dctEncoderClosesAtDeclaredSampleCount() async throws {
+#if canImport(ImageIO)
     let results = try await Interpreter.results(
       content: """
         /target 1024 string def
@@ -428,6 +431,17 @@ struct FilteredFileTests {
     let encoded = try #require(results.compactMap { $0.value as? FileValue }.first)
     #expect(stopped.value == true)
     #expect(encoded.file.isClosed)
+#else
+    await #expect(throws: Error.ioError) {
+      try await Interpreter.execute(
+        content: """
+          /target 1024 string def
+          /encoded target << /Columns 1 /Rows 1 /Colors 1 >> /DCTEncode filter def
+          encoded 0 write
+          """
+      )
+    }
+#endif
   }
 
   @Test
