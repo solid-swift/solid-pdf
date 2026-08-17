@@ -23,8 +23,7 @@ extension Operators {
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
-      let value = Int32(context.random.next() & 0x7FFF_FFFF)
-      context.operands.push(.integer(value))
+      context.operands.push(.integer(context.random.next()))
     }
   }
 
@@ -37,7 +36,7 @@ extension Operators {
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
-      context.operands.push(.integer(context.random.seed))
+      context.operands.push(.integer(context.random.restorableState))
     }
   }
 

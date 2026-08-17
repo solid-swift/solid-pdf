@@ -97,6 +97,114 @@ struct AttributeTests {
   }
 
   @Test
+  func accessReductionOperatorsAcceptOnlyTheirSpecifiedCompositeTypes() async throws {
+    let commonOperands = [
+      ("[]", "arraytype"),
+      ("0 packedarray", "packedarraytype"),
+      ("(%stdout) (w) file", "filetype"),
+      ("()", "stringtype"),
+    ]
+
+    for (operand, type) in commonOperands {
+      for operation in ["executeonly", "readonly", "noaccess"] {
+        let result: BooleanValue = try await Interpreter.result(
+          content: "\(operand) \(operation) type /\(type) eq"
+        )
+        #expect(result.value, "\(operation) rejected \(type)")
+      }
+    }
+
+    for operation in ["readonly", "noaccess"] {
+      let result: BooleanValue = try await Interpreter.result(
+        content: "<<>> \(operation) type /dicttype eq"
+      )
+      #expect(result.value, "\(operation) rejected dicttype")
+    }
+
+    for operation in ["executeonly", "readonly", "noaccess", "rcheck", "wcheck"] {
+      let result: BooleanValue = try await Interpreter.result(
+        content: """
+          {save \(operation)} stopped clear
+          $error /errorname get /typecheck eq
+          $error /command get /\(operation) load eq and
+          """
+      )
+      #expect(result.value, "\(operation) accepted a save object")
+    }
+
+    let dictionaryResult: BooleanValue = try await Interpreter.result(
+      content: """
+        {<<>> executeonly} stopped clear
+        $error /errorname get /typecheck eq
+        $error /command get /executeonly load eq and
+        """
+    )
+    #expect(dictionaryResult.value)
+  }
+
+  @Test
+  func accessReductionIsIdempotentAndMonotonic() async throws {
+    let validPrograms = [
+      ("[] readonly readonly executeonly executeonly noaccess noaccess", false, false),
+      ("0 packedarray readonly readonly executeonly executeonly noaccess noaccess", false, false),
+      ("() readonly readonly executeonly executeonly noaccess noaccess", false, false),
+      ("(%stdout) (w) file readonly readonly executeonly executeonly noaccess noaccess", false, false),
+      ("<<>> readonly readonly", true, false),
+      ("<<>> noaccess noaccess", false, false),
+    ]
+
+    for (program, readable, writable) in validPrograms {
+      let result: BooleanValue = try await Interpreter.result(
+        content: "\(program) dup rcheck \(readable) eq exch wcheck \(writable) eq and"
+      )
+      #expect(result.value, "Invalid final access for \(program)")
+    }
+
+    let invalidPrograms = [
+      ("[] executeonly readonly", "readonly"),
+      ("[] noaccess executeonly", "executeonly"),
+      ("() noaccess readonly", "readonly"),
+      ("<<>> readonly noaccess", "noaccess"),
+    ]
+
+    for (program, operation) in invalidPrograms {
+      let result: BooleanValue = try await Interpreter.result(
+        content: """
+          {\(program)} stopped clear
+          $error /errorname get /invalidaccess eq
+          $error /command get /\(operation) load eq and
+          """
+      )
+      #expect(result.value, "\(program) did not produce invalidaccess")
+    }
+  }
+
+  @Test
+  func accessChangesPreserveObjectAndDictionaryAliasingRules() async throws {
+    let independentViewPrograms = [
+      "[] dup readonly pop dup rcheck exch wcheck and",
+      "() dup readonly pop dup rcheck exch wcheck and",
+      "0 packedarray dup executeonly pop rcheck",
+      "(%stdout) (w) file dup noaccess pop wcheck",
+    ]
+
+    for program in independentViewPrograms {
+      let result: BooleanValue = try await Interpreter.result(content: program)
+      #expect(result.value, "Access leaked to an alias in \(program)")
+    }
+
+    let readOnlyDictionary: BooleanValue = try await Interpreter.result(
+      content: "<<>> dup readonly pop dup rcheck exch wcheck not and"
+    )
+    #expect(readOnlyDictionary.value)
+
+    let noAccessDictionary: BooleanValue = try await Interpreter.result(
+      content: "<<>> dup noaccess pop dup rcheck not exch wcheck not and"
+    )
+    #expect(noAccessDictionary.value)
+  }
+
+  @Test
   func testTestExecutableAttribute() async throws {
     let res1 = try await Interpreter.results(content: "(a) xcheck")
     expectEqual(res1.count, 1)
@@ -145,6 +253,43 @@ struct AttributeTests {
     } catch let error as Error {
       expectTrue(error == Error.typeCheck)
     }
+  }
+
+  @Test
+  func accessChecksUseExactTypesAndEffectiveFileCapabilities() async throws {
+    let cases = [
+      ("[]", true, true),
+      ("0 packedarray", true, false),
+      ("<<>>", true, true),
+      ("()", true, true),
+      ("(%stdout) (w) file", false, true),
+      ("(>) /ASCIIHexDecode filter", true, false),
+    ]
+
+    for (operand, readable, writable) in cases {
+      let result: BooleanValue = try await Interpreter.result(
+        content: """
+          \(operand)
+          dup rcheck \(readable) eq
+          exch wcheck \(writable) eq and
+          """
+      )
+      #expect(result.value, "Incorrect access capabilities for \(operand)")
+    }
+  }
+
+  @Test
+  func accessErrorsRetainOperandsAndCommandMetadata() async throws {
+    let result: BooleanValue = try await Interpreter.result(
+      content: """
+        {99 executeonly} stopped pop pop
+        $error /errorname get /typecheck eq
+        $error /command get /executeonly load eq and
+        exch 99 eq and
+        """
+    )
+
+    #expect(result.value)
   }
 
 }

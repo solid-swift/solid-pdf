@@ -6,18 +6,18 @@
 //
 
 /// The deterministic pseudo-random number generator used by PostScript's random operators.
-struct PostScriptRandomNumberGenerator: RandomNumberGenerator {
+struct PostScriptRandomNumberGenerator {
 
-  private(set) var seed: Int32
-  private var state: UInt64
+  private var state: UInt32
+
+  var restorableState: Int32 { Int32(bitPattern: state) }
 
   init(seed: Int32) {
-    self.seed = seed
-    self.state = UInt64(bitPattern: Int64(seed))
+    self.state = UInt32(bitPattern: seed)
   }
 
-  mutating func next() -> UInt64 {
-    state = state &* 6_364_136_223_846_793_005 &+ 1
-    return state
+  mutating func next() -> Int32 {
+    state = state &* 0x4C95_7F2D &+ 1
+    return Int32(state & 0x7FFF_FFFF)
   }
 }

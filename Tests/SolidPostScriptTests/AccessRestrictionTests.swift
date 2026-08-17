@@ -115,7 +115,6 @@ struct AccessRestrictionTests {
     arguments: [
       "[] noaccess length",
       "true setpacking {} noaccess length",
-      "0 dict executeonly length",
       "() noaccess length",
       "0 dict noaccess maxlength",
       "[] noaccess 0 0 getinterval",
@@ -123,7 +122,6 @@ struct AccessRestrictionTests {
       "() executeonly 0 0 getinterval",
       "[] noaccess {} forall",
       "true setpacking {} noaccess {} forall",
-      "0 dict executeonly {} forall",
       "() noaccess {} forall",
     ]
   )
