@@ -258,9 +258,11 @@ enum ResourceRuntime {
   }
 
   static func reclaimAutomaticResources(context: isolated Context, includeGlobal: Bool) {
-    context.localResources.removeAutomaticEntries()
+    _ = context.localResources.removeAutomaticEntries()
     if includeGlobal {
-      context.environment.reclaimAutomaticGlobalResources()
+      for mutation in context.environment.reclaimAutomaticGlobalResources() {
+        context.recordGlobalResourceMutation(mutation)
+      }
     }
   }
 

@@ -188,8 +188,18 @@ public final class InterpreterEnvironment: Sendable {
     return try globalResources.withLock { try $0.remove(key, from: category) }
   }
 
-  func reclaimAutomaticGlobalResources() {
-    globalResources.withLock { $0.removeAutomaticEntries() }
+  func reclaimAutomaticGlobalResources() -> [GlobalResourceMutation] {
+    guard resourcesInitialized.withLock({ $0 }) else { return [] }
+    return globalResources.withLock { resources in
+      resources.removeAutomaticEntries().map { removed in
+        GlobalResourceMutation(
+          key: removed.key,
+          category: removed.category,
+          previous: removed.entry,
+          replacementID: nil
+        )
+      }
+    }
   }
 
   func rollbackGlobalResourceMutations(_ mutations: [GlobalResourceMutation]) throws {

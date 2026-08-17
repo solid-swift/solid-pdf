@@ -191,7 +191,7 @@ extension Operators {
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
-      try context.exitDynamicallyEnclosingLoop()
+      try await context.exitDynamicallyEnclosingLoop()
     }
   }
 

@@ -26,6 +26,12 @@ struct GlobalResourceMutation: Sendable {
   let replacementID: UUID?
 }
 
+struct RemovedResourceEntry: Sendable {
+  let key: Object
+  let category: Object
+  let entry: ResourceEntry
+}
+
 struct ResourceStore: Sendable {
   private var categories: [Object: [Object: ResourceEntry]] = [:]
 
@@ -48,13 +54,19 @@ struct ResourceStore: Sendable {
     categories[try canonicalResourceKey(category)]?.removeValue(forKey: try canonicalResourceKey(key))
   }
 
-  mutating func removeAutomaticEntries() {
+  mutating func removeAutomaticEntries() -> [RemovedResourceEntry] {
+    var removed: [RemovedResourceEntry] = []
     for category in Array(categories.keys) {
+      guard let entries = categories[category] else { continue }
+      for (key, entry) in entries where entry.origin == .automatic {
+        removed.append(RemovedResourceEntry(key: key, category: category, entry: entry))
+      }
       categories[category]?.filterValues { $0.origin != .automatic }
       if categories[category]?.isEmpty == true {
         categories.removeValue(forKey: category)
       }
     }
+    return removed
   }
 
   var objects: [Object] {

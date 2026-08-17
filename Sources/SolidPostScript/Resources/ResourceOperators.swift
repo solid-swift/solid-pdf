@@ -361,7 +361,7 @@ extension Operators {
           let procArg: Object
 
           if let nameString = resourceKey.value as? NameStringConvertible {
-            let characters = Data(nameString.nameString.utf8)
+            let characters = try LanguageLimits.postScriptBytes(nameString.nameString)
             guard characters.count <= scratch.count else { throw Error.rangeCheck }
             try scratch.updateCharacters(characters, startingAt: 0)
             procArg = try .string(sharing: scratch, subRange: 0..<UInt(characters.count), kind: .literal)

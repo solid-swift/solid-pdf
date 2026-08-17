@@ -13,7 +13,7 @@ extension Operators {
       guard let path = try ResourceFiles.defaultPath(for: key, in: category, context: context) else {
         throw Error.undefinedResource
       }
-      let bytes = Data(path.utf8)
+      let bytes = try LanguageLimits.postScriptBytes(path)
       guard bytes.count <= scratch.count else { throw Error.rangeCheck }
       try scratch.updateCharacters(bytes, startingAt: 0)
       context.operands.push(try .string(sharing: scratch, subRange: 0..<UInt(bytes.count), kind: .literal))
@@ -55,6 +55,7 @@ enum ResourceFiles {
     }
     guard let regex = template.asTemplateRegex else { return [] }
     return try context.fileDevices.resourceFileNames(in: directory).compactMap { name in
+      guard (try? LanguageLimits.validateName(name)) != nil else { return nil }
       guard (try? regex.wholeMatch(in: name)) != nil else { return nil }
       return .literalName(name)
     }

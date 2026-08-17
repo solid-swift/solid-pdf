@@ -10,9 +10,14 @@ enum LanguageLimits {
   }
 
   static func validateName(_ name: String) throws {
-    guard let data = name.data(using: .isoLatin1) else {
+    let data = try postScriptBytes(name)
+    try validateNameLength(data.count)
+  }
+
+  static func postScriptBytes(_ value: String) throws -> Data {
+    guard let data = value.data(using: .isoLatin1) else {
       throw Error.limitCheck
     }
-    try validateNameLength(data.count)
+    return data
   }
 }

@@ -146,6 +146,9 @@ public actor Context {
     operands = OperandStack()
     dictionaries = DictionaryStack([Object]())
     localResources = ResourceStore()
+    for snapshot in languageSaves {
+      snapshot.invalidate()
+    }
     languageSaves.removeAll()
     activeErrors.removeAll()
     jobLifecycle = nil
@@ -202,6 +205,9 @@ public actor Context {
   func recordGlobalResourceMutation(_ mutation: GlobalResourceMutation) {
     for index in resourceLoadTransactions.indices {
       resourceLoadTransactions[index].append(mutation)
+    }
+    for snapshot in languageSaves {
+      snapshot.recordGlobalResourceMutation(mutation)
     }
   }
 
@@ -703,7 +709,7 @@ public actor Context {
     }
   }
 
-  internal func exitDynamicallyEnclosingLoop() throws -> Never {
+  internal func exitDynamicallyEnclosingLoop() async throws -> Never {
     for frame in execution {
       guard let boundary = frame.boundary else { continue }
       switch boundary.kind {
@@ -714,6 +720,7 @@ public actor Context {
       }
     }
 
+    try? await writeStandardOutput(Data("Error: exit not in loop\n".utf8))
     throw Error.control(.quit)
   }
 
@@ -859,6 +866,16 @@ public actor Context {
 
     for exec in execution {
       exec.source.save(to: builder)
+    }
+
+    for object in localResources.objects {
+      object.save(to: builder)
+    }
+
+    if scope == .job {
+      for object in try environment.globalResourceObjects() {
+        object.save(to: builder)
+      }
     }
 
     return builder.build()
@@ -1008,7 +1025,7 @@ public actor Context {
     closeFiles(allocatedAfter: job.localBoundary, globalBoundary: job.globalBoundary)
     retireStandardFiles()
     jobLifecycle = nil
-    languageSaves.removeAll()
+    discardLanguageSaves()
     return true
   }
 
@@ -1047,7 +1064,7 @@ public actor Context {
     packingMode = .unpacked
     userParameters = environment.userParameters()
     saveDepth = 0
-    languageSaves.removeAll()
+    discardLanguageSaves()
     echoEnabled = true
     activeErrors.removeAll()
     resolvingErrorNames.removeAll()
@@ -1057,6 +1074,13 @@ public actor Context {
 
   func registerLanguageSave(_ snapshot: Snapshot) {
     languageSaves.append(snapshot)
+  }
+
+  private func discardLanguageSaves() {
+    for snapshot in languageSaves {
+      snapshot.invalidate()
+    }
+    languageSaves.removeAll()
   }
 
   func didRestore(_ snapshot: Snapshot) {

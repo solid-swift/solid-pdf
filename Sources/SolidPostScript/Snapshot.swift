@@ -152,6 +152,7 @@ public final class Snapshot: Sendable {
   public let timestamp: Date
   let sequence: UInt64
   private let state: Mutex<State>
+  private let globalResourceMutations = Mutex<[GlobalResourceMutation]>([])
   private let packingMode: Context.PackingMode
   private let allocationMode: VM
   private let objectFormat: ObjectFormat
@@ -209,6 +210,14 @@ public final class Snapshot: Sendable {
         try operation()
       }
 
+      let resourceMutations = globalResourceMutations.withLock { mutations in
+        defer { mutations.removeAll() }
+        return mutations
+      }
+      if !resourceMutations.isEmpty {
+        try context.environment.rollbackGlobalResourceMutations(resourceMutations)
+      }
+
       context.packingMode = packingMode
       context.allocationMode = allocationMode
       context.objectFormat = objectFormat
@@ -262,6 +271,18 @@ public final class Snapshot: Sendable {
         state = .invalidated
       }
     }
+    globalResourceMutations.withLock { $0.removeAll() }
+  }
+
+  func recordGlobalResourceMutation(_ mutation: GlobalResourceMutation) {
+    guard globalBoundary != nil else { return }
+    guard state.withLock({ state in
+      if case .ready = state { return true }
+      return false
+    }) else {
+      return
+    }
+    globalResourceMutations.withLock { $0.append(mutation) }
   }
 
   func retainedAllocations() -> [VMAllocation] {

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SolidIO
 @testable import SolidPostScript
 import Testing
 
@@ -340,12 +341,17 @@ struct ControlTests {
 
   @Test
   func testQuit() async throws {
+    let output = DataSink()
     do {
-      _ = try await Interpreter.results(content: "exit")
+      _ = try await Interpreter.results(
+        content: "exit",
+        environment: InterpreterEnvironment(standardOutput: output)
+      )
       recordIssue("Expected an unmatched outer exit to follow the built-in quit path")
     } catch let error as Error {
       expectTrue(error == Error.control(.quit))
     }
+    #expect(String(data: output.data, encoding: .isoLatin1) == "Error: exit not in loop\n")
 
     do {
       _ = try await Interpreter.results(content: "quit")
@@ -369,6 +375,54 @@ struct ControlTests {
     }
   }
 
+  @Test
+  func loopAndProtectedExitPathsDoNotEmitTheTopLevelDiagnostic() async throws {
+    let output = DataSink()
+    let environment = InterpreterEnvironment(standardOutput: output)
+
+    let loopResult: IntegerValue = try await Interpreter.result(
+      content: "{exit} loop 1",
+      environment: environment
+    )
+    #expect(loopResult.value == 1)
+
+    let protectedResult: BooleanValue = try await Interpreter.result(
+      content: "{exit} stopped $error /errorname get /invalidexit eq and",
+      environment: environment
+    )
+    #expect(protectedResult.value)
+    #expect(output.data.isEmpty)
+  }
+
+  @Test
+  func unmatchedExitStillQuitsWhenDiagnosticOutputFails() async {
+    do {
+      _ = try await Interpreter.results(
+        content: "exit",
+        environment: InterpreterEnvironment(standardOutput: FailingExitSink())
+      )
+      recordIssue("Expected an unmatched outer exit to follow the built-in quit path")
+    } catch let error as Error {
+      expectTrue(error == Error.control(.quit))
+    } catch {
+      recordIssue("Expected the built-in quit signal, received \(error)")
+    }
+  }
+
+}
+
+private struct FailingExitSink: Sink {
+  var bytesWritten: Int { 0 }
+
+  func write(data: Data) throws {
+    throw Failure.write
+  }
+
+  func close() {}
+
+  private enum Failure: Swift.Error {
+    case write
+  }
 }
 
 private struct RunFileDevice: FileDevice {

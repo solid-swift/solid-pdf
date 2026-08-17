@@ -86,6 +86,162 @@ struct ResourceSystemTests {
   }
 
   @Test
+  func restoreRevertsCompositesReachableOnlyThroughLocalResources() async throws {
+    let result: BooleanValue = try await Interpreter.result(
+      content:
+        """
+        true setglobal
+        /Generic /Category findresource dup length 1 add dict copy
+        dup /InstanceType /dicttype put
+        /Container exch /Category defineresource pop
+        false setglobal
+        /OnlyResource << /nested [1] >> /Container defineresource pop
+        save /saved exch def
+        /OnlyResource /Container findresource /nested get 0 2 put
+        saved restore
+        /OnlyResource /Container findresource /nested get 0 get 1 eq
+        """
+    )
+
+    #expect(result.value)
+  }
+
+  @Test
+  func persistentOuterRestoreRevertsGlobalResourceMappingsAndContents() async throws {
+    let session = InterpreterSession()
+
+    try await session.executeJob(
+      content:
+        """
+        true () startjob pop
+        true setglobal
+        /Existing << /nested [1] >> /Generic defineresource pop
+        /Removed 7 /Generic defineresource pop
+        false setglobal
+        save /saved exch def
+        true setglobal
+        /Existing /Generic findresource /nested get 0 2 put
+        /Existing 9 /Generic defineresource pop
+        /Added 3 /Generic defineresource pop
+        /Removed /Generic undefineresource
+        false setglobal
+        saved restore
+        /Existing /Generic findresource /nested get 0 get 1 ne {undefined} if
+        /Removed /Generic findresource 7 ne {undefined} if
+        /Added /Generic resourcestatus {pop pop undefined} if
+        """
+    )
+
+    try await session.executeJob(
+      content:
+        """
+        /Existing /Generic findresource /nested get 0 get 1 ne {undefined} if
+        /Removed /Generic findresource 7 ne {undefined} if
+        /Added /Generic resourcestatus {pop pop undefined} if
+        """
+    )
+  }
+
+  @Test
+  func persistentOuterRestoreReinstatesReclaimedAutomaticResources() async throws {
+    let environment = InterpreterEnvironment(resourceCategories: ["ProcSet": SyntheticProcSetResources.instance])
+    let session = InterpreterSession(environment: environment)
+
+    try await session.executeJob(
+      content:
+        """
+        true () startjob pop
+        /Synthetic /ProcSet findresource pop
+        save /saved exch def
+        2 vmreclaim
+        /Synthetic /ProcSet resourcestatus {pop 2 ne {undefined} if} {undefined} ifelse
+        saved restore
+        /Synthetic /ProcSet resourcestatus {pop 1 ne {undefined} if} {undefined} ifelse
+        """
+    )
+  }
+
+  @Test
+  func nestedPersistentSaveDoesNotRestoreGlobalResourcesBeforeTheOuterSave() async throws {
+    let session = InterpreterSession()
+
+    try await session.executeJob(
+      content:
+        """
+        true () startjob pop
+        save /outer exch def
+        save /inner exch def
+        true setglobal /Nested 1 /Generic defineresource pop false setglobal
+        inner restore
+        /Nested /Generic findresource 1 ne {undefined} if
+        outer restore
+        /Nested /Generic resourcestatus {pop pop undefined} if
+        """
+    )
+  }
+
+  @Test
+  func restoringOneContextDoesNotReplaceALaterGlobalDefinition() async throws {
+    let environment = InterpreterEnvironment()
+    _ = try await Interpreter.execute(
+      content: "true setglobal /Shared 1 /Generic defineresource pop false setglobal",
+      environment: environment
+    )
+    let restoring = Context(environment: environment)
+    let replacing = Context(environment: environment)
+    let snapshot = try await restoring.snapshot(scope: .job)
+    await restoring.registerLanguageSave(snapshot)
+
+    try await restoring.executeResourceProgram(
+      "true setglobal /Shared 2 /Generic defineresource pop false setglobal"
+    )
+    try await replacing.executeResourceProgram(
+      "true setglobal /Shared 3 /Generic defineresource pop false setglobal"
+    )
+    try await restoring.restoreResourceSnapshot(snapshot)
+
+    let value: IntegerValue = try await Interpreter.result(
+      content: "/Shared /Generic findresource",
+      environment: environment
+    )
+    #expect(value.value == 3)
+  }
+
+  @Test
+  func resourceForAllCopiesPostScriptBytesRatherThanUTF8() async throws {
+    let name = String(repeating: "é", count: 100)
+    let result: IntegerValue = try await Interpreter.result(
+      content:
+        """
+        \(defineWidgetCategory)
+        /\(name) (value) /Widget defineresource pop
+        /copiedLength 0 def
+        (*) { /copiedLength exch length store } 100 string /Widget resourceforall
+        copiedLength
+        """
+    )
+
+    #expect(result.value == 100)
+  }
+
+  @Test
+  func defaultResourceFileNamePreservesPostScriptPathBytes() async throws {
+    let result: IntegerValue = try await Interpreter.result(
+      content:
+        """
+        \(defineWidgetCategory)
+        << /GenericResourceDir (é/) /GenericResourcePathSep (/) >> setsystemparams
+        /Widget /Category findresource begin
+        /é 100 string ResourceFileName
+        end
+        0 get
+        """
+    )
+
+    #expect(result.value == 0xE9)
+  }
+
+  @Test
   func genericStorageSupportsAliasesArbitraryKeysAndVMVisibility() async throws {
     let environment = InterpreterEnvironment()
     let result: BooleanValue = try await Interpreter.result(
@@ -400,6 +556,15 @@ private enum SyntheticProcSetResources: ResourceCategory {
 }
 
 private extension Context {
+  func executeResourceProgram(_ content: String) async throws {
+    let file = DataFile(data: try LanguageLimits.postScriptBytes(content), mode: .read)
+    try await pushAndRun(source: .file(file, access: .readOnly, vm: .local, kind: .executable))
+  }
+
+  func restoreResourceSnapshot(_ snapshot: Snapshot) throws {
+    try snapshot.restore(to: self)
+  }
+
   func peekOperandAfterExecuting(_ content: String) async throws -> StringValue {
     let file = DataFile(data: Data(content.utf8), mode: .read)
     try await pushAndRun(source: .file(file, access: .readOnly, vm: .local, kind: .executable))
