@@ -230,6 +230,19 @@ struct ErrorHandlingTests {
   }
 
   @Test
+  func `system handleerror dynamically invokes the current errordict handler`() async throws {
+    let result: IntegerValue = try await Interpreter.result(
+      content:
+        """
+        errordict /handleerror { 42 } put
+        handleerror
+        """
+    )
+
+    expectEqual(result.value, 42)
+  }
+
+  @Test
   func `initial error dictionaries are complete writable and local`() async throws {
     let errorDictionary: DictionaryValue = try await Interpreter.result(content: "errordict")
     let expectedNames = [

@@ -1125,7 +1125,6 @@ public actor Context {
     echoEnabled = true
     activeErrors.removeAll()
     resolvingErrorNames.removeAll()
-    localResources = ResourceStore()
     applyUserParameterLimits()
   }
 
@@ -1491,6 +1490,7 @@ public actor Context {
     }
     dict["="] = Operators.equalsProcedure
     dict["=="] = Operators.doubleEqualsProcedure
+    dict["handleerror"] = Operators.handleErrorProcedure
     dict["start"] = Operators.startProcedure
     if interactiveExecutiveEnabled {
       dict["prompt"] = Operators.promptProcedure

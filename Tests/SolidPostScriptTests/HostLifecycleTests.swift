@@ -53,6 +53,25 @@ struct HostLifecycleTests {
   }
 
   @Test
+  func startupLocalResourcesRemainPartOfInitialVM() async throws {
+    let startup = RecordingStartupProvider(
+      program: "/startupResource 19 /Generic defineresource pop"
+    )
+    let environment = InterpreterEnvironment(
+      hostConfiguration: InterpreterHostConfiguration(startupProgramProvider: startup)
+    )
+    _ = try await Interpreter.execute(
+      content: "<< /StartupMode 1 >> setsystemparams",
+      environment: environment
+    )
+
+    let session = InterpreterSession(environment: environment)
+    try await session.executeJob(
+      content: "/startupResource /Generic findresource 19 ne {undefined} if"
+    )
+  }
+
+  @Test
   func failedStartupIsNotRetried() async throws {
     let startup = FailingStartupProvider()
     let environment = InterpreterEnvironment(
@@ -90,6 +109,17 @@ struct HostLifecycleTests {
       content: "true setglobal /shared 2 /Generic defineresource pop false setglobal"
     )
     try await session.executeJob(content: "/shared /Generic findresource 1 ne {undefined} if")
+  }
+
+  @Test
+  func persistentLocalResourcesRemainAvailableToLaterJobs() async throws {
+    let session = InterpreterSession()
+    try await session.executeJob(
+      content: "true () startjob pop /persistentLocal 23 /Generic defineresource pop"
+    )
+    try await session.executeJob(
+      content: "/persistentLocal /Generic findresource 23 ne {undefined} if"
+    )
   }
 
   @Test
