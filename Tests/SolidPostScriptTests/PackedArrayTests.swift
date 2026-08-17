@@ -103,16 +103,19 @@ struct PackedArrayTests {
   @Test
   func testGetInterval() async throws {
     let results = try await Interpreter.results(
-      content: "true setglobal true setpacking {(a)(b)(c)(d)(e)} 1 3 getinterval"
+      content: "true setglobal (a) (b) (c) (d) (e) 5 packedarray cvx dup 1 3 getinterval"
     )
-    #expect(results.count == 1)
-    let arr2 = try #require(results.first?.value as? PackedArrayValue)
-    expectEqual(arr2.count, 3)
-    expectEqual(arr2.vm, .global)
+    #expect(results.count == 2)
+    let interval = try results[0].value(as: PackedArrayValue.self)
+    let source = try results[1].value(as: PackedArrayValue.self)
+    expectEqual(interval.count, 3)
+    expectEqual(interval.vm, .global)
+    expectEqual(interval.access, .readOnly)
     expectEqual(results.first?.kind, .executable)
-    expectEqual(try arr2.object(at: 0).value(as: StringValue.self).string, "b")
-    expectEqual(try arr2.object(at: 1).value(as: StringValue.self).string, "c")
-    expectEqual(try arr2.object(at: 2).value(as: StringValue.self).string, "d")
+    expectEqual(try interval.object(at: 0).value(as: StringValue.self).string, "b")
+    expectEqual(try interval.object(at: 1).value(as: StringValue.self).string, "c")
+    expectEqual(try interval.object(at: 2).value(as: StringValue.self).string, "d")
+    #expect(interval.allocation === source.allocation)
   }
 
   @Test

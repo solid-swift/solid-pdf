@@ -127,14 +127,15 @@ struct AccessRestrictionTests {
   @Test(
     arguments: [
       "[] noaccess length",
-      "true setpacking {} noaccess length",
+      "0 packedarray noaccess length",
       "() noaccess length",
       "0 dict noaccess maxlength",
       "[] noaccess 0 0 getinterval",
-      "true setpacking {} noaccess 0 0 getinterval",
+      "0 packedarray noaccess 0 0 getinterval",
+      "0 packedarray executeonly 0 0 getinterval",
       "() executeonly 0 0 getinterval",
       "[] noaccess {} forall",
-      "true setpacking {} noaccess {} forall",
+      "0 packedarray noaccess {} forall",
       "() noaccess {} forall",
     ]
   )
@@ -144,6 +145,27 @@ struct AccessRestrictionTests {
     )
 
     #expect(errorName.value == "invalidaccess")
+  }
+
+  @Test
+  func `packed getinterval access failure preserves operands and command`() async throws {
+    let results = try await Interpreter.results(
+      content:
+        """
+        42 { 1 2 2 packedarray noaccess 0 1 getinterval } stopped
+        $error /command get /getinterval load eq
+        $error /errorname get
+        """
+    )
+
+    #expect(try results[0].value(as: NameValue.self).value == "invalidaccess")
+    #expect(try results[1].value(as: BooleanValue.self).value)
+    #expect(try results[2].value(as: BooleanValue.self).value)
+    #expect(results[3].value is Operators.GetInterval)
+    #expect(try results[4].value(as: IntegerValue.self).value == 1)
+    #expect(try results[5].value(as: IntegerValue.self).value == 0)
+    #expect(try results[6].value(as: PackedArrayValue.self).access == .noAccess)
+    #expect(try results[7].value(as: IntegerValue.self).value == 42)
   }
 
   @Test

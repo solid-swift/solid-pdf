@@ -126,6 +126,7 @@ extension Operators {
         context.operands.push(try .array(sharing: array, subRange: startIndex..<endIndex, kind: source.kind))
 
       case (let array as PackedArrayValue, let index as IntegerValue, let count as IntegerValue):
+        try array.access.check(.read)
         let startIndex = try index.value.unsigned
         let endIndex = try startIndex + count.value.unsigned
         context.operands.push(
