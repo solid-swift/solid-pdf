@@ -136,6 +136,7 @@ public struct PackedArrayValue: CollectionValue, CompositeValue, VMStoredComposi
   func replaceElementsForBinding(_ elements: [Object]) throws {
     guard elements.count == refRange.count else { throw Error.rangeCheck }
     try elements.checkStorage(in: vm)
+    try ref.allocation.prepareSnapshotMutation()
     ref.uncheckedWrite { state in
       let stored = elements.map(VMStoredObject.init)
       stored.identifyVMEdgeSources(ref.allocation)

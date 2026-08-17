@@ -120,6 +120,10 @@ public actor Context {
     )))
     self.operands.setMaximumDepth(Int(userParameters.integer("MaxOpStack")))
     self.dictionaries.setMaximumDepth(Int(userParameters.integer("MaxDictStack")))
+    self.localVMAllocationSpace.configureSnapshotAccounting(
+      maximum: Int(userParameters.integer("MaxLocalVM")),
+      automaticCollection: userParameters.integer("VMReclaim") == 0
+    )
   }
 
   init(fileDevices: FileDevices) {
@@ -140,6 +144,10 @@ public actor Context {
     )))
     self.operands.setMaximumDepth(Int(userParameters.integer("MaxOpStack")))
     self.dictionaries.setMaximumDepth(Int(userParameters.integer("MaxDictStack")))
+    self.localVMAllocationSpace.configureSnapshotAccounting(
+      maximum: Int(userParameters.integer("MaxLocalVM")),
+      automaticCollection: userParameters.integer("VMReclaim") == 0
+    )
   }
 
   deinit {
@@ -290,6 +298,10 @@ public actor Context {
   func applyUserParameterLimits() {
     operands.setMaximumDepth(Int(userParameters.integer("MaxOpStack")))
     dictionaries.setMaximumDepth(Int(userParameters.integer("MaxDictStack")))
+    localVMAllocationSpace.configureSnapshotAccounting(
+      maximum: Int(userParameters.integer("MaxLocalVM")),
+      automaticCollection: userParameters.integer("VMReclaim") == 0
+    )
   }
 
   internal func pushAndRun(source: Object) async throws {

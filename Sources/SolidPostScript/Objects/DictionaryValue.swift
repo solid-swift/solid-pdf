@@ -121,11 +121,13 @@ public struct DictionaryValue: CompositeValue, VMStoredCompositeValue {
 
   /// Performs the ``setAccess`` operation.
   public func setAccess(to access: ObjectAccess) throws {
+    try ref.allocation.prepareSnapshotMutation()
     self.ref.uncheckedWrite { $0.access = access }
   }
 
   /// Reduces this dictionary's shared access while preserving the read-only dictionary restriction.
   public mutating func reduceAccess(to reducedAccess: ObjectAccess) throws {
+    try ref.allocation.prepareSnapshotMutation()
     try ref.uncheckedWrite { state in
       try state.access.canReduce(to: reducedAccess)
       guard state.access != .readOnly || reducedAccess != .noAccess else {

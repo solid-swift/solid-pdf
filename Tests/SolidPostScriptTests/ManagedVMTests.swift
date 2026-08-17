@@ -325,6 +325,58 @@ struct ManagedVMTests {
     let local = await context.localVMAllocationSpace
     #expect(allocation.membership(in: local) == nil)
   }
+
+  @Test
+  func snapshotUndoStorageIsChargedOnFirstMutationAndReleasedOnRestore() async throws {
+    let context = Context()
+    let accounting = try await context.exerciseSnapshotMutationAccounting()
+
+    #expect(accounting.firstMutation == accounting.backingFootprint)
+    #expect(accounting.secondMutation == 0)
+    #expect(accounting.afterRestore == accounting.beforeMutation)
+    #expect(accounting.restoredValue == .null)
+  }
+
+  @Test
+  func vmstatusReportsSaveObjectThenChangeProportionalUndoStorage() async throws {
+    let saveCharge: IntegerValue = try await Interpreter.result(
+      content:
+        """
+        true setglobal /measure 2 array def false setglobal
+        vmstatus pop exch pop measure exch 0 exch put
+        save
+        vmstatus pop exch pop measure exch 1 exch put
+        pop
+        measure aload pop exch sub
+        """
+    )
+    #expect(saveCharge.value == 32)
+
+    let mutationCharge: IntegerValue = try await Interpreter.result(
+      content:
+        """
+        true setglobal /measure 2 array def false setglobal
+        /tracked 100 array def
+        save
+        vmstatus pop exch pop measure exch 0 exch put
+        tracked 0 1 put
+        vmstatus pop exch pop measure exch 1 exch put
+        pop
+        measure aload pop exch sub
+        """
+    )
+    #expect(mutationCharge.value == 816)
+  }
+
+  @Test
+  func snapshotMutationVMErrorLeavesTheBackingUnchanged() async throws {
+    let context = Context()
+
+    await #expect(throws: Error.vmError) {
+      try await context.mutateSnapshotAtCurrentLocalVMLimit()
+    }
+    #expect(try await context.firstSnapshotArrayElement() == .null)
+  }
 }
 
 private extension Context {
@@ -364,6 +416,56 @@ private extension Context {
     operands.push(.string("%detached", access: .readOnly, vm: .local, kind: .literal))
 
     try await Operators.CurrentDevParams.instance.execute(context: self)
+  }
+
+  func exerciseSnapshotMutationAccounting() throws -> (
+    backingFootprint: Int,
+    beforeMutation: Int,
+    firstMutation: Int,
+    secondMutation: Int,
+    afterRestore: Int,
+    restoredValue: Object
+  ) {
+    let object = try Object.array([.null, .null], access: .unlimited, vm: .local, kind: .literal)
+    try adopt(object)
+    operands.push(object)
+    let array = try object.value(as: ArrayValue.self)
+    let snapshot = try snapshot()
+    registerLanguageSave(snapshot)
+    let beforeMutation = localVMAllocationSpace.chargedBytes
+
+    try array.updateObject(.integer(1), at: 0)
+    let afterFirstMutation = localVMAllocationSpace.chargedBytes
+    try array.updateObject(.integer(2), at: 0)
+    let afterSecondMutation = localVMAllocationSpace.chargedBytes
+    try snapshot.restore(to: self)
+
+    return (
+      array.allocationFootprint,
+      beforeMutation,
+      afterFirstMutation - beforeMutation,
+      afterSecondMutation - afterFirstMutation,
+      localVMAllocationSpace.chargedBytes,
+      try array.object(at: 0)
+    )
+  }
+
+  func mutateSnapshotAtCurrentLocalVMLimit() throws {
+    let object = try Object.array([.null], access: .unlimited, vm: .local, kind: .literal)
+    try adopt(object)
+    operands.push(object)
+    let snapshot = try snapshot()
+    registerLanguageSave(snapshot)
+    userParameters.setInteger(Int32(localVMAllocationSpace.chargedBytes), for: "MaxLocalVM")
+    userParameters.setInteger(-1, for: "VMReclaim")
+    applyUserParameterLimits()
+
+    try object.value(as: ArrayValue.self).updateObject(.integer(1), at: 0)
+  }
+
+  func firstSnapshotArrayElement() throws -> Object {
+    let object = try operands.peek()
+    return try object.value(as: ArrayValue.self).object(at: 0)
   }
 }
 

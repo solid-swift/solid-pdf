@@ -259,6 +259,13 @@ final class VMAllocation: Sendable {
       space.adjustCharge(for: self, to: bytes, restoring: restoring)
     }
   }
+
+  func prepareSnapshotMutation() throws {
+    let spaces = state.withLock { $0.memberships.values.map(\.space) }
+    for space in spaces {
+      try space.prepareSnapshotMutation(of: self)
+    }
+  }
 }
 
 /// A shared root lease retained by a language-visible composite handle.
@@ -317,6 +324,16 @@ final class VMEdgeLease: @unchecked Sendable {
 
 final class VMAllocationSpace: Sendable {
 
+  private struct SnapshotMutationKey: Hashable, Sendable {
+    let snapshot: ObjectIdentifier
+    let allocation: ObjectIdentifier
+  }
+
+  private struct SnapshotRegistration: @unchecked Sendable {
+    let snapshot: WeakSnapshot
+    let bytes: Int
+  }
+
   private struct LedgerRecord: @unchecked Sendable {
     let allocation: WeakVMAllocation
     let generation: UInt64
@@ -328,6 +345,11 @@ final class VMAllocationSpace: Sendable {
     var ledger: [ObjectIdentifier: LedgerRecord] = [:]
     var retainedOwners: [ObjectIdentifier: AnyObject] = [:]
     var committedSinceCollection = 0
+    var snapshotRegistrations: [ObjectIdentifier: [ObjectIdentifier: SnapshotRegistration]] = [:]
+    var snapshotMutations: Set<SnapshotMutationKey> = []
+    var snapshotCharges: [ObjectIdentifier: Int] = [:]
+    var snapshotMaximum: Int?
+    var snapshotAutomaticCollection = true
   }
 
   let id = UUID()
@@ -383,7 +405,8 @@ final class VMAllocationSpace: Sendable {
 
   var chargedBytes: Int {
     state.withLock { state in
-      state.ledger.values.reduce(0) { $0.saturatingAdd($1.chargedBytes) }
+      let allocations = state.ledger.values.reduce(0) { $0.saturatingAdd($1.chargedBytes) }
+      return state.snapshotCharges.values.reduce(allocations) { $0.saturatingAdd($1) }
     }
   }
 
@@ -428,11 +451,89 @@ final class VMAllocationSpace: Sendable {
     }
   }
 
+  func configureSnapshotAccounting(maximum: Int?, automaticCollection: Bool) {
+    state.withLock { state in
+      state.snapshotMaximum = maximum
+      state.snapshotAutomaticCollection = automaticCollection
+    }
+  }
+
+  func registerSnapshot(_ snapshot: Snapshot, allocation: VMAllocation, bytes: Int) {
+    precondition(bytes >= 0)
+    let snapshotIdentity = ObjectIdentifier(snapshot)
+    state.withLock { state in
+      guard state.ledger[allocation.identity] != nil else { return }
+      state.snapshotRegistrations[allocation.identity, default: [:]][snapshotIdentity] =
+        SnapshotRegistration(snapshot: WeakSnapshot(snapshot), bytes: bytes)
+    }
+  }
+
+  func releaseSnapshot(_ snapshot: Snapshot) {
+    let snapshotIdentity = ObjectIdentifier(snapshot)
+    state.withLock { state in
+      state.snapshotCharges.removeValue(forKey: snapshotIdentity)
+      state.snapshotMutations = state.snapshotMutations.filter { $0.snapshot != snapshotIdentity }
+      for allocationIdentity in Array(state.snapshotRegistrations.keys) {
+        state.snapshotRegistrations[allocationIdentity]?.removeValue(forKey: snapshotIdentity)
+        if state.snapshotRegistrations[allocationIdentity]?.isEmpty == true {
+          state.snapshotRegistrations.removeValue(forKey: allocationIdentity)
+        }
+      }
+    }
+  }
+
+  fileprivate func prepareSnapshotMutation(of allocation: VMAllocation) throws {
+    func commitIfPossible() -> Bool {
+      state.withLock { state in
+        guard let registrations = state.snapshotRegistrations[allocation.identity] else { return true }
+        let pending = registrations.compactMap { snapshotIdentity, registration -> (SnapshotMutationKey, Int)? in
+          guard registration.snapshot.value?.isReady == true else { return nil }
+          let key = SnapshotMutationKey(snapshot: snapshotIdentity, allocation: allocation.identity)
+          return state.snapshotMutations.contains(key) ? nil : (key, registration.bytes)
+        }
+        let additional = pending.reduce(0) { $0.saturatingAdd($1.1) }
+        if let maximum = state.snapshotMaximum {
+          let allocated = state.ledger.values.reduce(0) { $0.saturatingAdd($1.chargedBytes) }
+          let used = state.snapshotCharges.values.reduce(allocated) { $0.saturatingAdd($1) }
+          guard additional <= maximum - min(used, maximum) else { return false }
+        }
+        for (key, bytes) in pending {
+          state.snapshotMutations.insert(key)
+          state.snapshotCharges[key.snapshot, default: 0] =
+            state.snapshotCharges[key.snapshot, default: 0].saturatingAdd(bytes)
+          state.committedSinceCollection = state.committedSinceCollection.saturatingAdd(bytes)
+        }
+        return true
+      }
+    }
+
+    guard !commitIfPossible() else { return }
+    let automaticCollection = state.withLock { $0.snapshotAutomaticCollection }
+    guard automaticCollection else { throw Error.vmError }
+    pruneWeakGarbage()
+    guard !commitIfPossible() else { return }
+    collectCycles()
+    guard commitIfPossible() else { throw Error.vmError }
+  }
+
   func pruneWeakGarbage() {
     VMGraph.withLock {
       state.withLock { state in
         state.ledger = state.ledger.filter { $0.value.allocation.value != nil }
         state.retainedOwners = state.retainedOwners.filter { state.ledger[$0.key] != nil }
+        let liveSnapshots = Set(state.snapshotRegistrations.values.flatMap { registrations in
+          registrations.compactMap { identity, registration in
+            registration.snapshot.value == nil ? nil : identity
+          }
+        })
+        state.snapshotCharges = state.snapshotCharges.filter { liveSnapshots.contains($0.key) }
+        state.snapshotMutations = state.snapshotMutations.filter {
+          liveSnapshots.contains($0.snapshot) && state.ledger[$0.allocation] != nil
+        }
+        state.snapshotRegistrations = state.snapshotRegistrations.compactMapValues { registrations in
+          let live = registrations.filter { $0.value.snapshot.value != nil }
+          return live.isEmpty ? nil : live
+        }
         state.committedSinceCollection = 0
       }
     }
@@ -525,6 +626,14 @@ private final class WeakVMAllocation: @unchecked Sendable {
   weak var value: VMAllocation?
 
   init(_ value: VMAllocation) {
+    self.value = value
+  }
+}
+
+private final class WeakSnapshot: @unchecked Sendable {
+  weak var value: Snapshot?
+
+  init(_ value: Snapshot) {
     self.value = value
   }
 }

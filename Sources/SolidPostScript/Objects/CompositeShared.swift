@@ -83,6 +83,8 @@ public final class CompositeShared<T: Sendable>: Sendable {
 
   /// Performs the ``write`` operation.
   public func write<U: Sendable>(_ block: (inout State) throws -> U) throws -> U {
+    try state.withLock { try $0.access.check(.write) }
+    try allocation.prepareSnapshotMutation()
     return try VMGraph.withLock {
       try state.withLock {
         try $0.access.check(.write)
@@ -102,7 +104,9 @@ public final class CompositeShared<T: Sendable>: Sendable {
 
   // Commits only when no writer has changed the state since a versioned read.
   func write(ifRevision expectedRevision: UInt64, _ block: (inout State) throws -> Void) throws -> Bool {
-    try VMGraph.withLock {
+    try state.withLock { try $0.access.check(.write) }
+    try allocation.prepareSnapshotMutation()
+    return try VMGraph.withLock {
       try state.withLock {
         guard revision.withLock({ $0 }) == expectedRevision else { return false }
         try $0.access.check(.write)

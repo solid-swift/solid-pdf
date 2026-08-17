@@ -11,6 +11,12 @@ import Synchronization
 /// A restorable snapshot of local PostScript virtual memory.
 public final class Snapshot: Sendable {
 
+  private struct Backing: Sendable {
+    let allocation: VMAllocation
+    let vm: VM
+    let bytes: Int
+  }
+
   enum Scope: Sendable {
     case local
     case job
@@ -53,6 +59,7 @@ public final class Snapshot: Sendable {
     private var savedCompositeIdentities: Set<ObjectIdentifier> = []
     private var retainedObjects: [Object] = []
     private var retainedStoredObjects: [VMStoredObject] = []
+    private var backings: [Backing] = []
 
     fileprivate init(
       packingMode: Context.PackingMode,
@@ -90,6 +97,13 @@ public final class Snapshot: Sendable {
         guard savedCompositeIdentities.insert(allocated.allocation.identity).inserted else {
           return
         }
+        if !(composite is StringValue) && !(composite is FileValue) && !(composite is SaveValue) {
+          backings.append(Backing(
+            allocation: allocated.allocation,
+            vm: allocated.vm,
+            bytes: allocated.allocationFootprint
+          ))
+        }
       } else if let identifiable = composite as? SnapshotIdentifiableValue {
         guard savedCompositeIdentities.insert(identifiable.snapshotIdentity).inserted else { return }
       }
@@ -115,6 +129,7 @@ public final class Snapshot: Sendable {
         retainedObjects: retainedObjects,
         retainedStoredObjects: retainedStoredObjects,
         operations: operations,
+        backings: backings,
         packingMode: packingMode,
         allocationMode: allocationMode,
         objectFormat: objectFormat,
@@ -161,11 +176,13 @@ public final class Snapshot: Sendable {
   private let saveDepth: Int
   private let localBoundary: VMGenerationBoundary
   private let globalBoundary: VMGenerationBoundary?
+  private let accountingSpaces: [VMAllocationSpace]
 
   private init(
     retainedObjects: [Object],
     retainedStoredObjects: [VMStoredObject],
     operations: [RestoreOperation],
+    backings: [Backing],
     packingMode: Context.PackingMode,
     allocationMode: VM,
     objectFormat: ObjectFormat,
@@ -190,6 +207,25 @@ public final class Snapshot: Sendable {
     self.saveDepth = saveDepth
     self.localBoundary = localBoundary
     self.globalBoundary = globalBoundary
+    self.accountingSpaces = if let globalBoundary {
+      [localBoundary.space, globalBoundary.space]
+    } else {
+      [localBoundary.space]
+    }
+
+    for backing in backings {
+      let space = switch backing.vm {
+      case .local:
+        localBoundary.space
+      case .global:
+        globalBoundary?.space
+      }
+      space?.registerSnapshot(self, allocation: backing.allocation, bytes: backing.bytes)
+    }
+  }
+
+  deinit {
+    releaseAccounting()
   }
 
   internal func restore(to context: isolated Context) throws {
@@ -232,8 +268,10 @@ public final class Snapshot: Sendable {
       }
       context.didRestore(self)
       state.withLock { $0 = .consumed }
+      releaseAccounting()
     } catch {
       state.withLock { $0 = .invalidated }
+      releaseAccounting()
       throw error
     }
   }
@@ -272,6 +310,20 @@ public final class Snapshot: Sendable {
       }
     }
     globalResourceMutations.withLock { $0.removeAll() }
+    releaseAccounting()
+  }
+
+  var isReady: Bool {
+    state.withLock { state in
+      if case .ready = state { return true }
+      return false
+    }
+  }
+
+  private func releaseAccounting() {
+    for space in accountingSpaces {
+      space.releaseSnapshot(self)
+    }
   }
 
   func recordGlobalResourceMutation(_ mutation: GlobalResourceMutation) {

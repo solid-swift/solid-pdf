@@ -123,6 +123,7 @@ public struct ArrayValue: CollectionValue, VMStoredCompositeValue {
   public func updateObject(_ object: Object, at position: UInt) throws {
     try access.check(.write)
     try object.checkStorage(in: ref.vm)
+    try ref.allocation.prepareSnapshotMutation()
     return try ref.uncheckedWrite { ref in
       let index = try refRange.select(subRange: position..<position + 1, in: ref.value).lowerBound
       let stored = VMStoredObject(object)
@@ -135,6 +136,7 @@ public struct ArrayValue: CollectionValue, VMStoredCompositeValue {
   public func updateObjects(_ objects: some Collection<Object>, startingAt position: UInt) throws {
     try access.check(.write)
     try objects.checkStorage(in: ref.vm)
+    try ref.allocation.prepareSnapshotMutation()
     return try ref.uncheckedWrite { ref in
       let range = try refRange.select(subRange: position..<position + UInt(objects.count), in: ref.value)
       let stored = objects.map(VMStoredObject.init)
