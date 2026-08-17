@@ -12,7 +12,8 @@ let package = Package(
     .watchOS("26"),
   ],
   products: [
-    .library(name: "SolidPostScript", targets: ["SolidPostScript"])
+    .library(name: "SolidPostScript", targets: ["SolidPostScript"]),
+    .library(name: "SolidPostScriptCoreGraphics", targets: ["SolidPostScriptCoreGraphics"]),
   ],
   dependencies: [
     .package(
@@ -39,6 +40,16 @@ let package = Package(
         .product(name: "SolidIO", package: "solid-foundation"),
         .product(name: "SolidTempo", package: "solid-foundation"),
       ],
+      plugins: lintPlugins
+    ),
+    .target(
+      name: "SolidPostScriptCoreGraphics",
+      dependencies: ["SolidPostScript"],
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidPostScriptCoreGraphicsTests",
+      dependencies: ["SolidPostScript", "SolidPostScriptCoreGraphics"],
       plugins: lintPlugins
     ),
   ],
