@@ -33,8 +33,8 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["exec"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
-      try context.operands.pop().execute(context: context, method: .indirect)
+    public func execute(context: isolated Context) async throws {
+      try await context.operands.pop().execute(context: context, method: .indirect)
     }
   }
 
@@ -46,10 +46,11 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["if"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (proc, boolObj) = try context.operands.pop2()
       let bool = try boolObj.value(as: BooleanValue.self)
+      try proc.checkProcedure()
 
       if bool.value {
         try context.execution.push(source: proc, in: context)
@@ -65,10 +66,12 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["ifelse"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (elseproc, ifproc, boolObj) = try context.operands.pop3()
       let bool = try boolObj.value(as: BooleanValue.self)
+      try ifproc.checkProcedure()
+      try elseproc.checkProcedure()
 
       try context.execution.push(source: bool.value ? ifproc : elseproc, in: context)
     }
@@ -82,32 +85,52 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["for"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (proc, limit, increment, initial) = try context.operands.pop4()
+      try proc.checkProcedure()
 
-      switch (initial.value, increment.value, limit.value) {
-      case (let initial as IntegerValue, let increment as IntegerValue, let limit as IntegerValue):
-        try Self.execute(context: context, proc: proc, ops: (initial.value, increment.value, limit.value))
+      try await context.executeLoop(named: "for") {
+        switch (initial.value, increment.value, limit.value) {
+        case (let initial as IntegerValue, let increment as IntegerValue, let limit as IntegerValue):
+          try await Self.executeIntegers(
+            context: context,
+            proc: proc,
+            ops: (initial.value, increment.value, limit.value)
+          )
 
-      case (let initial as NumericConvertible, let increment as NumericConvertible, let limit as NumericConvertible):
-        try Self.execute(context: context, proc: proc, ops: (initial.real, increment.real, limit.real))
+        case (let initial as NumericConvertible, let increment as NumericConvertible, let limit as NumericConvertible):
+          try await Self.execute(context: context, proc: proc, ops: (initial.real, increment.real, limit.real))
 
-      default:
-        throw Error.typeCheck
+        default:
+          throw Error.typeCheck
+        }
       }
     }
 
     typealias ExecArgs<T> = (initial: T, increment: T, limit: T)
 
-    static func execute<T>(context: isolated Context, proc: Object, ops: ExecArgs<T>) throws
+    static func executeIntegers(
+      context: isolated Context,
+      proc: Object,
+      ops: ExecArgs<Int32>
+    ) async throws {
+      var control = Int64(ops.initial)
+      let increment = Int64(ops.increment)
+      let limit = Int64(ops.limit)
+      while increment >= 0 ? control <= limit : control >= limit {
+        let controlObject = try NumericSemantics.integer(validating: control)
+        try await context.execute(proc: proc, ops: [controlObject])
+        control += increment
+      }
+    }
+
+    static func execute<T>(context: isolated Context, proc: Object, ops: ExecArgs<T>) async throws
     where T: AdditiveArithmetic, T: Comparable, T: NumericObjectConvertible {
 
       var control = ops.initial
       while ops.increment >= .zero ? control <= ops.limit : control >= ops.limit {
-        if try !context.execute(proc: proc, ops: [control.numericObject]) {
-          break
-        }
+        try await context.execute(proc: proc, ops: [try control.numericObject])
         control += ops.increment
       }
     }
@@ -121,13 +144,19 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["repeat"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (proc, countObj) = try context.operands.pop2()
       let count = try countObj.value(as: IntegerValue.self)
+      guard count.value >= 0 else {
+        throw Error.rangeCheck
+      }
+      try proc.checkProcedure()
 
-      for _ in 0..<count.value where try !context.execute(proc: proc) {
-        break
+      try await context.executeLoop(named: "repeat") {
+        for _ in 0..<count.value {
+          try await context.execute(proc: proc)
+        }
       }
     }
   }
@@ -140,13 +169,14 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["loop"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let proc = try context.operands.pop()
+      try proc.checkProcedure()
 
-      while true {
-        if try !context.execute(proc: proc) {
-          break
+      try await context.executeLoop(named: "loop") {
+        while true {
+          try await context.execute(proc: proc)
         }
       }
     }
@@ -160,8 +190,8 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["exit"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
-      throw Error.control(.exit)
+    public func execute(context: isolated Context) async throws {
+      try await context.exitDynamicallyEnclosingLoop()
     }
   }
 
@@ -173,7 +203,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["stop"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       throw Error.control(.stop)
     }
   }
@@ -186,21 +216,12 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["stopped"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let proc = try context.operands.pop()
 
-      do {
-
-        if try !context.execute(proc: proc) {
-          throw Error.invalidExit
-        }
-
-        context.operands.push(.boolean(false))
-      } catch Error.control(.stop) {
-
-        context.operands.push(.boolean(true))
-      }
+      let stopped = try await context.executeStopped(proc)
+      context.operands.pushUnchecked(.boolean(stopped))
     }
   }
 
@@ -212,8 +233,8 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["countexecstack"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
-      context.operands.push(.integer(context.execution.depth))
+    public func execute(context: isolated Context) async throws {
+      context.operands.push(try NumericSemantics.integer(validating: context.execution.depth))
     }
   }
 
@@ -225,7 +246,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["execstack"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arrayObj = try context.operands.pop()
       let array = try arrayObj.value(as: ArrayValue.self)
       guard array.count >= context.execution.depth else {
@@ -245,7 +266,10 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["quit"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
+      if context.jobServerEnabled, context.jobLifecycle?.persistent != true {
+        throw Error.invalidAccess
+      }
       throw Error.control(.quit)
     }
   }

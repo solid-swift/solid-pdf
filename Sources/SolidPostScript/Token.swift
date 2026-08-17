@@ -9,7 +9,7 @@ import Foundation
 
 /// A lexical token recognized in PostScript source.
 public enum Token: Equatable, Hashable {
-  case integer(Int)
+  case integer(Int32)
   case real(Double)
   case string(Data)
   case name(String, kind: ObjectKind)

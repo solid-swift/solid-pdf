@@ -6,29 +6,30 @@
 //
 
 import Foundation
-import SolidCore
-
 internal protocol NumericConvertible: ObjectValue {
 
-  var real: Double { get throws }
-  var integer: Int { get throws }
+  var real: Double { get }
+  var integer: Int32 { get throws }
 
 }
 
 extension RealValue: NumericConvertible {
 
   var real: Double { value }
-  var integer: Int {
-    get throws { try Int(exactly: value.rounded()).unwrap(or: Error.rangeCheck) }
+  var integer: Int32 {
+    get throws {
+      guard let integer = Int32(exactly: value.rounded(.towardZero)) else {
+        throw Error.rangeCheck
+      }
+      return integer
+    }
   }
 
 }
 
 extension IntegerValue: NumericConvertible {
 
-  var real: Double {
-    get throws { try Double(exactly: value).unwrap(or: Error.rangeCheck) }
-  }
-  var integer: Int { value }
+  var real: Double { Double(value) }
+  var integer: Int32 { value }
 
 }

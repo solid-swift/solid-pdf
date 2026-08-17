@@ -46,12 +46,18 @@ struct DictionaryTests {
 
   @Test
   func testMaxLength() async throws {
-    let (len1, dict1) = try await Interpreter.result(
-      content: "10 dict maxlength",
-      as: (IntegerValue, DictionaryValue).self
-    )
+    let len1: IntegerValue = try await Interpreter.result(content: "10 dict maxlength")
     expectGreaterThanOrEqual(len1.value, 10)
-    expectEqual(dict1.count, 0)
+  }
+
+  @Test
+  func maxlengthRestoresItsOperandWhenErrorHandlingStops() async throws {
+    let results = try await Interpreter.results(content: "{10 dict noaccess maxlength} stopped")
+
+    #expect(results.count == 3)
+    #expect(try results[0].value(as: BooleanValue.self).value)
+    #expect(results[1].value is Operators.MaxLength)
+    #expect(results[2].value is DictionaryValue)
   }
 
   @Test
@@ -59,6 +65,16 @@ struct DictionaryTests {
     let ctx = try await Interpreter.execute(content: "10 dict begin")
     let dict1 = try await ctx.currentDictionary()
     expectGreaterThanOrEqual(dict1.capacity, 10)
+  }
+
+  @Test
+  func beginRequiresReadAccessAndRestoresItsOperandOnError() async throws {
+    let results = try await Interpreter.results(content: "{10 dict noaccess begin} stopped")
+
+    #expect(results.count == 3)
+    #expect(try results[0].value(as: BooleanValue.self).value)
+    #expect(results[1].value is Operators.Begin)
+    #expect(try results[2].value(as: DictionaryValue.self).access == .noAccess)
   }
 
   @Test
@@ -105,24 +121,30 @@ struct DictionaryTests {
   func testGet() async throws {
     let int1: IntegerValue = try await Interpreter.result(content: "/a 123 def currentdict /a get")
     expectEqual(int1.value, 123)
+
+    let int2: IntegerValue = try await Interpreter.result(content: "<< /a 456 >> (a) get")
+    expectEqual(int2.value, 456)
   }
 
   @Test
   func testPut() async throws {
     let dict1: DictionaryValue = try await Interpreter.result(content: "10 dict dup /a 123 put")
     expectEqual(try dict1.objectValue(forKeyIfExists: "a", as: IntegerValue.self)?.value, 123)
+
+    let dict2: DictionaryValue = try await Interpreter.result(content: "10 dict dup (a) 456 put")
+    expectEqual(try dict2.objectValue(forKeyIfExists: "a", as: IntegerValue.self)?.value, 456)
   }
 
   @Test
   func testUndefine() async throws {
-    let dict1: DictionaryValue = try await Interpreter.result(content: "<< /a 123 /b 456 >> dup /a undef")
+    let dict1: DictionaryValue = try await Interpreter.result(content: "<< /a 123 /b 456 >> dup (a) undef")
     expectNil(try dict1.objectValue(forKeyIfExists: "a"))
     expectEqual(try dict1.objectValue(forKeyIfExists: "b", as: IntegerValue.self)?.value, 456)
   }
 
   @Test
   func testKnown() async throws {
-    let bool1: BooleanValue = try await Interpreter.result(content: "<< /a 123 /b 456 >> /a known")
+    let bool1: BooleanValue = try await Interpreter.result(content: "<< /a 123 /b 456 >> (a) known")
     expectEqual(bool1.value, true)
 
     let bool2: BooleanValue = try await Interpreter.result(content: "<< /a 123 /b 456 >> /d known")
@@ -131,7 +153,7 @@ struct DictionaryTests {
 
   @Test
   func testWhere() async throws {
-    let ops1 = try await Interpreter.results(content: "<< /a 123 /b 456 >> begin /a where")
+    let ops1 = try await Interpreter.results(content: "<< /a 123 /b 456 >> begin (a) where")
     expectEqual(ops1.count, 2)
     let bool1 = try requireValue(ops1[0].value as? BooleanValue, "Expected BooleanValue")
     expectEqual(bool1.value, true)
@@ -155,6 +177,60 @@ struct DictionaryTests {
   }
 
   @Test
+  func stringKeysWorkWithDefinitionOperators() async throws {
+    let loaded: IntegerValue = try await Interpreter.result(content: "(a) 123 def (a) load")
+    expectEqual(loaded.value, 123)
+
+    let stored: IntegerValue = try await Interpreter.result(content: "(a) 123 store (a) load")
+    expectEqual(stored.value, 123)
+  }
+
+  @Test
+  func stringAndNameKeysCollapseToOneEntry() async throws {
+    let (value, length) = try await Interpreter.result(
+      content: "<< /a 1 (a) 2 >> dup length exch /a get",
+      as: (IntegerValue, IntegerValue).self
+    )
+    expectEqual(value.value, 2)
+    expectEqual(length.value, 1)
+  }
+
+  @Test
+  func globalDictionaryAcceptsLocalStringKeyAfterNormalization() async throws {
+    let value: IntegerValue = try await Interpreter.result(
+      content: "true setglobal 1 dict /d exch def false setglobal d (a) 123 put d /a get"
+    )
+    expectEqual(value.value, 123)
+  }
+
+  @Test
+  func invalidDictionaryKeysUseLanguageErrors() async throws {
+    await #expect(throws: Error.typeCheck) {
+      try await Interpreter.execute(content: "1 dict null 1 put")
+    }
+    await #expect(throws: Error.invalidAccess) {
+      try await Interpreter.execute(content: "1 dict (a) noaccess 1 put")
+    }
+  }
+
+  @Test
+  func publicDictionaryAPIsNormalizeKeys() throws {
+    let dictionary = try DictionaryValue(value: [:], access: .unlimited, vm: .global)
+    let localString = Object.string("a", access: .unlimited, vm: .local, kind: .literal)
+
+    try dictionary.setObject(123, forKey: localString)
+    #expect(try dictionary.objectValue(forKey: "a", as: IntegerValue.self).value == 123)
+    #expect(try dictionary.removeObject(forKey: localString) != nil)
+    #expect(dictionary.count == 0)
+
+    #expect(Object.literalName("same") == Object.string("same", access: .unlimited, vm: .local, kind: .literal))
+    #expect(
+      Object.literalName("same").hashValue
+        == Object.string("same", access: .unlimited, vm: .local, kind: .literal).hashValue
+    )
+  }
+
+  @Test
   func testCopy() async throws {
     let dict: DictionaryValue = try await Interpreter.result(content: "<< /a 123 /b 456 >> 10 dict copy")
     expectEqual(try dict.objectValue(forKeyIfExists: "a", as: IntegerValue.self)?.value, 123)
@@ -174,6 +250,24 @@ struct DictionaryTests {
       .associated()
     expectEqual((dict["abc"]??.value as? IntegerValue)?.value, 123)
     expectEqual((dict["xyz"]??.value as? StringValue)?.string, "test")
+  }
+
+  @Test
+  func dictionaryForAllSkipsEntriesRemovedAfterIterationBegins() async throws {
+    let count: IntegerValue = try await Interpreter.result(
+      content: """
+        /d << /a 1 /b 2 /c 3 >> def
+        0 d {
+          exch pop exch 1 add exch
+          dup /a ne { d /a undef } if
+          dup /b ne { d /b undef } if
+          dup /c ne { d /c undef } if
+          pop
+        } forall
+        """
+    )
+
+    #expect(count.value == 1)
   }
 
   @Test
@@ -244,6 +338,17 @@ struct DictionaryTests {
     expectEqual((operand.value as? IntegerValue)?.value, 5)
     let depth2 = await ctx2.dictionaryStackDepth
     expectEqual(depth2, 3)
+  }
+
+  @Test
+  func stringDictionaryKeysEnforceTheNameLimit() async throws {
+    let overlong = String(repeating: "k", count: 128)
+    let errorName: NameValue = try await Interpreter.result(
+      content:
+        "{1 dict (\(overlong)) 1 put} stopped clear $error /errorname get"
+    )
+
+    #expect(errorName.value == "limitcheck")
   }
 
 }

@@ -11,40 +11,93 @@ extension Object {
 
   /// Performs the ``file`` operation.
   public static func file(_ file: File, access: ObjectAccess, vm: VM, kind: ObjectKind) -> Object {
-    Self(value: FileValue(file: file, vm: vm), kind: kind)
+    Self(value: FileValue(file: file, access: access, vm: vm), kind: kind)
+  }
+
+  static func file(
+    _ file: File,
+    access: ObjectAccess,
+    vm: VM,
+    allocation: VMAllocation,
+    kind: ObjectKind
+  ) -> Object {
+    Self(value: FileValue(file: file, access: access, vm: vm, allocation: allocation), kind: kind)
   }
 
   /// Performs the ``dataFile`` operation.
   public static func dataFile(content: Data, access: ObjectAccess, vm: VM, kind: ObjectKind) -> Object {
     let mode: File.Mode = access == .unlimited ? .readWrite : .read
-    return Self(value: FileValue(file: DataFile(data: content, mode: mode), vm: vm), kind: kind)
+    return Self(value: FileValue(file: DataFile(data: content, mode: mode), access: access, vm: vm), kind: kind)
   }
 
 }
 
+extension FileValue: SnapshotIdentifiableValue {
+
+  var snapshotIdentity: ObjectIdentifier { ObjectIdentifier(file) }
+
+}
+
 /// A PostScript file value.
-public struct FileValue: CompositeValue, ObjectSource {
+public struct FileValue: CompositeValue, ObjectSource, VMStoredCompositeValue {
 
   /// The PostScript object type represented by this value.
   public static let objectType: ObjectType = .file
   /// The default execution kind for this value.
   public static let defaultKind: ObjectKind = .literal
 
+  private final class Shared: Sendable {
+    let file: File
+    let allocation: VMAllocation
+
+    init(file: File, vm: VM, allocation: VMAllocation? = nil) {
+      self.file = file
+      self.allocation = allocation ?? VMAllocationContext.allocation(in: vm, bytes: 32)
+      self.allocation.attach(
+        owner: self,
+        children: { [weak file] in
+          (file as? VMManagedFileGraph)?.retainedVMAllocations ?? []
+        }
+      )
+      (file as? VMManagedFileGraph)?.identifyRetainedEdges(source: self.allocation)
+    }
+  }
+
+  private let ref: Shared
+  private let rootLease: VMRootLease
+
   /// The ``file`` value.
-  public let file: File
+  public var file: File { ref.file }
   /// The ``access`` value.
   public private(set) var access: ObjectAccess
   /// The ``vm`` value.
   public let vm: VM
+  var allocation: VMAllocation { ref.allocation }
 
   init(file: File, vm: VM) {
-    self.file = file
+    self.ref = Shared(file: file, vm: vm)
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
     self.access = file.mode.access
     self.vm = vm
   }
 
+  init(file: File, access: ObjectAccess, vm: VM) {
+    self.ref = Shared(file: file, vm: vm)
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
+    self.access = access
+    self.vm = vm
+  }
+
+  init(file: File, access: ObjectAccess, vm: VM, allocation: VMAllocation) {
+    self.ref = Shared(file: file, vm: vm, allocation: allocation)
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
+    self.access = access
+    self.vm = vm
+  }
+
   init(sharing: FileValue, access: ObjectAccess) {
-    self.file = sharing.file
+    self.ref = sharing.ref
+    self.rootLease = sharing.rootLease
     self.access = access
     self.vm = sharing.vm
   }
@@ -54,13 +107,37 @@ public struct FileValue: CompositeValue, ObjectSource {
   /// The ``mode`` value.
   public var mode: File.Mode { file.mode }
 
+  var isReadable: Bool {
+    access.isReadAllowed && mode != .write
+  }
+
+  var isWritable: Bool {
+    access.isWriteAllowed && mode != .read
+  }
+
+  func checkReadable() throws {
+    guard isReadable else { throw Error.invalidAccess }
+  }
+
+  func checkWritable() throws {
+    guard isWritable else { throw Error.invalidAccess }
+  }
+
   /// Performs the ``setAccess`` operation.
   public mutating func setAccess(to access: ObjectAccess) throws {
     self.access = access
   }
 
+  /// Reduces this file object's access without changing aliases of the same file.
+  public mutating func reduceAccess(to reducedAccess: ObjectAccess) throws {
+    try access.canReduce(to: reducedAccess)
+    try setAccess(to: reducedAccess)
+  }
+
   /// Executes this value in the supplied interpreter context.
-  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
+  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
+    try access.check(.execute)
+    guard mode != .write else { throw Error.invalidAccess }
     try context.execution.push(source: Object(value: self, kind: kind), in: context)
   }
 
@@ -90,5 +167,22 @@ public struct FileValue: CompositeValue, ObjectSource {
   /// A debug representation of this value.
   public var debugString: String {
     "name: \(file.name), mode: \(file.mode)"
+  }
+
+  func storedObject(kind: ObjectKind) -> VMStoredObject {
+    let object = Object(value: self, kind: kind)
+    let access = access
+    let vm = vm
+    return .reference(allocation: allocation, owner: ref, object: object) { [weak ref] in
+      guard let ref else { return nil }
+      return Object(value: Self(ref: ref, access: access, vm: vm), kind: kind)
+    }
+  }
+
+  private init(ref: Shared, access: ObjectAccess, vm: VM) {
+    self.ref = ref
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
+    self.access = access
+    self.vm = vm
   }
 }

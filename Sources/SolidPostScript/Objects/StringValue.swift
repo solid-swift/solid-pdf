@@ -35,7 +35,7 @@ extension Object {
 }
 
 /// A PostScript string value.
-public struct StringValue: CompositeValue, ObjectSource {
+public struct StringValue: CompositeValue, ObjectSource, VMStoredCompositeValue {
 
   /// The type used to represent ``Storage``.
   public typealias Storage = Data
@@ -57,14 +57,21 @@ public struct StringValue: CompositeValue, ObjectSource {
   private final class Shared: Sendable {
     let value: Mutex<Storage>
     let vm: VM
+    let allocation: VMAllocation
 
     init(value: Storage, vm: VM) {
       self.value = Mutex(value)
       self.vm = vm
+      self.allocation = VMAllocationContext.allocation(in: vm, bytes: value.count + 16)
+      self.allocation.attach(
+        owner: self,
+        clear: { [weak self] in self?.value.withLock { $0.removeAll(keepingCapacity: false) } }
+      )
     }
   }
 
   private let ref: Shared
+  private let rootLease: VMRootLease
   /// The ``refRange`` value.
   public let refRange: StorageRange
 
@@ -77,6 +84,7 @@ public struct StringValue: CompositeValue, ObjectSource {
   /// Creates an instance.
   public init(data: Storage, access: ObjectAccess, vm: VM) {
     self.ref = Shared(value: data, vm: vm)
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
     self.refRange = data.indices
     self.access = access
   }
@@ -84,6 +92,7 @@ public struct StringValue: CompositeValue, ObjectSource {
   /// Creates an instance.
   public init(sharing: Self, subRange: SubRange) throws {
     self.ref = sharing.ref
+    self.rootLease = sharing.rootLease
     self.refRange = try sharing.ref.value.withLock {
       try sharing.refRange.select(subRange: subRange, in: $0)
     }
@@ -97,6 +106,8 @@ public struct StringValue: CompositeValue, ObjectSource {
 
   /// The ``vm`` value.
   public var vm: VM { ref.vm }
+  var allocation: VMAllocation { ref.allocation }
+  var allocationFootprint: Int { ref.value.withLock { $0.count + 16 } }
 
   /// The ``count`` value.
   public var count: UInt {
@@ -126,45 +137,58 @@ public struct StringValue: CompositeValue, ObjectSource {
   /// Performs the ``updateCharacter`` operation.
   public func updateCharacter(_ character: UInt8, at position: UInt) throws {
     try access.check(.write)
-    try ref.value.withLock { value in
-      let index = try refRange.select(subRange: position..<position + 1, in: value).lowerBound
-      value[index] = character
+    try VMGraph.withLock {
+      try ref.value.withLock { value in
+        let index = try refRange.select(subRange: position..<position + 1, in: value).lowerBound
+        value[index] = character
+      }
     }
   }
 
   /// Performs the ``updateCharacters`` operation.
   public func updateCharacters(_ characters: some Collection<UInt8>, startingAt position: UInt) throws {
     try access.check(.write)
-    try ref.value.withLock { value in
-      let range = try refRange.select(subRange: position..<position + UInt(characters.count), in: value)
-      value.replaceSubrange(range, with: characters)
+    try VMGraph.withLock {
+      try ref.value.withLock { value in
+        let range = try refRange.select(subRange: position..<position + UInt(characters.count), in: value)
+        value.replaceSubrange(range, with: characters)
+      }
     }
   }
 
   /// Performs the ``compare`` operation.
   public func compare(_ other: StringValue) -> ComparisonResult {
-    return valueSnapshot < other.valueSnapshot
+    return rangedValueSnapshot < other.rangedValueSnapshot
+  }
+
+  /// Compares the readable portions of two string objects.
+  func compareReadable(_ other: StringValue) throws -> ComparisonResult {
+    try access.check(.read)
+    try other.access.check(.read)
+    return compare(other)
   }
 
   /// Performs the ``firstRange`` operation.
   public func firstRange(of subdata: StringValue) throws -> SubRange? {
-    let value = valueSnapshot
-    guard let found = value.firstRange(of: subdata.valueSnapshot, in: refRange) else {
+    let value = try characters(in: range)
+    let sought = try subdata.characters(in: subdata.range)
+    guard let found = value.firstRange(of: sought, in: value.indices) else {
       return nil
     }
 
-    let startIndex = UInt(value.distance(from: refRange.lowerBound, to: found.lowerBound))
+    let startIndex = UInt(value.distance(from: value.startIndex, to: found.lowerBound))
     let endIndex = startIndex + UInt(found.count)
     return startIndex..<endIndex
   }
 
   /// Records restorable state in a snapshot builder.
   public func save(to snapshot: Snapshot.Builder) {
-    // Strings are not saved
+    // PLRM 3.7.3 explicitly excludes string contents from restore rollback.
   }
 
   /// Executes this value in the supplied interpreter context.
-  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
+  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
+    try access.check(.execute)
     try context.execution.push(source: .init(value: self, kind: .executable), in: context)
   }
 
@@ -178,21 +202,29 @@ public struct StringValue: CompositeValue, ObjectSource {
     String(data: rangedValueSnapshot, encoding: .isoLatin1).neverNil()
   }
 
+  var readableString: String {
+    get throws {
+      String(data: try characters(in: range), encoding: .isoLatin1).neverNil()
+    }
+  }
+
   /// Returns whether this value equals another PostScript value.
-  public func equals(_ other: any ObjectValue) -> Bool {
+  public func equals(_ other: any ObjectValue) throws -> Bool {
     switch other {
     case let otherString as StringValue:
-      valueSnapshot == otherString.valueSnapshot
+      try access.check(.read)
+      try otherString.access.check(.read)
+      return rangedValueSnapshot == otherString.rangedValueSnapshot
     case let otherName as NameValue:
-      string == otherName.value
+      return try readableString == otherName.value
     default:
-      false
+      return false
     }
   }
 
   /// Hashes the value into the supplied hasher.
   public func hash(into hasher: inout Hasher) {
-    hasher.combine(valueSnapshot)
+    hasher.combine(rangedValueSnapshot)
   }
 
   /// A debug representation of this value.
@@ -217,4 +249,27 @@ public struct StringValue: CompositeValue, ObjectSource {
   private var rangedValueSnapshot: Storage {
     ref.value.withLock { $0[refRange] }
   }
+
+  func storedObject(kind: ObjectKind) -> VMStoredObject {
+    let object = Object(value: self, kind: kind)
+    let range = refRange
+    let access = access
+    return .reference(allocation: allocation, owner: ref, object: object) { [weak ref] in
+      guard let ref else { return nil }
+      return Object(value: Self(ref: ref, refRange: range, access: access), kind: kind)
+    }
+  }
+
+  private init(ref: Shared, refRange: StorageRange, access: ObjectAccess) {
+    self.ref = ref
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
+    self.refRange = refRange
+    self.access = access
+  }
+}
+
+extension StringValue: SnapshotIdentifiableValue {
+
+  var snapshotIdentity: ObjectIdentifier { ObjectIdentifier(ref) }
+
 }

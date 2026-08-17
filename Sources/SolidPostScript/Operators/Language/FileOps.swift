@@ -24,8 +24,12 @@ extension Operators {
     FlushStd.instance,
     Reset.instance,
     Status.instance,
+    DeleteFile.instance,
+    RenameFile.instance,
+    FilenameForAll.instance,
     GetPosition.instance,
     SetPosition.instance,
+    CurrentFile.instance,
     Run.instance,
   ]
 
@@ -37,13 +41,26 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["file"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (mode, fileName) = try context.operands.popAs((StringValue, StringValue).self)
 
-      let file = try context.fileDevices.open(name: fileName.string, mode: mode.string)
+      let modeString = try mode.readableString
+      let fileNameString = try fileName.readableString
 
-      context.operands.push(.init(value: FileValue(file: file, vm: context.allocationMode), kind: .literal))
+      let object: Object
+      switch fileNameString {
+      case "%lineedit":
+        guard modeString == "r" else { throw Error.invalidFileAccess }
+        object = try await context.openInteractiveFileObject(statement: false)
+      case "%statementedit":
+        guard modeString == "r" else { throw Error.invalidFileAccess }
+        object = try await context.openInteractiveFileObject(statement: true)
+      default:
+        object = try context.openFileObject(name: fileNameString, mode: modeString)
+      }
+
+      context.operands.push(object)
     }
   }
 
@@ -55,11 +72,18 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["closefile"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let file: FileValue = try context.operands.popAs()
 
-      try file.file.close()
+      guard !file.file.isClosed else { return }
+      switch file.mode {
+      case .read:
+        break
+      case .write, .readWrite:
+        try await file.file.flush(context: context)
+      }
+      try await file.file.close(context: context)
     }
   }
 
@@ -71,12 +95,14 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["read"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let file: FileValue = try context.operands.popAs()
 
-      if let byte = try file.file.read(max: 1)?.first {
-        context.operands.push(.integer(Int(byte)), .boolean(true))
+      try file.checkReadable()
+
+      if let byte = try await file.file.read(max: 1, context: context)?.first {
+        context.operands.push(.integer(Int32(byte)), .boolean(true))
       } else {
         context.operands.push(.boolean(false))
       }
@@ -91,13 +117,19 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["readstring"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (stringObj, fileObj) = try context.operands.pop2()
-      let file = try fileObj.value(as: FileValue.self).file
+      let fileValue = try fileObj.value(as: FileValue.self)
       let string = try stringObj.value(as: StringValue.self)
 
-      let bytes = try file.read(max: Int(string.count)) ?? Data()
+      try fileValue.checkReadable()
+      try string.access.check(.write)
+      guard string.count > 0 else {
+        throw Error.rangeCheck
+      }
+
+      let bytes = try await fileValue.file.read(max: Int(string.count), context: context) ?? Data()
 
       try string.updateCharacters(bytes, startingAt: 0)
       let subRange = 0..<UInt(bytes.count)
@@ -116,13 +148,16 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["readhexstring"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (stringObj, fileObj) = try context.operands.pop2()
-      let file = try fileObj.value(as: FileValue.self).file
+      let fileValue = try fileObj.value(as: FileValue.self)
       let string = try stringObj.value(as: StringValue.self)
 
-      let (bytes, eof) = try file.readHex(max: Int(string.count))
+      try fileValue.checkReadable()
+      try string.access.check(.write)
+
+      let (bytes, eof) = try await fileValue.file.readHex(max: Int(string.count), context: context)
 
       try string.updateCharacters(bytes, startingAt: 0)
       let subRange = 0..<UInt(bytes.count)
@@ -139,16 +174,16 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["readline"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (stringObj, fileObj) = try context.operands.pop2()
-      let file = try fileObj.value(as: FileValue.self).file
+      let fileValue = try fileObj.value(as: FileValue.self)
       let string = try stringObj.value(as: StringValue.self)
 
-      let (line, eof) = try file.readLine()
-      guard line.count <= string.count else {
-        throw Error.rangeCheck
-      }
+      try fileValue.checkReadable()
+      try string.access.check(.write)
+
+      let (line, eof) = try await fileValue.file.readLine(max: Int(string.count), context: context)
 
       try string.updateCharacters(line, startingAt: 0)
       let subRange = 0..<UInt(line.count)
@@ -165,13 +200,15 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["write"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (int, file) = try context.operands.popAs((IntegerValue, FileValue).self)
 
-      let byte = UInt8(clamping: int.value)
+      try file.checkWritable()
 
-      try file.file.write(contentsOf: Data([byte]))
+      let byte = UInt8(truncatingIfNeeded: int.value)
+
+      try await file.file.write(contentsOf: Data([byte]), context: context)
     }
   }
 
@@ -183,11 +220,14 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["writestring"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (string, file) = try context.operands.popAs((StringValue, FileValue).self)
 
-      try file.file.write(contentsOf: string.characters(in: string.range))
+      try file.checkWritable()
+      try string.access.check(.read)
+
+      try await file.file.write(contentsOf: string.characters(in: string.range), context: context)
     }
   }
 
@@ -199,11 +239,15 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["writehexstring"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (string, file) = try context.operands.popAs((StringValue, FileValue).self)
 
-      try file.file.writeHex(contentsOf: string.characters(in: string.range))
+      try file.checkWritable()
+      try string.access.check(.read)
+
+      let data = try string.characters(in: string.range)
+      try await file.file.write(contentsOf: Data(data.baseEncoded(using: .base16Lower).utf8), context: context)
     }
   }
 
@@ -215,11 +259,18 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["bytesavailable"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let file: FileValue = try context.operands.popAs()
 
-      context.operands.push(.integer(try file.file.available))
+      try file.checkReadable()
+
+      let available = try await file.file.available(context: context)
+      context.operands.push(.integer(Self.postScriptCount(available)))
+    }
+
+    static func postScriptCount(_ available: Int) -> Int32 {
+      Int32(exactly: available) ?? -1
     }
   }
 
@@ -231,11 +282,11 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["flushfile"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let file: FileValue = try context.operands.popAs()
 
-      try file.file.flush()
+      try await file.file.flush(context: context)
     }
   }
 
@@ -247,10 +298,9 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["flush"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
-      let stdout = try context.fileDevices.open(device: "%stdout", name: "", mode: .read, openMethod: .truncateOrCreate)
-      try stdout.flush()
+      try await context.flushStandardOutput()
     }
   }
 
@@ -262,11 +312,15 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["resetfile"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let file: FileValue = try context.operands.popAs()
 
-      try file.file.reset()
+      do {
+        try context.reset(file: file.file)
+      } catch Error.ioError {
+        // resetfile is best-effort and never reports an I/O error.
+      }
     }
   }
 
@@ -278,11 +332,92 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["status"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
-      let file: FileValue = try context.operands.popAs()
+      let operand = try context.operands.pop()
+      if let file = operand.value as? FileValue {
+        context.operands.push(.boolean(!file.file.isClosed))
+        return
+      }
 
-      context.operands.push(.boolean(!file.file.isClosed))
+      let name = try operand.value(as: StringValue.self)
+      let nameString = try name.readableString
+
+      guard let status = try? context.fileDevices.status(name: nameString) else {
+        context.operands.push(.boolean(false))
+        return
+      }
+
+      context.operands.push(
+        .integer(status.pages),
+        .integer(status.bytes),
+        .integer(status.referenced),
+        .integer(status.created),
+        .boolean(true)
+      )
+    }
+  }
+
+  /// Implements the PostScript `deletefile` operator.
+  public enum DeleteFile: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["deletefile"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) async throws {
+
+      let name: StringValue = try context.operands.popAs()
+      try context.fileDevices.delete(name: name.readableString)
+    }
+  }
+
+  /// Implements the PostScript `renamefile` operator.
+  public enum RenameFile: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["renamefile"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) async throws {
+
+      let (newName, oldName) = try context.operands.popAs((StringValue, StringValue).self)
+      let oldNameString = try oldName.readableString
+      let newNameString = try newName.readableString
+      try context.fileDevices.rename(name: oldNameString, to: newNameString)
+    }
+  }
+
+  /// Implements the PostScript `filenameforall` operator.
+  public enum FilenameForAll: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["filenameforall"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) async throws {
+
+      let (scratchObject, proc, templateObject) = try context.operands.pop3()
+      let scratch = try scratchObject.value(as: StringValue.self)
+      let template = try templateObject.value(as: StringValue.self)
+      try scratch.access.check(.write)
+      let templateString = try template.readableString
+      try proc.checkProcedure()
+
+      try await context.executeLoop(named: "filenameforall") {
+        let names = try context.fileDevices.fileNames(matching: templateString)
+        for name in names {
+          guard let bytes = name.data(using: .isoLatin1), bytes.count <= scratch.count else {
+            throw Error.rangeCheck
+          }
+          try scratch.updateCharacters(bytes, startingAt: 0)
+          let argument = try Object.string(sharing: scratch, subRange: 0..<UInt(bytes.count), kind: .literal)
+          try await context.execute(proc: proc, ops: [argument])
+        }
+      }
     }
   }
 
@@ -294,11 +429,13 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["fileposition"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let file: FileValue = try context.operands.popAs()
 
-      context.operands.push(.integer(try file.file.offset))
+      guard file.file.isPositionable else { throw Error.ioError }
+
+      context.operands.push(try NumericSemantics.integer(validating: context.logicalOffset(in: file.file)))
     }
   }
 
@@ -310,11 +447,17 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["setfileposition"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (int, file) = try context.operands.popAs((IntegerValue, FileValue).self)
 
-      try file.file.setOffset(int.value)
+      guard int.value >= 0 else {
+        throw Error.rangeCheck
+      }
+
+      guard file.file.isPositionable else { throw Error.ioError }
+
+      try context.setLogicalOffset(Int(int.value), in: file.file)
     }
   }
 
@@ -326,16 +469,22 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["currentfile"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let file: Object =
         if let fileIndex = context.execution.firstIndex(where: { $0.source.type == .file }) {
-          context.execution[fileIndex].source
+          .init(value: context.execution[fileIndex].source.value, kind: .literal)
         } else {
-          .dataFile(content: Data(), access: .readOnly, vm: .local, kind: .executable)
+          try invalidFile()
         }
 
       context.operands.push(file)
+    }
+
+    private func invalidFile() throws -> Object {
+      let file = DataFile(data: Data(), mode: .read)
+      try file.close()
+      return .file(file, access: .readOnly, vm: .local, kind: .literal)
     }
   }
 
@@ -347,13 +496,13 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["run"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       context.operands.push(.string("r", access: .unlimited, vm: .local, kind: .literal))
 
-      try OpenFile.instance.execute(context: context)
-      try ChangeToExecutable.instance.execute(context: context)
-      try Exec.instance.execute(context: context)
+      try await OpenFile.instance.execute(context: context)
+      let fileObject = try context.operands.pop()
+      try await context.executeRun(.init(value: fileObject.value, kind: .executable))
     }
   }
 

@@ -30,7 +30,7 @@ struct ContainerConcurrencyTests {
     try await withThrowingTaskGroup(of: Void.self) { group in
       for index in 0..<count {
         group.addTask {
-          try array.updateObject(.integer(index), at: UInt(index))
+          try array.updateObject(.integer(Int32(index)), at: UInt(index))
         }
       }
       try await group.waitForAll()
@@ -71,7 +71,7 @@ struct ContainerConcurrencyTests {
     try await withThrowingTaskGroup(of: Void.self) { group in
       for index in 0..<count {
         group.addTask {
-          try dictionary.updateObject(.integer(index), forKey: .literalName("key-\(index)"))
+          try dictionary.updateObject(.integer(Int32(index)), forKey: .literalName("key-\(index)"))
         }
       }
       try await group.waitForAll()

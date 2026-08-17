@@ -15,6 +15,9 @@ extension Operators {
     GetGlobal.instance,
     SetGlobal.instance,
     CheckGlobal.instance,
+    VMStatus.instance,
+    VMReclaim.instance,
+    SetVMThreshold.instance,
   ]
 
   /// Implements the PostScript `save` operator.
@@ -25,10 +28,13 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["save"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
-      let snapshot = try context.snapshot()
+      try context.preflightAllocation(bytes: 32, vm: .local)
+      let snapshot = try context.snapshot(scope: context.languageSaveScope)
       let save = SaveValue(snapshot: snapshot)
+      context.saveDepth += 1
+      context.registerLanguageSave(snapshot)
 
       context.operands.push(.init(value: save))
     }
@@ -42,7 +48,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["restore"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let save: SaveValue = try context.operands.popAs()
 
@@ -50,15 +56,15 @@ extension Operators {
     }
   }
 
-  /// Implements the PostScript `setglobal` operator.
+  /// Implements the PostScript `setglobal` and compatibility `setshared` operators.
   public enum SetGlobal: OperatorValue {
     case instance
 
     /// The names that register this operator in the system dictionary.
-    public static let systemDictionaryNames: [Object] = ["setglobal"]
+    public static let systemDictionaryNames: [Object] = ["setglobal", "setshared"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let mode: BooleanValue = try context.operands.popAs()
 
@@ -66,29 +72,29 @@ extension Operators {
     }
   }
 
-  /// Implements the PostScript `currentglobal` operator.
+  /// Implements the PostScript `currentglobal` and compatibility `currentshared` operators.
   public enum GetGlobal: OperatorValue {
     case instance
 
     /// The names that register this operator in the system dictionary.
-    public static let systemDictionaryNames: [Object] = ["currentglobal"]
+    public static let systemDictionaryNames: [Object] = ["currentglobal", "currentshared"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       context.operands.push(.boolean(context.allocationMode == .global))
     }
   }
 
-  /// Implements the PostScript `gcheck` operator.
+  /// Implements the PostScript `gcheck` and compatibility `scheck` operators.
   public enum CheckGlobal: OperatorValue {
     case instance
 
     /// The names that register this operator in the system dictionary.
-    public static let systemDictionaryNames: [Object] = ["gcheck"]
+    public static let systemDictionaryNames: [Object] = ["gcheck", "scheck"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let obj = try context.operands.pop()
 
@@ -100,6 +106,68 @@ extension Operators {
         }
 
       context.operands.push(.boolean(result))
+    }
+  }
+
+  /// Implements the PostScript `vmstatus` operator.
+  public enum VMStatus: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["vmstatus"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) async throws {
+      let used = min(try context.estimatedVMUsage(in: context.allocationMode), Int(Int32.max))
+      let maximum = context.allocationMode == .local
+        ? context.userParameters.integer("MaxLocalVM")
+        : Int32.max
+      context.operands.push(
+        .integer(maximum),
+        .integer(Int32(used)),
+        .integer(Int32(clamping: context.saveDepth))
+      )
+    }
+  }
+
+  /// Implements the PostScript `vmreclaim` operator.
+  public enum VMReclaim: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["vmreclaim"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) async throws {
+      let value: IntegerValue = try context.operands.popAs()
+      switch value.value {
+      case -2 ... 0:
+        context.userParameters.setInteger(value.value, for: "VMReclaim")
+      case 1:
+        context.reclaimVM(includeGlobal: false)
+      case 2:
+        context.reclaimVM(includeGlobal: true)
+      default:
+        throw Error.rangeCheck
+      }
+    }
+  }
+
+  /// Implements the PostScript `setvmthreshold` operator.
+  public enum SetVMThreshold: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["setvmthreshold"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) async throws {
+      let value: IntegerValue = try context.operands.popAs()
+      guard value.value >= -1 else { throw Error.rangeCheck }
+      context.userParameters.setInteger(
+        value.value == -1 ? UserParameterState.vmThresholdDefault : value.value,
+        for: "VMThreshold"
+      )
     }
   }
 

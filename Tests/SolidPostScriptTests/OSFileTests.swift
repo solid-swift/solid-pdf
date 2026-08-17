@@ -340,14 +340,14 @@ struct OSFileTests {
     FileManager.default.createFile(atPath: file, contents: Data([]))
     defer { try? FileManager.default.removeItem(atPath: file) }
 
-    let res1 = try await Interpreter.results(content: "(\(file)) (w) file dup status")
+    let res1 = try await Interpreter.results(content: "(\(file)) (r) file dup status")
     expectEqual(res1.count, 2)
     expectEqual(res1[0].type, .boolean)
     expectEqual((res1[0].value as? BooleanValue)?.value, true)
     expectEqual(res1[1].type, .file)
     expectEqual((res1[1].value as? FileValue)?.file.isClosed, false)
 
-    let res2 = try await Interpreter.results(content: "(\(file)) (w) file dup closefile dup status")
+    let res2 = try await Interpreter.results(content: "(\(file)) (r) file dup closefile dup status")
     expectEqual(res2.count, 2)
     expectEqual(res2[0].type, .boolean)
     expectEqual((res2[0].value as? BooleanValue)?.value, false)

@@ -28,7 +28,7 @@ public enum NullValue: ObjectValue {
   public static let defaultKind: ObjectKind = .literal
 
   /// Executes this value in the supplied interpreter context.
-  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
+  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
   }
 
   /// Returns whether this value equals another PostScript value.

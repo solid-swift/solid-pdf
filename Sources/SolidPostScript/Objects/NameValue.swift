@@ -43,7 +43,7 @@ public struct NameValue: ObjectValue {
 
   /// Creates an instance.
   public init(value: String) {
-    self.value = value
+    self.value = NameInterningContext.table?.intern(value) ?? value
   }
 
   /// Performs the ``lookup`` operation.
@@ -53,20 +53,20 @@ public struct NameValue: ObjectValue {
   }
 
   /// Executes this value in the supplied interpreter context.
-  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
+  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
     let object = try lookup(in: context)
-    try object.execute(context: context, method: method)
+    try await object.execute(context: context, method: .indirect)
   }
 
   /// Returns whether this value equals another PostScript value.
-  public func equals(_ other: any ObjectValue) -> Bool {
+  public func equals(_ other: any ObjectValue) throws -> Bool {
     switch other {
     case let otherName as NameValue:
-      value == otherName.value
+      return value == otherName.value
     case let otherString as StringValue:
-      value == otherString.string
+      return try value == otherString.readableString
     default:
-      false
+      return false
     }
   }
 

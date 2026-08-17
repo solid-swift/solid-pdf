@@ -26,7 +26,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cvi"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 
@@ -36,14 +36,7 @@ extension Operators {
           try num.integer
 
         case let str as StringValue:
-          switch Scanner.number(string: str.string) {
-          case .integer(let int):
-            int
-          case .real(let real):
-            try RealValue(value: real).integer
-          default:
-            throw Error.syntaxError
-          }
+          try scanNumericObject(from: str, context: context).value(as: NumericConvertible.self).integer
 
         default:
           throw Error.typeCheck
@@ -61,30 +54,23 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cvr"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 
       let real =
         switch op.value {
         case let num as NumericConvertible:
-          try num.real
+          num.real
 
         case let str as StringValue:
-          switch Scanner.number(string: str.string) {
-          case .integer(let int):
-            try IntegerValue(value: int).real
-          case .real(let real):
-            real
-          default:
-            throw Error.syntaxError
-          }
+          try scanNumericObject(from: str, context: context).value(as: NumericConvertible.self).real
 
         default:
           throw Error.typeCheck
         }
 
-      context.operands.push(.real(real))
+      context.operands.push(try .real(real))
     }
   }
 
@@ -99,12 +85,17 @@ extension Operators {
     public static let defaultValue = "--nostringval--".data(using: .isoLatin1).neverNil()
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (stringObj, anyObj) = try context.operands.pop2()
       let string = try stringObj.value(as: StringValue.self)
+      try string.access.check(.write)
+      if let source = anyObj.value as? StringValue {
+        try source.access.check(.read)
+      }
 
-      let valueString = anyObj.valueString?.data(using: .isoLatin1) ?? Self.defaultValue
+      var formatter = PostScriptTextFormatter(mode: .value)
+      let valueString = formatter.format(anyObj)
       guard string.count >= valueString.count else {
         throw Error.rangeCheck
       }
@@ -124,7 +115,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cvrs"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (stringObj, radixObj, numObj) = try context.operands.pop3()
       let string = try stringObj.value(as: StringValue.self)
@@ -141,7 +132,7 @@ extension Operators {
             .data(using: .isoLatin1)
             .neverNil()
         } else {
-          try String(num.integer, radix: radix, uppercase: true)
+          try String(UInt32(bitPattern: num.integer), radix: Int(radix), uppercase: true)
             .data(using: .isoLatin1)
             .neverNil()
         }
@@ -165,11 +156,25 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cvn"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
-      let string: StringValue = try context.operands.popAs()
+      let stringObject = try context.operands.pop()
+      let string = try stringObject.value(as: StringValue.self)
+      let name = try string.readableString
+      try LanguageLimits.validateName(name)
 
-      context.operands.push(.literalName(string.string))
+      context.operands.push(.name(name, kind: stringObject.kind))
     }
   }
+}
+
+private func scanNumericObject(from string: StringValue, context: isolated Context) throws -> Object {
+  let scanner = try Scanner(content: string.characters(in: string.range))
+  guard let object = try scanner.nextObject(context: context)?.object else {
+    throw Error.syntaxError
+  }
+  guard object.value is NumericConvertible else {
+    throw Error.typeCheck
+  }
+  return object
 }

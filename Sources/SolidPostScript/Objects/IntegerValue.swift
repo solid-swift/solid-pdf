@@ -9,14 +9,21 @@ import Foundation
 
 extension Object: ExpressibleByIntegerLiteral {
 
+  public typealias IntegerLiteralType = Int32
+
   /// Creates an instance.
   public init(integerLiteral value: IntegerLiteralType) {
     self.init(value: IntegerValue(value: value))
   }
 
   /// Performs the ``integer`` operation.
-  public static func integer(_ value: Int) -> Self {
+  public static func integer(_ value: Int32) -> Self {
     Self(value: IntegerValue(value: value))
+  }
+
+  /// Creates an integer object when `value` is representable by PostScript.
+  public static func integer<T: BinaryInteger>(exactly value: T) -> Self? {
+    IntegerValue(exactly: value).map { Self(value: $0) }
   }
 }
 
@@ -28,16 +35,24 @@ public struct IntegerValue: ObjectValue {
   /// The default execution kind for this value.
   public static let defaultKind: ObjectKind = .literal
 
-  /// The ``value`` value.
-  public let value: Int
+  /// The signed 32-bit PostScript integer value.
+  public let value: Int32
 
   /// Creates an instance.
-  public init(value: Int) {
+  public init(value: Int32) {
+    self.value = value
+  }
+
+  /// Creates an instance when `value` is representable by PostScript.
+  public init?<T: BinaryInteger>(exactly value: T) {
+    guard let value = Int32(exactly: value) else {
+      return nil
+    }
     self.value = value
   }
 
   /// Executes this value in the supplied interpreter context.
-  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
+  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
     context.operands.push(.init(value: self, kind: kind))
   }
 
@@ -46,7 +61,7 @@ public struct IntegerValue: ObjectValue {
     guard let other = other as? NumericConvertible else {
       return false
     }
-    return try value == other.integer
+    return real == other.real
   }
 
   /// Hashes the value into the supplied hasher.

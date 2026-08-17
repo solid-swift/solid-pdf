@@ -31,6 +31,54 @@ struct PackedArrayTests {
   }
 
   @Test
+  func allocationModeControlsPackedArraysAndProcedures() async throws {
+    let checks: [BooleanValue] = try await Interpreter.result(
+      content:
+        """
+        true setglobal
+        1 2 2 packedarray gcheck
+        true setpacking
+        {1 2 add} gcheck
+        """,
+      count: 2
+    )
+
+    #expect(checks.map { $0.value } == [true, true])
+
+    let localChecks: [BooleanValue] = try await Interpreter.result(
+      content: "1 1 packedarray gcheck true setpacking {1} gcheck",
+      count: 2
+    )
+
+    #expect(localChecks.allSatisfy { !$0.value })
+  }
+
+  @Test
+  func globalPackedArraysRejectLocalCompositeValues() async throws {
+    await #expect(throws: Error.invalidAccess) {
+      try await Interpreter.execute(content: "/local (value) def true setglobal local 1 packedarray")
+    }
+
+    let localString = Object.string("local", access: .unlimited, vm: .local, kind: .literal)
+    #expect(throws: Error.invalidAccess) {
+      try PackedArrayValue(elements: [localString], vm: .global)
+    }
+  }
+
+  @Test
+  func bindPreservesProcedureVM() async throws {
+    let local: BooleanValue = try await Interpreter.result(
+      content: "true setpacking /p {1 2 add} def true setglobal /p load bind gcheck"
+    )
+    #expect(local.value == false)
+
+    let global: BooleanValue = try await Interpreter.result(
+      content: "true setglobal true setpacking /p {1 2 add} def /p load bind gcheck"
+    )
+    #expect(global.value == true)
+  }
+
+  @Test
   func testLength() async throws {
     let len: IntegerValue = try await Interpreter.result(content: "0 10 {1 add dup} repeat packedarray length")
     expectEqual(len.value, 10)
@@ -54,20 +102,20 @@ struct PackedArrayTests {
 
   @Test
   func testGetInterval() async throws {
-    let (arr2, arr1) = try await Interpreter.result(
-      content: "true setpacking {(a)(b)(c)(d)(e)} 1 3 getinterval",
-      as: (ArrayValue, PackedArrayValue).self
+    let results = try await Interpreter.results(
+      content: "true setglobal (a) (b) (c) (d) (e) 5 packedarray cvx dup 1 3 getinterval"
     )
-    expectEqual(arr2.count, 3)
-    expectEqual(try arr2.object(at: 0).value(as: StringValue.self).string, "b")
-    expectEqual(try arr2.object(at: 1).value(as: StringValue.self).string, "c")
-    expectEqual(try arr2.object(at: 2).value(as: StringValue.self).string, "d")
-    expectEqual(arr1.count, 5)
-    expectEqual(try arr1.object(at: 0).value(as: StringValue.self).string, "a")
-    expectEqual(try arr1.object(at: 1).value(as: StringValue.self).string, "b")
-    expectEqual(try arr1.object(at: 2).value(as: StringValue.self).string, "c")
-    expectEqual(try arr1.object(at: 3).value(as: StringValue.self).string, "d")
-    expectEqual(try arr1.object(at: 4).value(as: StringValue.self).string, "e")
+    #expect(results.count == 2)
+    let interval = try results[0].value(as: PackedArrayValue.self)
+    let source = try results[1].value(as: PackedArrayValue.self)
+    expectEqual(interval.count, 3)
+    expectEqual(interval.vm, .global)
+    expectEqual(interval.access, .readOnly)
+    expectEqual(results.first?.kind, .executable)
+    expectEqual(try interval.object(at: 0).value(as: StringValue.self).string, "b")
+    expectEqual(try interval.object(at: 1).value(as: StringValue.self).string, "c")
+    expectEqual(try interval.object(at: 2).value(as: StringValue.self).string, "d")
+    #expect(interval.allocation === source.allocation)
   }
 
   @Test

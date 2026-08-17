@@ -96,8 +96,8 @@ struct ScannerTests {
     expectEqual(
       try scan(
         """
-        (These\\
-        two strings\\
+        (These \\
+        two strings \\
         are the same.)
         (These two strings are the same.)
         """
@@ -138,13 +138,19 @@ struct ScannerTests {
 
     expectEqual(
       try scan("(CRLF: 1\r\n2\\\r\n3)"),
-      [.string(Data("CRLF: 1\n2 3".utf8))]
+      [.string(Data("CRLF: 1\n23".utf8))]
     )
+
+    #expect(try scan("(a\\\nb)") == [.string(Data("ab".utf8))])
+    #expect(try scan("(a\\\rb)") == [.string(Data("ab".utf8))])
+    #expect(try scan("(a\\\r\nb)") == [.string(Data("ab".utf8))])
   }
 
   @Test
   func testHexEncodedStrings() async throws {
 
+    #expect(try scan("<>") == [.string(Data())])
+    #expect(try scan("< 41\t42\r\n>") == [.string(Data("AB".utf8))])
     #expect(try scan("<4142>") == [.string(Data("AB".utf8))])
     #expect(try scan("<A>") == [.string(Data([0xA0]))])
 
@@ -215,6 +221,28 @@ struct ScannerTests {
       ),
       [.string(Data(base64Encoded: "Dwu+cPHenFxQsMuL6e3V8YwZhEA=").neverNil())]
     )
+
+    #expect(try scan("<~~>") == [.string(Data())])
+    #expect(try scan("<~!!~>") == [.string(Data([0]))])
+    #expect(try scan("<~!!!~>") == [.string(Data([0, 0]))])
+    #expect(try scan("<~!!!!~>") == [.string(Data([0, 0, 0]))])
+    #expect(try scan("<~ z\t\r\n\u{0C}\u{0}~>") == [.string(Data(repeating: 0, count: 4))])
+    #expect(try scan("<~>!!!!~>") == [.string(try Ascii85.decode(">!!!!"))])
+
+    for malformed in ["<~!~>", "<~!z~>", "<~uuuuu~>", "<~!!>", "<~!!~x>", "<~!!"] {
+      #expect(throws: Error.syntaxError) {
+        try scan(malformed)
+      }
+    }
+  }
+
+  @Test
+  func testMalformedAscii85UsesErrorDictionaryAndStopped() async throws {
+    let results = try await Interpreter.results(
+      content: "(<~!~>) cvx stopped $error /errorname get"
+    )
+    #expect(results.contains { ($0.value as? NameValue)?.value == "syntaxerror" })
+    #expect(results.contains { ($0.value as? BooleanValue)?.value == true })
   }
 
   @Test
@@ -338,54 +366,12 @@ struct ScannerTests {
       ]
     )
 
-    // Ensure < & << are distinctly recognized
-    expectEqual(
-      try scan(
-        """
-        <q <$ <\\ <%
-        q> $> \\> >%
-        <
-        <<
-        >>
-        < < > >
-        """
-      ),
-      [
-        .name("<", kind: .executable),
-        .name("q", kind: .executable),
-        .name("<", kind: .executable),
-        .name("$", kind: .executable),
-        .name("<", kind: .executable),
-        .name("\\", kind: .executable),
-        .name("<", kind: .executable),
-        .name("q", kind: .executable),
-        .name(">", kind: .executable),
-        .name("$", kind: .executable),
-        .name(">", kind: .executable),
-        .name("\\", kind: .executable),
-        .name(">", kind: .executable),
-        .name(">", kind: .executable),
-        .name("<", kind: .executable),
-        .name("<<", kind: .executable),
-        .name(">>", kind: .executable),
-        .name("<", kind: .executable),
-        .name("<", kind: .executable),
-        .name(">", kind: .executable),
-        .name(">", kind: .executable),
-      ]
-    )
-
-    // Ensure < & << are distinctly recognized
-    expectEqual(
-      try scan(
-        """
-        <
-        """
-      ),
-      [
-        .name("<", kind: .executable)
-      ]
-    )
+    expectEqual(try scan("<< >>"), [.name("<<", kind: .executable), .name(">>", kind: .executable)])
+    for malformed in ["<", "<q>", "<41"] {
+      #expect(throws: Error.syntaxError) {
+        try scan(malformed)
+      }
+    }
 
   }
 
@@ -485,6 +471,19 @@ struct ScannerTests {
     expectEqual(try scan("abc%\r"), [.name("abc", kind: .executable)])
     expectEqual(try scan("abc%\n"), [.name("abc", kind: .executable)])
     expectEqual(try scan("abc%\r\n"), [.name("abc", kind: .executable)])
+    expectEqual(try scan("abc%comment\u{0C}123"), [.name("abc", kind: .executable), .integer(123)])
+  }
+
+  @Test
+  func namesEnforceTheImplementationLimit() throws {
+    let maximum = String(repeating: "n", count: 127)
+    let overlong = maximum + "n"
+
+    #expect(try scan(maximum) == [.name(maximum, kind: .executable)])
+    #expect(try scan("/\(maximum)") == [.name(maximum, kind: .literal)])
+    #expect(throws: Error.limitCheck) { try scan(overlong) }
+    #expect(throws: Error.limitCheck) { try scan("/\(overlong)") }
+    #expect(throws: Error.limitCheck) { try scan("//\(overlong)") }
   }
 
   @Test
@@ -533,7 +532,7 @@ struct ScannerTests {
     guard try scanner.nextToken() != nil else {
       return recordIssue("Token expected")
     }
-    expectEqual(try scanner.available, 4)
+    expectEqual(try scanner.available, 3)
   }
 
 }

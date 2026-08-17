@@ -11,12 +11,10 @@ extension Data {
 
   internal static func < (_ lhs: Data, _ rhs: Data) -> ComparisonResult {
 
-    let minLength = Swift.min(lhs.count, rhs.count)
-
-    for i in 0..<minLength {
-      if lhs[i] < rhs[i] {
+    for (lhsByte, rhsByte) in zip(lhs, rhs) {
+      if lhsByte < rhsByte {
         return .orderedAscending
-      } else if lhs[i] > rhs[i] {
+      } else if lhsByte > rhsByte {
         return .orderedDescending
       }
     }

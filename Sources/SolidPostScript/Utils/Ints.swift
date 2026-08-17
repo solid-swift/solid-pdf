@@ -36,3 +36,15 @@ extension UInt {
   }
 
 }
+
+extension Int32 {
+
+  var unsigned: UInt {
+    get throws {
+      guard let value = UInt(exactly: self) else {
+        throw Error.rangeCheck
+      }
+      return value
+    }
+  }
+}

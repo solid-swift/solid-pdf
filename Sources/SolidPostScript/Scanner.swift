@@ -11,6 +11,14 @@ import SolidCore
 /// A scanner that converts PostScript source bytes into tokens.
 public class Scanner {
 
+  enum Lexeme {
+    case token(Token)
+    case binary(UInt8)
+    case procedureOpen
+    case procedureClose
+    case unmatchedClose(Chars)
+  }
+
   typealias Char = UInt8
   typealias Chars = [UInt8]
   typealias CharSet = Set<Char>
@@ -57,9 +65,24 @@ public class Scanner {
     "Invalid regular expression pattern",
     try Regex(#"([0-9]{1,2})#([0-9a-zA-Z]+)"#)
   )
+  // Regex is immutable after initialization, but Regex is not declared Sendable.
+  nonisolated(unsafe) static let decimalIntegerRegex = neverThrow(
+    "Invalid regular expression pattern",
+    try Regex(#"[+-]?[0-9]+"#)
+  )
+  // Regex is immutable after initialization, but Regex is not declared Sendable.
+  nonisolated(unsafe) static let realRegex = neverThrow(
+    "Invalid regular expression pattern",
+    try Regex(#"[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[+-]?[0-9]+[eE][+-]?[0-9]+"#)
+  )
 
   /// The ``file`` value.
   public let file: File
+  private var pushback: [Char] = []
+  private var history: [Char] = []
+  private var contextualInput: [Char]?
+  private var contextualOffset = 0
+  private var contextualEOF = false
 
   /// Creates an instance.
   public convenience init(content: Data) throws {
@@ -71,40 +94,124 @@ public class Scanner {
     self.file = file
   }
 
-  /// Performs the ``nextToken`` operation.
+  /// Returns the next context-free lexical token.
+  ///
+  /// Procedure construction requires interpreter allocation and packing state, so it is performed by the
+  /// context-aware scanner used during execution.
   public func nextToken() throws -> Token? {
+    guard let lexeme = try nextLexeme(binaryEnabled: false) else {
+      return nil
+    }
+    switch lexeme {
+    case .token(let token):
+      return token
+    case .procedureOpen:
+      return .name("{", kind: .executable)
+    case .procedureClose:
+      return .name("}", kind: .executable)
+    case .unmatchedClose(let chars):
+      return try .name(String(bytes: chars, encoding: .isoLatin1).unwrap(), kind: .executable)
+    case .binary:
+      throw Error.unregistered(.internalScannerError)
+    }
+  }
+
+  func nextContextualObject(context: isolated Context) async throws -> ScannedObject? {
+    let savedPushback = pushback
+    let savedHistory = history
+    var input: [Char] = []
+    var reachedEOF = false
+
+    while true {
+      pushback = savedPushback
+      history = savedHistory
+      contextualInput = input
+      contextualOffset = 0
+      contextualEOF = reachedEOF
+
+      do {
+        let object = try nextObject(context: context)
+        try await returnContextualLookahead(to: context)
+        contextualInput = nil
+        contextualOffset = 0
+        contextualEOF = false
+        return object
+      } catch is ScannerInputRequired {
+        do {
+          if let byte = try await context.readScannerByte(from: file) {
+            input.append(byte)
+          } else {
+            reachedEOF = true
+          }
+        } catch {
+          try await returnContextualLookahead(to: context)
+          contextualInput = nil
+          contextualOffset = 0
+          contextualEOF = false
+          throw error
+        }
+      } catch {
+        try await returnContextualLookahead(to: context)
+        contextualInput = nil
+        contextualOffset = 0
+        contextualEOF = false
+        throw error
+      }
+    }
+  }
+
+  func nextLexeme(binaryEnabled: Bool) throws -> Lexeme? {
 
     var chars: [Char] = []
 
     while true {
 
       guard let char = try next() else {
-        return try token(chars, putBack: 0)
+        return try token(chars, putBack: 0).map(Lexeme.token)
+      }
+
+      if binaryEnabled && (128...159).contains(char) {
+        if let token = try token(chars) {
+          return .token(token)
+        }
+        return .binary(char)
       }
 
       switch char {
       case Self.whitespace:
-        if let token = try token(chars) {
-          return token
+        if !chars.isEmpty {
+          if char == Self.carriageReturn, try peek() == Self.lineFeed {
+            try skip()
+          }
+          return .token(try token(chars, putBack: 0).neverNil())
         }
         try skip(while: Self.whitespace.contains)
 
       case Self.literalStringDelims.open:
-        return try token(chars) ?? literalString()
-
-      case Self.angleDelims.open where try peek().map { $0 == Self.ascii85Marker || $0.isHexDigit } ?? false:
-        return try token(chars) ?? encodedString()
+        return try token(chars).map(Lexeme.token) ?? .token(literalString())
 
       case Self.angleDelims.open where try peek() == Self.angleDelims.open,
         Self.angleDelims.close where try peek() == Self.angleDelims.close:
-        return try token(chars) ?? token([char] + take(1), putBack: 0)
+        return try token(chars).map(Lexeme.token) ?? .token(token([char] + take(1), putBack: 0).neverNil())
 
-      case Self.arrayDelims, Self.procedureDelims, Self.angleDelims.open, Self.angleDelims.close:
-        return try token(chars) ?? name(char)
+      case Self.angleDelims.open:
+        return try token(chars).map(Lexeme.token) ?? .token(encodedString())
+
+      case Self.literalStringDelims.close, Self.angleDelims.close:
+        return try token(chars).map(Lexeme.token) ?? .unmatchedClose([char])
+
+      case Self.procedureDelims:
+        if let token = try token(chars) {
+          return .token(token)
+        }
+        return char == Self.char("{") ? .procedureOpen : .procedureClose
+
+      case Self.arrayDelims:
+        return try token(chars).map(Lexeme.token) ?? .token(name(char))
 
       case Self.nameDelim:
         if let token = try token(chars) {
-          return token
+          return .token(token)
         }
 
         chars.append(char)
@@ -115,10 +222,18 @@ public class Scanner {
         }
 
       case Self.commentDelim:
-        try comment()
-        if let token = try token(chars, putBack: 0) {
-          return token
+        if !chars.isEmpty {
+          try comment()
+          return .token(try token(chars, putBack: 0).neverNil())
         }
+        try comment()
+
+      case Self.ascii85Marker where try peek() == Self.angleDelims.close:
+        if let token = try token(chars) {
+          return .token(token)
+        }
+        try skip()
+        return .unmatchedClose([char, Self.angleDelims.close])
 
       default:
         chars.append(char)
@@ -135,13 +250,19 @@ public class Scanner {
       }
 
       if firstChar == Self.nameDelim {
+        var nameChars = chars.dropFirst()
+        if nameChars.first == Self.nameDelim {
+          nameChars = nameChars.dropFirst()
+        }
+        try LanguageLimits.validateNameLength(nameChars.count)
         let name = try String(bytes: chars.dropFirst(), encoding: .isoLatin1).unwrap()
         return .name(name, kind: .literal)
       }
 
       let string = try String(bytes: chars, encoding: .isoLatin1).unwrap()
 
-      guard let number = Self.number(string: string) else {
+      guard let number = try Self.number(string: string) else {
+        try LanguageLimits.validateNameLength(chars.count)
         return .name(string, kind: .executable)
       }
       return number
@@ -155,7 +276,7 @@ public class Scanner {
 
       while let char = try next() {
         switch char {
-        case Self.lineFeed:
+        case Self.lineFeed, Self.formFeed:
           return
 
         case Self.carriageReturn:
@@ -172,26 +293,44 @@ public class Scanner {
 
     func encodedString() throws -> Token {
 
+      if try peek() == Self.ascii85Marker {
+        try skip()
+
+        var chars: [Char] = []
+        while let char = try next() {
+          if char == Self.ascii85Marker {
+            guard try next() == Self.angleDelims.close else {
+              throw Error.syntaxError
+            }
+
+            do {
+              let encoded = try String(bytes: chars, encoding: .ascii).unwrap(or: Error.syntaxError)
+              return .string(try Ascii85.decode(encoded))
+            } catch is Ascii85.DecodingError {
+              throw Error.syntaxError
+            }
+          }
+
+          chars.append(char)
+        }
+
+        throw Error.syntaxError
+      }
+
       let chars = try take { $0 != Self.angleDelims.close }
 
       guard try next() == Self.angleDelims.close else {
         throw Error.syntaxError
       }
 
-      let data: Data
-      if chars.first == Self.ascii85Marker {
-        let ascii85Chars = chars[chars.index(after: chars.startIndex)..<chars.index(before: chars.endIndex)]
-        data = try Ascii85.decode(String(bytes: ascii85Chars, encoding: .ascii).neverNil())
-      } else {
-        let nowsChars = chars.filter { !Self.whitespace.contains($0) }
-        let hexChars = nowsChars.count.isMultiple(of: 2) ? nowsChars : nowsChars + [Self.zero]
+      let nowsChars = chars.filter { !Self.whitespace.contains($0) }
+      let hexChars = nowsChars.count.isMultiple(of: 2) ? nowsChars : nowsChars + [Self.zero]
 
-        data = try Data(
-          baseEncodedString: String(bytes: hexChars, encoding: .ascii).neverNil(),
-          encoding: .base16
-        )
-        .unwrap(or: Error.syntaxError)
-      }
+      let data = try Data(
+        baseEncodedString: String(bytes: hexChars, encoding: .ascii).neverNil(),
+        encoding: .base16
+      )
+      .unwrap(or: Error.syntaxError)
 
       return .string(data)
     }
@@ -220,7 +359,9 @@ public class Scanner {
           }
 
         case Self.escapeMarker:
-          chars.append(try escapeLiteralChar())
+          if let escaped = try escapeLiteralChar() {
+            chars.append(escaped)
+          }
 
         case Self.carriageReturn:
           if try peek() == Self.lineFeed {
@@ -235,21 +376,29 @@ public class Scanner {
       }
     }
 
-    func escapeLiteralChar() throws -> Char {
+    func escapeLiteralChar() throws -> Char? {
 
       let escaped = try next().unwrap(or: Error.syntaxError)
 
-      return switch escaped {
-      case Self.escapes.lineFeed: Self.lineFeed
-      case Self.escapes.carriageReturn: Self.carriageReturn
-      case Self.escapes.tab: Self.tab
-      case Self.escapes.backSpace: Self.backSpace
-      case Self.escapes.formFeed: Self.formFeed
-      case Self.lineFeed, Self.carriageReturn: try newlineEscape(escaped)
-      case Self.octalDigits: try octalEscape(escaped)
+      switch escaped {
+      case Self.escapes.lineFeed:
+        return Self.lineFeed
+      case Self.escapes.carriageReturn:
+        return Self.carriageReturn
+      case Self.escapes.tab:
+        return Self.tab
+      case Self.escapes.backSpace:
+        return Self.backSpace
+      case Self.escapes.formFeed:
+        return Self.formFeed
+      case Self.lineFeed, Self.carriageReturn:
+        try newlineEscape(escaped)
+        return nil
+      case Self.octalDigits:
+        return try octalEscape(escaped)
       default:
         // Ignore slash
-        escaped
+        return escaped
       }
     }
 
@@ -274,54 +423,129 @@ public class Scanner {
       return code
     }
 
-    func newlineEscape(_ char: Char) throws -> Char {
+    func newlineEscape(_ char: Char) throws {
       if try char == Self.carriageReturn && peek() == Self.lineFeed {
         try skip()
       }
-      return Self.space
     }
   }
 
-  static func number(string: String) -> Token? {
+  static func number(string: String) throws -> Token? {
 
-    if let int = integer(string: string) {
-      return .integer(int)
-    } else if let real = real(string: string) {
-      return .real(real)
-    } else {
+    if string.wholeMatch(of: decimalIntegerRegex) != nil {
+      if let integer = Int32(string) {
+        return .integer(integer)
+      }
+      return .real(try parseReal(string))
+    }
+
+    if string.wholeMatch(of: realRegex) != nil {
+      return .real(try parseReal(string))
+    }
+
+    guard let match = string.wholeMatch(of: radixRegex),
+      match.output.count == 3,
+      let baseSubstring = match.output[1].substring,
+      let digitsSubstring = match.output[2].substring,
+      let base = Int(baseSubstring),
+      (2...36).contains(base)
+    else {
       return nil
     }
+
+    let digits = String(digitsSubstring)
+    guard digits.allSatisfy({ digitValue($0).map { $0 < base } ?? false }) else {
+      return nil
+    }
+
+    var value: UInt32 = 0
+    for digit in digits {
+      let (multiplied, multiplyOverflow) = value.multipliedReportingOverflow(by: UInt32(base))
+      let (next, addOverflow) = multiplied.addingReportingOverflow(UInt32(digitValue(digit).neverNil()))
+      guard !multiplyOverflow && !addOverflow else {
+        throw Error.limitCheck
+      }
+      value = next
+    }
+    return .integer(Int32(bitPattern: value))
   }
 
-  static func real(string: String) -> Double? {
-    guard let real = Double(string) else {
-      return nil
+  private static func parseReal(_ string: String) throws -> Double {
+    guard let real = Double(string), real.isFinite else {
+      throw Error.limitCheck
+    }
+
+    let significand = string.prefix { $0 != "e" && $0 != "E" }
+    let underflowed = real == 0 && significand.contains { $0.isNumber && $0 != "0" }
+    guard !underflowed else {
+      throw Error.limitCheck
     }
     return real
   }
 
-  static func integer(string: String) -> Int? {
-    if let int = Int(string) {
-      return int
-    } else if let match = string.wholeMatch(of: Self.radixRegex),
-      match.output.count == 3,
-      let base = match.output[1].substring.map({ Int($0) }) ?? nil,
-      let number = match.output[2].substring.map({ Int($0, radix: base) }) ?? nil
-    {
-      return number
-    } else {
-      return nil
+  private static func digitValue(_ digit: Character) -> Int? {
+    switch digit {
+    case "0"..."9":
+      Int(digit.asciiValue.neverNil() - Character("0").asciiValue.neverNil())
+    case "a"..."z":
+      Int(digit.asciiValue.neverNil() - Character("a").asciiValue.neverNil()) + 10
+    case "A"..."Z":
+      Int(digit.asciiValue.neverNil() - Character("A").asciiValue.neverNil()) + 10
+    default:
+      nil
     }
   }
 
   var available: Int {
     get throws {
-      try file.available
+      try file.available + pushback.count
     }
   }
 
+  func readBinaryByte() throws -> UInt8 {
+    try next().unwrap(or: Error.syntaxError)
+  }
+
+  func readBinaryData(count: Int) throws -> Data {
+    guard count >= 0 else {
+      throw Error.syntaxError
+    }
+    return try Data((0..<count).map { _ in try readBinaryByte() })
+  }
+
   private func next() throws -> Char? {
-    return try file.readByte()
+    let byte: Char?
+    if let pushed = pushback.popLast() {
+      byte = pushed
+    } else if let contextualInput {
+      if contextualOffset < contextualInput.count {
+        byte = contextualInput[contextualOffset]
+        contextualOffset += 1
+      } else if contextualEOF {
+        byte = nil
+      } else {
+        throw ScannerInputRequired()
+      }
+    } else {
+      byte = try file.readByte()
+    }
+    if let byte {
+      history.append(byte)
+      if history.count > 8 {
+        history.removeFirst(history.count - 8)
+      }
+    }
+    return byte
+  }
+
+  private func returnContextualLookahead(to context: isolated Context) async throws {
+    var unread = Data(pushback.reversed())
+    if let contextualInput, contextualOffset < contextualInput.count {
+      unread.append(contentsOf: contextualInput.dropFirst(contextualOffset))
+    }
+    pushback.removeAll()
+    context.prependReadAhead(unread, to: file)
+    try await context.finishScannerRead(from: file)
   }
 
   private func take(_ count: Int) throws -> [Char] {
@@ -359,7 +583,7 @@ public class Scanner {
   }
 
   private func skip(count: Int = 1) throws {
-    for _ in 0..<1 {
+    for _ in 0..<count {
       _ = try next()
     }
   }
@@ -385,10 +609,17 @@ public class Scanner {
   }
 
   private func rewind(count: Int = 1) throws {
-    try file.setOffset(file.offset - count)
+    guard count >= 0, history.count >= count else {
+      throw Error.unregistered(.internalScannerError)
+    }
+    for _ in 0..<count {
+      pushback.append(history.removeLast())
+    }
   }
 
 }
+
+private struct ScannerInputRequired: Swift.Error {}
 
 extension Scanner.CharSet {
 

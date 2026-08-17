@@ -22,12 +22,12 @@ public final class ProcSetResources: ResourceCategory {
   }
 
   /// The ``dictionary`` value.
-  public var dictionary: ResourceCatoryDictionary {
-    .init(category: "ProcSet", instanceType: .dictionary)
+  public var dictionary: ResourceCategoryDictionary {
+    .init(category: "ProcSet", instanceType: .dictionary, fileName: Operators.ResourceFileName.default)
   }
 
   /// Performs the ``loadResource`` operation.
-  public func loadResource(forKey key: Object, in context: isolated Context) throws -> Object {
+  public func loadResource(forKey key: Object, in context: isolated Context) async throws -> Object {
 
     guard
       let keyString = key.value as? NameStringConvertible,
@@ -38,7 +38,7 @@ public final class ProcSetResources: ResourceCategory {
 
     let source = procSet.load()
     let file = DataFile(data: source.data(using: .isoLatin1).neverNil(), mode: .read)
-    try context.pushAndRun(source: .file(file, access: .readOnly, vm: .local, kind: .executable))
+    try await context.pushAndRun(source: .file(file, access: .readOnly, vm: .local, kind: .executable))
 
     return try context.dictionaries.object(forKey: key)
   }
@@ -86,16 +86,4 @@ public final class ProcSetResources: ResourceCategory {
 
 struct Weak<Value: AnyObject> {
   weak var value: Value?
-}
-
-extension String {
-
-  // Regex is immutable after initialization, but Regex is not declared Sendable.
-  nonisolated(unsafe) private static let templateReplaceRegex = neverThrow(try Regex(#"(?<=\\)(\*|\?|\\)"#))
-
-  var asTemplateRegex: Regex<AnyRegexOutput>? {
-    let pattern = replacing(Self.templateReplaceRegex) { $0[2].substring ?? "" }
-    return try? Regex(pattern)
-  }
-
 }

@@ -25,9 +25,6 @@ extension UpdatableAccessValue {
   /// Performs the ``reduceAccess`` operation.
   public mutating func reduceAccess(to reducedAccess: ObjectAccess) throws {
     try access.canReduce(to: reducedAccess)
-    guard access >= Self.maxAccess else {
-      throw Error.invalidAccess
-    }
     try setAccess(to: reducedAccess)
   }
 

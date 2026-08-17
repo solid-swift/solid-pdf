@@ -24,17 +24,15 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["sqrt"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
-      let result: Object =
-        switch arg.value {
-        case let l as IntegerValue:
-          .real(try l.real.squareRoot())
-        case let l as RealValue:
-          .real(l.value.squareRoot())
-        default:
-          throw Error.typeCheck
-        }
+      guard let number = arg.value as? NumericConvertible else {
+        throw Error.typeCheck
+      }
+      guard number.real >= 0 else {
+        throw Error.rangeCheck
+      }
+      let result: Object = try .real(number.real.squareRoot())
       context.operands.push(result)
     }
   }
@@ -47,19 +45,14 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["exp"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let args = try context.operands.pop(count: 2)
-      let result: Object =
-        switch (args[1].value, args[0].value) {
-        case (let l as IntegerValue, let r as IntegerValue):
-          .real(try pow(l.real, r.real))
-        case (let l as RealValue, let r as RealValue):
-          .real(pow(l.value, r.value))
-        case (let l as NumericConvertible, let r as NumericConvertible):
-          .real(try pow(l.real, r.real))
-        default:
-          throw Error.typeCheck
-        }
+      guard let base = args[1].value as? NumericConvertible,
+        let exponent = args[0].value as? NumericConvertible
+      else {
+        throw Error.typeCheck
+      }
+      let result = try NumericSemantics.power(base.real, exponent.real)
       context.operands.push(result)
     }
   }
@@ -72,17 +65,15 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["ln"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
-      let result: Object =
-        switch arg.value {
-        case let l as IntegerValue:
-          .real(try log(l.real))
-        case let l as RealValue:
-          .real(log(l.value))
-        default:
-          throw Error.typeCheck
-        }
+      guard let number = arg.value as? NumericConvertible else {
+        throw Error.typeCheck
+      }
+      guard number.real > 0 else {
+        throw Error.rangeCheck
+      }
+      let result: Object = try .real(log(number.real))
       context.operands.push(result)
     }
   }
@@ -95,17 +86,15 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["log"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg = try context.operands.pop()
-      let result: Object =
-        switch arg.value {
-        case let l as IntegerValue:
-          .real(try log10(l.real))
-        case let l as RealValue:
-          .real(log10(l.value))
-        default:
-          throw Error.typeCheck
-        }
+      guard let number = arg.value as? NumericConvertible else {
+        throw Error.typeCheck
+      }
+      guard number.real > 0 else {
+        throw Error.rangeCheck
+      }
+      let result: Object = try .real(log10(number.real))
       context.operands.push(result)
     }
   }

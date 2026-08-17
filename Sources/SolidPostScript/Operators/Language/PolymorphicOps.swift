@@ -22,7 +22,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["copy"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let opObj = try context.operands.pop()
       switch opObj.type {
 
@@ -32,7 +32,7 @@ extension Operators {
         guard count.value >= 0 else {
           throw Error.rangeCheck
         }
-        let ops = try context.operands.peek(count: count.value)
+        let ops = try context.operands.peek(count: Int(count.value))
         context.operands.push(contentsOf: ops)
 
       // Copy array
@@ -46,7 +46,7 @@ extension Operators {
       case .dictionary:
         let dict1 = try context.operands.pop().value(as: DictionaryValue.self)
         let dict2 = try opObj.value(as: DictionaryValue.self)
-        try dict2.updateObjects(forKeysIn: dict1)
+        try context.updateDictionary(dict2, from: dict1)
         context.operands.push(opObj)
 
       // Copy string
@@ -70,7 +70,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["token"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 
@@ -80,7 +80,7 @@ extension Operators {
         let scanner = try Scanner(content: string.characters(in: string.range))
         let reader = TokenObjectIterator(scanner: scanner)
 
-        if let object = try reader.next(context: context) {
+        if let object = try reader.nextScanned(context: context)?.object {
 
           let post: Object = try .string(
             sharing: string,
@@ -95,10 +95,11 @@ extension Operators {
 
       case .file:
         let file = try op.value(as: FileValue.self)
+        try file.checkReadable()
         let scanner = try Scanner(file: file.file)
         let reader = TokenObjectIterator(scanner: scanner)
 
-        if let object = try reader.next(context: context) {
+        if let object = try await reader.nextContextual(context: context)?.object {
 
           context.operands.push(contentsOf: [.boolean(true), object])
         } else {

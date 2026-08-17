@@ -26,25 +26,28 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["length"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 
-      let length =
-        switch op.value {
-        case let coll as CollectionValue:
-          coll.count
-        case let dictionary as DictionaryValue:
-          dictionary.count
-        case let string as StringValue:
-          string.count
-        case let name as NameValue:
-          try name.value.count.unsigned
-        default:
-          throw Error.typeCheck
-        }
+      let length: UInt
+      switch op.value {
+      case let coll as CollectionValue:
+        try coll.access.check(.read)
+        length = coll.count
+      case let dictionary as DictionaryValue:
+        try dictionary.access.check(.read)
+        length = dictionary.count
+      case let string as StringValue:
+        try string.access.check(.read)
+        length = string.count
+      case let name as NameValue:
+        length = try LanguageLimits.postScriptBytes(name.value).count.unsigned
+      default:
+        throw Error.typeCheck
+      }
 
-      context.operands.push(.integer(try length.signed))
+      context.operands.push(try NumericSemantics.integer(validating: length))
     }
   }
 
@@ -56,7 +59,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["get"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (indexOrKey, source) = try context.operands.pop2()
 
@@ -67,7 +70,7 @@ extension Operators {
         case (let dictionary as DictionaryValue, _):
           try dictionary.object(forKey: indexOrKey)
         case (let string as StringValue, let index as IntegerValue):
-          .integer(try Int(string.character(at: index.value.unsigned)))
+          .integer(Int32(try string.character(at: index.value.unsigned)))
         default:
           throw Error.typeCheck
         }
@@ -83,7 +86,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["put"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (value, indexOrKey, target) = try context.operands.pop3()
 
@@ -91,9 +94,12 @@ extension Operators {
       case (let coll as ArrayValue, let index as IntegerValue, _):
         try coll.updateObject(value, at: index.value.unsigned)
       case (let dictionary as DictionaryValue, _, _):
-        try dictionary.updateObject(value, forKey: indexOrKey)
+        try context.updateDictionary(dictionary, value: value, forKey: indexOrKey)
       case (let string as StringValue, let index as IntegerValue, let char as IntegerValue):
-        try string.updateCharacter(UInt8(truncatingIfNeeded: char.value), at: index.value.unsigned)
+        guard let byte = UInt8(exactly: char.value) else {
+          throw Error.rangeCheck
+        }
+        try string.updateCharacter(byte, at: index.value.unsigned)
       default:
         throw Error.typeCheck
       }
@@ -108,24 +114,27 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["getinterval"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
-      let (count, index) = try context.operands.pop2()
-      let source = try context.operands.peek()
+      let (count, index, source) = try context.operands.pop3()
 
       switch (source.value, index.value, count.value) {
       case (let array as ArrayValue, let index as IntegerValue, let count as IntegerValue):
+        try array.access.check(.read)
         let startIndex = try index.value.unsigned
         let endIndex = try startIndex + count.value.unsigned
         context.operands.push(try .array(sharing: array, subRange: startIndex..<endIndex, kind: source.kind))
 
       case (let array as PackedArrayValue, let index as IntegerValue, let count as IntegerValue):
+        try array.access.check(.read)
         let startIndex = try index.value.unsigned
         let endIndex = try startIndex + count.value.unsigned
-        let elements = try array.objects(in: startIndex..<endIndex)
-        context.operands.push(try .array(elements, access: .unlimited, vm: context.allocationMode, kind: source.kind))
+        context.operands.push(
+          try .packedArray(sharing: array, subRange: startIndex..<endIndex, kind: source.kind)
+        )
 
       case (let string as StringValue, let index as IntegerValue, let count as IntegerValue):
+        try string.access.check(.read)
         let startIndex = try index.value.unsigned
         let endIndex = try startIndex + count.value.unsigned
         context.operands.push(try .string(sharing: string, subRange: startIndex..<endIndex, kind: source.kind))
@@ -144,14 +153,14 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["putinterval"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
-      let (source, index) = try context.operands.pop2()
-      let target = try context.operands.peek()
+      let (source, index, target) = try context.operands.pop3()
 
       switch (source.value, index.value, target.value) {
       case (let arr1 as CollectionValue, let index as IntegerValue, let arr2 as ArrayValue):
-        try arr2.updateObjects(arr1.objects(in: arr1.range), startingAt: index.value.unsigned)
+        let objects = try Array(arr1.objects(in: arr1.range))
+        try arr2.updateObjects(objects, startingAt: index.value.unsigned)
 
       case (let str1 as StringValue, let index as IntegerValue, let str2 as StringValue):
         try str2.updateCharacters(str1.characters(in: str1.range), startingAt: index.value.unsigned)
@@ -170,38 +179,36 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["forall"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (proc, source) = try context.operands.pop2()
+      try proc.checkProcedure()
 
-      switch (source.value, proc.value) {
-      case (let coll as CollectionValue, is CollectionValue):
-        for idx in 0..<coll.count {
-          let result = try context.execute(proc: proc, ops: [try coll.object(at: idx)])
-          if !result {
-            break
+      try await context.executeLoop(named: "forall") {
+        switch source.value {
+        case let coll as CollectionValue:
+          try coll.access.check(.read)
+          for idx in 0..<coll.count {
+            try await context.execute(proc: proc, ops: [try coll.object(at: idx)])
           }
-        }
 
-      case (let dict as DictionaryValue, is CollectionValue):
-        for key in dict.keys {
-          let value = try dict.object(forKey: key)
-          let result = try context.execute(proc: proc, ops: [value, key])
-          if !result {
-            break
+        case let dict as DictionaryValue:
+          try dict.access.check(.read)
+          let initialKeys = Array(dict.keys)
+          for key in initialKeys {
+            guard let value = try dict.object(forKeyIfExists: key) else { continue }
+            try await context.execute(proc: proc, ops: [value, key])
           }
-        }
 
-      case (let string as StringValue, is CollectionValue):
-        for idx in 0..<string.count {
-          let result = try context.execute(proc: proc, ops: [.integer(Int(string.character(at: idx)))])
-          if !result {
-            break
+        case let string as StringValue:
+          try string.access.check(.read)
+          for idx in 0..<string.count {
+            try await context.execute(proc: proc, ops: [.integer(Int32(string.character(at: idx)))])
           }
-        }
 
-      default:
-        throw Error.typeCheck
+        default:
+          throw Error.typeCheck
+        }
       }
     }
   }

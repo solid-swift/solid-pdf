@@ -17,8 +17,6 @@ extension Operators {
     ResourceOperator("ResourceForAll", "resourceforall", isolated: false),
   ]
 
-  private static let categoriesDictName: Object = "@Internal.Resources"
-
   /// Implements the PostScript resource operator operator.
   public struct ResourceOperator: OperatorValue, Hashable {
 
@@ -38,74 +36,44 @@ extension Operators {
       self.isolated = isolated
     }
 
-    static func resourceCategories(for context: isolated Context, vmOverride: VM? = nil) throws -> DictionaryValue {
-
-      let vm = vmOverride ?? context.allocationMode
-
-      let allocDict =
-        if vm == .global {
-          try context.dictionaries.globalDictionary()
-        } else {
-          try context.dictionaries.userDictionary()
-        }
-
-      guard let catDict = try allocDict.objectValue(forKeyIfExists: categoriesDictName, as: DictionaryValue.self) else {
-        let catDict = try DictionaryValue(value: [:], access: .unlimited, vm: context.allocationMode)
-        try allocDict.updateObject(.init(value: catDict, kind: .literal), forKey: categoriesDictName)
-        return catDict
-      }
-      return catDict
-    }
-
-    static func resources(for context: isolated Context, category key: Object, vmOveride: VM? = nil) throws
-      -> DictionaryValue
-    {
-      let catDict = try resourceCategories(for: context, vmOverride: vmOveride)
-
-      if let resDict: DictionaryValue = try catDict.objectValue(forKeyIfExists: key) {
-        return resDict
-      }
-
-      let resDict = try DictionaryValue(value: [:], access: .unlimited, vm: context.allocationMode)
-      try catDict.updateObject(.init(value: resDict, kind: .literal), forKey: key)
-      return resDict
-    }
-
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
-      let (categoryKey) = try context.operands.pop()
+      let savedOperands = context.operands
+      let savedDictionaries = context.dictionaries
 
-      let resourceCategories = try Self.resourceCategories(for: context)
-
-      let category = try resourceCategories.object(forKey: categoryKey)
-      context.operands.push(category)
-
-      try Begin.instance.execute(context: context)
-
-      let result: Bool
       do {
+        let categoryKey = try context.operands.pop()
+        let category = try await ResourceRuntime.categoryDictionary(categoryKey, context: context)
+        context.operands.push(category)
+
+        try await Begin.instance.execute(context: context)
 
         let implementationProc = try category.value(as: DictionaryValue.self).object(forKey: implementationKey)
 
-        if isolated {
-          result = try context.executeIsolated(proc: implementationProc)
+        let executeImplementation = {
+          if let implementation = implementationProc.value as? any OperatorValue {
+            try await implementation.execute(context: context)
+          } else if isolated {
+            try await context.executeIsolated(proc: implementationProc)
+          } else {
+            try await context.execute(proc: implementationProc)
+          }
+        }
+
+        if systemDictionaryNames.contains(where: { ($0.value as? NameValue)?.value == "resourceforall" }) {
+          try await context.executeLoop(named: "resourceforall", executeImplementation)
         } else {
-          result = try context.execute(proc: implementationProc)
+          try await executeImplementation()
         }
 
-        try End.instance.execute(context: context)
+        try await End.instance.execute(context: context)
       } catch {
-
         if isolated {
-          try End.instance.execute(context: context)
+          context.operands = savedOperands
+          context.dictionaries = savedDictionaries
         }
-
         throw error
-      }
-
-      if !result {
-        throw Error.control(.exit)
       }
     }
   }
@@ -119,7 +87,16 @@ extension Operators {
   /// A PostScript resource category extension.
   public protocol ResourceCategoryExtension: Hashable, Sendable {
 
+    /// Compatibility callback used by extensions written before lifecycle-specific hooks existed.
     func execute(context: isolated Context, instances: some Collection<Object>) throws
+    /// Validates an instance before an explicit definition is committed.
+    func validateDefinition(key: Object, instance: Object, context: isolated Context) throws
+    /// Validates an instance supplied by a resource provider or external file.
+    func validateLoaded(key: Object, instance: Object, context: isolated Context) throws
+    /// Performs category-specific work after a definition is committed.
+    func didDefine(key: Object, instance: Object, context: isolated Context) throws
+    /// Performs category-specific work before a definition is removed.
+    func willUndefine(key: Object, instance: Object, context: isolated Context) throws
   }
 
   /// Performs the ``resourceCategoryImplementationNames`` operation.
@@ -151,32 +128,20 @@ extension Operators {
     }
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (instance, key) = try context.operands.pop2()
       let categoryKey = try context.dictionaries.object(forKey: "Category")
-
-      if let instanceType = try context.dictionaries.objectValue(forKeyIfExists: "InstanceType", as: NameValue.self),
-        instance.type != ObjectType(instanceType.value)
-      {
-        throw Error.typeCheck
-      }
-
-      try self.extension?.execute(context: context, instances: [instance])
-
-      let resources = try ResourceOperator.resources(for: context, category: categoryKey)
-
-      try resources.updateObject(instance, forKey: key)
-
-      if context.allocationMode == .global {
-        // Remove any local definition of instance
-        _ = try context.dictionaries.userDictionary()
-          .objectValue(forKeyIfExists: categoriesDictName, as: DictionaryValue.self)?
-          .objectValue(forKeyIfExists: categoryKey, as: DictionaryValue.self)?
-          .removeObject(forKey: key)
-      }
-
-      context.operands.push(instance)
+      context.operands.push(
+        try await ResourceRuntime.define(
+          instance,
+          for: key,
+          in: categoryKey,
+          origin: .explicit,
+          implementationExtension: self.extension,
+          context: context
+        )
+      )
     }
   }
 
@@ -204,28 +169,18 @@ extension Operators {
     }
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let key = try context.operands.pop()
       let categoryKey = try context.dictionaries.object(forKey: "Category")
-
-      let resources = try ResourceOperator.resources(for: context, category: categoryKey)
-
-      if let existingInstance = try resources.object(forKeyIfExists: key) {
-
-        context.operands.push(existingInstance)
-      } else {
-
-        let defineProc = try context.dictionaries.object(forKey: "DefineResource")
-
-        let newInstance = try Resources.loadInstance(forKey: key, in: categoryKey, context: context)
-
-        try self.extension?.execute(context: context, instances: [newInstance])
-
-        if try !context.execute(proc: defineProc, ops: [newInstance, key]) {
-          throw Error.control(.exit)
-        }
-      }
+      context.operands.push(
+        try await ResourceRuntime.find(
+          key,
+          in: categoryKey,
+          implementationExtension: self.extension,
+          context: context
+        )
+      )
     }
   }
 
@@ -253,32 +208,16 @@ extension Operators {
     }
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
-      let (categoryKey, key) = try context.operands.pop2()
-
-      let instances: [Object?]
-
-      if context.allocationMode == .local {
-
-        let instance = try ResourceOperator.resources(for: context, category: categoryKey)
-          .removeObject(forKey: key)
-
-        instances = [instance]
-      } else {
-
-        let localInstance =
-          try ResourceOperator.resources(for: context, category: categoryKey, vmOveride: .local)
-          .removeObject(forKey: key) ?? .null
-
-        let globalInstance =
-          try ResourceOperator.resources(for: context, category: categoryKey)
-          .removeObject(forKey: key) ?? .null
-
-        instances = [localInstance, globalInstance]
-      }
-
-      try self.extension?.execute(context: context, instances: instances.compacted())
+      let key = try context.operands.pop()
+      let categoryKey = try context.dictionaries.object(forKey: "Category")
+      try await ResourceRuntime.remove(
+        key,
+        from: categoryKey,
+        implementationExtension: self.extension,
+        context: context
+      )
     }
   }
 
@@ -306,46 +245,39 @@ extension Operators {
     }
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
-      let (categoryKey, key) = try context.operands.pop2()
-
-      let instance: Object? =
-        if context.allocationMode == .local {
-
-          try ResourceOperator.resources(for: context, category: categoryKey)
-            .object(forKeyIfExists: key)
-            ?? ResourceOperator.resources(for: context, category: categoryKey, vmOveride: .global)
-            .object(forKeyIfExists: key)
-        } else {
-
-          try ResourceOperator.resources(for: context, category: categoryKey, vmOveride: .global)
-            .object(forKeyIfExists: key)
-        }
-
-      if let instance {
-
-        if let ext = self.extension {
-
-          try ext.execute(context: context, instances: [instance])
-        }
-
-        let resourceCategory = try Resources.loadCategory(forKey: categoryKey)
-
-        let size = try resourceCategory.sizeOfResource(instance)
-
-        context.operands.push(.boolean(true), .integer(size), .integer(0))
+      let key = try context.operands.pop()
+      let categoryKey = try context.dictionaries.object(forKey: "Category")
+      if let entry = try ResourceRuntime.visibleEntry(for: key, in: categoryKey, context: context) {
+        try self.extension?.execute(context: context, instances: [entry.instance])
+        let provider = try ResourceRuntime.provider(categoryKey, context: context)
+        let size = entry.size >= 0 ? Int(entry.size) : try provider?.sizeOfResource(entry.instance) ?? -1
+        context.operands.push(
+          .boolean(true),
+          try NumericSemantics.integer(validating: size),
+          .integer(entry.origin.rawValue)
+        )
+      } else if let provider = try ResourceRuntime.provider(categoryKey, context: context),
+                let status = try provider.statusOfResource(forKey: key)
+      {
+          context.operands.push(
+            .boolean(true),
+            try NumericSemantics.integer(validating: status.size),
+            .integer(status.isLoaded ? 0 : 2)
+          )
+      } else if let availability = try await ResourceRuntime.externalAvailability(
+        for: key,
+        in: categoryKey,
+        context: context
+      ) {
+        context.operands.push(
+          .boolean(true),
+          .integer(availability.size),
+          .integer(2)
+        )
       } else {
-
-        let resourceCategory = try Resources.loadCategory(forKey: categoryKey)
-
-        if let status = try resourceCategory.statusOfResource(forKey: key) {
-
-          context.operands.push(.boolean(true), .integer(status.size), .integer(status.isLoaded ? 1 : 2))
-        } else {
-
-          context.operands.push(.boolean(false))
-        }
+        context.operands.push(.boolean(false))
       }
     }
   }
@@ -374,45 +306,84 @@ extension Operators {
     }
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
-      let (categoryKey, scratchObj, proc, templateObj) = try context.operands.pop4()
-      let scratch = try scratchObj.value(as: StringValue.self)
-      let template = try templateObj.value(as: NameStringConvertible.self).nameString
+      var categoryDictionaryActive = true
+      var activeCategoryKey: Object?
+      do {
+        let (scratchObj, proc, templateObj) = try context.operands.pop3()
+        let categoryKey = try context.dictionaries.object(forKey: "Category")
+        activeCategoryKey = categoryKey
+        let scratch = try scratchObj.value(as: StringValue.self)
+        let templateString = try templateObj.value(as: StringValue.self)
+        try templateString.access.check(.read)
+        try scratch.access.check(.write)
+        try proc.checkProcedure()
+        let template = templateString.nameString
 
-      var resourceKeys: [Object] = []
+        var resourceKeys: [Object] = []
+        let stored = try ResourceRuntime.storedEntries(in: categoryKey, context: context)
+        resourceKeys.append(contentsOf: stored.filter { $0.entry.origin == .explicit }.map(\.key))
 
-      if context.allocationMode == .local {
+        var providerAvailable: [Object] = []
+        if let provider = try ResourceRuntime.provider(categoryKey, context: context) {
+          for key in try context.enumerateResources(from: provider, matching: template) {
+            if try provider.statusOfResource(forKey: key)?.isLoaded == true {
+              resourceKeys.append(key)
+            } else {
+              providerAvailable.append(key)
+            }
+          }
+        }
+        resourceKeys.append(contentsOf: stored.filter { $0.entry.origin == .automatic }.map(\.key))
+        resourceKeys.append(contentsOf: providerAvailable)
+        resourceKeys.append(
+          contentsOf: try await ResourceFiles.externalKeys(
+            in: categoryKey,
+            matching: template,
+            context: context
+          )
+        )
 
-        resourceKeys.append(contentsOf: try ResourceOperator.resources(for: context, category: categoryKey).keys)
-      }
-
-      resourceKeys.append(
-        contentsOf:
-          try ResourceOperator
-          .resources(for: context, category: categoryKey, vmOveride: .global).keys
-      )
-
-      let category = try Resources.loadCategory(forKey: categoryKey)
-      resourceKeys.append(contentsOf: try category.enumerateResources(matching: template))
-
-      for resourceKey in resourceKeys {
-
-        let procArg: Object
-
-        if let stringKey = resourceKey.value as? StringValue {
-
-          try scratch.updateCharacters(stringKey.characters(in: stringKey.range), startingAt: 0)
-
-          procArg = try .string(sharing: scratch, subRange: stringKey.range, kind: .literal)
-        } else {
-
-          procArg = resourceKey
+        guard let regex = template.asTemplateRegex else { return }
+        var seen = Set<Object>()
+        resourceKeys = try resourceKeys.filter { key in
+          guard seen.insert(try canonicalResourceKey(key)).inserted else { return false }
+          guard let name = key.value as? NameStringConvertible else { return template == "*" }
+          if let string = key.value as? StringValue { try string.access.check(.read) }
+          return (try? regex.wholeMatch(in: name.nameString)) != nil
         }
 
-        if try !context.execute(proc: proc, ops: [procArg]) {
-          throw Error.control(.exit)
+        try await End.instance.execute(context: context)
+        categoryDictionaryActive = false
+        for resourceKey in resourceKeys {
+
+          let procArg: Object
+
+          if let nameString = resourceKey.value as? NameStringConvertible {
+            let characters = try LanguageLimits.postScriptBytes(nameString.nameString)
+            guard characters.count <= scratch.count else { throw Error.rangeCheck }
+            try scratch.updateCharacters(characters, startingAt: 0)
+            procArg = try .string(sharing: scratch, subRange: 0..<UInt(characters.count), kind: .literal)
+          } else {
+            procArg = resourceKey
+          }
+
+          try await context.execute(proc: proc, ops: [procArg])
         }
+        try context.dictionaries.push(try await ResourceRuntime.categoryDictionary(categoryKey, context: context))
+        categoryDictionaryActive = true
+      } catch let transfer as LoopExitTransfer {
+        if !categoryDictionaryActive, let categoryKey = activeCategoryKey {
+          try context.dictionaries.push(try await ResourceRuntime.categoryDictionary(categoryKey, context: context))
+          categoryDictionaryActive = true
+        }
+        throw transfer
+      } catch {
+        if categoryDictionaryActive {
+          try? await End.instance.execute(context: context)
+        }
+        throw error
       }
     }
   }
@@ -454,4 +425,25 @@ extension Operators.ResourceOperatorImplementation {
     hasher.combine(ext)
   }
 
+}
+
+extension Operators.ResourceCategoryExtension {
+  /// Deprecated compatibility hook for extensions created before lifecycle-specific callbacks existed.
+  public func execute(context: isolated Context, instances: some Collection<Object>) throws {}
+
+  /// Validates an explicitly defined instance.
+  public func validateDefinition(key: Object, instance: Object, context: isolated Context) throws {
+    try execute(context: context, instances: [instance])
+  }
+
+  /// Validates an instance supplied by an external provider.
+  public func validateLoaded(key: Object, instance: Object, context: isolated Context) throws {
+    try execute(context: context, instances: [instance])
+  }
+
+  /// Performs category-specific work after an instance is committed.
+  public func didDefine(key: Object, instance: Object, context: isolated Context) throws {}
+
+  /// Performs category-specific work before an instance is removed.
+  public func willUndefine(key: Object, instance: Object, context: isolated Context) throws {}
 }

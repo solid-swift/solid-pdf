@@ -29,25 +29,46 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["type"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
-      let op = try context.operands.peek()
+      let op = try context.operands.pop()
       let typeName = op.type.name
 
-      context.operands.push(.string(typeName, access: .unlimited, vm: context.allocationMode, kind: .literal))
+      context.operands.push(.executableName(typeName))
     }
   }
 
-  private static func reduceAccess(to access: ObjectAccess, context: isolated Context) throws {
-
-    let op = try context.operands.pop()
-
-    guard var value = op.value as? AccessedValue else {
+  private static func reduceAccess(
+    to access: ObjectAccess,
+    includingDictionaries: Bool,
+    context: isolated Context
+  ) throws {
+    let object = try context.operands.pop()
+    let reduced = switch object.value {
+    case let value as ArrayValue:
+      try reduceAccess(of: object, value: value, to: access)
+    case let value as PackedArrayValue:
+      try reduceAccess(of: object, value: value, to: access)
+    case let value as FileValue:
+      try reduceAccess(of: object, value: value, to: access)
+    case let value as StringValue:
+      try reduceAccess(of: object, value: value, to: access)
+    case let value as DictionaryValue where includingDictionaries:
+      try reduceAccess(of: object, value: value, to: access)
+    default:
       throw Error.typeCheck
     }
+    context.operands.push(reduced)
+  }
 
+  private static func reduceAccess<Value>(
+    of object: Object,
+    value: Value,
+    to access: ObjectAccess
+  ) throws -> Object where Value: UpdatableAccessValue {
+    var value = value
     try value.reduceAccess(to: access)
-    context.operands.push(.init(value: value, kind: op.kind))
+    return .init(value: value, kind: object.kind)
   }
 
   /// Implements the PostScript `executeonly` operator.
@@ -58,8 +79,8 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["executeonly"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
-      try reduceAccess(to: .executeOnly, context: context)
+    public func execute(context: isolated Context) async throws {
+      try reduceAccess(to: .executeOnly, includingDictionaries: false, context: context)
     }
   }
 
@@ -71,8 +92,8 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["readonly"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
-      try reduceAccess(to: .readOnly, context: context)
+    public func execute(context: isolated Context) async throws {
+      try reduceAccess(to: .readOnly, includingDictionaries: true, context: context)
     }
   }
 
@@ -84,8 +105,8 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["noaccess"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
-      try reduceAccess(to: .noAccess, context: context)
+    public func execute(context: isolated Context) async throws {
+      try reduceAccess(to: .noAccess, includingDictionaries: true, context: context)
     }
   }
 
@@ -97,7 +118,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["xcheck"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 
@@ -105,15 +126,28 @@ extension Operators {
     }
   }
 
-  private static func test(_ keyPath: KeyPath<ObjectAccess, Bool>, context: isolated Context) throws {
+  private enum AccessTest {
+    case read
+    case write
+  }
 
-    let op = try context.operands.pop()
-
-    guard let value = op.value as? AccessedValue else {
+  private static func test(_ test: AccessTest, context: isolated Context) throws {
+    let object = try context.operands.pop()
+    let result = switch object.value {
+    case let value as ArrayValue:
+      test == .read ? value.access.isReadAllowed : value.access.isWriteAllowed
+    case let value as PackedArrayValue:
+      test == .read ? value.access.isReadAllowed : false
+    case let value as DictionaryValue:
+      test == .read ? value.access.isReadAllowed : value.access.isWriteAllowed
+    case let value as FileValue:
+      test == .read ? value.isReadable : value.isWritable
+    case let value as StringValue:
+      test == .read ? value.access.isReadAllowed : value.access.isWriteAllowed
+    default:
       throw Error.typeCheck
     }
-
-    context.operands.push(.boolean(value.access[keyPath: keyPath]))
+    context.operands.push(.boolean(result))
   }
 
   /// Implements the PostScript `rcheck` operator.
@@ -124,8 +158,8 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["rcheck"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
-      try test(\.isReadAllowed, context: context)
+    public func execute(context: isolated Context) async throws {
+      try test(.read, context: context)
     }
   }
 
@@ -137,8 +171,8 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["wcheck"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
-      try test(\.isWriteAllowed, context: context)
+    public func execute(context: isolated Context) async throws {
+      try test(.write, context: context)
     }
   }
 
@@ -150,7 +184,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cvlit"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 
@@ -166,7 +200,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["cvx"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
 

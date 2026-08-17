@@ -19,22 +19,14 @@ public class TokenObjectIterator: ObjectIterator {
 
   /// Returns the next PostScript object, when available.
   public func next(context: isolated Context) throws -> Object? {
+    try nextScanned(context: context)?.object
+  }
 
-    guard let token = try scanner.nextToken() else {
-      return nil
-    }
+  func nextScanned(context: isolated Context) throws -> ScannedObject? {
+    try scanner.nextObject(context: context)
+  }
 
-    return switch token {
-    case .integer(let int): int.numericObject
-    case .real(let real): real.numericObject
-    case .string(let string):
-      .string(string, access: .unlimited, vm: .local, kind: .literal)
-    case .name(let name, kind: let kind):
-      if name.starts(with: "/") {
-        try NameValue(value: String(name.dropFirst())).lookup(in: context)
-      } else {
-        .name(name, kind: kind)
-      }
-    }
+  func nextContextual(context: isolated Context) async throws -> ScannedObject? {
+    try await scanner.nextContextualObject(context: context)
   }
 }

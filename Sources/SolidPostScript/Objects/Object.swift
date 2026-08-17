@@ -60,12 +60,8 @@ public struct Object: Equatable, Hashable, Sendable {
     snapshot.save(self)
   }
 
-  func execute(context: isolated Context, method: AccessMethod) throws {
-    if kind == .executable {
-      try value.execute(context: context, kind: kind, method: method)
-    } else {
-      context.operands.push(self)
-    }
+  func execute(context: isolated Context, method: AccessMethod) async throws {
+    try await context.execute(object: self, method: method)
   }
 
   func makeIterator(context: isolated Context) throws -> ObjectIterator {
@@ -77,6 +73,16 @@ public struct Object: Equatable, Hashable, Sendable {
 
   /// Hashes the value into the supplied hasher.
   public func hash(into hasher: inout Hasher) {
+    if let numeric = value as? NumericConvertible {
+      hasher.combine(ObjectType.integer)
+      hasher.combine(numeric.real)
+      return
+    }
+    if let nameString = value as? NameStringConvertible {
+      hasher.combine(ObjectType.name)
+      hasher.combine(nameString.nameString)
+      return
+    }
     hasher.combine(type)
     value.hash(into: &hasher)
   }

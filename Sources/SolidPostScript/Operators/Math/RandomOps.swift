@@ -6,8 +6,6 @@
 //
 
 import Foundation
-import SolidCore
-
 extension Operators {
 
   static let randomOps: [OperatorValue] = [
@@ -24,9 +22,8 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["rand"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
-      let value = UInt32.random(in: 0 ... .max, using: &context.random)
-      context.operands.push(.integer(Int(value)))
+    public func execute(context: isolated Context) async throws {
+      context.operands.push(.integer(context.random.next()))
     }
   }
 
@@ -38,8 +35,8 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["rrand"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
-      context.operands.push(.integer(context.random.seed))
+    public func execute(context: isolated Context) async throws {
+      context.operands.push(.integer(context.random.restorableState))
     }
   }
 
@@ -51,7 +48,7 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["srand"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let arg: IntegerValue = try context.operands.popAs()
       context.random = Context.RandomGenerator(seed: arg.value)
     }

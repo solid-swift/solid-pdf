@@ -23,7 +23,7 @@ struct ConcurrentExecutionTests {
       ("1 2 add 3 mul", 9),
     ]
 
-    try await withThrowingTaskGroup(of: (Int, Int).self) { group in
+    try await withThrowingTaskGroup(of: (Int, Int32).self) { group in
       for (index, (program, _)) in programs.enumerated() {
         group.addTask {
           let result: IntegerValue = try await Interpreter.result(content: program)
@@ -31,14 +31,14 @@ struct ConcurrentExecutionTests {
         }
       }
 
-      var results: [(Int, Int)] = []
+      var results: [(Int, Int32)] = []
       for try await result in group {
         results.append(result)
       }
 
       let sorted = results.sorted { $0.0 < $1.0 }
       for (index, value) in sorted {
-        #expect(value == programs[index].1, "VM \(index): expected \(programs[index].1), got \(value)")
+        #expect(value == Int32(programs[index].1), "VM \(index): expected \(programs[index].1), got \(value)")
       }
     }
   }
@@ -48,6 +48,27 @@ struct ConcurrentExecutionTests {
     async let result1: IntegerValue = Interpreter.result(content: "/x 10 def x")
     async let result2: IntegerValue = Interpreter.result(content: "/x 20 def x")
     async let result3: IntegerValue = Interpreter.result(content: "/x 30 def x")
+
+    let (v1, v2, v3) = try await (result1, result2, result3)
+    #expect(v1.value == 10)
+    #expect(v2.value == 20)
+    #expect(v3.value == 30)
+  }
+
+  @Test func sharedDictionaryCompatibilityAliasRemainsContextIsolated() async throws {
+    let environment = InterpreterEnvironment()
+    async let result1: IntegerValue = Interpreter.result(
+      content: "shareddict /x 10 put shareddict /x get",
+      environment: environment
+    )
+    async let result2: IntegerValue = Interpreter.result(
+      content: "shareddict /x 20 put shareddict /x get",
+      environment: environment
+    )
+    async let result3: IntegerValue = Interpreter.result(
+      content: "shareddict /x 30 put shareddict /x get",
+      environment: environment
+    )
 
     let (v1, v2, v3) = try await (result1, result2, result3)
     #expect(v1.value == 10)
@@ -75,7 +96,7 @@ struct ConcurrentExecutionTests {
       count: count
     )
 
-    #expect(results.map(\.value) == Array((0..<count).reversed()))
+    #expect(results.map(\.value) == Array((0..<Int32(count)).reversed()))
   }
 
   @Test func resultExtractionHandlesEdgeCases() async {

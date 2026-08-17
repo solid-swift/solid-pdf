@@ -25,8 +25,16 @@ extension Object {
   }
 }
 
+extension ArrayValue: SnapshotIdentifiableValue {
+
+  var snapshotIdentity: ObjectIdentifier { ObjectIdentifier(ref) }
+
+}
+
+extension ArrayValue: SharedBackingArrayValue {}
+
 /// An PostScript array value.
-public struct ArrayValue: CollectionValue {
+public struct ArrayValue: CollectionValue, VMStoredCompositeValue {
 
   /// The PostScript object type represented by this value.
   public static let objectType: ObjectType = .array
@@ -36,16 +44,33 @@ public struct ArrayValue: CollectionValue {
   /// The ``access`` value.
   public private(set) var access: ObjectAccess = Self.maxAccess
 
-  typealias Shared = CompositeShared<Storage>
+  typealias StoredStorage = [VMStoredObject]
+  typealias Shared = CompositeShared<StoredStorage>
 
   private var ref: Shared
+  private let rootLease: VMRootLease
   /// The ``refRange`` value.
   public let refRange: StorageRange
 
   /// Creates an instance.
   public init(elements: Storage, access: ObjectAccess, vm: VM) throws {
     try elements.checkStorage(in: vm)
-    self.ref = Shared(value: elements, access: access, vm: vm)
+    let stored = elements.map(VMStoredObject.init)
+    let ref = Shared(
+      value: stored,
+      access: access,
+      vm: vm,
+      chargedBytes: Self.footprint(for: stored.count),
+      footprint: { Self.footprint(for: $0.count) },
+      children: { $0.vmAllocations },
+      snapshotCopy: { $0.map { $0.copiedForSnapshot() } },
+      storedObjects: { $0 },
+      identifyEdges: { $0.identifyVMEdgeSources($1) },
+      clear: { $0.removeAll(keepingCapacity: false) }
+    )
+    ref.uncheckedRead { $0.value.identifyVMEdgeSources(ref.allocation) }
+    self.ref = ref
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
     self.refRange = elements.indices
     self.access = access
   }
@@ -53,6 +78,7 @@ public struct ArrayValue: CollectionValue {
   /// Creates an instance.
   public init(sharing: Self, subRange: SubRange) throws {
     self.ref = sharing.ref
+    self.rootLease = sharing.rootLease
     self.refRange = try sharing.refRange.select(subRange: subRange, in: sharing.ref.uncheckedRead { $0.value })
     self.access = sharing.access
   }
@@ -64,6 +90,8 @@ public struct ArrayValue: CollectionValue {
 
   /// The ``vm`` value.
   public var vm: VM { ref.vm }
+  var allocation: VMAllocation { ref.allocation }
+  var allocationFootprint: Int { Self.footprint(for: ref.uncheckedRead { $0.value.count }) }
 
   /// The ``count`` value.
   public var count: UInt {
@@ -78,7 +106,7 @@ public struct ArrayValue: CollectionValue {
 
     return try ref.uncheckedRead { refState in
       let index = try refRange.select(subRange: position..<position + 1, in: refState.value).lowerBound
-      return refState.value[index]
+      return refState.value[index].object
     }
   }
 
@@ -87,7 +115,7 @@ public struct ArrayValue: CollectionValue {
     try self.access.check(access)
     return try ref.uncheckedRead { refState in
       let subRange = try refRange.select(subRange: subRange, in: refState.value)
-      return refState.value[subRange]
+      return ArraySlice(refState.value[subRange].map(\.object))
     }
   }
 
@@ -95,9 +123,12 @@ public struct ArrayValue: CollectionValue {
   public func updateObject(_ object: Object, at position: UInt) throws {
     try access.check(.write)
     try object.checkStorage(in: ref.vm)
+    try ref.allocation.prepareSnapshotMutation()
     return try ref.uncheckedWrite { ref in
       let index = try refRange.select(subRange: position..<position + 1, in: ref.value).lowerBound
-      ref.value[index] = object
+      let stored = VMStoredObject(object)
+      stored.identifyEdgeSource(self.ref.allocation)
+      ref.value[index] = stored
     }
   }
 
@@ -105,29 +136,34 @@ public struct ArrayValue: CollectionValue {
   public func updateObjects(_ objects: some Collection<Object>, startingAt position: UInt) throws {
     try access.check(.write)
     try objects.checkStorage(in: ref.vm)
+    try ref.allocation.prepareSnapshotMutation()
     return try ref.uncheckedWrite { ref in
       let range = try refRange.select(subRange: position..<position + UInt(objects.count), in: ref.value)
-      ref.value.replaceSubrange(range, with: objects)
+      let stored = objects.map(VMStoredObject.init)
+      stored.identifyVMEdgeSources(self.ref.allocation)
+      ref.value.replaceSubrange(range, with: stored)
     }
   }
 
   /// Performs the ``forEachUnchecked`` operation.
   public func forEachUnchecked(_ block: (Object) throws -> Void) rethrows {
-    let elements = ref.uncheckedRead { $0.value }
+    let elements = ref.uncheckedRead { $0.value[refRange].map(\.object) }
+    try elements.forEach(block)
+  }
+
+  func forEachBackingUnchecked(_ block: (Object) throws -> Void) rethrows {
+    let elements = ref.uncheckedRead { $0.value.map(\.object) }
     try elements.forEach(block)
   }
 
   /// Records restorable state in a snapshot builder.
   public func save(to snapshot: Snapshot.Builder) {
-    let elements = ref.uncheckedRead { $0.value }
-    for element in elements {
-      element.save(to: snapshot)
-    }
+    forEachBackingUnchecked { $0.save(to: snapshot) }
     ref.save(to: snapshot)
   }
 
   /// Executes this value in the supplied interpreter context.
-  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) throws {
+  public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
     let obj = Object(value: self, kind: kind)
     switch method {
     case .indirect:
@@ -146,31 +182,56 @@ public struct ArrayValue: CollectionValue {
     guard let other = other as? Self else {
       return false
     }
-    return ref === other.ref
+    return arrayViewIdentity == other.arrayViewIdentity
   }
 
   /// Hashes the value into the supplied hasher.
   public func hash(into hasher: inout Hasher) {
-    hasher.combine(ObjectIdentifier(ref))
+    hasher.combine(arrayViewIdentity)
   }
 
   /// A debug representation of this value.
   public var debugString: String {
-    ref.uncheckedRead { refState in
-      let slice = range.count != refState.value.count ? "[\(range)]" : ""
-      return "[\(refState.value[refRange].map(\.debugString).joined(separator: ", "))]\(slice)"
+    let snapshot = ref.uncheckedRead { refState in
+      (elements: refState.value[refRange].map(\.object), backingCount: refState.value.count)
     }
+    let logicalRange = 0..<UInt(snapshot.elements.count)
+    let slice = snapshot.elements.count != snapshot.backingCount ? "[\(logicalRange)]" : ""
+    return "[\(snapshot.elements.map(\.debugString).joined(separator: ", "))]\(slice)"
   }
 
   /// Returns the PostScript token representation, when available.
   public func tokenString(kind: ObjectKind) -> String? {
-    ref.uncheckedRead { refState in
-      let elements = refState.value[refRange]
-      let tokens = elements.compactMap { $0.tokenString() }
-      guard tokens.count == elements.count else {
-        return nil
-      }
-      return "[\(tokens.joined(separator: ", "))]"
+    let elements = ref.uncheckedRead { $0.value[refRange].map(\.object) }
+    let tokens = elements.compactMap { $0.tokenString() }
+    guard tokens.count == elements.count else {
+      return nil
     }
+    return "[\(tokens.joined(separator: ", "))]"
+  }
+
+  func storedObject(kind: ObjectKind) -> VMStoredObject {
+    let object = Object(value: self, kind: kind)
+    let range = refRange
+    let access = access
+    return .reference(allocation: allocation, owner: ref, object: object) { [weak ref] in
+      guard let ref else { return nil }
+      return Object(value: Self(ref: ref, refRange: range, access: access), kind: kind)
+    }
+  }
+
+  func refreshStoredEdges() {
+    ref.uncheckedRead { $0.value.refreshVMEdges() }
+  }
+
+  private init(ref: Shared, refRange: StorageRange, access: ObjectAccess) {
+    self.ref = ref
+    self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
+    self.refRange = refRange
+    self.access = access
+  }
+
+  private static func footprint(for count: Int) -> Int {
+    count * 8 + 16
   }
 }

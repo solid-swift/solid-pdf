@@ -23,9 +23,11 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["string"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let count: IntegerValue = try context.operands.popAs()
-      let data = Data(repeating: 0, count: count.value)
+      let countValue = Int(count.value)
+      try context.limitCheck(size: countValue, objectType: .string)
+      let data = Data(repeating: 0, count: countValue)
       context.operands.push(.string(data, access: .unlimited, vm: context.allocationMode, kind: .literal))
     }
   }
@@ -38,17 +40,20 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["anchorsearch"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (seekObj, stringObj) = try context.operands.pop2()
       let string = try stringObj.value(as: StringValue.self)
       let seek = try seekObj.value(as: StringValue.self)
+      try string.access.check(.read)
+      try seek.access.check(.read)
 
-      if string.count >= seek.count, try string.characters(in: seek.range) == seek.characters(in: seek.range) {
+      if string.count >= seek.count, try string.characters(in: 0..<seek.count) == seek.characters(in: seek.range) {
 
+        let matchObj: Object = try .string(sharing: string, subRange: ..<seek.count, kind: stringObj.kind)
         let postObj: Object = try .string(sharing: string, subRange: seek.count..., kind: stringObj.kind)
 
-        context.operands.push(contentsOf: [.boolean(true), seekObj, postObj])
+        context.operands.push(contentsOf: [.boolean(true), matchObj, postObj])
       } else {
         context.operands.push(contentsOf: [.boolean(false), stringObj])
       }
@@ -63,10 +68,12 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["search"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
       let (seekObj, stringObj) = try context.operands.pop2()
       let string = try stringObj.value(as: StringValue.self)
       let seek = try seekObj.value(as: StringValue.self)
+      try string.access.check(.read)
+      try seek.access.check(.read)
 
       if let matchRange = try string.firstRange(of: seek) {
 

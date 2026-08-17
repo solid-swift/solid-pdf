@@ -10,6 +10,9 @@ import Foundation
 /// An PostScript ascii85.
 public enum Ascii85 {
 
+  private static let firstDigit: UInt8 = 33
+  private static let lastDigit: UInt8 = 117
+
   // Error handling for the ASCII85 decoding process
   /// A PostScript decoding error.
   public enum DecodingError: Swift.Error {
@@ -20,59 +23,66 @@ public enum Ascii85 {
   /// Performs the ``decode`` operation.
   public static func decode(_ input: some StringProtocol) throws -> Data {
 
-    guard input.allSatisfy({ $0.isASCII && $0 >= "!" && $0 <= "u" || $0 == "z" }) else {
-      throw DecodingError.invalidCharacter
-    }
-
-    // Ensure the length of the filtered input is valid
-    guard !input.isEmpty && input.count % 5 == 0 else {
-      throw DecodingError.invalidLength
-    }
-
     var decodedBytes: [UInt8] = []
+    var tuple: [UInt64] = []
 
-    // Process each group of 5 characters
-    var buffer: [UInt32] = Array(repeating: 0, count: 5)
-    var byteCount = 0
+    for character in input {
 
-    for (index, character) in input.enumerated() {
-
-      if character == "z" {
-        // "z" is a special case that represents 4 zero bytes
-        decodedBytes.append(contentsOf: [0, 0, 0, 0])
-        byteCount += 4
-        continue
-      }
-
-      // Map the ASCII85 character to its base85 value
-      guard let value = character.asciiValue else {
+      guard let ascii = character.asciiValue else {
         throw DecodingError.invalidCharacter
       }
 
-      buffer[index % 5] = UInt32(value - 33)
+      if whitespace.contains(ascii) {
+        continue
+      }
 
-      // If we have 5 characters, decode them to 4 bytes
-      if index % 5 == 4 {
-        let combined = buffer.reduce(0) { $0 * 85 + $1 }
-        decodedBytes.append(UInt8((combined >> 24) & 0xFF))
-        decodedBytes.append(UInt8((combined >> 16) & 0xFF))
-        decodedBytes.append(UInt8((combined >> 8) & 0xFF))
-        decodedBytes.append(UInt8(combined & 0xFF))
-        byteCount += 4
+      if character == "z" {
+        guard tuple.isEmpty else {
+          throw DecodingError.invalidCharacter
+        }
+        decodedBytes.append(contentsOf: [0, 0, 0, 0])
+        continue
+      }
+
+      guard ascii >= firstDigit, ascii <= lastDigit else {
+        throw DecodingError.invalidCharacter
+      }
+
+      tuple.append(UInt64(ascii - firstDigit))
+
+      if tuple.count == 5 {
+        decodedBytes.append(contentsOf: try decode(tuple))
+        tuple.removeAll(keepingCapacity: true)
       }
     }
 
-    // Handle padding if the input length was not a multiple of 5
-    let paddingCount = input.count % 5
-    if paddingCount > 0 {
-      buffer[paddingCount] = 84
-      let combined = buffer.reduce(0) { $0 * 85 + $1 }
-      for i in 0..<paddingCount - 1 {
-        decodedBytes.append(UInt8((combined >> (8 * (3 - i))) & 0xFF))
-      }
+    guard tuple.count != 1 else {
+      throw DecodingError.invalidLength
+    }
+
+    if !tuple.isEmpty {
+      let byteCount = tuple.count - 1
+      tuple.append(contentsOf: repeatElement(84, count: 5 - tuple.count))
+      decodedBytes.append(contentsOf: try decode(tuple).prefix(byteCount))
     }
 
     return Data(decodedBytes)
+  }
+
+  private static let whitespace: Set<UInt8> = [0x00, 0x09, 0x0A, 0x0C, 0x0D, 0x20]
+
+  private static func decode(_ tuple: [UInt64]) throws -> [UInt8] {
+    let combined = tuple.reduce(0) { $0 * 85 + $1 }
+    guard combined <= UInt32.max else {
+      throw DecodingError.invalidCharacter
+    }
+
+    return [
+      UInt8((combined >> 24) & 0xFF),
+      UInt8((combined >> 16) & 0xFF),
+      UInt8((combined >> 8) & 0xFF),
+      UInt8(combined & 0xFF),
+    ]
   }
 
   static let ascii85Table = Array(
@@ -108,12 +118,12 @@ public enum Ascii85 {
     // Handle padding if data length is not a multiple of 4
     if byteCount > 0 {
       buffer <<= (4 - byteCount) * 8
-      var encodedBlock = [Character](repeating: "!", count: byteCount + 1)
-      for i in (0..<byteCount + 1).reversed() {
+      var encodedBlock = [Character](repeating: "!", count: 5)
+      for i in encodedBlock.indices.reversed() {
         encodedBlock[i] = ascii85Table[Int(buffer % 85)]
         buffer /= 85
       }
-      encodedString.append(contentsOf: encodedBlock)
+      encodedString.append(contentsOf: encodedBlock.prefix(byteCount + 1))
     }
 
     return encodedString

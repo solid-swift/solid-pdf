@@ -26,11 +26,11 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["eq"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op2, op1) = try context.operands.pop2()
 
-      context.operands.push(.boolean(op1 == op2))
+      context.operands.push(.boolean(try op1.value.equals(op2.value)))
     }
   }
 
@@ -42,11 +42,11 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["ne"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op2, op1) = try context.operands.pop2()
 
-      context.operands.push(.boolean(op1 != op2))
+      context.operands.push(.boolean(try !op1.value.equals(op2.value)))
     }
   }
 
@@ -58,13 +58,13 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["ge"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op2, op1) = try context.operands.pop2()
 
       switch (op1.value, op2.value) {
       case (let str1 as StringValue, let str2 as StringValue):
-        let result = str1.compare(str2)
+        let result = try str1.compareReadable(str2)
         context.operands.push(.boolean(result == .orderedSame || result == .orderedDescending))
 
       case (let num1 as IntegerValue, let num2 as IntegerValue):
@@ -74,7 +74,7 @@ extension Operators {
         context.operands.push(.boolean(num1.value >= num2.value))
 
       case (let num1 as NumericConvertible, let num2 as NumericConvertible):
-        context.operands.push(try .boolean(num1.real >= num2.real))
+        context.operands.push(.boolean(num1.real >= num2.real))
 
       default:
         throw Error.typeCheck
@@ -90,13 +90,13 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["gt"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op2, op1) = try context.operands.pop2()
 
       switch (op1.value, op2.value) {
       case (let str1 as StringValue, let str2 as StringValue):
-        context.operands.push(.boolean(str1.compare(str2) == .orderedDescending))
+        context.operands.push(.boolean(try str1.compareReadable(str2) == .orderedDescending))
 
       case (let num1 as IntegerValue, let num2 as IntegerValue):
         context.operands.push(.boolean(num1.value > num2.value))
@@ -105,7 +105,7 @@ extension Operators {
         context.operands.push(.boolean(num1.value > num2.value))
 
       case (let num1 as NumericConvertible, let num2 as NumericConvertible):
-        context.operands.push(try .boolean(num1.real > num2.real))
+        context.operands.push(.boolean(num1.real > num2.real))
 
       default:
         throw Error.typeCheck
@@ -121,13 +121,13 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["le"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op2, op1) = try context.operands.pop2()
 
       switch (op1.value, op2.value) {
       case (let str1 as StringValue, let str2 as StringValue):
-        let result = str1.compare(str2)
+        let result = try str1.compareReadable(str2)
         context.operands.push(.boolean(result == .orderedSame || result == .orderedAscending))
 
       case (let num1 as IntegerValue, let num2 as IntegerValue):
@@ -137,7 +137,7 @@ extension Operators {
         context.operands.push(.boolean(num1.value <= num2.value))
 
       case (let num1 as NumericConvertible, let num2 as NumericConvertible):
-        context.operands.push(try .boolean(num1.real <= num2.real))
+        context.operands.push(.boolean(num1.real <= num2.real))
 
       default:
         throw Error.typeCheck
@@ -153,13 +153,13 @@ extension Operators {
     public static let systemDictionaryNames: [Object] = ["lt"]
 
     /// Executes this value in the supplied interpreter context.
-    public func execute(context: isolated Context) throws {
+    public func execute(context: isolated Context) async throws {
 
       let (op2, op1) = try context.operands.pop2()
 
       switch (op1.value, op2.value) {
       case (let str1 as StringValue, let str2 as StringValue):
-        context.operands.push(.boolean(str1.compare(str2) == .orderedAscending))
+        context.operands.push(.boolean(try str1.compareReadable(str2) == .orderedAscending))
 
       case (let num1 as IntegerValue, let num2 as IntegerValue):
         context.operands.push(.boolean(num1.value < num2.value))
@@ -168,7 +168,7 @@ extension Operators {
         context.operands.push(.boolean(num1.value < num2.value))
 
       case (let num1 as NumericConvertible, let num2 as NumericConvertible):
-        context.operands.push(try .boolean(num1.real < num2.real))
+        context.operands.push(.boolean(num1.real < num2.real))
 
       default:
         throw Error.typeCheck
