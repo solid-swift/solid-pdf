@@ -46,6 +46,8 @@ public final class Snapshot: Sendable {
     var objectFormat: ObjectFormat
     var userParameters: UserParameterState
     var localResources: ResourceStore
+    var graphicsState: GraphicsCanonicalState
+    var graphicsStack: [GraphicsStackFrame]
     let saveDepth: Int
     let sequence: UInt64
     let localBoundary: VMGenerationBoundary
@@ -67,6 +69,8 @@ public final class Snapshot: Sendable {
       objectFormat: ObjectFormat,
       userParameters: UserParameterState,
       localResources: ResourceStore,
+      graphicsState: GraphicsCanonicalState,
+      graphicsStack: [GraphicsStackFrame],
       saveDepth: Int,
       sequence: UInt64,
       localBoundary: VMGenerationBoundary,
@@ -78,6 +82,8 @@ public final class Snapshot: Sendable {
       self.objectFormat = objectFormat
       self.userParameters = userParameters
       self.localResources = localResources
+      self.graphicsState = graphicsState
+      self.graphicsStack = graphicsStack
       self.saveDepth = saveDepth
       self.sequence = sequence
       self.localBoundary = localBoundary
@@ -135,6 +141,8 @@ public final class Snapshot: Sendable {
         objectFormat: objectFormat,
         userParameters: userParameters,
         localResources: localResources,
+        graphicsState: graphicsState,
+        graphicsStack: graphicsStack,
         saveDepth: saveDepth,
         sequence: sequence,
         localBoundary: localBoundary,
@@ -155,6 +163,8 @@ public final class Snapshot: Sendable {
       objectFormat: context.objectFormat,
       userParameters: context.userParameters,
       localResources: context.localResources,
+      graphicsState: context.graphicsState,
+      graphicsStack: context.graphicsStack,
       saveDepth: context.saveDepth,
       sequence: context.takeSnapshotSequence(),
       localBoundary: context.localVMAllocationSpace.boundary(),
@@ -173,6 +183,8 @@ public final class Snapshot: Sendable {
   private let objectFormat: ObjectFormat
   private let userParameters: UserParameterState
   private let localResources: ResourceStore
+  private let graphicsState: GraphicsCanonicalState
+  private let graphicsStack: [GraphicsStackFrame]
   private let saveDepth: Int
   private let localBoundary: VMGenerationBoundary
   private let globalBoundary: VMGenerationBoundary?
@@ -188,6 +200,8 @@ public final class Snapshot: Sendable {
     objectFormat: ObjectFormat,
     userParameters: UserParameterState,
     localResources: ResourceStore,
+    graphicsState: GraphicsCanonicalState,
+    graphicsStack: [GraphicsStackFrame],
     saveDepth: Int,
     sequence: UInt64,
     localBoundary: VMGenerationBoundary,
@@ -204,6 +218,8 @@ public final class Snapshot: Sendable {
     self.objectFormat = objectFormat
     self.userParameters = userParameters
     self.localResources = localResources
+    self.graphicsState = graphicsState
+    self.graphicsStack = graphicsStack
     self.saveDepth = saveDepth
     self.localBoundary = localBoundary
     self.globalBoundary = globalBoundary
@@ -259,6 +275,8 @@ public final class Snapshot: Sendable {
       context.objectFormat = objectFormat
       context.userParameters = userParameters
       context.localResources = localResources
+      context.graphicsState = graphicsState
+      context.graphicsStack = graphicsStack
       context.saveDepth = saveDepth
       context.applyUserParameterLimits()
       context.closeFiles(allocatedAfter: localBoundary, globalBoundary: globalBoundary)

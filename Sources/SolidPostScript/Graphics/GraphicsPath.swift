@@ -25,11 +25,31 @@ public struct GraphicsPath: Sendable, Hashable {
   /// Whether the path has no elements.
   public var isEmpty: Bool { elements.isEmpty }
 
-  mutating func append(_ element: Element) {
+  mutating func append(_ element: Element) throws {
+    guard elements.count < LanguageLimits.maximumPathElements else { throw Error.limitCheck }
     elements.append(element)
   }
 
   mutating func removeAll() {
     elements.removeAll(keepingCapacity: true)
+  }
+
+  var currentPoint: GraphicsPoint? {
+    guard let last = elements.last else { return nil }
+    switch last {
+    case .move(let point), .line(let point), .curve(_, _, let point):
+      return point
+    case .close:
+      return currentSubpathStart
+    }
+  }
+
+  var currentSubpathStart: GraphicsPoint? {
+    for element in elements.reversed() {
+      if case .move(let point) = element {
+        return point
+      }
+    }
+    return nil
   }
 }

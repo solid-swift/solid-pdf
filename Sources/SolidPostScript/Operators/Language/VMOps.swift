@@ -35,6 +35,7 @@ extension Operators {
       let save = SaveValue(snapshot: snapshot)
       context.saveDepth += 1
       context.registerLanguageSave(snapshot)
+      context.pushLanguageGraphicsSave(sequence: snapshot.sequence)
 
       context.operands.push(.init(value: save))
     }

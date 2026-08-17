@@ -89,6 +89,8 @@ public actor Context {
   var filePendingEndOfFile: [ObjectIdentifier: any File] = [:]
   var graphicsDeviceDescriptor: GraphicsDeviceDescriptor = .letter
   var graphicsEventConsumer: (any GraphicsEventConsumer)?
+  var graphicsState: GraphicsCanonicalState = .initial(for: .letter)
+  var graphicsStack: [GraphicsStackFrame] = []
   private var executionBoundarySequence: UInt64 = 0
   private var executionTimingDepth = 0
   private var hostSuspensionDepth = 0
@@ -318,7 +320,7 @@ public actor Context {
     renderer: sending Renderer
   ) async throws -> sending Renderer.Output {
     precondition(graphicsEventConsumer == nil, "A PostScript context cannot run overlapping renders")
-    graphicsDeviceDescriptor = deviceDescriptor
+    try resetGraphics(for: deviceDescriptor)
     graphicsEventConsumer = renderer
     do {
       try await executeStart()
@@ -990,6 +992,11 @@ public actor Context {
 
     for object in localResources.objects {
       object.save(to: builder)
+    }
+
+    graphicsState.dashSource?.save(to: builder)
+    for frame in graphicsStack {
+      frame.state.dashSource?.save(to: builder)
     }
 
     if scope == .job {

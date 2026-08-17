@@ -75,7 +75,8 @@ public struct GraphicsClip: Sendable, Hashable {
     self.constraints = constraints
   }
 
-  func appending(_ constraint: GraphicsClipConstraint) -> Self {
-    Self(imageableBounds: imageableBounds, constraints: constraints + [constraint])
+  func appending(_ constraint: GraphicsClipConstraint) throws -> Self {
+    guard constraints.count < LanguageLimits.maximumClipConstraints else { throw Error.limitCheck }
+    return Self(imageableBounds: imageableBounds, constraints: constraints + [constraint])
   }
 }
