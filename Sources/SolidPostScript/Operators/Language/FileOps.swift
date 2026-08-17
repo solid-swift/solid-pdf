@@ -265,7 +265,12 @@ extension Operators {
 
       try file.checkReadable()
 
-      context.operands.push(try NumericSemantics.integer(validating: await file.file.available(context: context)))
+      let available = try await file.file.available(context: context)
+      context.operands.push(.integer(Self.postScriptCount(available)))
+    }
+
+    static func postScriptCount(_ available: Int) -> Int32 {
+      Int32(exactly: available) ?? -1
     }
   }
 

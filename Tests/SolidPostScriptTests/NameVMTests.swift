@@ -10,6 +10,12 @@ import Testing
 struct NameVMTests {
 
   @Test
+  func nameLengthCountsPostScriptBytes() async throws {
+    let length: IntegerValue = try await Interpreter.result(content: "(\\015\\012) cvn length")
+    #expect(length.value == 2)
+  }
+
+  @Test
   func languageNamesAreChargedOnceInGlobalVM() async throws {
     let environment = InterpreterEnvironment()
     let context = Context(environment: environment)

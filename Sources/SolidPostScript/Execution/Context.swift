@@ -43,15 +43,6 @@ public actor Context {
     var data: Data
   }
 
-  private enum StatementDelimiter {
-    case literalString
-    case procedure
-    case array
-    case dictionary
-    case hexadecimalString
-    case ascii85String
-  }
-
   /// A legacy PostScript execution mode.
   @available(*, deprecated, message: "Procedure literals are constructed by the scanner")
   public enum ExecutionMode: Sendable {
@@ -1088,6 +1079,7 @@ public actor Context {
     // their backing dictionaries are created lazily for the first job.
     try ensureResourcesInitialized()
     retireStandardFiles()
+    environment.standardErrorFile.reopen()
     localVMAllocationSpace.pruneWeakGarbage()
     let localBoundary = localVMAllocationSpace.boundary()
     let globalBoundary = environment.globalVMAllocationSpace.boundary()
@@ -1304,17 +1296,24 @@ public actor Context {
 
       guard !executivePendingInput.isEmpty else { continue }
       let byte = executivePendingInput.removeFirst()
+      var consumesBinaryData = false
+      if statement, objectFormat.binaryEnabled {
+        var scanner = StatementScanner(data: result, binaryEnabled: true)
+        consumesBinaryData = scanner.expectsBinaryData()
+      }
 
-      switch byte {
-      case 0x03:
+      switch (byte, consumesBinaryData) {
+      case (_, true):
+        result.append(byte)
+      case (0x03, false):
         throw Error.interrupt
-      case Scanner.backSpace, 0x7F:
+      case (Scanner.backSpace, false), (0x7F, false):
         if !result.isEmpty { result.removeLast() }
-      case 0x15:
+      case (0x15, false):
         while let last = result.last, last != Scanner.lineFeed, last != Scanner.carriageReturn {
           result.removeLast()
         }
-      case 0x12:
+      case (0x12, false):
         if echoEnabled {
           let line = result.suffix { $0 != Scanner.lineFeed && $0 != Scanner.carriageReturn }
           try await writeStandardOutput(Data(line))
@@ -1323,95 +1322,30 @@ public actor Context {
         result.append(byte)
       }
 
-      if echoEnabled, byte != 0x12 {
+      if echoEnabled, byte != 0x12 || consumesBinaryData {
         try await writeStandardOutput(Data([byte]))
       }
 
       guard byte == Scanner.lineFeed || byte == Scanner.carriageReturn else { continue }
-      if !statement || Self.isCompleteStatement(result) { return result }
-    }
-  }
+      if byte == Scanner.carriageReturn,
+        executivePendingInput.first == Scanner.lineFeed
+      {
+        executivePendingInput.removeFirst()
+        result.append(Scanner.lineFeed)
+        if echoEnabled {
+          try await writeStandardOutput(Data([Scanner.lineFeed]))
+        }
+      }
+      if !statement { return result }
 
-  private nonisolated static func isCompleteStatement(_ data: Data) -> Bool {
-    let bytes = Array(data)
-    var delimiters: [StatementDelimiter] = []
-    var escaped = false
-    var comment = false
-    var index = 0
-
-    while index < bytes.count {
-      let byte = bytes[index]
-      if comment {
-        if byte == Scanner.lineFeed || byte == Scanner.carriageReturn { comment = false }
-        index += 1
+      var scanner = StatementScanner(data: result, binaryEnabled: objectFormat.binaryEnabled)
+      switch scanner.completion() {
+      case .complete, .invalid:
+        return result
+      case .empty, .incomplete:
         continue
       }
-      if delimiters.last == .literalString {
-        if escaped {
-          escaped = false
-        } else if byte == Scanner.escapeMarker {
-          escaped = true
-        } else if byte == Scanner.literalStringDelims.open {
-          delimiters.append(.literalString)
-        } else if byte == Scanner.literalStringDelims.close {
-          _ = delimiters.popLast()
-        }
-        index += 1
-        continue
-      }
-      if delimiters.last == .hexadecimalString {
-        if byte == Scanner.char(">") { _ = delimiters.popLast() }
-        index += 1
-        continue
-      }
-      if delimiters.last == .ascii85String {
-        if byte == Scanner.char("~"), bytes.indices.contains(index + 1), bytes[index + 1] == Scanner.char(">") {
-          _ = delimiters.popLast()
-          index += 2
-        } else {
-          index += 1
-        }
-        continue
-      }
-      switch byte {
-      case Scanner.commentDelim:
-        comment = true
-      case Scanner.literalStringDelims.open:
-        delimiters.append(.literalString)
-      case Scanner.char("{"):
-        delimiters.append(.procedure)
-      case Scanner.char("["):
-        delimiters.append(.array)
-      case Scanner.char("<"):
-        if bytes.indices.contains(index + 1), bytes[index + 1] == Scanner.char("<") {
-          delimiters.append(.dictionary)
-          index += 1
-        } else if bytes.indices.contains(index + 1), bytes[index + 1] == Scanner.char("~") {
-          delimiters.append(.ascii85String)
-          index += 1
-        } else {
-          delimiters.append(.hexadecimalString)
-        }
-      case Scanner.literalStringDelims.close:
-        if delimiters.last == .literalString { _ = delimiters.popLast() }
-      case Scanner.char("}"):
-        if delimiters.last == .procedure { _ = delimiters.popLast() }
-      case Scanner.char("]"):
-        if delimiters.last == .array { _ = delimiters.popLast() }
-      case Scanner.char(">"):
-        if delimiters.last == .dictionary,
-          bytes.indices.contains(index + 1),
-          bytes[index + 1] == Scanner.char(">")
-        {
-          _ = delimiters.popLast()
-          index += 1
-        }
-      default:
-        break
-      }
-      index += 1
     }
-    return delimiters.isEmpty
   }
 
   func closeFiles(

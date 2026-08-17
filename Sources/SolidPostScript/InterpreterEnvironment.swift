@@ -14,6 +14,7 @@ public final class InterpreterEnvironment: Sendable {
   let standardInput: StandardInputChannel
   let standardOutput: StandardOutputChannel
   let standardError: StandardOutputChannel
+  let standardErrorFile: StandardOutputFile
   let monotonicInstantSource: any MonotonicInstantSource
 
   /// The application integration used by this environment.
@@ -78,14 +79,19 @@ public final class InterpreterEnvironment: Sendable {
     self.globalVMAllocationSpace = globalVMAllocationSpace
     self.nameTable = NameTable(globalVM: globalVMAllocationSpace)
     self.hostConfiguration = hostConfiguration
-    self.standardInput = StandardInputChannel(source: hostConfiguration.standardInput)
-    self.standardOutput = StandardOutputChannel(sink: hostConfiguration.standardOutput)
-    self.standardError = StandardOutputChannel(sink: hostConfiguration.standardError)
+    let standardInput = StandardInputChannel(source: hostConfiguration.standardInput)
+    let standardOutput = StandardOutputChannel(sink: hostConfiguration.standardOutput)
+    let standardError = StandardOutputChannel(sink: hostConfiguration.standardError)
+    let standardErrorFile = StandardOutputFile(channel: standardError, name: "stderr")
+    self.standardInput = standardInput
+    self.standardOutput = standardOutput
+    self.standardError = standardError
+    self.standardErrorFile = standardErrorFile
     self.monotonicInstantSource = monotonicInstantSource
     self.fileDevices = fileDevices
-      .replacing(StandardInputFileDevice(channel: self.standardInput))
-      .replacing(StandardOutputFileDevice(channel: self.standardOutput, deviceName: "stdout"))
-      .replacing(StandardOutputFileDevice(channel: self.standardError, deviceName: "stderr"))
+      .replacing(StandardInputFileDevice(channel: standardInput))
+      .replacing(StandardOutputFileDevice(channel: standardOutput, deviceName: "stdout"))
+      .replacing(StandardOutputFileDevice(channel: standardError, deviceName: "stderr", sharedFile: standardErrorFile))
     var categories = Resources.resources
     categories.merge(resourceCategories) { _, replacement in replacement }
     if resourceCategories["IODevice"] == nil {

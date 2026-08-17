@@ -69,6 +69,13 @@ actor StandardOutputChannel {
 struct StandardOutputFileDevice: FileDevice {
   let channel: StandardOutputChannel
   let deviceName: String
+  let sharedFile: StandardOutputFile?
+
+  init(channel: StandardOutputChannel, deviceName: String, sharedFile: StandardOutputFile? = nil) {
+    self.channel = channel
+    self.deviceName = deviceName
+    self.sharedFile = sharedFile
+  }
 
   var searched: Bool { false }
   var name: String { deviceName }
@@ -77,7 +84,7 @@ struct StandardOutputFileDevice: FileDevice {
     guard name.isEmpty, mode == .write, openMethod == .truncateOrCreate else {
       throw Error.invalidFileAccess
     }
-    return StandardOutputFile(channel: channel, name: deviceName)
+    return sharedFile ?? StandardOutputFile(channel: channel, name: deviceName)
   }
 }
 
@@ -133,6 +140,10 @@ final class StandardOutputFile: ContextualFile, Sendable {
 
   func close(context: isolated Context) async {
     close()
+  }
+
+  func reopen() {
+    closed.withLock { $0 = false }
   }
 
   var offset: Int { get throws { throw Error.ioError } }

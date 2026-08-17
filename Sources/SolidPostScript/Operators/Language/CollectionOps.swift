@@ -42,7 +42,7 @@ extension Operators {
         try string.access.check(.read)
         length = string.count
       case let name as NameValue:
-        length = try name.value.count.unsigned
+        length = try LanguageLimits.postScriptBytes(name.value).count.unsigned
       default:
         throw Error.typeCheck
       }

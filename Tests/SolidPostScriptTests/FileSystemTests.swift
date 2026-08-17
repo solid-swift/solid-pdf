@@ -93,9 +93,11 @@ struct FileSystemTests {
 
   @Test
   func filenameForAllHonorsDeviceTemplatesAndExit() async throws {
-    let url = temporaryURL(extension: "ps")
+    let directory = temporaryDirectory()
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let url = directory.appending(path: "only.ps")
     try Data().write(to: url)
-    defer { try? FileManager.default.removeItem(at: url) }
+    defer { try? FileManager.default.removeItem(at: directory) }
 
     let template = "%*%\(url.deletingLastPathComponent().path)/*.ps"
     let results = try await Interpreter.results(content: "(\(template)) { exit } 1024 string filenameforall")

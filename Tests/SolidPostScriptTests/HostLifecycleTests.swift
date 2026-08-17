@@ -498,7 +498,7 @@ struct HostLifecycleTests {
     )
     #expect(available.value == 10)
 
-    for statement in ["<< /a\n1 >>\n", "<4142\n43>\n", "<~87cU\nR~>\n"] {
+    for statement in ["<4142\n43>\n", "<~87cU\nR~>\n"] {
       let provider = QueueExecutiveProvider(
         events: statement.split(separator: "\n").map {
           .data(Data((String($0) + "\n").utf8))
@@ -516,6 +516,34 @@ struct HostLifecycleTests {
       )
       #expect(value.value == Int32(statement.utf8.count))
     }
+
+    let dictionaryProvider = QueueExecutiveProvider(events: [.data(Data("<< /a\n".utf8))])
+    let dictionaryEnvironment = InterpreterEnvironment(
+      hostConfiguration: InterpreterHostConfiguration(
+        standardOutput: DataSink(),
+        interactiveExecutiveProvider: dictionaryProvider
+      )
+    )
+    let dictionaryLine: IntegerValue = try await Interpreter.result(
+      content: "(%statementedit) (r) file bytesavailable",
+      environment: dictionaryEnvironment
+    )
+    #expect(dictionaryLine.value == 6)
+
+    let binaryProvider = QueueExecutiveProvider(
+      events: [.data(Data([142, 3, Scanner.carriageReturn, Scanner.lineFeed, 65, Scanner.lineFeed]))]
+    )
+    let binaryEnvironment = InterpreterEnvironment(
+      hostConfiguration: InterpreterHostConfiguration(
+        standardOutput: DataSink(),
+        interactiveExecutiveProvider: binaryProvider
+      )
+    )
+    let binaryLength: IntegerValue = try await Interpreter.result(
+      content: "1 setobjectformat (%statementedit) (r) file bytesavailable",
+      environment: binaryEnvironment
+    )
+    #expect(binaryLength.value == 6)
   }
 
   @Test
@@ -573,25 +601,98 @@ struct HostLifecycleTests {
   }
 
   @Test
+  func standardErrorIsSharedAcrossContexts() async throws {
+    let environment = InterpreterEnvironment(
+      hostConfiguration: InterpreterHostConfiguration(standardError: DataSink())
+    )
+
+    async let firstErrorResult: FileValue = Interpreter.result(
+      content: "(%stderr) (w) file",
+      environment: environment
+    )
+    async let secondErrorResult: FileValue = Interpreter.result(
+      content: "(%stderr) (w) file",
+      environment: environment
+    )
+    let (firstError, secondError) = try await (firstErrorResult, secondErrorResult)
+    let firstOutput: FileValue = try await Interpreter.result(
+      content: "(%stdout) (w) file",
+      environment: environment
+    )
+    let secondOutput: FileValue = try await Interpreter.result(
+      content: "(%stdout) (w) file",
+      environment: environment
+    )
+    let firstInput: FileValue = try await Interpreter.result(
+      content: "(%stdin) (r) file",
+      environment: environment
+    )
+    let secondInput: FileValue = try await Interpreter.result(
+      content: "(%stdin) (r) file",
+      environment: environment
+    )
+
+    #expect(firstError.file === secondError.file)
+    #expect(firstOutput.file !== secondOutput.file)
+    #expect(firstInput.file !== secondInput.file)
+
+    _ = try await Interpreter.execute(
+      content: "(%stderr) (w) file closefile",
+      environment: environment
+    )
+    #expect(firstError.file.isClosed)
+    let status: BooleanValue = try await Interpreter.result(
+      content: "(%stderr) (w) file status",
+      environment: environment
+    )
+    #expect(!status.value)
+  }
+
+  @Test
+  func standardInputAvailabilityIsIndeterminateWithoutReading() async throws {
+    let source = CountingSource(data: Data("A".utf8))
+    let environment = InterpreterEnvironment(
+      hostConfiguration: InterpreterHostConfiguration(standardInput: source)
+    )
+
+    let available: IntegerValue = try await Interpreter.result(
+      content: "(%stdin) (r) file bytesavailable",
+      environment: environment
+    )
+
+    #expect(available.value == -1)
+    #expect(source.readCount == 0)
+    #expect(Operators.BytesAvailable.postScriptCount(Int.max) == -1)
+  }
+
+  @Test
   func jobBoundariesEstablishFreshStandardFileObjects() async throws {
     let context = Context(environment: InterpreterEnvironment(), jobServerEnabled: true)
     try await context.executeStart()
     let startup = try await context.openFileObject(name: "%stdout", mode: "w").value(as: FileValue.self)
+    let startupError = try await context.openFileObject(name: "%stderr", mode: "w").value(as: FileValue.self)
 
     try await context.beginSessionJob()
     let firstJob = try await context.openFileObject(name: "%stdout", mode: "w").value(as: FileValue.self)
+    let firstJobError = try await context.openFileObject(name: "%stderr", mode: "w").value(as: FileValue.self)
     #expect(startup.allocation !== firstJob.allocation)
     #expect(startup.file !== firstJob.file)
     #expect(startup.file.isClosed)
+    #expect(startupError.file === firstJobError.file)
+    #expect(!firstJobError.file.isClosed)
 
     try await context.finishSessionJob()
     #expect(firstJob.file.isClosed)
+    #expect(firstJobError.file.isClosed)
 
     try await context.beginSessionJob()
     let secondJob = try await context.openFileObject(name: "%stdout", mode: "w").value(as: FileValue.self)
+    let secondJobError = try await context.openFileObject(name: "%stderr", mode: "w").value(as: FileValue.self)
     #expect(firstJob.allocation !== secondJob.allocation)
     #expect(firstJob.file !== secondJob.file)
     #expect(!secondJob.file.isClosed)
+    #expect(firstJobError.file === secondJobError.file)
+    #expect(!secondJobError.file.isClosed)
     try await context.finishSessionJob()
   }
 
@@ -751,6 +852,37 @@ private actor QueueExecutiveProvider: InteractiveExecutiveProvider {
   func nextEvent() async throws -> InteractiveExecutiveEvent {
     events.isEmpty ? .endOfFile : events.removeFirst()
   }
+}
+
+private final class CountingSource: Source, Sendable {
+  private struct State: Sendable {
+    var data: Data
+    var readCount = 0
+    var bytesRead = 0
+  }
+
+  private let state: Mutex<State>
+
+  var readCount: Int { state.withLock(\.readCount) }
+  var bytesRead: Int { state.withLock(\.bytesRead) }
+
+  init(data: Data) {
+    self.state = Mutex(State(data: data))
+  }
+
+  func read(max: Int) async -> Data? {
+    state.withLock { state in
+      state.readCount += 1
+      guard !state.data.isEmpty else { return nil }
+      let count = min(max, state.data.count)
+      let result = Data(state.data.prefix(count))
+      state.data.removeFirst(count)
+      state.bytesRead += count
+      return result
+    }
+  }
+
+  func close() {}
 }
 
 private struct NoticeObserver: InterpreterLifecycleObserver {

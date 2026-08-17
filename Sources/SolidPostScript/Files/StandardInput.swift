@@ -50,7 +50,7 @@ actor StandardInputChannel {
     while try await read(max: 4096) != nil {}
   }
 
-  var available: Int { buffered.count }
+  var available: Int { buffered.isEmpty ? -1 : buffered.count }
 }
 
 struct StandardInputFileDevice: FileDevice {
