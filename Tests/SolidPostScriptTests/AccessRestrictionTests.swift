@@ -124,6 +124,37 @@ struct AccessRestrictionTests {
     #expect(errorName.value == "invalidaccess")
   }
 
+  @Test(arguments: ["()", "(/value 1 def)"])
+  func `no access executable strings do not execute`(_ string: String) async throws {
+    let result: BooleanValue = try await Interpreter.result(
+      content:
+        """
+        /value 0 def
+        { \(string) noaccess cvx exec } stopped pop clear
+        $error /errorname get /invalidaccess eq
+        $error /command get type /stringtype eq and
+        value 0 eq and
+        """
+    )
+
+    #expect(result.value)
+  }
+
+  @Test
+  func `read only and execute only strings remain executable`() async throws {
+    let result: IntegerValue = try await Interpreter.result(
+      content:
+        """
+        /value 0 def
+        (/value 1 def) readonly cvx exec
+        (value 2 add /value exch def) executeonly cvx exec
+        value
+        """
+    )
+
+    #expect(result.value == 3)
+  }
+
   @Test(
     arguments: [
       "[] noaccess length",

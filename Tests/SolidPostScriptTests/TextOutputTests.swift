@@ -88,7 +88,7 @@ struct TextOutputTests {
       environment: InterpreterEnvironment(standardOutput: sink)
     )
     #expect(sink.data == Data("abc".utf8))
-    #expect(sink.flushCount == 2)
+    #expect(sink.flushCount == 3)
     #expect(!sink.closed)
   }
 
@@ -101,8 +101,43 @@ struct TextOutputTests {
       environment: InterpreterEnvironment(standardOutput: sink)
     )
     #expect(sink.data == Data("ab".utf8))
+    #expect(sink.flushCount == 1)
     #expect(!sink.closed)
     #expect(try results[0].value(as: BooleanValue.self).value)
+  }
+
+  @Test
+  func closingNoAccessStdoutStillFlushes() async throws {
+    let sink = RecordingSink()
+    _ = try await Interpreter.execute(
+      content: "(%stdout) (w) file noaccess closefile",
+      environment: InterpreterEnvironment(standardOutput: sink)
+    )
+
+    #expect(sink.flushCount == 1)
+    #expect(!sink.closed)
+  }
+
+  @Test
+  func failedCloseFlushLeavesTheLogicalFileOpen() async throws {
+    let sink = FailingFlushSink()
+    let results = try await Interpreter.results(
+      content:
+        """
+        /standard (%stdout) (w) file def
+        standard (a) writestring
+        { standard closefile } stopped pop clear
+        standard status
+        $error /errorname get
+        """,
+      environment: InterpreterEnvironment(standardOutput: sink)
+    )
+
+    #expect(sink.data == Data("a".utf8))
+    #expect(sink.flushCount == 1)
+    #expect(results.count == 2)
+    #expect(results.contains { ($0.value as? BooleanValue)?.value == true })
+    #expect(results.contains { ($0.value as? NameValue)?.value == "ioerror" })
   }
 
   @Test
@@ -112,7 +147,7 @@ struct TextOutputTests {
       content: "(%stdout) (w) file /ASCIIHexEncode filter dup (Hi) writestring closefile",
       environment: InterpreterEnvironment(standardOutput: sink)
     )
-    #expect(sink.data == Data("4869>".utf8))
+    #expect(sink.data == Data("4869\n>".utf8))
   }
 
   @Test
@@ -190,6 +225,34 @@ private struct FailingSink: Sink {
 
   private enum Failure: Swift.Error {
     case write
+  }
+}
+
+private final class FailingFlushSink: Sink, Flushable, Sendable {
+  private struct State: Sendable {
+    var data = Data()
+    var flushCount = 0
+  }
+
+  private let state = Mutex(State())
+
+  var data: Data { state.withLock(\.data) }
+  var flushCount: Int { state.withLock(\.flushCount) }
+  var bytesWritten: Int { state.withLock { $0.data.count } }
+
+  func write(data: Data) {
+    state.withLock { $0.data.append(data) }
+  }
+
+  func flush() throws {
+    state.withLock { $0.flushCount += 1 }
+    throw Failure.flush
+  }
+
+  func close() {}
+
+  private enum Failure: Swift.Error {
+    case flush
   }
 }
 

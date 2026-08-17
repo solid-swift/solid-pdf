@@ -46,10 +46,10 @@ struct FilteredFileTests {
       content: """
         /output 20 string def
         output /ASCIIHexEncode filter dup (Hi) writestring closefile
-        output 0 5 getinterval
+        output 0 6 getinterval
         """
     )
-    #expect(encoded.string == "4869>")
+    #expect(encoded.string == "4869\n>")
   }
 
   @Test
@@ -97,7 +97,7 @@ struct FilteredFileTests {
         """
     )
     let strings = results.compactMap { $0.value as? StringValue }
-    #expect(strings.map(\.string) == [">", "4869"])
+    #expect(strings.map(\.string) == ["\n>", "4869"])
   }
 
   @Test

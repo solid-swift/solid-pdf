@@ -76,6 +76,13 @@ extension Operators {
 
       let file: FileValue = try context.operands.popAs()
 
+      guard !file.file.isClosed else { return }
+      switch file.mode {
+      case .read:
+        break
+      case .write, .readWrite:
+        try await file.file.flush(context: context)
+      }
       try await file.file.close(context: context)
     }
   }
