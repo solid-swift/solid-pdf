@@ -180,13 +180,10 @@ public class Scanner {
       switch char {
       case Self.whitespace:
         if !chars.isEmpty {
-          if contextualInput != nil {
-            if char == Self.carriageReturn, try peek() == Self.lineFeed {
-              try skip()
-            }
-            return .token(try token(chars, putBack: 0).neverNil())
+          if char == Self.carriageReturn, try peek() == Self.lineFeed {
+            try skip()
           }
-          return .token(try token(chars).neverNil())
+          return .token(try token(chars, putBack: 0).neverNil())
         }
         try skip(while: Self.whitespace.contains)
 

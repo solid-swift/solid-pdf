@@ -51,6 +51,7 @@ public struct SaveValue: CompositeValue, VMStoredCompositeValue {
 
   /// Executes this value in the supplied interpreter context.
   public func execute(context: isolated Context, kind: ObjectKind, method: Object.AccessMethod) async throws {
+    context.operands.push(.init(value: self, kind: kind))
   }
 
   /// Returns whether this value equals another PostScript value.

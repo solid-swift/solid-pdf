@@ -143,12 +143,9 @@ extension Operators {
       case -2 ... 0:
         context.userParameters.setInteger(value.value, for: "VMReclaim")
       case 1:
-        ResourceRuntime.reclaimAutomaticResources(context: context, includeGlobal: false)
-        context.localVMAllocationSpace.collectCycles()
+        context.reclaimVM(includeGlobal: false)
       case 2:
-        ResourceRuntime.reclaimAutomaticResources(context: context, includeGlobal: true)
-        context.environment.globalVMAllocationSpace.collectCycles()
-        context.localVMAllocationSpace.collectCycles()
+        context.reclaimVM(includeGlobal: true)
       default:
         throw Error.rangeCheck
       }

@@ -194,8 +194,9 @@ extension Operators {
 
         case let dict as DictionaryValue:
           try dict.access.check(.read)
-          for key in dict.keys {
-            let value = try dict.object(forKey: key)
+          let initialKeys = Array(dict.keys)
+          for key in initialKeys {
+            guard let value = try dict.object(forKeyIfExists: key) else { continue }
             try await context.execute(proc: proc, ops: [value, key])
           }
 

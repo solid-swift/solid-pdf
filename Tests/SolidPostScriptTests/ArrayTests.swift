@@ -108,6 +108,7 @@ struct ArrayTests {
     let secondInterval = try ArrayValue(sharing: array, subRange: 1..<3)
     let distinct = try ArrayValue(elements: [1, 2, 3], access: .unlimited, vm: .local)
     let empty = try ArrayValue(elements: [], access: .unlimited, vm: .local)
+    let emptyInterval = try ArrayValue(sharing: empty, subRange: 0..<0)
     let distinctEmpty = try ArrayValue(elements: [], access: .unlimited, vm: .local)
     var restrictedInterval = firstInterval
     try restrictedInterval.setAccess(to: .readOnly)
@@ -117,13 +118,15 @@ struct ArrayTests {
     #expect(Object(value: array) != Object(value: firstInterval))
     #expect(Object(value: firstInterval) != Object(value: secondInterval))
     #expect(Object(value: array) != Object(value: distinct))
-    #expect(Object(value: empty) == Object(value: distinctEmpty))
+    #expect(Object(value: empty) == Object(value: emptyInterval))
+    #expect(Object(value: empty) != Object(value: distinctEmpty))
     #expect(
       Object(value: firstInterval, kind: .literal) == Object(value: restrictedInterval, kind: .executable)
     )
     #expect(Set([Object(value: firstInterval), Object(value: sameFirstInterval)]).count == 1)
     #expect(Set([Object(value: firstInterval), Object(value: secondInterval)]).count == 2)
-    #expect(Set([Object(value: empty), Object(value: distinctEmpty)]).count == 1)
+    #expect(Set([Object(value: empty), Object(value: emptyInterval)]).count == 1)
+    #expect(Set([Object(value: empty), Object(value: distinctEmpty)]).count == 2)
   }
 
   @Test
@@ -135,6 +138,7 @@ struct ArrayTests {
     let secondInterval = try PackedArrayValue(sharing: array, subRange: 1..<3)
     let distinct = try PackedArrayValue(elements: [1, 2, 3], vm: .local)
     let empty = try PackedArrayValue(elements: [], vm: .local)
+    let emptyInterval = try PackedArrayValue(sharing: empty, subRange: 0..<0)
     let distinctEmpty = try PackedArrayValue(elements: [], vm: .local)
     let ordinaryEmpty = try ArrayValue(elements: [], access: .unlimited, vm: .local)
 
@@ -143,10 +147,12 @@ struct ArrayTests {
     #expect(Object(value: array) != Object(value: firstInterval))
     #expect(Object(value: firstInterval) != Object(value: secondInterval))
     #expect(Object(value: array) != Object(value: distinct))
-    #expect(Object(value: empty) == Object(value: distinctEmpty))
+    #expect(Object(value: empty) == Object(value: emptyInterval))
+    #expect(Object(value: empty) != Object(value: distinctEmpty))
     #expect(Set([Object(value: firstInterval), Object(value: sameFirstInterval)]).count == 1)
     #expect(Set([Object(value: firstInterval), Object(value: secondInterval)]).count == 2)
-    #expect(Set([Object(value: empty), Object(value: distinctEmpty)]).count == 1)
+    #expect(Set([Object(value: empty), Object(value: emptyInterval)]).count == 1)
+    #expect(Set([Object(value: empty), Object(value: distinctEmpty)]).count == 2)
     #expect(Object(value: empty) != Object(value: ordinaryEmpty))
   }
 

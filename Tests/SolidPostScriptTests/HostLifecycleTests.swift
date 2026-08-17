@@ -470,6 +470,46 @@ struct HostLifecycleTests {
   }
 
   @Test
+  func finishingAJobCollectsUnreachableLocalAndGlobalCycles() async throws {
+    let context = Context(environment: InterpreterEnvironment(), jobServerEnabled: true)
+    try await context.executeStart()
+    try await context.beginSessionJob()
+
+    let localSpace = await context.localVMAllocationSpace
+    let globalSpace = await context.environment.globalVMAllocationSpace
+    let source = Object.file(
+      DataFile(
+        data: Data(
+          """
+          /localCycle 1 array def
+          localCycle 0 localCycle put
+          userdict /localCycle undef
+          true setglobal
+          globaldict begin
+          /globalCycle 1 array def
+          globalCycle 0 globalCycle put
+          currentdict /globalCycle undef
+          end
+          false setglobal
+          """.utf8
+        ),
+        mode: .read
+      ),
+      access: .readOnly,
+      vm: .local,
+      kind: .executable
+    )
+    try await context.pushAndRun(source: source)
+    let localBefore = localSpace.chargedBytes
+    let globalBefore = globalSpace.chargedBytes
+
+    try await context.finishSessionJob()
+
+    #expect(localSpace.chargedBytes < localBefore)
+    #expect(globalSpace.chargedBytes < globalBefore)
+  }
+
+  @Test
   func lifecycleNoticesUseTheExistingOrderedOutputChannel() async throws {
     let output = DataSink()
     let observer = NoticeObserver()

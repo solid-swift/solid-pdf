@@ -99,6 +99,8 @@ extension Operators {
     public func execute(context: isolated Context) async throws {
 
       let op = try context.operands.pop()
+      let dictionary = try op.value(as: DictionaryValue.self)
+      try dictionary.access.check(.read)
 
       try context.dictionaries.push(op)
     }

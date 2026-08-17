@@ -213,8 +213,25 @@ struct StringTests {
     let (result, token2, post, token) = try await Interpreter.result(content: ps, as: Result.self)
     expectEqual(result.value, true)
     expectEqual(token2.value, "def")
-    expectEqual(post.string, " ghi")
+    expectEqual(post.string, "ghi")
     expectEqual(token.value, "abc")
+  }
+
+  @Test
+  func stringTokenConsumesOneCompleteWhitespaceSeparator() async throws {
+    let space: StringValue = try await Interpreter.result(content: "(abc def) token pop pop")
+    let carriageReturn: StringValue = try await Interpreter.result(content: "(abc\\rdef) token pop pop")
+    let lineFeed: StringValue = try await Interpreter.result(content: "(abc\\ndef) token pop pop")
+    let carriageReturnLineFeed: StringValue = try await Interpreter.result(
+      content: "(abc\\r\\ndef) token pop pop"
+    )
+    let delimiter: StringValue = try await Interpreter.result(content: "(abc/def) token pop pop")
+
+    #expect(space.string == "def")
+    #expect(carriageReturn.string == "def")
+    #expect(lineFeed.string == "def")
+    #expect(carriageReturnLineFeed.string == "def")
+    #expect(delimiter.string == "/def")
   }
 
   @Test

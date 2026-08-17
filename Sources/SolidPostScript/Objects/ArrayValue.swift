@@ -180,18 +180,12 @@ public struct ArrayValue: CollectionValue, VMStoredCompositeValue {
     guard let other = other as? Self else {
       return false
     }
-    if refRange.isEmpty, other.refRange.isEmpty {
-      return true
-    }
     return arrayViewIdentity == other.arrayViewIdentity
   }
 
   /// Hashes the value into the supplied hasher.
   public func hash(into hasher: inout Hasher) {
-    hasher.combine(refRange.isEmpty)
-    if !refRange.isEmpty {
-      hasher.combine(arrayViewIdentity)
-    }
+    hasher.combine(arrayViewIdentity)
   }
 
   /// A debug representation of this value.

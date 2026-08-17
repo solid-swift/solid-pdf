@@ -968,7 +968,14 @@ public actor Context {
   }
 
   func finishJob() async throws {
-    guard let job = jobLifecycle else { return }
+    guard try await finishJobState() else { return }
+    await withUserTimeSuspended {
+      reclaimVM(includeGlobal: true)
+    }
+  }
+
+  private func finishJobState() async throws -> Bool {
+    guard let job = jobLifecycle else { return false }
     operands = OperandStack()
     execution = ExecutionStack()
     dictionaries.clear()
@@ -990,6 +997,15 @@ public actor Context {
     retireStandardFiles()
     jobLifecycle = nil
     languageSaves.removeAll()
+    return true
+  }
+
+  func reclaimVM(includeGlobal: Bool) {
+    ResourceRuntime.reclaimAutomaticResources(context: self, includeGlobal: includeGlobal)
+    if includeGlobal {
+      environment.globalVMAllocationSpace.collectCycles()
+    }
+    localVMAllocationSpace.collectCycles()
   }
 
   func transitionJob(persistent: Bool, authorization: JobAuthorizationOutcome) async throws {

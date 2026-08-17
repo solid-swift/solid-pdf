@@ -68,6 +68,16 @@ struct DictionaryTests {
   }
 
   @Test
+  func beginRequiresReadAccessAndRestoresItsOperandOnError() async throws {
+    let results = try await Interpreter.results(content: "{10 dict noaccess begin} stopped")
+
+    #expect(results.count == 3)
+    #expect(try results[0].value(as: BooleanValue.self).value)
+    #expect(results[1].value is Operators.Begin)
+    #expect(try results[2].value(as: DictionaryValue.self).access == .noAccess)
+  }
+
+  @Test
   func testEnd() async throws {
     let ctx = try await Interpreter.execute(content: "10 dict begin end")
     let depth = await ctx.dictionaryStackDepth
@@ -240,6 +250,24 @@ struct DictionaryTests {
       .associated()
     expectEqual((dict["abc"]??.value as? IntegerValue)?.value, 123)
     expectEqual((dict["xyz"]??.value as? StringValue)?.string, "test")
+  }
+
+  @Test
+  func dictionaryForAllSkipsEntriesRemovedAfterIterationBegins() async throws {
+    let count: IntegerValue = try await Interpreter.result(
+      content: """
+        /d << /a 1 /b 2 /c 3 >> def
+        0 d {
+          exch pop exch 1 add exch
+          dup /a ne { d /a undef } if
+          dup /b ne { d /b undef } if
+          dup /c ne { d /c undef } if
+          pop
+        } forall
+        """
+    )
+
+    #expect(count.value == 1)
   }
 
   @Test

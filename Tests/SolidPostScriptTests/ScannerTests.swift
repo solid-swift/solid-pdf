@@ -519,7 +519,7 @@ struct ScannerTests {
     guard try scanner.nextToken() != nil else {
       return recordIssue("Token expected")
     }
-    expectEqual(try scanner.available, 4)
+    expectEqual(try scanner.available, 3)
   }
 
 }

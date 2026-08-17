@@ -23,6 +23,17 @@ struct ControlTests {
   }
 
   @Test
+  func executableInertObjectsRemainDataWhileNullRemainsANoOp() async throws {
+    let markDepth: IntegerValue = try await Interpreter.result(content: "mark cvx exec counttomark")
+    let saveType: NameValue = try await Interpreter.result(content: "save cvx exec type")
+    let nullResult: IntegerValue = try await Interpreter.result(content: "41 null cvx exec")
+
+    #expect(markDepth.value == 0)
+    #expect(saveType.value == "savetype")
+    #expect(nullResult.value == 41)
+  }
+
+  @Test
   func testIf() async throws {
     let res1: IntegerValue = try await Interpreter.result(content: "10 true {20} if")
     expectEqual(res1.value, 20)
