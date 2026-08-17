@@ -87,6 +87,8 @@ public actor Context {
   private var standardFiles: [String: Object] = [:]
   var fileReadAhead: [ObjectIdentifier: FileReadAhead] = [:]
   var filePendingEndOfFile: [ObjectIdentifier: any File] = [:]
+  var graphicsDeviceDescriptor: GraphicsDeviceDescriptor = .letter
+  var graphicsEventConsumer: (any GraphicsEventConsumer)?
   private var executionBoundarySequence: UInt64 = 0
   private var executionTimingDepth = 0
   private var hostSuspensionDepth = 0
@@ -307,6 +309,28 @@ public actor Context {
       try establishStandardFiles()
       try execution.push(source: source, in: self)
       try await run(untilExecutionDepth: 0)
+    }
+  }
+
+  func render<Renderer: GraphicsRenderer>(
+    source: Object,
+    deviceDescriptor: GraphicsDeviceDescriptor,
+    renderer: sending Renderer
+  ) async throws -> sending Renderer.Output {
+    precondition(graphicsEventConsumer == nil, "A PostScript context cannot run overlapping renders")
+    graphicsDeviceDescriptor = deviceDescriptor
+    graphicsEventConsumer = renderer
+    do {
+      try await executeStart()
+      try await prepareIdiomResources()
+      try await pushAndRun(source: source)
+      let output = try renderer.finish()
+      graphicsEventConsumer = nil
+      return output
+    } catch {
+      renderer.abort()
+      graphicsEventConsumer = nil
+      throw error
     }
   }
 

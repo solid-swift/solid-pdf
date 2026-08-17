@@ -31,18 +31,60 @@ public enum Interpreter {
 
   /// Executes a PostScript file in a new context belonging to `environment`.
   public static func execute(file: File, environment: InterpreterEnvironment) async throws -> Context {
+    let result = try await render(file: file, to: NullGraphicsTarget(), environment: environment)
+    return result.context
+  }
+
+  /// Renders PostScript content to a typed graphics target in a new environment.
+  public static func render<Target: GraphicsTarget>(
+    content: String,
+    to target: Target
+  ) async throws -> GraphicsRenderResult<Target.Output> {
+    try await render(content: content, to: target, environment: InterpreterEnvironment())
+  }
+
+  /// Renders PostScript content to a typed graphics target in `environment`.
+  public static func render<Target: GraphicsTarget>(
+    content: String,
+    to target: Target,
+    environment: InterpreterEnvironment
+  ) async throws -> GraphicsRenderResult<Target.Output> {
+    try await render(
+      file: DataFile(data: content.data(using: .isoLatin1).neverNil(), mode: .read),
+      to: target,
+      environment: environment
+    )
+  }
+
+  /// Renders a PostScript file to a typed graphics target in a new environment.
+  public static func render<Target: GraphicsTarget>(
+    file: File,
+    to target: Target
+  ) async throws -> GraphicsRenderResult<Target.Output> {
+    try await render(file: file, to: target, environment: InterpreterEnvironment())
+  }
+
+  /// Renders a PostScript file to a typed graphics target in `environment`.
+  public static func render<Target: GraphicsTarget>(
+    file: File,
+    to target: Target,
+    environment: InterpreterEnvironment
+  ) async throws -> GraphicsRenderResult<Target.Output> {
     let source: Object = .file(file, access: .readOnly, vm: .local, kind: .executable)
+    let renderer = try target.makeRenderer()
     let context = Context(environment: environment)
     do {
-      try await context.executeStart()
-      try await context.prepareIdiomResources()
-      try await context.pushAndRun(source: source)
+      let output = try await context.render(
+        source: source,
+        deviceDescriptor: target.deviceDescriptor,
+        renderer: renderer
+      )
+      return GraphicsRenderResult(context: context, output: output)
     } catch let stop as ErrorStop {
       throw stop.error
     } catch let undispatched as UndispatchedError {
       throw undispatched.error
     }
-    return context
   }
 
   /// Performs the ``results`` operation.
