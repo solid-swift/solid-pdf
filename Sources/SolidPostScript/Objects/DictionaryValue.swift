@@ -419,7 +419,9 @@ extension Object {
       case is NullValue:
         throw Error.typeCheck
       case let string as StringValue:
-        return .literalName(try string.readableString)
+        let name = try string.readableString
+        try LanguageLimits.validateName(name)
+        return .literalName(name)
       default:
         return self
       }

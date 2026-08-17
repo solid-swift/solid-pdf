@@ -160,8 +160,10 @@ extension Operators {
 
       let stringObject = try context.operands.pop()
       let string = try stringObject.value(as: StringValue.self)
+      let name = try string.readableString
+      try LanguageLimits.validateName(name)
 
-      context.operands.push(.name(try string.readableString, kind: stringObject.kind))
+      context.operands.push(.name(name, kind: stringObject.kind))
     }
   }
 }

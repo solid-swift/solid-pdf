@@ -471,6 +471,19 @@ struct ScannerTests {
     expectEqual(try scan("abc%\r"), [.name("abc", kind: .executable)])
     expectEqual(try scan("abc%\n"), [.name("abc", kind: .executable)])
     expectEqual(try scan("abc%\r\n"), [.name("abc", kind: .executable)])
+    expectEqual(try scan("abc%comment\u{0C}123"), [.name("abc", kind: .executable), .integer(123)])
+  }
+
+  @Test
+  func namesEnforceTheImplementationLimit() throws {
+    let maximum = String(repeating: "n", count: 127)
+    let overlong = maximum + "n"
+
+    #expect(try scan(maximum) == [.name(maximum, kind: .executable)])
+    #expect(try scan("/\(maximum)") == [.name(maximum, kind: .literal)])
+    #expect(throws: Error.limitCheck) { try scan(overlong) }
+    #expect(throws: Error.limitCheck) { try scan("/\(overlong)") }
+    #expect(throws: Error.limitCheck) { try scan("//\(overlong)") }
   }
 
   @Test

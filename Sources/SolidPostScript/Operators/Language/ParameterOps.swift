@@ -140,7 +140,15 @@ extension Operators {
 
 extension Context {
   func parameterDictionary(_ values: [String: ParameterValue]) throws -> Object {
-    try limitCheck(size: values.count, objectType: .dictionary)
+    let retainedAllocation = values.values.reduce(0) { total, value in
+      let (next, overflow) = total.addingReportingOverflow(value.allocationFootprint)
+      return overflow ? .max : next
+    }
+    try limitCheck(
+      size: values.count,
+      objectType: .dictionary,
+      additionalAllocationBytes: retainedAllocation
+    )
     return try .dictionary(
       uniqueKeysWithValues: values.map { (.literalName($0.key), $0.value.object(vm: allocationMode)) },
       access: .unlimited,

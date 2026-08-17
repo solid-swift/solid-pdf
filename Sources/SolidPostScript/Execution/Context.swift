@@ -265,6 +265,9 @@ public actor Context {
 
   var currentJobPersistent: Bool { jobLifecycle?.persistent ?? false }
   var isSystemAdministratorJob: Bool { jobLifecycle?.authorization == .administrator }
+  var languageSaveScope: Snapshot.Scope {
+    currentJobPersistent && languageSaves.isEmpty ? .job : .local
+  }
 
   func reportCurrentError() async throws {
     try await withUserTimeAccounting {
@@ -465,6 +468,12 @@ public actor Context {
       // one local array instead of applying the ordinary error-initiation rollback.
       let recoveryStack = try makeLocalArray(invocation.operandStack)
       operands.recoverFromOverflow(with: recoveryStack)
+    } else if error == .dictionaryStackOverflow {
+      let recoveryStack = try makeLocalArray(invocation.dictionaryStack)
+      operands = savedOperands
+      operands.pushUnchecked(command)
+      operands.pushUnchecked(recoveryStack)
+      dictionaries.clear()
     } else if !error.isExternal {
       operands = savedOperands
       operands.pushUnchecked(command)
@@ -722,12 +731,14 @@ public actor Context {
     size: Int,
     objectType: ObjectType,
     vm: VM? = nil,
-    additionalDictionaryEntries: Int = 0
+    additionalDictionaryEntries: Int = 0,
+    additionalAllocationBytes: Int = 0
   ) throws {
     guard size >= 0 else {
       throw Error.rangeCheck
     }
     precondition(additionalDictionaryEntries >= 0)
+    precondition(additionalAllocationBytes >= 0)
     let allowed =
       switch objectType {
       case .array, .packedArray, .dictionary:
@@ -743,6 +754,7 @@ public actor Context {
 
     let requested = estimatedAllocationSize(count: size, objectType: objectType)
       .saturatingAdd(additionalDictionaryEntries.saturatingMultiply(Self.estimatedDictionaryEntryAllocationSize))
+      .saturatingAdd(additionalAllocationBytes)
     try preflightAllocation(bytes: requested, vm: vm)
   }
 
@@ -1013,7 +1025,15 @@ public actor Context {
     try await finishJob()
     try beginJob(persistent: persistent, authorization: authorization)
     try await prepareIdiomResources()
-    if let rootExecution {
+    if let rootExecution, let file = rootExecution.source.value as? FileValue {
+      let source = Object.file(
+        file.file,
+        access: file.access,
+        vm: .local,
+        kind: rootExecution.source.kind
+      )
+      try execution.push(source: source, in: self)
+    } else if let rootExecution {
       execution = ExecutionStack([rootExecution])
     }
   }

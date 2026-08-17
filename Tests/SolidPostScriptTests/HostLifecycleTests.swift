@@ -93,6 +93,102 @@ struct HostLifecycleTests {
   }
 
   @Test
+  func unencapsulatedOutermostSavesRestoreGlobalVM() async throws {
+    let session = InterpreterSession()
+
+    try await session.executeJob(
+      content:
+        """
+        true () startjob pop
+        true setglobal globaldict /savedGlobal [1] put false setglobal
+        save /outer exch def
+        true setglobal
+        globaldict /savedGlobal get 0 2 put
+        globaldict /newGlobal 9 put
+        false setglobal
+        outer restore
+        globaldict /savedGlobal get 0 get 1 ne {undefined} if
+        globaldict /newGlobal known {undefined} if
+        """
+    )
+
+    try await session.executeJob(
+      content:
+        "globaldict /savedGlobal get 0 get 1 ne {undefined} if globaldict /newGlobal known {undefined} if"
+    )
+  }
+
+  @Test
+  func onlyTheOutermostUnencapsulatedSaveRestoresGlobalVM() async throws {
+    let session = InterpreterSession()
+
+    try await session.executeJob(
+      content:
+        """
+        true () startjob pop
+        true setglobal globaldict /nestedGlobal [1] put false setglobal
+        save /outer exch def
+        true setglobal globaldict /nestedGlobal get 0 2 put false setglobal
+        save /inner exch def
+        true setglobal globaldict /nestedGlobal get 0 3 put false setglobal
+        inner restore
+        globaldict /nestedGlobal get 0 get 3 ne {undefined} if
+        outer restore
+        globaldict /nestedGlobal get 0 get 1 ne {undefined} if
+        """
+    )
+  }
+
+  @Test
+  func pendingUnencapsulatedSaveRestoresGlobalVMAtJobEnd() async throws {
+    let session = InterpreterSession()
+
+    try await session.executeJob(
+      content:
+        """
+        true () startjob pop
+        true setglobal globaldict /pendingGlobal [1] put false setglobal
+        save pop
+        true setglobal
+        globaldict /pendingGlobal get 0 2 put
+        globaldict /pendingNewGlobal 9 put
+        false setglobal
+        """
+    )
+
+    try await session.executeJob(
+      content:
+        """
+        globaldict /pendingGlobal get 0 get 1 ne {undefined} if
+        globaldict /pendingNewGlobal known {undefined} if
+        """
+    )
+  }
+
+  @Test
+  func languageSavesInsideEncapsulatedJobsRemainLocal() async throws {
+    let session = InterpreterSession()
+    try await session.executeJob(
+      content:
+        "true () startjob pop true setglobal globaldict /encapsulatedGlobal [1] put false setglobal"
+    )
+
+    try await session.executeJob(
+      content:
+        """
+        save /localSave exch def
+        true setglobal globaldict /encapsulatedGlobal get 0 2 put false setglobal
+        localSave restore
+        globaldict /encapsulatedGlobal get 0 get 2 ne {undefined} if
+        """
+    )
+
+    try await session.executeJob(
+      content: "globaldict /encapsulatedGlobal get 0 get 1 ne {undefined} if"
+    )
+  }
+
+  @Test
   func jobResetRestoresSharedAllocationModeToLocal() async throws {
     let session = InterpreterSession()
     try await session.executeJob(content: "true setshared")

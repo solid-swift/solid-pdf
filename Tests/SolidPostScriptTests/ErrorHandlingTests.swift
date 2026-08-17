@@ -451,6 +451,61 @@ struct ErrorHandlingTests {
   }
 
   @Test
+  func `dictstackoverflow handler receives dictstack and permanent recovery state`() async throws {
+    let results = try await Interpreter.results(
+      content:
+        """
+        /recovery null def
+        /handlerDepth null def
+        /overflowing << /marker 1 >> def
+        errordict /dictstackoverflow {
+          /recovery exch store
+          /handlerDepth countdictstack store
+        } put
+        << /MaxDictStack 4 >> setuserparams
+        overflowing begin
+        1 dict begin
+        handlerDepth recovery
+        """
+    )
+
+    let recovery = try results[0].value(as: ArrayValue.self)
+    expectEqual(recovery.count, 4)
+    expectEqual(try results[1].value(as: IntegerValue.self).value, 3)
+    expectTrue(results[2].value is Operators.Begin)
+    expectTrue(results[3].value is DictionaryValue)
+
+    let recoveredTop = try recovery.object(at: 3).value(as: DictionaryValue.self)
+    expectEqual(try recoveredTop.objectValue(forKey: "marker", as: IntegerValue.self).value, 1)
+  }
+
+  @Test
+  func `default dictstackoverflow handler preserves failure time dictionary metadata`() async throws {
+    let results = try await Interpreter.results(
+      content:
+        """
+        /defaultDictStackOverflow errordict /dictstackoverflow get def
+        errordict /dictstackoverflow {
+          << /MaxDictStack 100 >> setuserparams
+          defaultDictStackOverflow exec
+        } put
+        << /MaxDictStack 4 >> setuserparams
+        1 dict begin
+        { 1 dict begin } stopped
+        $error /dstack get
+        $error /command get /begin load eq
+        """
+    )
+
+    expectEqual(try results[0].value(as: BooleanValue.self).value, true)
+    let dictionaryStack = try results[1].value(as: ArrayValue.self)
+    expectEqual(dictionaryStack.count, 4)
+    expectEqual(try results[2].value(as: BooleanValue.self).value, true)
+    let recovery = try results[3].value(as: ArrayValue.self)
+    expectEqual(recovery.count, 4)
+  }
+
+  @Test
   func `bulk push stackoverflow recovery remains atomic`() async throws {
     let recovery: ArrayValue = try await Interpreter.result(
       content:

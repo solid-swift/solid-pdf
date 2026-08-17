@@ -223,10 +223,6 @@ public class Scanner {
 
       case Self.commentDelim:
         if !chars.isEmpty {
-          if contextualInput != nil {
-            try rewind()
-            return .token(try token(chars, putBack: 0).neverNil())
-          }
           try comment()
           return .token(try token(chars, putBack: 0).neverNil())
         }
@@ -254,6 +250,11 @@ public class Scanner {
       }
 
       if firstChar == Self.nameDelim {
+        var nameChars = chars.dropFirst()
+        if nameChars.first == Self.nameDelim {
+          nameChars = nameChars.dropFirst()
+        }
+        try LanguageLimits.validateNameLength(nameChars.count)
         let name = try String(bytes: chars.dropFirst(), encoding: .isoLatin1).unwrap()
         return .name(name, kind: .literal)
       }
@@ -261,6 +262,7 @@ public class Scanner {
       let string = try String(bytes: chars, encoding: .isoLatin1).unwrap()
 
       guard let number = try Self.number(string: string) else {
+        try LanguageLimits.validateNameLength(chars.count)
         return .name(string, kind: .executable)
       }
       return number
@@ -274,7 +276,7 @@ public class Scanner {
 
       while let char = try next() {
         switch char {
-        case Self.lineFeed:
+        case Self.lineFeed, Self.formFeed:
           return
 
         case Self.carriageReturn:

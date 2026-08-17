@@ -28,7 +28,13 @@ extension Operators {
       guard count.value >= 0 else {
         throw Error.rangeCheck
       }
-      let ops = try context.operands.pop(count: Int(count.value)).reversed()
+      let elementCount = Int(count.value)
+      let ops = Array(try context.operands.peek(count: elementCount).reversed())
+      try ops.checkStorage(in: context.allocationMode)
+      try context.preflightAllocation(
+        bytes: context.estimatedAllocationSize(count: elementCount, objectType: .packedArray)
+      )
+      _ = try context.operands.pop(count: elementCount)
       context.operands.push(try .packedArray(ops, vm: context.allocationMode, kind: .literal))
     }
   }

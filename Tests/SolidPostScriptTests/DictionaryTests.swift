@@ -340,4 +340,15 @@ struct DictionaryTests {
     expectEqual(depth2, 3)
   }
 
+  @Test
+  func stringDictionaryKeysEnforceTheNameLimit() async throws {
+    let overlong = String(repeating: "k", count: 128)
+    let errorName: NameValue = try await Interpreter.result(
+      content:
+        "{1 dict (\(overlong)) 1 put} stopped clear $error /errorname get"
+    )
+
+    #expect(errorName.value == "limitcheck")
+  }
+
 }

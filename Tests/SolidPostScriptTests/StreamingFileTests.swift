@@ -163,16 +163,15 @@ struct StreamingFileTests {
   }
 
   @Test
-  func contextualScannerLeavesDelimitersAndCommentsUnread() async throws {
-    for (suffix, expected) in [("<", 60), ("%", 37)] {
-      let environment = environment(standardInput: Data("currentfile read\(suffix)".utf8))
-      let results = try await Interpreter.results(
-        content: "(%stdin) (r) file cvx exec",
-        environment: environment
-      )
-      #expect(try results[0].value(as: IntegerValue.self).value == Int32(expected))
-      #expect(try results[1].value(as: BooleanValue.self).value)
-    }
+  func contextualScannerLeavesDelimitersUnread() async throws {
+    let environment = environment(standardInput: Data("currentfile read<".utf8))
+    let results = try await Interpreter.results(
+      content: "(%stdin) (r) file cvx exec",
+      environment: environment
+    )
+
+    #expect(try results[0].value(as: IntegerValue.self).value == 60)
+    #expect(try results[1].value(as: BooleanValue.self).value)
   }
 
   @Test
@@ -260,6 +259,28 @@ struct StreamingFileTests {
         environment: environment(file: file)
       )
       #expect(!status.value)
+    }
+  }
+
+  @Test
+  func contextualTokenConsumesATerminatingCommentAsOneSeparator() async throws {
+    for separator in ["%comment\n", "%comment\r", "%comment\r\n", "%comment\u{0C}"] {
+      let source = "name\(separator)Z"
+      let file = DataFile(data: Data(source.utf8), mode: .read)
+      let results = try await Interpreter.results(
+        content:
+          """
+          /file (%cursor%input) (r) file def
+          file token pop pop
+          file fileposition
+          file read
+          """,
+        environment: environment(file: file)
+      )
+
+      #expect(try results[0].value(as: IntegerValue.self).value == 90)
+      #expect(try results[1].value(as: BooleanValue.self).value)
+      #expect(try results[2].value(as: IntegerValue.self).value == source.utf8.count - 1)
     }
   }
 

@@ -185,4 +185,19 @@ struct ConversionTests {
     }
   }
 
+  @Test
+  func convertToNameEnforcesTheImplementationLimit() async throws {
+    let maximum = String(repeating: "n", count: 127)
+    let converted: NameValue = try await Interpreter.result(content: "(\(maximum)) cvn")
+    #expect(converted.value == maximum)
+
+    let overlong = maximum + "n"
+    let results = try await Interpreter.results(
+      content:
+        "{(\(overlong)) cvn} stopped clear $error /command get /cvn load eq $error /errorname get"
+    )
+    #expect(try results[0].value(as: NameValue.self).value == "limitcheck")
+    #expect(try results[1].value(as: BooleanValue.self).value)
+  }
+
 }

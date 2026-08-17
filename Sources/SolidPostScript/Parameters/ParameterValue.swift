@@ -5,6 +5,16 @@ enum ParameterValue: Equatable, Sendable {
   case integer(Int32)
   case string(Data)
 
+  var allocationFootprint: Int {
+    switch self {
+    case .string(let value):
+      let (footprint, overflow) = value.count.addingReportingOverflow(16)
+      return overflow ? .max : footprint
+    default:
+      return 0
+    }
+  }
+
   func object(vm: VM) -> Object {
     switch self {
     case .boolean(let value):

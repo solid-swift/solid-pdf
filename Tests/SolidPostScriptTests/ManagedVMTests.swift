@@ -2,6 +2,7 @@
 //  ManagedVMTests.swift
 //
 
+import Foundation
 @testable import SolidPostScript
 import Testing
 
@@ -223,5 +224,49 @@ struct ManagedVMTests {
     #expect(try operandSnapshot.value(as: ArrayValue.self).object(at: 0) == .integer(1))
     #expect(try executionSnapshot.value(as: ArrayValue.self).object(at: 0) == .integer(2))
     #expect(try dictionarySnapshot.value(as: ArrayValue.self).object(at: 0) == .integer(3))
+  }
+
+  @Test
+  func packedArrayAllocationHonorsMaxLocalVMTransactionally() async throws {
+    let results = try await Interpreter.results(
+      content:
+        """
+        /operation { 1 2 3 3 packedarray } def
+        << /MaxLocalVM 1 /VMReclaim -1 >> setuserparams
+        /operation load stopped
+        $error /command get /packedarray load eq
+        $error /errorname get
+        """
+    )
+
+    #expect(try results[0].value(as: NameValue.self).value == "VMerror")
+    #expect(try results[1].value(as: BooleanValue.self).value)
+    #expect(try results[2].value(as: BooleanValue.self).value)
+    #expect(results[3].value is Operators.ConstructPackedArray)
+    #expect(try results[4].value(as: IntegerValue.self).value == 3)
+    #expect(try results[5].value(as: IntegerValue.self).value == 3)
+    #expect(try results[6].value(as: IntegerValue.self).value == 2)
+    #expect(try results[7].value(as: IntegerValue.self).value == 1)
+  }
+
+  @Test
+  func parameterDictionariesPreflightRetainedStrings() async throws {
+    let context = Context()
+
+    await #expect(throws: Error.vmError) {
+      try await context.constructParameterDictionaryAtDictionaryOnlyLimit()
+    }
+  }
+}
+
+private extension Context {
+  func constructParameterDictionaryAtDictionaryOnlyLimit() throws {
+    let values = ["Retained": ParameterValue.string(Data(repeating: 0, count: 64))]
+    let dictionaryBytes = estimatedAllocationSize(count: values.count, objectType: .dictionary)
+    let maximum = localVMAllocationSpace.chargedBytes + dictionaryBytes
+    userParameters.setInteger(Int32(maximum), for: "MaxLocalVM")
+    userParameters.setInteger(-1, for: "VMReclaim")
+
+    _ = try parameterDictionary(values)
   }
 }

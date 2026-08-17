@@ -85,9 +85,10 @@ struct BinaryObjectSequenceEncoder {
       _ = try BinaryNumberCodec.floatData(real.value, format: format)
     case .name:
       let name = try object.value(as: NameValue.self).value
-      guard let data = name.data(using: .isoLatin1), !data.isEmpty, data.count <= 127 else {
+      guard let data = name.data(using: .isoLatin1), !data.isEmpty else {
         throw Error.limitCheck
       }
+      try LanguageLimits.validateNameLength(data.count)
       addPayload(key: .name(name), data: data)
     case .string:
       let string = try object.value(as: StringValue.self)
@@ -154,7 +155,8 @@ struct BinaryObjectSequenceEncoder {
     case .name:
       let name = try object.value(as: NameValue.self).value
       let data = try name.data(using: .isoLatin1).unwrap(or: Error.limitCheck)
-      guard let length = UInt16(exactly: data.count), length > 0, length <= 127,
+      try LanguageLimits.validateNameLength(data.count)
+      guard let length = UInt16(exactly: data.count), length > 0,
         let offset = payloadOffsets[.name(name)]
       else {
         throw Error.limitCheck

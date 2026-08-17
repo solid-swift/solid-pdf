@@ -296,7 +296,8 @@ private struct BinaryObjectSequenceDecoder {
 
     let region = Region(offset: Int(record.value), count: Int(record.length))
     try validateString(region: region, context: context)
-    guard record.length <= 127,
+    try LanguageLimits.validateNameLength(Int(record.length))
+    guard
       let value = String(data: body.subdata(in: region.offset..<region.offset + region.count), encoding: .isoLatin1)
     else {
       throw Error.limitCheck
