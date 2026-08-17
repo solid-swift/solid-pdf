@@ -43,7 +43,7 @@ public struct NameValue: ObjectValue {
 
   /// Creates an instance.
   public init(value: String) {
-    self.value = value
+    self.value = NameInterningContext.table?.intern(value) ?? value
   }
 
   /// Performs the ``lookup`` operation.

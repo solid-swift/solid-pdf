@@ -109,11 +109,14 @@ public actor Context {
     self.jobServerEnabled = jobServerEnabled
     let userParameters = environment.userParameters()
     self.userParameters = userParameters
-    let dictionaries = Self.defaultDictionaries(
-      interactiveExecutiveEnabled: environment.hostConfiguration.interactiveExecutiveEnabled,
-      jobServerEnabled: jobServerEnabled
-    )
+    let dictionaries = NameInterningContext.$table.withValue(environment.nameTable) {
+      Self.defaultDictionaries(
+        interactiveExecutiveEnabled: environment.hostConfiguration.interactiveExecutiveEnabled,
+        jobServerEnabled: jobServerEnabled
+      )
+    }
     self.dictionaries = DictionaryStack(dictionaries)
+    neverThrow(try environment.nameTable.intern(dictionaries))
     neverThrow(try Self.adopt(dictionaries, into: VMAllocationSpaces(
       local: localVMAllocationSpace,
       global: environment.globalVMAllocationSpace
@@ -136,8 +139,11 @@ public actor Context {
     self.jobServerEnabled = false
     let userParameters = environment.userParameters()
     self.userParameters = userParameters
-    let dictionaries = Self.defaultDictionaries()
+    let dictionaries = NameInterningContext.$table.withValue(environment.nameTable) {
+      Self.defaultDictionaries()
+    }
     self.dictionaries = DictionaryStack(dictionaries)
+    neverThrow(try environment.nameTable.intern(dictionaries))
     neverThrow(try Self.adopt(dictionaries, into: VMAllocationSpaces(
       local: localVMAllocationSpace,
       global: environment.globalVMAllocationSpace
@@ -176,6 +182,7 @@ public actor Context {
 
   func adopt(_ objects: some Sequence<Object>) throws {
     let objects = Array(objects)
+    try environment.nameTable.intern(objects)
     let footprints = try Self.unadoptedAllocationFootprints(objects, in: allocationSpaces)
     for (vm, bytes) in footprints where bytes > 0 {
       try preflightAllocation(bytes: bytes, vm: vm)
@@ -378,10 +385,12 @@ public actor Context {
   func withUserTimeAccounting<Result>(
     _ operation: () async throws -> Result
   ) async rethrows -> Result {
-    try await VMAllocationContext.$spaces.withValue(allocationSpaces) {
-      beginUserTimeAccounting()
-      defer { endUserTimeAccounting() }
-      return try await operation()
+    try await NameInterningContext.$table.withValue(environment.nameTable) {
+      try await VMAllocationContext.$spaces.withValue(allocationSpaces) {
+        beginUserTimeAccounting()
+        defer { endUserTimeAccounting() }
+        return try await operation()
+      }
     }
   }
 
@@ -504,6 +513,7 @@ public actor Context {
     let savedOperands = operands
 
     do {
+      try environment.nameTable.intern([object])
       if object.kind == .executable {
         try await object.value.execute(context: self, kind: object.kind, method: method)
       } else {

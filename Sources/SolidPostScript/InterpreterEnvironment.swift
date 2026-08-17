@@ -6,7 +6,8 @@ import Synchronization
 /// Shared system and device state for one PostScript interpreter environment.
 public final class InterpreterEnvironment: Sendable {
   let state = Mutex(SystemParameterState())
-  let globalVMAllocationSpace = VMAllocationSpace(vm: .global)
+  let globalVMAllocationSpace: VMAllocationSpace
+  let nameTable: NameTable
   private let globalResources = Mutex(ResourceStore())
   private let resourcesInitialized = Mutex(false)
   let resourceCategories: [Object: any ResourceCategory]
@@ -73,6 +74,9 @@ public final class InterpreterEnvironment: Sendable {
     resourceCategories: [Object: any ResourceCategory] = [:],
     monotonicInstantSource: any MonotonicInstantSource
   ) {
+    let globalVMAllocationSpace = VMAllocationSpace(vm: .global)
+    self.globalVMAllocationSpace = globalVMAllocationSpace
+    self.nameTable = NameTable(globalVM: globalVMAllocationSpace)
     self.hostConfiguration = hostConfiguration
     self.standardInput = StandardInputChannel(source: hostConfiguration.standardInput)
     self.standardOutput = StandardOutputChannel(sink: hostConfiguration.standardOutput)

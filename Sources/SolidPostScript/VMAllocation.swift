@@ -376,6 +376,20 @@ final class VMAllocationSpace: Sendable {
     }
   }
 
+  func allocatePermanent(bytes: Int) -> VMAllocation {
+    precondition(bytes >= 0)
+    return state.withLock { state in
+      let allocation = VMAllocation(vm: vm, space: self, generation: 0)
+      state.ledger[allocation.identity] = LedgerRecord(
+        allocation: WeakVMAllocation(allocation),
+        generation: 0,
+        chargedBytes: bytes
+      )
+      state.committedSinceCollection = state.committedSinceCollection.saturatingAdd(bytes)
+      return allocation
+    }
+  }
+
   func adopt(_ allocation: VMAllocation, chargedBytes: Int = 32) throws {
     precondition(allocation.vm == vm)
     if let membership = allocation.membership(in: self) {
