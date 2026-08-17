@@ -5,7 +5,10 @@ enum ResourceRuntime {
 
   static func preloadIdiomSets(context: isolated Context) async throws {
     let category = Object.literalName("IdiomSet")
-    var keys = try provider(category, context: context)?.enumerateResources(matching: "*") ?? []
+    var keys: [Object] = []
+    if let provider = try provider(category, context: context) {
+      keys = try context.enumerateResources(from: provider, matching: "*")
+    }
     keys.append(contentsOf: try await ResourceFiles.externalKeys(in: category, matching: "*", context: context))
     guard !keys.isEmpty else { return }
 
@@ -38,6 +41,7 @@ enum ResourceRuntime {
   }
 
   static func categoryDictionary(_ category: Object, context: isolated Context) async throws -> Object {
+    try context.ensureResourcesInitialized()
     let category = try categoryName(category)
     if let entry = try context.environment.globalResource(for: category, in: categoryCategory) {
       return entry.instance
@@ -154,7 +158,7 @@ enum ResourceRuntime {
     if let provider = try provider(category, context: context),
        let availability = try provider.statusOfResource(forKey: key)
     {
-      let instance = try await provider.loadResource(forKey: key, in: context)
+      let instance = try await context.loadResource(from: provider, forKey: key)
       try validateInstanceType(instance, implementation: implementation)
       try provider.resourceExtension?.validateLoaded(key: key, instance: instance, context: context)
       if let implementationExtension,
@@ -198,7 +202,7 @@ enum ResourceRuntime {
        let availability = try provider.statusOfResource(forKey: key),
        availability.isLoaded
     {
-      let instance = try await provider.loadResource(forKey: key, in: context)
+      let instance = try await context.loadResource(from: provider, forKey: key)
       try categoryExtension?.willUndefine(key: key, instance: instance, context: context)
       try implementationExtension?.willUndefine(key: key, instance: instance, context: context)
       return

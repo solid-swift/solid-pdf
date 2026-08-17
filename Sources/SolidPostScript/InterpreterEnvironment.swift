@@ -136,24 +136,27 @@ public final class InterpreterEnvironment: Sendable {
   func ensureResourcesInitialized() throws {
     if resourcesInitialized.withLock({ $0 }) { return }
 
-    var initial = ResourceStore()
-    for provider in resourceCategories.values {
-      let descriptor = provider.dictionary
+    let initial = try VMAllocationContext.$spaces.withValue(nil) {
+      var initial = ResourceStore()
+      for provider in resourceCategories.values {
+        let descriptor = provider.dictionary
+        try initial.define(
+          ResourceEntry(instance: descriptor.object(), origin: .explicit, size: -1),
+          for: .literalName(descriptor.category),
+          in: .literalName("Category")
+        )
+      }
+      let generic = try ResourceCategoryDictionary(
+        category: "Generic",
+        fileName: Operators.ResourceFileName.default
+      ).object()
       try initial.define(
-        ResourceEntry(instance: descriptor.object(), origin: .explicit, size: -1),
-        for: .literalName(descriptor.category),
+        ResourceEntry(instance: generic, origin: .explicit, size: -1),
+        for: .literalName("Generic"),
         in: .literalName("Category")
       )
+      return initial
     }
-    let generic = try ResourceCategoryDictionary(
-      category: "Generic",
-      fileName: Operators.ResourceFileName.default
-    ).object()
-    try initial.define(
-      ResourceEntry(instance: generic, origin: .explicit, size: -1),
-      for: .literalName("Generic"),
-      in: .literalName("Category")
-    )
 
     resourcesInitialized.withLock { initialized in
       guard !initialized else { return }

@@ -79,11 +79,15 @@ extension Operators {
     public func execute(context: isolated Context) async throws {
       let identifier: StringValue = try context.operands.popAs()
       let device = try context.fileDevices.device(named: deviceName(identifier))
-      let values = try (device as? any ParameterizedFileDevice)?.currentParameters() ?? [:]
+      let values = try VMAllocationContext.$spaces.withValue(nil) {
+        try (device as? any ParameterizedFileDevice)?.currentParameters() ?? [:]
+      }
       try context.limitCheck(size: values.count, objectType: .dictionary)
-      context.operands.push(
-        try .dictionary(values, access: .unlimited, vm: context.allocationMode, kind: .literal)
-      )
+      let dictionary = try VMAllocationContext.$spaces.withValue(nil) {
+        try Object.dictionary(values, access: .unlimited, vm: context.allocationMode, kind: .literal)
+      }
+      try context.adopt(dictionary)
+      context.operands.push(dictionary)
     }
   }
 

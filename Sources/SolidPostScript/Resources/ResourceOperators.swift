@@ -327,7 +327,7 @@ extension Operators {
 
         var providerAvailable: [Object] = []
         if let provider = try ResourceRuntime.provider(categoryKey, context: context) {
-          for key in try provider.enumerateResources(matching: template) {
+          for key in try context.enumerateResources(from: provider, matching: template) {
             if try provider.statusOfResource(forKey: key)?.isLoaded == true {
               resourceKeys.append(key)
             } else {

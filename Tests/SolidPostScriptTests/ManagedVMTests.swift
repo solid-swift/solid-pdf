@@ -306,6 +306,25 @@ struct ManagedVMTests {
       try await context.constructParameterDictionaryAtDictionaryOnlyLimit()
     }
   }
+
+  @Test
+  func deviceParameterGraphsAreAdoptedAfterAggregatePreflight() async throws {
+    let payload = try Object.array(
+      [.string(Data(repeating: 0, count: 128), access: .unlimited, vm: .local, kind: .literal)],
+      access: .unlimited,
+      vm: .local,
+      kind: .literal
+    )
+    let allocation = try payload.value(as: ArrayValue.self).allocation
+    let device = DetachedParameterDevice(payload: payload)
+    let context = Context(fileDevices: FileDevices(devices: [device]))
+
+    await #expect(throws: Error.vmError) {
+      try await context.currentDeviceParametersAtDictionaryOnlyLimit()
+    }
+    let local = await context.localVMAllocationSpace
+    #expect(allocation.membership(in: local) == nil)
+  }
 }
 
 private extension Context {
@@ -336,6 +355,16 @@ private extension Context {
 
     _ = try parameterDictionary(values)
   }
+
+  func currentDeviceParametersAtDictionaryOnlyLimit() async throws {
+    let dictionaryBytes = estimatedAllocationSize(count: 1, objectType: .dictionary)
+    let maximum = localVMAllocationSpace.chargedBytes + dictionaryBytes
+    userParameters.setInteger(Int32(maximum), for: "MaxLocalVM")
+    userParameters.setInteger(-1, for: "VMReclaim")
+    operands.push(.string("%detached", access: .readOnly, vm: .local, kind: .literal))
+
+    try await Operators.CurrentDevParams.instance.execute(context: self)
+  }
 }
 
 private final class CountingFileDevice: FileDevice, Sendable {
@@ -349,4 +378,24 @@ private final class CountingFileDevice: FileDevice, Sendable {
     state.withLock { $0 += 1 }
     return DataFile(data: Data(), mode: .read)
   }
+}
+
+private final class DetachedParameterDevice: ParameterizedFileDevice, Sendable {
+  let name = "detached"
+  let searched = false
+  let payload: Object
+
+  init(payload: Object) {
+    self.payload = payload
+  }
+
+  func open(name: String, mode: FileMode, openMethod: FileOpenMethod) throws -> any File {
+    throw Error.undefinedFilename
+  }
+
+  func currentParameters() throws -> [Object: Object] {
+    ["Payload": payload]
+  }
+
+  func setParameters(_ parameters: [Object: Object]) throws {}
 }

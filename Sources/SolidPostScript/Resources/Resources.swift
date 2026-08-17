@@ -65,7 +65,7 @@ public enum Resources {
     guard let resourceCategory = try context.environment.resourceCategory(for: categoryKey) else {
       throw Error.undefined
     }
-    return try await resourceCategory.loadResource(forKey: key, in: context)
+    return try await context.loadResource(from: resourceCategory, forKey: key)
   }
 
 }

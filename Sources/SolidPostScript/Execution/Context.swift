@@ -163,11 +163,43 @@ public actor Context {
   }
 
   func adopt(_ object: Object) throws {
-    let footprints = try Self.unadoptedAllocationFootprints([object], in: allocationSpaces)
+    try adopt([object])
+  }
+
+  func adopt(_ objects: some Sequence<Object>) throws {
+    let objects = Array(objects)
+    let footprints = try Self.unadoptedAllocationFootprints(objects, in: allocationSpaces)
     for (vm, bytes) in footprints where bytes > 0 {
       try preflightAllocation(bytes: bytes, vm: vm)
     }
-    try Self.adopt([object], into: allocationSpaces)
+    try Self.adopt(objects, into: allocationSpaces)
+  }
+
+  func loadResource(
+    from provider: any ResourceCategory,
+    forKey key: Object
+  ) async throws -> Object {
+    let object = try await VMAllocationContext.$spaces.withValue(nil) {
+      try await provider.loadResource(forKey: key, in: self)
+    }
+    try adopt(object)
+    return object
+  }
+
+  func enumerateResources(
+    from provider: any ResourceCategory,
+    matching template: String
+  ) throws -> [Object] {
+    let objects = try VMAllocationContext.$spaces.withValue(nil) {
+      try provider.enumerateResources(matching: template)
+    }
+    try adopt(objects)
+    return objects
+  }
+
+  func ensureResourcesInitialized() throws {
+    try environment.ensureResourcesInitialized()
+    try adopt(environment.globalResourceObjects())
   }
 
   private nonisolated static func unadoptedAllocationFootprints(
@@ -1032,7 +1064,7 @@ public actor Context {
     precondition(authorization != .denied)
     // Standard category implementations are part of the environment's initial VM, even when
     // their backing dictionaries are created lazily for the first job.
-    try environment.ensureResourcesInitialized()
+    try ensureResourcesInitialized()
     retireStandardFiles()
     localVMAllocationSpace.pruneWeakGarbage()
     let localBoundary = localVMAllocationSpace.boundary()

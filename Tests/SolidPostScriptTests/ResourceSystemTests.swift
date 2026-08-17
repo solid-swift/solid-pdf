@@ -309,6 +309,10 @@ struct ResourceSystemTests {
       environment: environment
     )
     #expect(try dictionary.objectValue(forKey: "answer", as: IntegerValue.self).value == 42)
+    let payload = try dictionary.objectValue(forKey: "payload", as: ArrayValue.self)
+    let nested = try payload.object(at: 0).value(as: StringValue.self)
+    #expect(payload.allocation.membership(in: environment.globalVMAllocationSpace)?.isValid == true)
+    #expect(nested.allocation.membership(in: environment.globalVMAllocationSpace)?.isValid == true)
 
     let after: BooleanValue = try await Interpreter.result(
       content: "/Synthetic /ProcSet resourcestatus { pop 1 eq } { false } ifelse",
@@ -551,7 +555,18 @@ private enum SyntheticProcSetResources: ResourceCategory {
 
   func loadResource(forKey key: Object, in context: isolated Context) async throws -> Object {
     guard try canonicalResourceKey(key) == "Synthetic" else { throw Error.undefinedResource }
-    return try .dictionary(["answer": 42], access: .unlimited, vm: .global, kind: .literal)
+    let payload = try Object.array(
+      [.string("provider", access: .readOnly, vm: .global, kind: .literal)],
+      access: .readOnly,
+      vm: .global,
+      kind: .literal
+    )
+    return try .dictionary(
+      ["answer": 42, "payload": payload],
+      access: .unlimited,
+      vm: .global,
+      kind: .literal
+    )
   }
 }
 
