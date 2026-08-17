@@ -14,6 +14,7 @@ let package = Package(
   products: [
     .library(name: "SolidPostScript", targets: ["SolidPostScript"]),
     .library(name: "SolidPostScriptCoreGraphics", targets: ["SolidPostScriptCoreGraphics"]),
+    .library(name: "SolidPostScriptPlutoVG", targets: ["SolidPostScriptPlutoVG"]),
   ],
   dependencies: [
     .package(
@@ -75,6 +76,20 @@ let package = Package(
         .headerSearchPath("source"),
       ],
       linkerSettings: [.linkedLibrary("m")]
+    ),
+    .target(
+      name: "SolidPostScriptPlutoVG",
+      dependencies: ["SolidPostScript", "CPlutoVG"],
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidPostScriptPlutoVGTests",
+      dependencies: [
+        "SolidPostScript",
+        "SolidPostScriptCoreGraphics",
+        "SolidPostScriptPlutoVG",
+      ],
+      plugins: lintPlugins
     ),
   ],
   swiftLanguageModes: [.v6]
