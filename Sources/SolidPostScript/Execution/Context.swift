@@ -93,7 +93,7 @@ public actor Context {
   private var executivePendingInput = Data()
   private var snapshotSequence: UInt64 = 0
   private var openedFiles: [OpenedFile] = []
-  private var standardFiles: [String: any File] = [:]
+  private var standardFiles: [String: Object] = [:]
   var fileReadAhead: [ObjectIdentifier: FileReadAhead] = [:]
   var filePendingEndOfFile: [ObjectIdentifier: any File] = [:]
   private var executionBoundarySequence: UInt64 = 0
@@ -212,6 +212,7 @@ public actor Context {
 
   internal func pushAndRun(source: Object) async throws {
     try await withUserTimeAccounting {
+      try establishStandardFiles()
       try execution.push(source: source, in: self)
       try await run(untilExecutionDepth: 0)
     }
@@ -219,6 +220,7 @@ public actor Context {
 
   func executeStart() async throws {
     try await withUserTimeAccounting {
+      try establishStandardFiles()
       let targetDepth = execution.depth
       try await execute(object: .executableName("start"), method: .direct)
       try await run(untilExecutionDepth: targetDepth)
@@ -859,7 +861,7 @@ public actor Context {
     return allocation
   }
 
-  func openFile(name: String, mode modeString: String) throws -> any File {
+  func openFileObject(name: String, mode modeString: String) throws -> Object {
     let parsed = PostScriptFileName(name)
     if let device = parsed.device, parsed.name.isEmpty, ["stdin", "stdout", "stderr"].contains(device) {
       let mode = try FileMode(string: modeString)
@@ -872,18 +874,71 @@ public actor Context {
       default:
         throw Error.invalidFileAccess
       }
-      if let file = standardFiles[device] { return file }
-      let file = try fileDevices.open(device: device, name: "", mode: mode, openMethod: openMethod)
-      standardFiles[device] = file
+      guard let file = standardFiles[device] else {
+        preconditionFailure("Standard PostScript files must be established before language execution")
+      }
       return file
     }
-    return try fileDevices.open(name: name, mode: modeString)
+    let file = try fileDevices.open(name: name, mode: modeString)
+    let vm = allocationMode
+    let allocation = register(file: file, vm: vm)
+    return .file(file, access: file.mode.access, vm: vm, allocation: allocation, kind: .literal)
   }
 
-  func resetStandardFiles() {
+  private func establishStandardFiles() throws {
+    guard standardFiles.isEmpty else { return }
+
+    let specifications: [(device: String, mode: FileMode, method: FileOpenMethod)] = [
+      ("stdin", .read, .existingOnly),
+      ("stdout", .write, .truncateOrCreate),
+      ("stderr", .write, .truncateOrCreate),
+    ]
+    var opened: [(device: String, file: any File)] = []
+    do {
+      for specification in specifications {
+        let file = try fileDevices.open(
+          device: specification.device,
+          name: "",
+          mode: specification.mode,
+          openMethod: specification.method
+        )
+        opened.append((specification.device, file))
+      }
+    } catch {
+      for entry in opened {
+        try? entry.file.close()
+      }
+      throw error
+    }
+
+    standardFiles = Dictionary(uniqueKeysWithValues: opened.map { entry in
+      let allocation = register(file: entry.file, vm: .local)
+      let object = Object.file(
+        entry.file,
+        access: entry.file.mode.access,
+        vm: .local,
+        allocation: allocation,
+        kind: .literal
+      )
+      return (entry.device, object)
+    })
+  }
+
+  private func retireStandardFiles() {
+    let files = standardFiles.values.compactMap { $0.value as? FileValue }
+    let allocations = Set(files.map { $0.allocation.identity })
+
     standardFiles.removeAll()
-    fileReadAhead.removeAll()
-    filePendingEndOfFile.removeAll()
+    for file in files {
+      clearReadAhead(for: file.file)
+      filePendingEndOfFile.removeValue(forKey: ObjectIdentifier(file.file))
+      if !file.file.isClosed {
+        try? file.file.close()
+      }
+    }
+    openedFiles.removeAll {
+      $0.file.value == nil || allocations.contains($0.allocation.identity)
+    }
   }
 
   func beginJob(persistent: Bool, authorization: JobAuthorizationOutcome) throws {
@@ -892,6 +947,8 @@ public actor Context {
     // Standard category implementations are part of the environment's initial VM, even when
     // their backing dictionaries are created lazily for the first job.
     try environment.ensureResourcesInitialized()
+    retireStandardFiles()
+    localVMAllocationSpace.pruneWeakGarbage()
     let localBoundary = localVMAllocationSpace.boundary()
     let globalBoundary = environment.globalVMAllocationSpace.boundary()
     let snapshot = persistent ? nil : try snapshot(scope: .job)
@@ -907,6 +964,7 @@ public actor Context {
       resourceTransactionIndex: resourceTransactionIndex
     )
     resetForJob()
+    try establishStandardFiles()
   }
 
   func finishJob() async throws {
@@ -929,7 +987,7 @@ public actor Context {
       try environment.rollbackGlobalResourceMutations(mutations)
     }
     closeFiles(allocatedAfter: job.localBoundary, globalBoundary: job.globalBoundary)
-    resetStandardFiles()
+    retireStandardFiles()
     jobLifecycle = nil
     languageSaves.removeAll()
   }
@@ -959,7 +1017,6 @@ public actor Context {
     resolvingErrorNames.removeAll()
     localResources = ResourceStore()
     applyUserParameterLimits()
-    resetStandardFiles()
   }
 
   func registerLanguageSave(_ snapshot: Snapshot) {
@@ -975,7 +1032,10 @@ public actor Context {
   }
 
   func standardOutput() throws -> any File {
-    try openFile(name: "%stdout", mode: "w")
+    guard let object = standardFiles["stdout"], let value = object.value as? FileValue else {
+      preconditionFailure("Standard PostScript files must be established before language execution")
+    }
+    return value.file
   }
 
   func binaryErrorReportingEnabled() throws -> Bool {

@@ -158,7 +158,7 @@ struct VMTests {
     "save /s exch def 0 string s restore",
     "save /s exch def 0 dict s restore",
     "save /s exch def 0 packedarray s restore",
-    "save /s exch def (%stdout) (w) file s restore",
+    "save /s exch def (%stdout) (w) file /ASCIIHexEncode filter s restore",
     "save /s exch def 0 dict begin s restore",
     "save /s exch def { s restore } exec",
   ])
@@ -166,6 +166,54 @@ struct VMTests {
     await #expect(throws: Error.invalidRestore) {
       try await Interpreter.execute(content: content)
     }
+  }
+
+  @Test
+  func standardFilesPredateSaveAndPreserveTheirAllocationIdentity() async throws {
+    let results = try await Interpreter.results(
+      content:
+        """
+        save /s exch def
+        true setglobal
+        (%stdin) (r) file
+        (%stdout) (w) file
+        (%stderr) (w) file
+        s restore
+        (%stdin) (r) file
+        (%stdout) (w) file
+        (%stderr) (w) file
+        """
+    )
+
+    #expect(results.count == 6)
+    for index in 0..<3 {
+      let afterRestore = try results[index].value(as: FileValue.self)
+      let beforeRestore = try results[index + 3].value(as: FileValue.self)
+      #expect(afterRestore.vm == .local)
+      #expect(beforeRestore.vm == .local)
+      #expect(afterRestore.allocation === beforeRestore.allocation)
+      #expect(afterRestore.file === beforeRestore.file)
+    }
+  }
+
+  @Test
+  func restoreDoesNotReopenAClosedStandardFile() async throws {
+    let results = try await Interpreter.results(
+      content:
+        """
+        (%stdout) (w) file /standard exch def
+        save /s exch def
+        standard closefile
+        s restore
+        { (%stdout) (w) file (unreachable) writestring } stopped
+        /didStop exch def
+        clear
+        didStop standard
+        """
+    )
+
+    #expect(try results[0].value(as: FileValue.self).file.isClosed)
+    #expect(try results[1].value(as: BooleanValue.self).value)
   }
 
   @Test

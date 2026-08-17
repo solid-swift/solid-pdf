@@ -128,6 +128,28 @@ struct StreamingFileTests {
   }
 
   @Test
+  func standardInputCursorContinuesAcrossRestore() async throws {
+    let results = try await Interpreter.results(
+      content:
+        """
+        (%stdin) (r) file
+        dup read pop pop
+        save /s exch def
+        (%stdin) (r) file
+        dup read pop pop
+        s restore
+        read
+        """,
+      environment: environment(standardInput: Data("ABC".utf8))
+    )
+
+    #expect(try results[0].value(as: IntegerValue.self).value == 67)
+    #expect(try results[1].value(as: BooleanValue.self).value)
+    let file = try results[2].value(as: FileValue.self)
+    #expect(!file.file.isClosed)
+  }
+
+  @Test
   func contextualScannerConsumesOneCompleteWhitespaceSeparator() async throws {
     for separator in [" ", "\n", "\r", "\r\n"] {
       let environment = environment(standardInput: Data("currentfile read\(separator)x".utf8))

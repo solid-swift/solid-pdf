@@ -447,6 +447,29 @@ struct HostLifecycleTests {
   }
 
   @Test
+  func jobBoundariesEstablishFreshStandardFileObjects() async throws {
+    let context = Context(environment: InterpreterEnvironment(), jobServerEnabled: true)
+    try await context.executeStart()
+    let startup = try await context.openFileObject(name: "%stdout", mode: "w").value(as: FileValue.self)
+
+    try await context.beginSessionJob()
+    let firstJob = try await context.openFileObject(name: "%stdout", mode: "w").value(as: FileValue.self)
+    #expect(startup.allocation !== firstJob.allocation)
+    #expect(startup.file !== firstJob.file)
+    #expect(startup.file.isClosed)
+
+    try await context.finishSessionJob()
+    #expect(firstJob.file.isClosed)
+
+    try await context.beginSessionJob()
+    let secondJob = try await context.openFileObject(name: "%stdout", mode: "w").value(as: FileValue.self)
+    #expect(firstJob.allocation !== secondJob.allocation)
+    #expect(firstJob.file !== secondJob.file)
+    #expect(!secondJob.file.isClosed)
+    try await context.finishSessionJob()
+  }
+
+  @Test
   func lifecycleNoticesUseTheExistingOrderedOutputChannel() async throws {
     let output = DataSink()
     let observer = NoticeObserver()
