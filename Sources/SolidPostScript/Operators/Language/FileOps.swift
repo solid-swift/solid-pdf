@@ -397,14 +397,16 @@ extension Operators {
       let templateString = try template.readableString
       try proc.checkProcedure()
 
-      let names = try context.fileDevices.fileNames(matching: templateString)
-      for name in names {
-        guard let bytes = name.data(using: .isoLatin1), bytes.count <= scratch.count else {
-          throw Error.rangeCheck
+      try await context.executeLoop(named: "filenameforall") {
+        let names = try context.fileDevices.fileNames(matching: templateString)
+        for name in names {
+          guard let bytes = name.data(using: .isoLatin1), bytes.count <= scratch.count else {
+            throw Error.rangeCheck
+          }
+          try scratch.updateCharacters(bytes, startingAt: 0)
+          let argument = try Object.string(sharing: scratch, subRange: 0..<UInt(bytes.count), kind: .literal)
+          try await context.execute(proc: proc, ops: [argument])
         }
-        try scratch.updateCharacters(bytes, startingAt: 0)
-        let argument = try Object.string(sharing: scratch, subRange: 0..<UInt(bytes.count), kind: .literal)
-        if try await !context.execute(proc: proc, ops: [argument]) { break }
       }
     }
   }
@@ -489,8 +491,8 @@ extension Operators {
       context.operands.push(.string("r", access: .unlimited, vm: .local, kind: .literal))
 
       try await OpenFile.instance.execute(context: context)
-      try await ChangeToExecutable.instance.execute(context: context)
-      try await Exec.instance.execute(context: context)
+      let fileObject = try context.operands.pop()
+      try await context.executeRun(.init(value: fileObject.value, kind: .executable))
     }
   }
 

@@ -534,7 +534,7 @@ private struct FilterSource {
       return try string.characters(in: string.range)
     case .procedure(let procedure):
       let originalDepth = context.operands.depth
-      guard try await context.execute(proc: procedure) else { throw Error.invalidExit }
+      try await context.execute(proc: procedure)
       guard context.operands.depth == originalDepth + 1 else { throw Error.typeCheck }
       let string: StringValue = try context.operands.popAs()
       try string.access.check(.read)

@@ -90,7 +90,8 @@ struct ErrorHandlingTests {
     let operandStack = try results[2].value(as: ArrayValue.self)
 
     expectEqual(dictionaryStack.count, 3)
-    expectEqual(executionStack.count, 2)
+    expectEqual(executionStack.count, 3)
+    expectEqual(try executionStack.object(at: 1), .executableName("stopped"))
     expectEqual(operandStack.count, 1)
     expectEqual(try operandStack.object(at: 0).value(as: IntegerValue.self).value, 99)
   }

@@ -96,6 +96,7 @@ public actor Context {
   private var standardFiles: [String: any File] = [:]
   var fileReadAhead: [ObjectIdentifier: FileReadAhead] = [:]
   var filePendingEndOfFile: [ObjectIdentifier: any File] = [:]
+  private var executionBoundarySequence: UInt64 = 0
   private var executionTimingDepth = 0
   private var hostSuspensionDepth = 0
 
@@ -334,7 +335,11 @@ public actor Context {
     try Task<Never, Never>.checkCancellation()
     var iterationsUntilCancellationCheck = 256
 
-    while execution.depth > targetDepth, let iterator = execution.peek()?.iterator {
+    while execution.depth > targetDepth {
+
+      guard let iterator = execution.peek()?.iterator else {
+        preconditionFailure("Execution boundary exposed to the object runner")
+      }
 
       iterationsUntilCancellationCheck -= 1
       if iterationsUntilCancellationCheck == 0 {
@@ -602,45 +607,108 @@ public actor Context {
     try .array(objects, access: .unlimited, vm: .local, kind: .literal)
   }
 
-  internal func executeIsolated(proc: Object, ops: [Object] = []) async throws -> Bool {
+  internal func executeIsolated(proc: Object, ops: [Object] = []) async throws {
 
     let savedDictionaries = dictionaries
     defer { dictionaries = savedDictionaries }
 
-    return try await execute(proc: proc, ops: ops)
+    try await execute(proc: proc, ops: ops)
   }
 
-  internal func executeAny(_ object: Object) async throws -> Bool {
+  internal func executeAny(_ object: Object) async throws {
     let saved = execution
     let targetDepth = execution.depth
     defer { execution = saved }
 
-    do {
-      try await object.execute(context: self, method: .indirect)
-      try await run(untilExecutionDepth: targetDepth)
-      return true
-    } catch Error.control(.exit) {
-      return false
-    }
+    try await object.execute(context: self, method: .indirect)
+    try await run(untilExecutionDepth: targetDepth)
   }
 
-  internal func execute(proc: Object, ops: [Object] = []) async throws -> Bool {
+  internal func execute(proc: Object, ops: [Object] = []) async throws {
 
     let saved = execution
     let targetDepth = execution.depth
     try execution.push(source: proc, in: self)
     defer { execution = saved }
 
+    operands.push(contentsOf: ops)
+    try operands.throwIfOverflowed()
+
+    try await run(untilExecutionDepth: targetDepth)
+  }
+
+  internal func executeLoop(
+    named operatorName: String,
+    _ operation: () async throws -> Void
+  ) async throws {
+    let boundary = try pushExecutionBoundary(kind: .loop, named: operatorName)
+    defer { execution.pop(boundary: boundary) }
+
     do {
-      operands.push(contentsOf: ops)
-      try operands.throwIfOverflowed()
-
-      try await run(untilExecutionDepth: targetDepth)
-
-      return true
-    } catch Error.control(.exit) {
-      return false
+      try await operation()
+    } catch let transfer as LoopExitTransfer {
+      guard transfer.boundaryIdentifier == boundary.identifier else {
+        throw transfer
+      }
     }
+  }
+
+  internal func executeStopped(_ object: Object) async throws -> Bool {
+    let boundary = try pushExecutionBoundary(kind: .stopped, named: "stopped")
+    defer { execution.pop(boundary: boundary) }
+
+    do {
+      try await executeAny(object)
+      return false
+    } catch Error.control(.stop) {
+      return true
+    } catch is ErrorStop {
+      return true
+    }
+  }
+
+  internal func executeRun(_ fileObject: Object) async throws {
+    let file = try fileObject.value(as: FileValue.self).file
+    let boundary: ExecutionBoundary
+    do {
+      boundary = try pushExecutionBoundary(kind: .run, named: "run")
+    } catch {
+      try? await closeLogicalFile(file)
+      throw error
+    }
+    defer { execution.pop(boundary: boundary) }
+
+    do {
+      try await executeAny(fileObject)
+      try await closeLogicalFile(file)
+    } catch {
+      try? await closeLogicalFile(file)
+      throw error
+    }
+  }
+
+  internal func exitDynamicallyEnclosingLoop() throws -> Never {
+    for frame in execution {
+      guard let boundary = frame.boundary else { continue }
+      switch boundary.kind {
+      case .loop:
+        throw LoopExitTransfer(boundaryIdentifier: boundary.identifier)
+      case .run, .stopped:
+        throw Error.invalidExit
+      }
+    }
+
+    throw Error.control(.quit)
+  }
+
+  private func pushExecutionBoundary(
+    kind: ExecutionBoundary.Kind,
+    named operatorName: String
+  ) throws -> ExecutionBoundary {
+    executionBoundarySequence &+= 1
+    let boundary = ExecutionBoundary(identifier: executionBoundarySequence, kind: kind)
+    try execution.push(boundary: boundary, source: .executableName(operatorName), in: self)
+    return boundary
   }
 
   internal func limitCheck(

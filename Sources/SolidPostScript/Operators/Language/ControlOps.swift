@@ -90,19 +90,21 @@ extension Operators {
       let (proc, limit, increment, initial) = try context.operands.pop4()
       try proc.checkProcedure()
 
-      switch (initial.value, increment.value, limit.value) {
-      case (let initial as IntegerValue, let increment as IntegerValue, let limit as IntegerValue):
-        try await Self.executeIntegers(
-          context: context,
-          proc: proc,
-          ops: (initial.value, increment.value, limit.value)
-        )
+      try await context.executeLoop(named: "for") {
+        switch (initial.value, increment.value, limit.value) {
+        case (let initial as IntegerValue, let increment as IntegerValue, let limit as IntegerValue):
+          try await Self.executeIntegers(
+            context: context,
+            proc: proc,
+            ops: (initial.value, increment.value, limit.value)
+          )
 
-      case (let initial as NumericConvertible, let increment as NumericConvertible, let limit as NumericConvertible):
-        try await Self.execute(context: context, proc: proc, ops: (initial.real, increment.real, limit.real))
+        case (let initial as NumericConvertible, let increment as NumericConvertible, let limit as NumericConvertible):
+          try await Self.execute(context: context, proc: proc, ops: (initial.real, increment.real, limit.real))
 
-      default:
-        throw Error.typeCheck
+        default:
+          throw Error.typeCheck
+        }
       }
     }
 
@@ -118,9 +120,7 @@ extension Operators {
       let limit = Int64(ops.limit)
       while increment >= 0 ? control <= limit : control >= limit {
         let controlObject = try NumericSemantics.integer(validating: control)
-        if try await !context.execute(proc: proc, ops: [controlObject]) {
-          break
-        }
+        try await context.execute(proc: proc, ops: [controlObject])
         control += increment
       }
     }
@@ -130,9 +130,7 @@ extension Operators {
 
       var control = ops.initial
       while ops.increment >= .zero ? control <= ops.limit : control >= ops.limit {
-        if try await !context.execute(proc: proc, ops: [try control.numericObject]) {
-          break
-        }
+        try await context.execute(proc: proc, ops: [try control.numericObject])
         control += ops.increment
       }
     }
@@ -155,8 +153,10 @@ extension Operators {
       }
       try proc.checkProcedure()
 
-      for _ in 0..<count.value where try await !context.execute(proc: proc) {
-        break
+      try await context.executeLoop(named: "repeat") {
+        for _ in 0..<count.value {
+          try await context.execute(proc: proc)
+        }
       }
     }
   }
@@ -174,9 +174,9 @@ extension Operators {
       let proc = try context.operands.pop()
       try proc.checkProcedure()
 
-      while true {
-        if try await !context.execute(proc: proc) {
-          break
+      try await context.executeLoop(named: "loop") {
+        while true {
+          try await context.execute(proc: proc)
         }
       }
     }
@@ -191,7 +191,7 @@ extension Operators {
 
     /// Executes this value in the supplied interpreter context.
     public func execute(context: isolated Context) async throws {
-      throw Error.control(.exit)
+      try context.exitDynamicallyEnclosingLoop()
     }
   }
 
@@ -220,20 +220,8 @@ extension Operators {
 
       let proc = try context.operands.pop()
 
-      do {
-
-        if try await !context.executeAny(proc) {
-          throw Error.invalidExit
-        }
-
-        context.operands.push(.boolean(false))
-      } catch Error.control(.stop) {
-
-        context.operands.pushUnchecked(.boolean(true))
-      } catch is ErrorStop {
-
-        context.operands.pushUnchecked(.boolean(true))
-      }
+      let stopped = try await context.executeStopped(proc)
+      context.operands.pushUnchecked(.boolean(stopped))
     }
   }
 

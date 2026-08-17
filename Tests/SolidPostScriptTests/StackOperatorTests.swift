@@ -77,4 +77,29 @@ struct StackOperatorTests {
     expectEqual(ops4[2].string, "a")
   }
 
+  @Test
+  func clearToMarkRemovesTheNearestMarkAndObjectsAboveIt() async throws {
+    let loneMarkResults = try await Interpreter.results(content: "1 mark cleartomark")
+    #expect(loneMarkResults == [.integer(1)])
+
+    let nestedResults = try await Interpreter.results(content: "1 mark 2 mark 3 cleartomark")
+    #expect(nestedResults.count == 3)
+    #expect(try nestedResults[0].value(as: IntegerValue.self).value == 2)
+    #expect(nestedResults[1].type == .mark)
+    #expect(try nestedResults[2].value(as: IntegerValue.self).value == 1)
+  }
+
+  @Test
+  func clearToMarkReportsUnmatchedMarkWithoutPartialMutation() async throws {
+    let result: BooleanValue = try await Interpreter.result(
+      content: """
+        {1 2 cleartomark} stopped clear
+        $error /errorname get /unmatchedmark eq
+        $error /command get /cleartomark load eq and
+        """
+    )
+
+    #expect(result.value)
+  }
+
 }

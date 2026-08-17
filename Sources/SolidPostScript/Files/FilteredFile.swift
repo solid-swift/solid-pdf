@@ -447,9 +447,7 @@ final class FilterTarget: Sendable {
     context: isolated Context
   ) async throws -> StringValue {
     let originalDepth = context.operands.depth
-    guard try await context.execute(proc: procedure, ops: [.boolean(more), data]) else {
-      throw Error.invalidExit
-    }
+    try await context.execute(proc: procedure, ops: [.boolean(more), data])
     guard context.operands.depth == originalDepth + 1 else { throw Error.typeCheck }
     let result: StringValue = try context.operands.popAs()
     try result.access.check(.write)

@@ -51,20 +51,23 @@ extension Operators {
 
         let implementationProc = try category.value(as: DictionaryValue.self).object(forKey: implementationKey)
 
-        let result: Bool
-        if let implementation = implementationProc.value as? any OperatorValue {
-          try await implementation.execute(context: context)
-          result = true
-        } else if isolated {
-          result = try await context.executeIsolated(proc: implementationProc)
+        let executeImplementation = {
+          if let implementation = implementationProc.value as? any OperatorValue {
+            try await implementation.execute(context: context)
+          } else if isolated {
+            try await context.executeIsolated(proc: implementationProc)
+          } else {
+            try await context.execute(proc: implementationProc)
+          }
+        }
+
+        if systemDictionaryNames.contains(where: { ($0.value as? NameValue)?.value == "resourceforall" }) {
+          try await context.executeLoop(named: "resourceforall", executeImplementation)
         } else {
-          result = try await context.execute(proc: implementationProc)
+          try await executeImplementation()
         }
 
         try await End.instance.execute(context: context)
-        if !result {
-          throw Error.control(.exit)
-        }
       } catch {
         if isolated {
           context.operands = savedOperands
@@ -306,9 +309,11 @@ extension Operators {
     public func execute(context: isolated Context) async throws {
 
       var categoryDictionaryActive = true
+      var activeCategoryKey: Object?
       do {
         let (scratchObj, proc, templateObj) = try context.operands.pop3()
         let categoryKey = try context.dictionaries.object(forKey: "Category")
+        activeCategoryKey = categoryKey
         let scratch = try scratchObj.value(as: StringValue.self)
         let templateString = try templateObj.value(as: StringValue.self)
         try templateString.access.check(.read)
@@ -364,12 +369,16 @@ extension Operators {
             procArg = resourceKey
           }
 
-          if try await !context.execute(proc: proc, ops: [procArg]) {
-            break
-          }
+          try await context.execute(proc: proc, ops: [procArg])
         }
         try context.dictionaries.push(try await ResourceRuntime.categoryDictionary(categoryKey, context: context))
         categoryDictionaryActive = true
+      } catch let transfer as LoopExitTransfer {
+        if !categoryDictionaryActive, let categoryKey = activeCategoryKey {
+          try context.dictionaries.push(try await ResourceRuntime.categoryDictionary(categoryKey, context: context))
+          categoryDictionaryActive = true
+        }
+        throw transfer
       } catch {
         if categoryDictionaryActive {
           try? await End.instance.execute(context: context)

@@ -183,37 +183,30 @@ extension Operators {
       let (proc, source) = try context.operands.pop2()
       try proc.checkProcedure()
 
-      switch source.value {
-      case let coll as CollectionValue:
-        try coll.access.check(.read)
-        for idx in 0..<coll.count {
-          let result = try await context.execute(proc: proc, ops: [try coll.object(at: idx)])
-          if !result {
-            break
+      try await context.executeLoop(named: "forall") {
+        switch source.value {
+        case let coll as CollectionValue:
+          try coll.access.check(.read)
+          for idx in 0..<coll.count {
+            try await context.execute(proc: proc, ops: [try coll.object(at: idx)])
           }
-        }
 
-      case let dict as DictionaryValue:
-        try dict.access.check(.read)
-        for key in dict.keys {
-          let value = try dict.object(forKey: key)
-          let result = try await context.execute(proc: proc, ops: [value, key])
-          if !result {
-            break
+        case let dict as DictionaryValue:
+          try dict.access.check(.read)
+          for key in dict.keys {
+            let value = try dict.object(forKey: key)
+            try await context.execute(proc: proc, ops: [value, key])
           }
-        }
 
-      case let string as StringValue:
-        try string.access.check(.read)
-        for idx in 0..<string.count {
-          let result = try await context.execute(proc: proc, ops: [.integer(Int32(string.character(at: idx)))])
-          if !result {
-            break
+        case let string as StringValue:
+          try string.access.check(.read)
+          for idx in 0..<string.count {
+            try await context.execute(proc: proc, ops: [.integer(Int32(string.character(at: idx)))])
           }
-        }
 
-      default:
-        throw Error.typeCheck
+        default:
+          throw Error.typeCheck
+        }
       }
     }
   }

@@ -68,7 +68,7 @@ enum ResourceFiles {
       throw Error.undefinedResource
     }
     let source: Object = .file(file, access: .readOnly, vm: .global, kind: .executable)
-    guard try await context.execute(proc: source) else { throw Error.invalidExit }
+    try await context.execute(proc: source)
   }
 
   static func defaultPath(
@@ -123,7 +123,7 @@ enum ResourceFiles {
     let savedOperands = context.operands
     defer { context.operands = savedOperands }
     let scratch = Object.string(Data(repeating: 0, count: 4096), access: .unlimited, vm: .local, kind: .literal)
-    guard try await context.execute(proc: procedure, ops: [key, scratch]) else { throw Error.invalidExit }
+    try await context.execute(proc: procedure, ops: [key, scratch])
     let result: StringValue = try context.operands.popAs()
     return try result.readableString
   }
