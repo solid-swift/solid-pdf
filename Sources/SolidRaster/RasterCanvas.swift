@@ -80,6 +80,18 @@ public struct RasterCanvas: ~Copyable {
     }
   }
 
+  /// Strokes a path after applying dash, cap, join, and transformation geometry.
+  public mutating func stroke(
+    _ path: RasterPath,
+    style: RasterStrokeStyle,
+    paint: RasterPaint,
+    transform: RasterAffineTransform = .identity
+  ) throws(RasterError) {
+    try requireActive()
+    let outline = try PathStroker.stroke(path, style: style, transform: transform)
+    try fill(outline, rule: .winding, paint: paint)
+  }
+
   /// Consumes the canvas and returns an immutable top-left-origin image.
   public consuming func finish(
     pixelFormat: RasterPixelFormat = .rgba8Unorm
