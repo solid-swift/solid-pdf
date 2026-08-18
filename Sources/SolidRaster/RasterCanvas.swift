@@ -92,6 +92,57 @@ public struct RasterCanvas: ~Copyable {
     try fill(outline, rule: .winding, paint: paint)
   }
 
+  /// Draws an image through an affine transformation and the current clip.
+  public mutating func draw(
+    _ image: RasterImage,
+    transform: RasterAffineTransform,
+    interpolation: RasterInterpolation = .nearest
+  ) throws(RasterError) {
+    try requireActive()
+    guard let inverse = transform.inverted,
+      image.width > 0,
+      image.height > 0,
+      image.data.count <= limits.maximumSurfaceBytes
+    else { throw .invalidImage }
+    let corners = [
+      RasterPoint(x: 0, y: 0),
+      RasterPoint(x: Double(image.width), y: 0),
+      RasterPoint(x: Double(image.width), y: Double(image.height)),
+      RasterPoint(x: 0, y: Double(image.height)),
+    ].map(transform.transform)
+    let boundary = RasterPath(elements: [
+      .move(to: corners[0]),
+      .line(to: corners[1]),
+      .line(to: corners[2]),
+      .line(to: corners[3]),
+      .close,
+    ])
+    let boundarySpans = try GrayRasterizer.rasterize(
+      boundary,
+      rule: .winding,
+      width: width,
+      height: height,
+      limits: limits
+    )
+    let visible = CoverageSpans.intersect(boundarySpans, try clippingSpans())
+    let source = [UInt8](image.data)
+    let destinationWidth = width
+    withPixels { span in
+      RasterCompositor.compositeImage(
+        source: source,
+        sourceWidth: image.width,
+        sourceHeight: image.height,
+        sourceBytesPerRow: image.bytesPerRow,
+        sourceFormat: image.pixelFormat,
+        inverseTransform: inverse,
+        interpolation: interpolation,
+        spans: visible,
+        destinationWidth: destinationWidth,
+        pixels: &span
+      )
+    }
+  }
+
   /// Consumes the canvas and returns an immutable top-left-origin image.
   public consuming func finish(
     pixelFormat: RasterPixelFormat = .rgba8Unorm

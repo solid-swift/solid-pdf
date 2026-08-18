@@ -12,6 +12,7 @@ let package = Package(
     .watchOS("26"),
   ],
   products: [
+    .executable(name: "SolidRasterBenchmark", targets: ["SolidRasterBenchmark"]),
     .library(name: "SolidRaster", targets: ["SolidRaster"]),
     .library(name: "SolidPostScript", targets: ["SolidPostScript"]),
     .library(name: "SolidPostScriptRaster", targets: ["SolidPostScriptRaster"]),
@@ -26,6 +27,10 @@ let package = Package(
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
   ],
   targets: [
+    .executableTarget(
+      name: "SolidRasterBenchmark",
+      dependencies: ["SolidRaster"]
+    ),
     .target(
       name: "SolidRaster",
       plugins: lintPlugins
