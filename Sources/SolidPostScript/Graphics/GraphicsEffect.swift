@@ -6,6 +6,10 @@ public enum GraphicsEffect: Sendable, Hashable {
   case fill(path: GraphicsPath, rule: GraphicsFillRule, state: GraphicsStateSnapshot)
   /// A path-stroke effect.
   case stroke(path: GraphicsPath, state: GraphicsStateSnapshot)
+  /// A user-path fill effect.
+  case userPathFill(path: GraphicsPath, rule: GraphicsFillRule, state: GraphicsStateSnapshot)
+  /// A reduced user-path stroke-outline effect.
+  case userPathStroke(outline: GraphicsPath, state: GraphicsStateSnapshot)
   /// A page-erasure effect.
   case erase(state: GraphicsStateSnapshot)
   /// A batched rectangle-fill effect.

@@ -54,6 +54,8 @@ public enum GraphicsOperation: Sendable, Hashable {
     case reverse
     case strokeOutline
     case clippingPath
+    case appendUserPath
+    case exportUserPath
   }
 
   /// A clipping operation.

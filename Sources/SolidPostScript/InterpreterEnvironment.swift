@@ -16,6 +16,7 @@ public final class InterpreterEnvironment: Sendable {
   let standardError: StandardOutputChannel
   let standardErrorFile: StandardOutputFile
   let monotonicInstantSource: any MonotonicInstantSource
+  let userPathCache = UserPathCache()
 
   /// The application integration used by this environment.
   public let hostConfiguration: InterpreterHostConfiguration
@@ -240,7 +241,11 @@ public final class InterpreterEnvironment: Sendable {
   }
 
   func systemParameters() -> [String: ParameterValue] {
-    state.withLock { $0.currentValues }
+    var values = state.withLock { $0.currentValues }
+    let status = userPathCache.status()
+    values["CurUPathCache"] = .integer(Int32(clamping: status.bytes))
+    values["MaxUPathCache"] = .integer(Int32(clamping: status.maximumBytes))
+    return values
   }
 
   func systemString(_ name: String) -> String? {
@@ -329,6 +334,11 @@ public final class InterpreterEnvironment: Sendable {
       if let nextSystemPassword { state.systemPassword = nextSystemPassword }
       if let nextStartJobPassword { state.startJobPassword = nextStartJobPassword }
     }
+    let maximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxUPathCache"] else { return 0 }
+      return value
+    }
+    userPathCache.setMaximumBytes(Int(maximum))
   }
 
 

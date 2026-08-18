@@ -32,6 +32,10 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
         effects.append(.fill(path: event.before.path, rule: rule, state: event.before))
       case .paint(.stroke):
         effects.append(.stroke(path: event.before.path, state: event.before))
+      case .paint(.userPathFill(let rule)):
+        effects.append(.userPathFill(path: event.before.path, rule: rule, state: event.before))
+      case .paint(.userPathStroke):
+        effects.append(.userPathStroke(outline: event.before.path, state: event.before))
       case .paint(.fillRectangles(let paths)):
         effects.append(.fillRectangles(paths: paths, state: event.before))
       case .paint(.strokeRectangles(let paths, let matrix)):

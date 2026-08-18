@@ -57,6 +57,10 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
         try fill(event.before.path, rule: rule, state: event.before)
       case .paint(.stroke):
         try stroke(event.before.path, matrix: event.before.matrix, state: event.before)
+      case .paint(.userPathFill(let rule)):
+        try fill(event.before.path, rule: rule, state: event.before)
+      case .paint(.userPathStroke):
+        try fill(event.before.path, rule: .winding, state: event.before)
       case .paint(.fillRectangles(let paths)):
         try fill(GraphicsPath(elements: paths.flatMap(\.elements)), rule: .winding, state: event.before)
       case .paint(.strokeRectangles(let paths, let matrix)):

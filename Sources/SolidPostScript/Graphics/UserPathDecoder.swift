@@ -25,6 +25,7 @@ struct DecodedUserPath: Sendable, Hashable {
     }
     var userPath = GraphicsPath()
     for operation in operations {
+      let priorElementCount = userPath.elements.count
       switch operation {
       case .move(let point):
         try userPath.append(.move(to: point))
@@ -69,7 +70,9 @@ struct DecodedUserPath: Sendable, Hashable {
       case .close:
         if userPath.currentPoint != nil { try userPath.append(.close) }
       }
-      guard userPath.elements.allSatisfy({ $0.points.allSatisfy(bounds.contains) }) else {
+      guard userPath.elements.dropFirst(priorElementCount)
+        .allSatisfy({ $0.points.allSatisfy(bounds.contains) })
+      else {
         throw Error.rangeCheck
       }
     }
@@ -231,7 +234,13 @@ enum UserPathDecoder {
       width: boundsOperands[2] - boundsOperands[0],
       height: boundsOperands[3] - boundsOperands[1]
     )
-    guard bounds.width >= 0, bounds.height >= 0 else { throw Error.rangeCheck }
+    guard bounds.x.isFinite,
+      bounds.y.isFinite,
+      bounds.width.isFinite,
+      bounds.height.isFinite,
+      bounds.width >= 0,
+      bounds.height >= 0
+    else { throw Error.rangeCheck }
     index += 1
     if index < encoded.count {
       guard encoded[index].0 == .move || encoded[index].0 == .arc || encoded[index].0 == .arcNegative else {
@@ -279,6 +288,7 @@ enum UserPathDecoder {
   private static func code(for object: Object) -> Code? {
     let name: String?
     if let value = object.value as? NameValue {
+      guard object.kind == .executable else { return nil }
       name = value.value
     } else if let value = object.value as? any OperatorValue {
       name = value.systemDictionaryNames.first?.valueString

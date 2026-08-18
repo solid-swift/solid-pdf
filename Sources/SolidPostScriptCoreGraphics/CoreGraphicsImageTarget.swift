@@ -44,6 +44,10 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
         fill(event.before.path, rule: rule, state: event.before, in: context)
       case .paint(.stroke):
         try stroke(event.before.path, state: event.before, in: context)
+      case .paint(.userPathFill(let rule)):
+        fill(event.before.path, rule: rule, state: event.before, in: context)
+      case .paint(.userPathStroke):
+        fill(event.before.path, rule: .winding, state: event.before, in: context)
       case .paint(.fillRectangles(let paths)):
         fillRectangles(paths, state: event.before, in: context)
       case .paint(.strokeRectangles(let paths, let matrix)):

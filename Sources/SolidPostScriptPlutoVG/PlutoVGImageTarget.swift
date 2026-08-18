@@ -68,6 +68,10 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         try fill(event.before.path, rule: rule, state: event.before, in: canvas)
       case .paint(.stroke):
         try stroke(event.before.path, state: event.before, in: canvas)
+      case .paint(.userPathFill(let rule)):
+        try fill(event.before.path, rule: rule, state: event.before, in: canvas)
+      case .paint(.userPathStroke):
+        try fill(event.before.path, rule: .winding, state: event.before, in: canvas)
       case .paint(.fillRectangles(let paths)):
         try fillRectangles(paths, state: event.before, in: canvas)
       case .paint(.strokeRectangles(let paths, let matrix)):
