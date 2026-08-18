@@ -44,11 +44,14 @@ LINUX_PLATFORM="${SOLIDPDF_LINUX_PLATFORM:-$(default_platform)}"
 readonly LINUX_PLATFORM
 WORKSPACE_IDENTIFIER="$(printf '%s' "${REPOSITORY_ROOT}" | cksum | awk '{print $1}')"
 readonly WORKSPACE_IDENTIFIER
-CONFIGURATION_IDENTIFIER="$(normalized_identifier "${SWIFT_IMAGE}-${LINUX_PLATFORM}")"
+CONFIGURATION_IDENTIFIER="$(normalized_identifier "${SWIFT_IMAGE}-${LINUX_PLATFORM}-benchmark-v3")"
 readonly CONFIGURATION_IDENTIFIER
 readonly CONTAINER_NAME="solidpdf-${CONFIGURATION_IDENTIFIER}-${WORKSPACE_IDENTIFIER}"
 readonly BUILD_VOLUME="${CONTAINER_NAME}-build"
 readonly CACHE_VOLUME="${CONTAINER_NAME}-cache"
+readonly BENCHMARK_VOLUME="${CONTAINER_NAME}-benchmarks"
+readonly PACKAGE_STATE_DIRECTORY="${REPOSITORY_ROOT}/.cache/linux-container/${CONFIGURATION_IDENTIFIER}"
+readonly RESOLVED_FILE="${PACKAGE_STATE_DIRECTORY}/Package.resolved"
 
 function container_exists() {
   docker container inspect "${CONTAINER_NAME}" >/dev/null 2>&1
@@ -60,6 +63,8 @@ function container_is_running() {
 
 function create_container() {
   echo "Creating ${CONTAINER_NAME} from ${SWIFT_IMAGE} (${LINUX_PLATFORM})..." >&2
+  mkdir -p "${PACKAGE_STATE_DIRECTORY}"
+  cp "${REPOSITORY_ROOT}/Package.resolved" "${RESOLVED_FILE}"
   docker pull --platform "${LINUX_PLATFORM}" "${SWIFT_IMAGE}" >/dev/null
   docker create \
     --name "${CONTAINER_NAME}" \
@@ -67,8 +72,10 @@ function create_container() {
     --label "com.solidpdf.role=swift-linux" \
     --label "com.solidpdf.workspace=${REPOSITORY_ROOT}" \
     --mount "type=bind,source=${REPOSITORY_ROOT},target=/workspace,readonly" \
+    --mount "type=bind,source=${RESOLVED_FILE},target=/workspace/Package.resolved" \
     --mount "type=volume,source=${BUILD_VOLUME},target=/build" \
     --mount "type=volume,source=${CACHE_VOLUME},target=/root/.cache" \
+    --mount "type=volume,source=${BENCHMARK_VOLUME},target=/workspace/.benchmarkBaselines" \
     --workdir /workspace \
     "${SWIFT_IMAGE}" \
     sleep infinity >/dev/null
@@ -91,6 +98,8 @@ function print_status() {
   echo "Workspace: ${REPOSITORY_ROOT} (read-only at /workspace)"
   echo "Build:     ${BUILD_VOLUME} (at /build)"
   echo "Cache:     ${CACHE_VOLUME} (at /root/.cache)"
+  echo "Benchmarks: ${BENCHMARK_VOLUME} (at /workspace/.benchmarkBaselines)"
+  echo "Resolution: ${RESOLVED_FILE} (at /workspace/Package.resolved)"
   if container_exists; then
     echo "State:     $(docker container inspect --format '{{.State.Status}}' "${CONTAINER_NAME}")"
   else
@@ -108,7 +117,7 @@ Commands:
   shell           Open an interactive Bash shell in the development container.
   status          Show the resolved configuration and current container state.
   stop            Stop the development container without deleting its caches.
-  remove          Remove the container while preserving its build/cache volumes.
+  remove          Remove the container while preserving its build/cache/benchmark volumes.
 EOF
 }
 

@@ -155,7 +155,12 @@ if benchmarkEnabled {
   package.targets += [
     .target(
       name: "SolidRasterBenchmarkSupport",
-      dependencies: ["SolidRaster"],
+      dependencies: [
+        "SolidPostScript",
+        "SolidPostScriptPlutoVG",
+        "SolidPostScriptRaster",
+        "SolidRaster",
+      ],
       path: "Benchmarks/SolidRasterBenchmarkSupport"
     ),
     .executableTarget(
@@ -170,9 +175,30 @@ if benchmarkEnabled {
         .plugin(name: "BenchmarkPlugin", package: "benchmark")
       ]
     ),
+    .executableTarget(
+      name: "SolidPostScriptRasterBenchmark",
+      dependencies: [
+        "SolidPostScript",
+        "SolidPostScriptPlutoVG",
+        "SolidPostScriptRaster",
+        "SolidRaster",
+        "SolidRasterBenchmarkSupport",
+        .product(name: "Benchmark", package: "benchmark"),
+      ],
+      path: "Benchmarks/SolidPostScriptRasterBenchmark",
+      plugins: [
+        .plugin(name: "BenchmarkPlugin", package: "benchmark")
+      ]
+    ),
     .testTarget(
       name: "SolidRasterBenchmarkSupportTests",
-      dependencies: ["SolidRaster", "SolidRasterBenchmarkSupport"],
+      dependencies: [
+        "SolidPostScript",
+        "SolidPostScriptPlutoVG",
+        "SolidPostScriptRaster",
+        "SolidRaster",
+        "SolidRasterBenchmarkSupport",
+      ],
       path: "Tests/SolidRasterBenchmarkSupportTests",
       plugins: lintPlugins
     ),
