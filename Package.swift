@@ -12,6 +12,7 @@ let package = Package(
     .watchOS("26"),
   ],
   products: [
+    .library(name: "SolidColor", targets: ["SolidColor"]),
     .library(name: "SolidRaster", targets: ["SolidRaster"]),
     .library(name: "SolidPostScript", targets: ["SolidPostScript"]),
     .library(name: "SolidPostScriptRaster", targets: ["SolidPostScriptRaster"]),
@@ -27,6 +28,15 @@ let package = Package(
   ],
   targets: [
     .target(
+      name: "SolidColor",
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidColorTests",
+      dependencies: ["SolidColor"],
+      plugins: lintPlugins
+    ),
+    .target(
       name: "SolidRaster",
       plugins: lintPlugins
     ),
@@ -38,6 +48,7 @@ let package = Package(
     .target(
       name: "SolidPostScript",
       dependencies: [
+        "SolidColor",
         "SolidRaster",
         .product(name: "SolidCore", package: "solid-foundation"),
         .product(name: "SolidIO", package: "solid-foundation"),
