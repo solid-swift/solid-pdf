@@ -10,7 +10,10 @@ public struct RasterCanvas: ~Copyable {
   private let limits: RasterLimits
   private var pixels: [UInt8]
   private var clip: RasterClip
-  private var compiledClip: [CoverageSpan]?
+  private var compiledClip: [CoverageSpan]
+  private var compiledConstraintCount: Int?
+  private var clipScratch: [CoverageSpan]
+  private var visibleSpans: [CoverageSpan]
   private var finished: Bool
 
   /// Creates a raster canvas initialized to `background`.
@@ -37,7 +40,10 @@ public struct RasterCanvas: ~Copyable {
     self.limits = limits
     pixels = initialPixels
     clip = RasterClip(imageableBounds: RasterRect(x: 0, y: 0, width: Double(width), height: Double(height)))
-    compiledClip = nil
+    compiledClip = []
+    compiledConstraintCount = nil
+    clipScratch = []
+    visibleSpans = []
     finished = false
   }
 
@@ -45,8 +51,15 @@ public struct RasterCanvas: ~Copyable {
   public mutating func setClip(_ clip: RasterClip) throws(RasterError) {
     try requireActive()
     guard clip.constraints.count <= limits.maximumClipConstraints else { throw .limitExceeded }
+    guard clip != self.clip else { return }
+    let canExtendCompiledPrefix = compiledConstraintCount == self.clip.constraints.count
+      && self.clip.imageableBounds == clip.imageableBounds
+      && self.clip.constraints.count <= clip.constraints.count
+      && self.clip.constraints.elementsEqual(clip.constraints.prefix(self.clip.constraints.count))
     self.clip = clip
-    compiledClip = nil
+    if !canExtendCompiledPrefix {
+      compiledConstraintCount = nil
+    }
   }
 
   /// Clears the complete surface to a color.
@@ -64,17 +77,13 @@ public struct RasterCanvas: ~Copyable {
   ) throws(RasterError) {
     try requireActive()
     guard path.elements.count <= limits.maximumPathElements else { throw .limitExceeded }
-    let pathSpans = try GrayRasterizer.rasterize(
-      path,
-      rule: rule,
-      width: width,
-      height: height,
-      limits: limits
-    )
-    let visible = CoverageSpans.intersect(pathSpans, try clippingSpans())
+    let pathSpans = try rasterize(path, rule: rule)
+    try compileClip()
+    intersectWithClip(pathSpans)
     guard case .solid(let color) = paint else { return }
     let source = try RasterCompositor.premultiplied(color)
     let surfaceWidth = width
+    let visible = visibleSpans
     withPixels { span in
       RasterCompositor.composite(source, spans: visible, width: surfaceWidth, pixels: &span)
     }
@@ -117,16 +126,12 @@ public struct RasterCanvas: ~Copyable {
       .line(to: corners[3]),
       .close,
     ])
-    let boundarySpans = try GrayRasterizer.rasterize(
-      boundary,
-      rule: .winding,
-      width: width,
-      height: height,
-      limits: limits
-    )
-    let visible = CoverageSpans.intersect(boundarySpans, try clippingSpans())
+    let boundarySpans = try rasterize(boundary, rule: .winding)
+    try compileClip()
+    intersectWithClip(boundarySpans)
     let source = [UInt8](image.data)
     let destinationWidth = width
+    let visible = visibleSpans
     withPixels { span in
       RasterCompositor.compositeImage(
         source: source,
@@ -162,22 +167,54 @@ public struct RasterCanvas: ~Copyable {
     )
   }
 
-  private mutating func clippingSpans() throws(RasterError) -> [CoverageSpan] {
-    if let compiledClip { return compiledClip }
-    var spans = CoverageSpans.rectangle(clip.imageableBounds, width: width, height: height)
-    for constraint in clip.constraints {
-      let constraintSpans = try GrayRasterizer.rasterize(
-        constraint.path,
-        rule: constraint.rule,
-        width: width,
-        height: height,
-        limits: limits
-      )
-      spans = CoverageSpans.intersect(spans, constraintSpans)
-      if spans.isEmpty { break }
+  private mutating func compileClip() throws(RasterError) {
+    if compiledConstraintCount == nil {
+      CoverageSpans.rectangle(clip.imageableBounds, width: width, height: height, into: &compiledClip)
+      compiledConstraintCount = 0
     }
-    compiledClip = spans
-    return spans
+    guard var constraintIndex = compiledConstraintCount,
+      constraintIndex < clip.constraints.count
+    else { return }
+
+    while constraintIndex < clip.constraints.count, !compiledClip.isEmpty {
+      let constraint = clip.constraints[constraintIndex]
+      let constraintSpans = try rasterize(constraint.path, rule: constraint.rule)
+      var scratch: [CoverageSpan] = []
+      swap(&scratch, &clipScratch)
+      CoverageSpans.intersect(compiledClip.span, constraintSpans.span, into: &scratch)
+      swap(&compiledClip, &scratch)
+      swap(&clipScratch, &scratch)
+      constraintIndex += 1
+      compiledConstraintCount = constraintIndex
+    }
+    if compiledClip.isEmpty {
+      compiledConstraintCount = clip.constraints.count
+    }
+  }
+
+  private mutating func intersectWithClip(_ spans: borrowing [CoverageSpan]) {
+    var result: [CoverageSpan] = []
+    swap(&result, &visibleSpans)
+    CoverageSpans.intersect(spans.span, compiledClip.span, into: &result)
+    swap(&visibleSpans, &result)
+  }
+
+  private func rasterize(
+    _ path: borrowing RasterPath,
+    rule: RasterFillRule
+  ) throws(RasterError) -> [CoverageSpan] {
+    if let rectangle = CoverageSpans.integralRectangle(in: path) {
+      var spans: [CoverageSpan] = []
+      CoverageSpans.rectangle(rectangle, width: width, height: height, into: &spans)
+      return spans
+    }
+    return try GrayRasterizer.rasterize(
+      path,
+      rule: rule,
+      width: width,
+      height: height,
+      limits: limits
+    )
   }
 
   private borrowing func requireActive() throws(RasterError) {

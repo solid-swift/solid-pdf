@@ -28,6 +28,8 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
     private var canvas: RasterCanvas?
     private var lifecycle = Lifecycle.active
     private var activeImage: (descriptor: GraphicsImageDescriptor, state: GraphicsStateSnapshot, components: [Float])?
+    private var cachedGraphicsClip: GraphicsClip?
+    private var cachedRasterClip: RasterClip?
 
     fileprivate init(pixelWidth: Int, pixelHeight: Int, descriptor: GraphicsDeviceDescriptor) throws {
       try Self.validate(pixelWidth: pixelWidth, pixelHeight: pixelHeight, descriptor: descriptor)
@@ -271,7 +273,10 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
     }
 
     private func rasterClip(_ clip: GraphicsClip) throws(RasterError) -> RasterClip {
-      RasterClip(
+      if clip == cachedGraphicsClip, let cachedRasterClip {
+        return cachedRasterClip
+      }
+      let converted = RasterClip(
         imageableBounds: transformedBounds(clip.imageableBounds, by: rasterMatrix).raster,
         constraints: clip.constraints.map {
           RasterClipConstraint(
@@ -280,6 +285,9 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
           )
         }
       )
+      cachedGraphicsClip = clip
+      cachedRasterClip = converted
+      return converted
     }
 
     private func transformedBounds(_ rect: GraphicsRect, by matrix: GraphicsMatrix) -> GraphicsRect {
