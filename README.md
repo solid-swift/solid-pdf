@@ -5,7 +5,7 @@ SolidPDF is a Swift package for PDF and related document-language implementation
 
 ## Requirements
 
-- Swift 6.2+
+- Swift 6.3+
 - macOS 26+, iOS 26+, tvOS 26+, watchOS 26+, or Linux
 
 ## Installation
@@ -72,4 +72,6 @@ the remaining portability boundary.
 
 ## License
 
-SolidPDF is available under the MIT License. See [LICENSE](LICENSE).
+SolidPDF is available under the MIT License. See [LICENSE](LICENSE). Portions of `SolidRaster` are
+derived from the FreeType Project under the FreeType License; see
+[Vendor/PlutoVG/source/FTL.TXT](Vendor/PlutoVG/source/FTL.TXT).

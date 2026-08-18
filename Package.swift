@@ -1,4 +1,4 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.3
 
 import PackageDescription
 import class Foundation.ProcessInfo
@@ -12,7 +12,9 @@ let package = Package(
     .watchOS("26"),
   ],
   products: [
+    .library(name: "SolidRaster", targets: ["SolidRaster"]),
     .library(name: "SolidPostScript", targets: ["SolidPostScript"]),
+    .library(name: "SolidPostScriptRaster", targets: ["SolidPostScriptRaster"]),
     .library(name: "SolidPostScriptCoreGraphics", targets: ["SolidPostScriptCoreGraphics"]),
     .library(name: "SolidPostScriptPlutoVG", targets: ["SolidPostScriptPlutoVG"]),
   ],
@@ -24,6 +26,15 @@ let package = Package(
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
   ],
   targets: [
+    .target(
+      name: "SolidRaster",
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidRasterTests",
+      dependencies: ["SolidRaster"],
+      plugins: lintPlugins
+    ),
     .target(
       name: "SolidPostScript",
       dependencies: [
@@ -46,6 +57,16 @@ let package = Package(
     .target(
       name: "SolidPostScriptCoreGraphics",
       dependencies: ["SolidPostScript"],
+      plugins: lintPlugins
+    ),
+    .target(
+      name: "SolidPostScriptRaster",
+      dependencies: ["SolidPostScript", "SolidRaster"],
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidPostScriptRasterTests",
+      dependencies: ["SolidPostScript", "SolidPostScriptRaster", "SolidRaster"],
       plugins: lintPlugins
     ),
     .testTarget(
@@ -79,7 +100,7 @@ let package = Package(
     ),
     .target(
       name: "SolidPostScriptPlutoVG",
-      dependencies: ["SolidPostScript", "CPlutoVG"],
+      dependencies: ["SolidPostScript", "SolidRaster", "CPlutoVG"],
       plugins: lintPlugins
     ),
     .testTarget(
