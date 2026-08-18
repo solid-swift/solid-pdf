@@ -6,6 +6,12 @@ import SolidRaster
 import Testing
 
 @Suite struct RasterImageTargetTests {
+  @Test func rendererWithoutTransmittedPageProducesNoSurface() throws {
+    let renderer = try RasterImageTarget(pixelWidth: 20, pixelHeight: 20).makeRenderer()
+
+    #expect(try renderer.finish().isEmpty)
+  }
+
   @Test func defaultRenderProducesLetterRasterPage() async throws {
     let result = try await Interpreter.render(content: "0 0 20 20 rectfill showpage")
     let image = try #require(result.output.first)

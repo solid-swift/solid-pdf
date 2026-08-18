@@ -13,6 +13,13 @@ enum PathStroker {
     static func * (lhs: Self, rhs: Double) -> Self { Self(x: lhs.x * rhs, y: lhs.y * rhs) }
   }
 
+  private struct Segment {
+    let start: Vector
+    let end: Vector
+    let unit: Vector
+    let normal: Vector
+  }
+
   static func stroke(
     _ path: RasterPath,
     style: RasterStrokeStyle,
@@ -22,7 +29,12 @@ enum PathStroker {
       style.width >= 0,
       style.miterLimit.isFinite,
       style.miterLimit >= 1,
-      [transform.a, transform.b, transform.c, transform.d, transform.tx, transform.ty].allSatisfy(\.isFinite)
+      transform.a.isFinite,
+      transform.b.isFinite,
+      transform.c.isFinite,
+      transform.d.isFinite,
+      transform.tx.isFinite,
+      transform.ty.isFinite
     else { throw .invalidGeometry }
     guard style.width > 0 else { return RasterPath() }
     let flattened = try PathFlattener.flatten(path)
@@ -53,29 +65,34 @@ enum PathStroker {
     transform: RasterAffineTransform,
     into elements: inout [RasterPath.Element]
   ) throws(RasterError) {
-    var points = subpath.points
-    if subpath.isClosed, let first = points.first, points.last != first { points.append(first) }
-    var segments: [(start: Vector, end: Vector, unit: Vector, normal: Vector)] = []
-    for pair in zip(points, points.dropFirst()) {
-      let start = Vector(x: pair.0.x, y: pair.0.y)
-      let end = Vector(x: pair.1.x, y: pair.1.y)
-      let delta = end - start
-      let length = hypot(delta.x, delta.y)
-      guard length.isFinite else { throw .invalidGeometry }
-      guard length > 0 else { continue }
-      let unit = delta * (1 / length)
-      segments.append((start, end, unit, Vector(x: -unit.y, y: unit.x)))
+    let points = subpath.points
+    var segments: ContiguousArray<Segment> = []
+    segments.reserveCapacity(points.count)
+    for index in 1..<points.count {
+      if let segment = try makeSegment(from: points[index - 1], to: points[index]) {
+        segments.append(segment)
+      }
+    }
+    if subpath.isClosed,
+      let first = points.first,
+      let last = points.last,
+      first != last,
+      let segment = try makeSegment(from: last, to: first)
+    {
+      segments.append(segment)
     }
     guard let firstSegment = segments.first, let lastSegment = segments.last else { return }
 
     for segment in segments {
       let offset = segment.normal * halfWidth
-      appendPolygon([
+      appendQuadrilateral(
         segment.start + offset,
         segment.end + offset,
         segment.end - offset,
         segment.start - offset,
-      ], transform: transform, into: &elements)
+        transform: transform,
+        into: &elements
+      )
     }
 
     if subpath.isClosed {
@@ -127,8 +144,8 @@ enum PathStroker {
 
   private static func appendJoin(
     at point: Vector,
-    previous: (start: Vector, end: Vector, unit: Vector, normal: Vector),
-    next: (start: Vector, end: Vector, unit: Vector, normal: Vector),
+    previous: Segment,
+    next: Segment,
     halfWidth: Double,
     style: RasterStrokeStyle,
     transform: RasterAffineTransform,
@@ -152,9 +169,9 @@ enum PathStroker {
       ),
       hypot(miter.x - point.x, miter.y - point.y) <= halfWidth * style.miterLimit
     {
-      appendPolygon([outer1, miter, outer2], transform: transform, into: &elements)
+      appendTriangle(outer1, miter, outer2, transform: transform, into: &elements)
     } else {
-      appendPolygon([point, outer1, outer2], transform: transform, into: &elements)
+      appendTriangle(point, outer1, outer2, transform: transform, into: &elements)
     }
   }
 
@@ -175,12 +192,14 @@ enum PathStroker {
     case .square:
       let offset = normal * halfWidth
       let extensionVector = outward * halfWidth
-      appendPolygon([
+      appendQuadrilateral(
         point + offset,
         point + offset + extensionVector,
         point - offset + extensionVector,
         point - offset,
-      ], transform: transform, into: &elements)
+        transform: transform,
+        into: &elements
+      )
     }
   }
 
@@ -191,24 +210,57 @@ enum PathStroker {
     into elements: inout [RasterPath.Element]
   ) {
     let segmentCount = max(12, min(128, Int((Double.pi * radius).rounded(.up))))
-    let points = (0..<segmentCount).map { index in
-      let angle = Double(index) * 2 * .pi / Double(segmentCount)
-      return Vector(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
-    }
-    appendPolygon(points, transform: transform, into: &elements)
-  }
-
-  private static func appendPolygon(
-    _ points: [Vector],
-    transform: RasterAffineTransform,
-    into elements: inout [RasterPath.Element]
-  ) {
-    guard let first = points.first else { return }
+    let angleStep = 2 * Double.pi / Double(segmentCount)
+    let first = Vector(x: center.x + radius, y: center.y)
     elements.append(.move(to: transformed(first, by: transform)))
-    for point in points.dropFirst() {
+    for index in 1..<segmentCount {
+      let angle = Double(index) * angleStep
+      let point = Vector(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
       elements.append(.line(to: transformed(point, by: transform)))
     }
     elements.append(.close)
+  }
+
+  private static func appendTriangle(
+    _ first: Vector,
+    _ second: Vector,
+    _ third: Vector,
+    transform: RasterAffineTransform,
+    into elements: inout [RasterPath.Element]
+  ) {
+    elements.append(.move(to: transformed(first, by: transform)))
+    elements.append(.line(to: transformed(second, by: transform)))
+    elements.append(.line(to: transformed(third, by: transform)))
+    elements.append(.close)
+  }
+
+  private static func appendQuadrilateral(
+    _ first: Vector,
+    _ second: Vector,
+    _ third: Vector,
+    _ fourth: Vector,
+    transform: RasterAffineTransform,
+    into elements: inout [RasterPath.Element]
+  ) {
+    elements.append(.move(to: transformed(first, by: transform)))
+    elements.append(.line(to: transformed(second, by: transform)))
+    elements.append(.line(to: transformed(third, by: transform)))
+    elements.append(.line(to: transformed(fourth, by: transform)))
+    elements.append(.close)
+  }
+
+  private static func makeSegment(
+    from startPoint: RasterPoint,
+    to endPoint: RasterPoint
+  ) throws(RasterError) -> Segment? {
+    let start = Vector(x: startPoint.x, y: startPoint.y)
+    let end = Vector(x: endPoint.x, y: endPoint.y)
+    let delta = end - start
+    let length = hypot(delta.x, delta.y)
+    guard length.isFinite else { throw .invalidGeometry }
+    guard length > 0 else { return nil }
+    let unit = delta * (1 / length)
+    return Segment(start: start, end: end, unit: unit, normal: Vector(x: -unit.y, y: unit.x))
   }
 
   private static func transformed(_ vector: Vector, by transform: RasterAffineTransform) -> RasterPoint {

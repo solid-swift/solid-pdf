@@ -113,17 +113,15 @@ public struct RasterCanvas: ~Copyable {
       image.height > 0,
       image.data.count <= limits.maximumSurfaceBytes
     else { throw .invalidImage }
-    let corners = [
-      RasterPoint(x: 0, y: 0),
-      RasterPoint(x: Double(image.width), y: 0),
-      RasterPoint(x: Double(image.width), y: Double(image.height)),
-      RasterPoint(x: 0, y: Double(image.height)),
-    ].map(transform.transform)
+    let first = transform.transform(RasterPoint(x: 0, y: 0))
+    let second = transform.transform(RasterPoint(x: Double(image.width), y: 0))
+    let third = transform.transform(RasterPoint(x: Double(image.width), y: Double(image.height)))
+    let fourth = transform.transform(RasterPoint(x: 0, y: Double(image.height)))
     let boundary = RasterPath(elements: [
-      .move(to: corners[0]),
-      .line(to: corners[1]),
-      .line(to: corners[2]),
-      .line(to: corners[3]),
+      .move(to: first),
+      .line(to: second),
+      .line(to: third),
+      .line(to: fourth),
       .close,
     ])
     let boundarySpans = try rasterize(boundary, rule: .winding)

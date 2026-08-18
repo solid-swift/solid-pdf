@@ -44,7 +44,7 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
         tx: -descriptor.mediaBounds.x,
         ty: descriptor.mediaBounds.maxY
       )
-      canvas = try Self.makePage(pixelWidth: pixelWidth, pixelHeight: pixelHeight)
+      canvas = nil
     }
 
     /// Processes one validated graphics event.
@@ -171,9 +171,10 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
     }
 
     private func withCanvas(_ body: (inout RasterCanvas) throws -> Void) throws {
-      guard lifecycle == .active, var current = canvas.take() else {
+      guard lifecycle == .active else {
         throw SolidPostScript.Error.ioError
       }
+      var current = try takeCanvas()
       do {
         try body(&current)
         canvas = consume current
@@ -259,17 +260,23 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
     }
 
     private func transmitPage() throws {
-      guard let current = canvas.take() else { throw SolidPostScript.Error.ioError }
+      guard lifecycle == .active else { throw SolidPostScript.Error.ioError }
+      let current = try takeCanvas()
       do {
         let image = try current.finish()
-        let next = try Self.makePage(pixelWidth: pixelWidth, pixelHeight: pixelHeight)
-        canvas = consume next
+        canvas = nil
         pages.append(image)
       } catch {
         canvas = nil
-        if error is RasterError { throw SolidPostScript.Error.ioError }
-        throw error
+        throw SolidPostScript.Error.ioError
       }
+    }
+
+    private func takeCanvas() throws -> RasterCanvas {
+      if let current = canvas.take() {
+        return consume current
+      }
+      return try Self.makePage(pixelWidth: pixelWidth, pixelHeight: pixelHeight)
     }
 
     private func rasterClip(_ clip: GraphicsClip) throws(RasterError) -> RasterClip {
@@ -291,18 +298,14 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
     }
 
     private func transformedBounds(_ rect: GraphicsRect, by matrix: GraphicsMatrix) -> GraphicsRect {
-      let points = [
-        GraphicsPoint(x: rect.x, y: rect.y),
-        GraphicsPoint(x: rect.maxX, y: rect.y),
-        GraphicsPoint(x: rect.maxX, y: rect.maxY),
-        GraphicsPoint(x: rect.x, y: rect.maxY),
-      ].map(matrix.transform)
-      let xs = points.map(\.x)
-      let ys = points.map(\.y)
-      let minimumX = xs.min() ?? 0
-      let maximumX = xs.max() ?? 0
-      let minimumY = ys.min() ?? 0
-      let maximumY = ys.max() ?? 0
+      let first = matrix.transform(GraphicsPoint(x: rect.x, y: rect.y))
+      let second = matrix.transform(GraphicsPoint(x: rect.maxX, y: rect.y))
+      let third = matrix.transform(GraphicsPoint(x: rect.maxX, y: rect.maxY))
+      let fourth = matrix.transform(GraphicsPoint(x: rect.x, y: rect.maxY))
+      let minimumX = min(first.x, second.x, third.x, fourth.x)
+      let maximumX = max(first.x, second.x, third.x, fourth.x)
+      let minimumY = min(first.y, second.y, third.y, fourth.y)
+      let maximumY = max(first.y, second.y, third.y, fourth.y)
       return GraphicsRect(x: minimumX, y: minimumY, width: maximumX - minimumX, height: maximumY - minimumY)
     }
   }

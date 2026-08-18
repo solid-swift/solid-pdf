@@ -2,6 +2,24 @@ import SolidRaster
 import Testing
 
 @Suite struct PathStrokerTests {
+  @Test func closedStrokePreservesClosingSegment() throws {
+    let path = RasterPath(elements: [
+      .move(to: RasterPoint(x: 2, y: 2)),
+      .line(to: RasterPoint(x: 8, y: 2)),
+      .line(to: RasterPoint(x: 8, y: 8)),
+      .close,
+    ])
+    var canvas = try RasterCanvas(width: 10, height: 10)
+    try canvas.stroke(
+      path,
+      style: RasterStrokeStyle(width: 2, cap: .butt, join: .bevel),
+      paint: .solid(.black)
+    )
+    let image = try canvas.finish()
+
+    #expect(image.data[5 * image.bytesPerRow + 5 * 4] == 0)
+  }
+
   @Test func squareCapExtendsHalfWidth() throws {
     let path = RasterPath(elements: [
       .move(to: RasterPoint(x: 4, y: 8)),
