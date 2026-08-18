@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-swift run -c release SolidRasterBenchmark
+BENCHMARK_ENABLE=1 swift package benchmark --target SolidRasterBenchmark "$@"

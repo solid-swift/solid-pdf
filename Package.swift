@@ -12,7 +12,6 @@ let package = Package(
     .watchOS("26"),
   ],
   products: [
-    .executable(name: "SolidRasterBenchmark", targets: ["SolidRasterBenchmark"]),
     .library(name: "SolidRaster", targets: ["SolidRaster"]),
     .library(name: "SolidPostScript", targets: ["SolidPostScript"]),
     .library(name: "SolidPostScriptRaster", targets: ["SolidPostScriptRaster"]),
@@ -27,10 +26,6 @@ let package = Package(
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
   ],
   targets: [
-    .executableTarget(
-      name: "SolidRasterBenchmark",
-      dependencies: ["SolidRaster"]
-    ),
     .target(
       name: "SolidRaster",
       plugins: lintPlugins
@@ -139,3 +134,47 @@ let lintPlugins: [Target.PluginUsage] =
   lintEnabled
   ? [.plugin(name: "Lint", package: "swiftformatplugins")]
   : []
+
+// Benchmarking
+let benchmarkEnableEnvironment = ProcessInfo.processInfo.environment["BENCHMARK_ENABLE"]?.lowercased()
+let benchmarkEnabled =
+  if let benchmarkEnableEnvironment,
+    benchmarkEnableEnvironment == "1"
+      || benchmarkEnableEnvironment == "true"
+      || benchmarkEnableEnvironment == "t"
+  {
+    true
+  } else {
+    false
+  }
+
+if benchmarkEnabled {
+  package.dependencies += [
+    .package(url: "https://github.com/ordo-one/benchmark", .upToNextMajor(from: "1.29.7")),
+  ]
+  package.targets += [
+    .target(
+      name: "SolidRasterBenchmarkSupport",
+      dependencies: ["SolidRaster"],
+      path: "Benchmarks/SolidRasterBenchmarkSupport"
+    ),
+    .executableTarget(
+      name: "SolidRasterBenchmark",
+      dependencies: [
+        "SolidRaster",
+        "SolidRasterBenchmarkSupport",
+        .product(name: "Benchmark", package: "benchmark"),
+      ],
+      path: "Benchmarks/SolidRasterBenchmark",
+      plugins: [
+        .plugin(name: "BenchmarkPlugin", package: "benchmark")
+      ]
+    ),
+    .testTarget(
+      name: "SolidRasterBenchmarkSupportTests",
+      dependencies: ["SolidRaster", "SolidRasterBenchmarkSupport"],
+      path: "Tests/SolidRasterBenchmarkSupportTests",
+      plugins: lintPlugins
+    ),
+  ]
+}
