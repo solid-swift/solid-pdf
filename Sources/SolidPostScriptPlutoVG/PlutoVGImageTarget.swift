@@ -1,6 +1,7 @@
 import CPlutoVG
 import Foundation
 import SolidPostScript
+import SolidRaster
 
 /// A portable PostScript graphics target that rasterizes pages through PlutoVG.
 public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
@@ -239,7 +240,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
           Int32(bytesPerRow)
         )
       }
-      return RasterImage(
+      return try RasterImage(
         width: width,
         height: height,
         bytesPerRow: bytesPerRow,

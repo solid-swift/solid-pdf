@@ -71,7 +71,12 @@ let package = Package(
     ),
     .testTarget(
       name: "SolidPostScriptRasterTests",
-      dependencies: ["SolidPostScript", "SolidPostScriptRaster", "SolidRaster"],
+      dependencies: [
+        "SolidPostScript",
+        "SolidPostScriptPlutoVG",
+        "SolidPostScriptRaster",
+        "SolidRaster",
+      ],
       plugins: lintPlugins
     ),
     .testTarget(

@@ -1,7 +1,4 @@
-import Foundation
+@_exported import SolidRaster
 
-/// The byte organization of a portable raster image.
-public enum RasterPixelFormat: Sendable, Hashable {
-  /// Four straight-alpha, normalized 8-bit components in red, green, blue, alpha order.
-  case rgba8Unorm
-}
+/// The shared portable raster pixel-format type.
+public typealias RasterPixelFormat = SolidRaster.RasterPixelFormat
