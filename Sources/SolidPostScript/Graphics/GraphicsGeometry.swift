@@ -37,6 +37,20 @@ public struct GraphicsRect: Sendable, Hashable {
   public var maxX: Double { x + width }
   /// The maximum vertical coordinate.
   public var maxY: Double { y + height }
+
+  func contains(_ point: GraphicsPoint) -> Bool {
+    point.x >= x && point.x <= maxX && point.y >= y && point.y <= maxY
+  }
+}
+
+extension GraphicsRect {
+  static func bounding(_ points: [GraphicsPoint]) -> Self {
+    let minimumX = points.map(\.x).min() ?? 0
+    let minimumY = points.map(\.y).min() ?? 0
+    let maximumX = points.map(\.x).max() ?? minimumX
+    let maximumY = points.map(\.y).max() ?? minimumY
+    return Self(x: minimumX, y: minimumY, width: maximumX - minimumX, height: maximumY - minimumY)
+  }
 }
 
 /// A six-component PostScript affine transformation matrix.

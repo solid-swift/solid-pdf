@@ -289,6 +289,11 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       state: GraphicsStateSnapshot,
       in canvas: OpaquePointer
     ) throws {
+      if state.strokeAdjustment {
+        let outline = try GraphicsPathGeometry.strokeOutline(path: path, state: state, matrix: matrix)
+        try fill(outline, rule: .winding, state: state, in: canvas)
+        return
+      }
       guard let inverse = matrix.inverted else { return }
       plutovg_canvas_save(canvas)
       defer { plutovg_canvas_restore(canvas) }

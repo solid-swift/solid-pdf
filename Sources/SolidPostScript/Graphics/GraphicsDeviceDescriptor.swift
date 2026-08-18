@@ -12,6 +12,10 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
   public let verticalResolution: Double
   /// The initial transformation from default user space to device space.
   public let defaultMatrix: GraphicsMatrix
+  /// The initial curve-flattening tolerance in device pixels.
+  public let defaultFlatness: Double
+  /// Whether stroke adjustment is initially enabled.
+  public let defaultStrokeAdjustment: Bool
 
   /// Creates a graphics device descriptor.
   public init(
@@ -19,13 +23,17 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
     imageableBounds: GraphicsRect,
     horizontalResolution: Double,
     verticalResolution: Double,
-    defaultMatrix: GraphicsMatrix
+    defaultMatrix: GraphicsMatrix,
+    defaultFlatness: Double = 1,
+    defaultStrokeAdjustment: Bool = false
   ) {
     self.mediaBounds = mediaBounds
     self.imageableBounds = imageableBounds
     self.horizontalResolution = horizontalResolution
     self.verticalResolution = verticalResolution
     self.defaultMatrix = defaultMatrix
+    self.defaultFlatness = defaultFlatness
+    self.defaultStrokeAdjustment = defaultStrokeAdjustment
   }
 
   /// The installation-default Letter page at 72 dots per inch.

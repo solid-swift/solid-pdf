@@ -1,4 +1,10 @@
 import Foundation
+import SolidRaster
+
+struct GraphicsClipStackEntry: Sendable {
+  let clip: GraphicsClip
+  let region: RasterRegion
+}
 
 struct GraphicsCanonicalState: Sendable {
   var matrix: GraphicsMatrix
@@ -11,7 +17,11 @@ struct GraphicsCanonicalState: Sendable {
   var miterLimit: Double
   var dash: GraphicsDash
   var dashSource: Object?
-  var clipStack: [GraphicsClip]
+  var flatness: Double
+  var strokeAdjustment: Bool
+  var pathBoundingBox: GraphicsRect?
+  var resolvedClip: RasterRegion
+  var clipStack: [GraphicsClipStackEntry]
 
   static func initial(for descriptor: GraphicsDeviceDescriptor) -> Self {
     Self(
@@ -25,6 +35,10 @@ struct GraphicsCanonicalState: Sendable {
       miterLimit: 10,
       dash: GraphicsDash(),
       dashSource: nil,
+      flatness: descriptor.defaultFlatness,
+      strokeAdjustment: descriptor.defaultStrokeAdjustment,
+      pathBoundingBox: nil,
+      resolvedClip: (try? .rectangle(descriptor.imageableBounds.rasterRect)) ?? RasterRegion(),
       clipStack: []
     )
   }
@@ -39,8 +53,42 @@ struct GraphicsCanonicalState: Sendable {
       lineCap: lineCap,
       lineJoin: lineJoin,
       miterLimit: miterLimit,
-      dash: dash
+      dash: dash,
+      flatness: flatness,
+      strokeAdjustment: strokeAdjustment,
+      pathBoundingBox: pathBoundingBox
     )
+  }
+
+  mutating func clearPath() {
+    path.removeAll()
+    pathBoundingBox = nil
+  }
+
+  mutating func appendPath(_ element: GraphicsPath.Element) throws {
+    if let pathBoundingBox {
+      for point in element.points where !pathBoundingBox.contains(point) {
+        throw Error.rangeCheck
+      }
+    }
+    try path.append(element)
+  }
+
+  func validatePathBounds() throws {
+    guard let pathBoundingBox else { return }
+    guard path.elements.allSatisfy({ $0.points.allSatisfy(pathBoundingBox.contains) }) else {
+      throw Error.rangeCheck
+    }
+  }
+
+  mutating func initializeGraphics(for descriptor: GraphicsDeviceDescriptor) {
+    let preservedFlatness = flatness
+    let preservedStrokeAdjustment = strokeAdjustment
+    let preservedClipStack = clipStack
+    self = .initial(for: descriptor)
+    flatness = preservedFlatness
+    strokeAdjustment = preservedStrokeAdjustment
+    clipStack = preservedClipStack
   }
 
   func checkStorage(in vm: VM) throws {

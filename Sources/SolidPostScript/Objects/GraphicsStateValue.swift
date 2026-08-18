@@ -1,4 +1,5 @@
 import Foundation
+import SolidRaster
 
 extension Object {
   static func graphicsState(_ state: GraphicsCanonicalState, vm: VM) throws -> Self {
@@ -10,11 +11,13 @@ extension Object {
 public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
   private struct Storage: Sendable {
     var snapshot: GraphicsStateSnapshot
-    var clipStack: [GraphicsClip]
+    var resolvedClip: RasterRegion
+    var clipStack: [GraphicsClipStackEntry]
     var dashSource: VMStoredObject?
 
     init(_ state: GraphicsCanonicalState) {
       self.snapshot = state.snapshot
+      self.resolvedClip = state.resolvedClip
       self.clipStack = state.clipStack
       self.dashSource = state.dashSource.map(VMStoredObject.init)
     }
@@ -31,6 +34,10 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         miterLimit: snapshot.miterLimit,
         dash: snapshot.dash,
         dashSource: dashSource?.object,
+        flatness: snapshot.flatness,
+        strokeAdjustment: snapshot.strokeAdjustment,
+        pathBoundingBox: snapshot.pathBoundingBox,
+        resolvedClip: resolvedClip,
         clipStack: clipStack
       )
     }
@@ -61,6 +68,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       identifyEdges: { storage, allocation in storage.dashSource?.identifyEdgeSource(allocation) },
       clear: {
         $0.snapshot = GraphicsCanonicalState.initial(for: .letter).snapshot
+        $0.resolvedClip = RasterRegion()
         $0.clipStack.removeAll()
         $0.dashSource = nil
       }
@@ -154,9 +162,18 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       let (value, overflow) = lhs.addingReportingOverflow(rhs)
       return overflow ? .max : value
     }
+    let clipStackTrapezoids = storage.clipStack.reduce(0) {
+      add($0, $1.region.trapezoids.count)
+    }
     return add(
       add(64, multiply(storage.snapshot.path.elements.count, 56)),
-      add(multiply(storage.snapshot.clip.constraints.count, 64), multiply(storage.clipStack.count, 32))
+      add(
+        multiply(storage.snapshot.clip.constraints.count, 64),
+        add(
+          multiply(storage.resolvedClip.trapezoids.count, 56),
+          add(multiply(storage.clipStack.count, 32), multiply(clipStackTrapezoids, 56))
+        )
+      )
     )
   }
 }

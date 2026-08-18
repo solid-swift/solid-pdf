@@ -16,6 +16,8 @@ public enum GraphicsOperation: Sendable, Hashable {
     case setLineJoin(GraphicsLineJoin)
     case setMiterLimit(Double)
     case setDash(GraphicsDash)
+    case setFlatness(Double)
+    case setStrokeAdjustment(Bool)
     case setGray(Double)
     case setRGB(red: Double, green: Double, blue: Double)
     case setCMYK(cyan: Double, magenta: Double, yellow: Double, black: Double)
@@ -47,6 +49,11 @@ public enum GraphicsOperation: Sendable, Hashable {
     case arcNegative(center: GraphicsPoint, radius: Double, startDegrees: Double, endDegrees: Double)
     case arcTo(corner: GraphicsPoint, following: GraphicsPoint, radius: Double)
     case close
+    case setBoundingBox(GraphicsRect)
+    case flatten
+    case reverse
+    case strokeOutline
+    case clippingPath
   }
 
   /// A clipping operation.
@@ -64,6 +71,8 @@ public enum GraphicsOperation: Sendable, Hashable {
     case fillRectangles([GraphicsPath])
     case strokeRectangles(paths: [GraphicsPath], matrix: GraphicsMatrix?)
     case image(GraphicsImageDescriptor)
+    case userPathFill(GraphicsFillRule)
+    case userPathStroke
   }
 
   /// A page-lifecycle operation.

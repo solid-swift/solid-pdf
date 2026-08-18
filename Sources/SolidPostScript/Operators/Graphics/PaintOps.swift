@@ -1,4 +1,5 @@
 import Foundation
+import SolidRaster
 
 extension Operators {
 
@@ -19,8 +20,16 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["initclip"]
 
     func execute(context: isolated Context) async throws {
+      let descriptor = context.graphicsDeviceDescriptor
+      let region: RasterRegion
+      do {
+        region = try .rectangle(descriptor.imageableBounds.rasterRect)
+      } catch {
+        throw error.postScriptError
+      }
       try context.applyGraphicsOperation(.clip(.initialize)) {
-        $0.clip = GraphicsClip(imageableBounds: context.graphicsDeviceDescriptor.imageableBounds)
+        $0.clip = GraphicsClip(imageableBounds: descriptor.imageableBounds)
+        $0.resolvedClip = region
       }
     }
   }
@@ -75,7 +84,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["stroke"]
 
     func execute(context: isolated Context) async throws {
-      try context.applyGraphicsOperation(.paint(.stroke)) { $0.path.removeAll() }
+      try context.applyGraphicsOperation(.paint(.stroke)) { $0.clearPath() }
     }
   }
 
@@ -85,7 +94,8 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       let before = context.graphicsState
-      let after = GraphicsCanonicalState.initial(for: context.graphicsDeviceDescriptor)
+      var after = before
+      after.initializeGraphics(for: context.graphicsDeviceDescriptor)
       try context.emitGraphicsOperation(.page(.show), before: before, after: after)
       context.graphicsState = after
     }
@@ -102,13 +112,20 @@ extension Operators {
   }
 
   static func intersectClip(context: isolated Context, rule: GraphicsFillRule) throws {
+    let candidate = try GraphicsPathGeometry.region(
+      for: context.graphicsState.path,
+      rule: rule,
+      flatness: context.graphicsState.flatness
+    )
+    let resolved = try GraphicsPathGeometry.intersect(context.graphicsState.resolvedClip, candidate)
     try context.applyGraphicsOperation(.clip(.intersect(rule))) {
       $0.clip = try $0.clip.appending(GraphicsClipConstraint(path: $0.path, rule: rule))
-      $0.path.removeAll()
+      $0.resolvedClip = resolved
+      $0.clearPath()
     }
   }
 
   static func paintFill(context: isolated Context, rule: GraphicsFillRule) throws {
-    try context.applyGraphicsOperation(.paint(.fill(rule))) { $0.path.removeAll() }
+    try context.applyGraphicsOperation(.paint(.fill(rule))) { $0.clearPath() }
   }
 }

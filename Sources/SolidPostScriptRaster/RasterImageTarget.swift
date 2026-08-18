@@ -198,6 +198,11 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
       matrix: GraphicsMatrix,
       state: GraphicsStateSnapshot
     ) throws {
+      if state.strokeAdjustment {
+        let outline = try GraphicsPathGeometry.strokeOutline(path: path, state: state, matrix: matrix)
+        try fill(outline, rule: .winding, state: state)
+        return
+      }
       guard let inverse = matrix.inverted else { return }
       let strokeTransform = matrix.concatenated(with: rasterMatrix).raster
       let style = RasterStrokeStyle(

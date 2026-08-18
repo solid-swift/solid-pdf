@@ -43,11 +43,11 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
       case .paint(.fill(let rule)):
         fill(event.before.path, rule: rule, state: event.before, in: context)
       case .paint(.stroke):
-        stroke(event.before.path, state: event.before, in: context)
+        try stroke(event.before.path, state: event.before, in: context)
       case .paint(.fillRectangles(let paths)):
         fillRectangles(paths, state: event.before, in: context)
       case .paint(.strokeRectangles(let paths, let matrix)):
-        strokeRectangles(paths, matrix: matrix, state: event.before, in: context)
+        try strokeRectangles(paths, matrix: matrix, state: event.before, in: context)
       case .page(.show), .page(.copy):
         guard let image = context.makeImage() else { throw SolidPostScript.Error.ioError }
         let next = try Self.makePage(
@@ -167,8 +167,8 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
       context.restoreGState()
     }
 
-    private func stroke(_ path: GraphicsPath, state: GraphicsStateSnapshot, in context: CGContext) {
-      stroke(path, matrix: state.matrix, state: state, in: context)
+    private func stroke(_ path: GraphicsPath, state: GraphicsStateSnapshot, in context: CGContext) throws {
+      try stroke(path, matrix: state.matrix, state: state, in: context)
     }
 
     private func stroke(
@@ -176,7 +176,12 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
       matrix: GraphicsMatrix,
       state: GraphicsStateSnapshot,
       in context: CGContext
-    ) {
+    ) throws {
+      if state.strokeAdjustment {
+        let outline = try GraphicsPathGeometry.strokeOutline(path: path, state: state, matrix: matrix)
+        fill(outline, rule: .winding, state: state, in: context)
+        return
+      }
       guard let inverse = matrix.inverted else { return }
       context.saveGState()
       replay(state.clip, in: context)
@@ -210,10 +215,10 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
       matrix: GraphicsMatrix?,
       state: GraphicsStateSnapshot,
       in context: CGContext
-    ) {
+    ) throws {
       let path = GraphicsPath(elements: paths.flatMap(\.elements))
       let effectiveMatrix = matrix?.concatenated(with: state.matrix) ?? state.matrix
-      stroke(path, matrix: effectiveMatrix, state: state, in: context)
+      try stroke(path, matrix: effectiveMatrix, state: state, in: context)
     }
 
     private func replay(_ clip: GraphicsClip, in context: CGContext) {

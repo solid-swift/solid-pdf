@@ -1,10 +1,14 @@
 import Foundation
 
 enum PathFlattener {
-  private static let toleranceSquared = 1.0 / 1_024.0
   private static let maximumDepth = 16
 
-  static func flatten(_ path: RasterPath) throws(RasterError) -> FlattenedPath {
+  static func flatten(
+    _ path: RasterPath,
+    flatness: Double = 1.0 / 32.0
+  ) throws(RasterError) -> FlattenedPath {
+    guard flatness.isFinite, flatness > 0 else { throw .invalidGeometry }
+    let toleranceSquared = flatness * flatness
     var subpaths: ContiguousArray<FlattenedPath.Subpath> = []
     var points: ContiguousArray<RasterPoint> = []
     var current: RasterPoint?
@@ -41,6 +45,7 @@ enum PathFlattener {
           control1: control1,
           control2: control2,
           end: end,
+          toleranceSquared: toleranceSquared,
           depth: 0,
           into: &points
         )
@@ -59,6 +64,7 @@ enum PathFlattener {
     control1: RasterPoint,
     control2: RasterPoint,
     end: RasterPoint,
+    toleranceSquared: Double,
     depth: Int,
     into points: inout ContiguousArray<RasterPoint>
   ) throws(RasterError) {
@@ -86,6 +92,7 @@ enum PathFlattener {
       control1: startControl,
       control2: leftControl,
       end: middle,
+      toleranceSquared: toleranceSquared,
       depth: depth + 1,
       into: &points
     )
@@ -94,6 +101,7 @@ enum PathFlattener {
       control1: rightControl,
       control2: controlEnd,
       end: end,
+      toleranceSquared: toleranceSquared,
       depth: depth + 1,
       into: &points
     )

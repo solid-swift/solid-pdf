@@ -22,6 +22,10 @@ extension Operators {
     CurrentMiterLimit.instance,
     SetDash.instance,
     CurrentDash.instance,
+    SetFlatness.instance,
+    CurrentFlatness.instance,
+    SetStrokeAdjustment.instance,
+    CurrentStrokeAdjustment.instance,
     SetGray.instance,
     CurrentGray.instance,
     SetRGBColor.instance,
@@ -100,7 +104,7 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       try context.applyGraphicsOperation(.state(.initialize)) {
-        $0 = .initial(for: context.graphicsDeviceDescriptor)
+        $0.initializeGraphics(for: context.graphicsDeviceDescriptor)
       }
     }
   }
@@ -113,7 +117,9 @@ extension Operators {
       guard context.graphicsState.clipStack.count < LanguageLimits.maximumClipStackDepth else {
         throw Error.limitCheck
       }
-      try context.applyGraphicsOperation(.state(.clipSave)) { $0.clipStack.append($0.clip) }
+      try context.applyGraphicsOperation(.state(.clipSave)) {
+        $0.clipStack.append(GraphicsClipStackEntry(clip: $0.clip, region: $0.resolvedClip))
+      }
     }
   }
 
@@ -122,10 +128,11 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["cliprestore"]
 
     func execute(context: isolated Context) async throws {
-      guard let clip = context.graphicsState.clipStack.last else { throw Error.invalidRestore }
+      guard let entry = context.graphicsState.clipStack.last else { throw Error.invalidRestore }
       try context.applyGraphicsOperation(.state(.clipRestore)) {
         _ = $0.clipStack.popLast()
-        $0.clip = clip
+        $0.clip = entry.clip
+        $0.resolvedClip = entry.region
       }
     }
   }
@@ -276,6 +283,46 @@ extension Operators {
     func execute(context: isolated Context) async throws {
       let pattern = try context.makeDashObject()
       context.operands.push(try .real(context.graphicsState.dash.phase), pattern)
+    }
+  }
+
+  enum SetFlatness: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["setflat"]
+
+    func execute(context: isolated Context) async throws {
+      let flatness = min(100, max(0.2, try numeric(context.operands.pop())))
+      try context.applyGraphicsOperation(.state(.setFlatness(flatness))) { $0.flatness = flatness }
+    }
+  }
+
+  enum CurrentFlatness: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["currentflat"]
+
+    func execute(context: isolated Context) async throws {
+      context.operands.push(try .real(context.graphicsState.flatness))
+    }
+  }
+
+  enum SetStrokeAdjustment: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["setstrokeadjust"]
+
+    func execute(context: isolated Context) async throws {
+      let value: BooleanValue = try context.operands.popAs()
+      try context.applyGraphicsOperation(.state(.setStrokeAdjustment(value.value))) {
+        $0.strokeAdjustment = value.value
+      }
+    }
+  }
+
+  enum CurrentStrokeAdjustment: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["currentstrokeadjust"]
+
+    func execute(context: isolated Context) async throws {
+      context.operands.push(.boolean(context.graphicsState.strokeAdjustment))
     }
   }
 

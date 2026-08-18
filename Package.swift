@@ -38,6 +38,7 @@ let package = Package(
     .target(
       name: "SolidPostScript",
       dependencies: [
+        "SolidRaster",
         .product(name: "SolidCore", package: "solid-foundation"),
         .product(name: "SolidIO", package: "solid-foundation"),
         .product(name: "SolidTempo", package: "solid-foundation"),

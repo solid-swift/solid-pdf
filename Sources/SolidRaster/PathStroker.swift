@@ -23,7 +23,8 @@ enum PathStroker {
   static func stroke(
     _ path: RasterPath,
     style: RasterStrokeStyle,
-    transform: RasterAffineTransform
+    transform: RasterAffineTransform,
+    flatness: Double = 1.0 / 32.0
   ) throws(RasterError) -> RasterPath {
     guard style.width.isFinite,
       style.width >= 0,
@@ -37,7 +38,7 @@ enum PathStroker {
       transform.ty.isFinite
     else { throw .invalidGeometry }
     guard style.width > 0 else { return RasterPath() }
-    let flattened = try PathFlattener.flatten(path)
+    let flattened = try PathFlattener.flatten(path, flatness: flatness)
     let subpaths = try DashProcessor.apply(
       flattened.subpaths,
       pattern: style.dash,

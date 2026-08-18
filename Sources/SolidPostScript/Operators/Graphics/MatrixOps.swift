@@ -4,6 +4,7 @@ extension Operators {
 
   static let matrixOps: [OperatorValue] = [
     MakeMatrix.instance,
+    InitializeMatrix.instance,
     IdentityMatrix.instance,
     DefaultMatrix.instance,
     CurrentMatrix.instance,
@@ -26,6 +27,16 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       context.operands.push(try makeMatrixObject(.identity, context: context))
+    }
+  }
+
+  enum InitializeMatrix: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["initmatrix"]
+
+    func execute(context: isolated Context) async throws {
+      let matrix = context.graphicsDeviceDescriptor.defaultMatrix
+      try context.applyGraphicsOperation(.transform(.setMatrix(matrix))) { $0.matrix = matrix }
     }
   }
 

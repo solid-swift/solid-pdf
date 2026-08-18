@@ -44,9 +44,16 @@ extension Operators {
       for path in paths {
         for element in path.elements { try combined.append(element) }
       }
+      let candidate = try GraphicsPathGeometry.region(
+        for: combined,
+        rule: .winding,
+        flatness: context.graphicsState.flatness
+      )
+      let resolved = try GraphicsPathGeometry.intersect(context.graphicsState.resolvedClip, candidate)
       try context.applyGraphicsOperation(.clip(.intersectRectangles(paths))) {
         $0.clip = try $0.clip.appending(GraphicsClipConstraint(path: combined, rule: .winding))
-        $0.path.removeAll()
+        $0.resolvedClip = resolved
+        $0.clearPath()
       }
     }
   }

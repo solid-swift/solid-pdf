@@ -105,6 +105,7 @@ extension Operators {
       second = corner
       try context.applyGraphicsOperation(.path(.arcTo(corner: corner, following: following, radius: radius))) {
         try $0.path.append(.line(to: $0.matrix.transform(corner)))
+        try $0.validatePathBounds()
       }
       return (first, second)
     }
@@ -133,6 +134,7 @@ extension Operators {
         clockwise: clockwise,
         connectsToStart: false
       )
+      try state.validatePathBounds()
     }
     return (first, second)
   }
@@ -157,6 +159,7 @@ extension Operators {
         clockwise: clockwise,
         connectsToStart: true
       )
+      try state.validatePathBounds()
     }
   }
 

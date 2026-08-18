@@ -52,4 +52,83 @@ public struct GraphicsPath: Sendable, Hashable {
     }
     return nil
   }
+
+  var boundingPoints: [GraphicsPoint] {
+    var points: [GraphicsPoint] = []
+    for (index, element) in elements.enumerated() {
+      if index == elements.count - 1, case .move = element, elements.count > 1 { continue }
+      points.append(contentsOf: element.points)
+    }
+    return points
+  }
+
+  func reversedPath() throws -> Self {
+    struct Segment {
+      let start: GraphicsPoint
+      let element: Element
+      let end: GraphicsPoint
+    }
+    var result = GraphicsPath()
+    var subpathStart: GraphicsPoint?
+    var current: GraphicsPoint?
+    var segments: [Segment] = []
+    var closed = false
+
+    func appendSubpath() throws {
+      guard let start = subpathStart else { return }
+      guard let end = segments.last?.end else {
+        try result.append(.move(to: start))
+        return
+      }
+      try result.append(.move(to: closed ? start : end))
+      for segment in segments.reversed() {
+        switch segment.element {
+        case .line:
+          try result.append(.line(to: segment.start))
+        case .curve(let control1, let control2, _):
+          try result.append(.curve(control1: control2, control2: control1, end: segment.start))
+        case .move, .close:
+          break
+        }
+      }
+      if closed { try result.append(.close) }
+    }
+
+    for element in elements {
+      switch element {
+      case .move(let point):
+        try appendSubpath()
+        subpathStart = point
+        current = point
+        segments.removeAll(keepingCapacity: true)
+        closed = false
+      case .line(let point):
+        guard let segmentStart = current else { continue }
+        segments.append(Segment(start: segmentStart, element: element, end: point))
+        current = point
+      case .curve(_, _, let point):
+        guard let segmentStart = current else { continue }
+        segments.append(Segment(start: segmentStart, element: element, end: point))
+        current = point
+      case .close:
+        if let current, let subpathStart, current != subpathStart {
+          segments.append(Segment(start: current, element: .line(to: subpathStart), end: subpathStart))
+        }
+        closed = true
+        current = subpathStart
+      }
+    }
+    try appendSubpath()
+    return result
+  }
+}
+
+extension GraphicsPath.Element {
+  var points: [GraphicsPoint] {
+    switch self {
+    case .move(let point), .line(let point): [point]
+    case .curve(let control1, let control2, let end): [control1, control2, end]
+    case .close: []
+    }
+  }
 }
