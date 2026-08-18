@@ -24,6 +24,10 @@ extension Operators {
     CurrentDash.instance,
     SetGray.instance,
     CurrentGray.instance,
+    SetRGBColor.instance,
+    CurrentRGBColor.instance,
+    SetCMYKColor.instance,
+    CurrentCMYKColor.instance,
   ]
 
   enum GraphicsSave: OperatorValue {
@@ -290,12 +294,76 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["currentgray"]
 
     func execute(context: isolated Context) async throws {
-      guard case .deviceGray(let gray) = context.graphicsState.paint else {
-        preconditionFailure("The initial graphics tranche only supports DeviceGray")
-      }
-      context.operands.push(try .real(gray))
+      context.operands.push(try .real(context.graphicsState.paint.grayComponent))
     }
   }
+
+  enum SetRGBColor: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["setrgbcolor"]
+
+    func execute(context: isolated Context) async throws {
+      let operands = try context.operands.pop(count: 3)
+      let red = clamped(try numeric(operands[2]))
+      let green = clamped(try numeric(operands[1]))
+      let blue = clamped(try numeric(operands[0]))
+      try context.applyGraphicsOperation(.state(.setRGB(red: red, green: green, blue: blue))) {
+        $0.paint = .deviceRGB(red: red, green: green, blue: blue)
+      }
+    }
+  }
+
+  enum CurrentRGBColor: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["currentrgbcolor"]
+
+    func execute(context: isolated Context) async throws {
+      let components = context.graphicsState.paint.rgbComponents
+      context.operands.push(
+        try .real(components.blue),
+        try .real(components.green),
+        try .real(components.red)
+      )
+    }
+  }
+
+  enum SetCMYKColor: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["setcmykcolor"]
+
+    func execute(context: isolated Context) async throws {
+      let operands = try context.operands.pop(count: 4)
+      let cyan = clamped(try numeric(operands[3]))
+      let magenta = clamped(try numeric(operands[2]))
+      let yellow = clamped(try numeric(operands[1]))
+      let black = clamped(try numeric(operands[0]))
+      try context.applyGraphicsOperation(.state(.setCMYK(
+        cyan: cyan,
+        magenta: magenta,
+        yellow: yellow,
+        black: black
+      ))) {
+        $0.paint = .deviceCMYK(cyan: cyan, magenta: magenta, yellow: yellow, black: black)
+      }
+    }
+  }
+
+  enum CurrentCMYKColor: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["currentcmykcolor"]
+
+    func execute(context: isolated Context) async throws {
+      let components = context.graphicsState.paint.cmykComponents
+      context.operands.push(
+        try .real(components.black),
+        try .real(components.yellow),
+        try .real(components.magenta),
+        try .real(components.cyan)
+      )
+    }
+  }
+
+  static func clamped(_ value: Double) -> Double { min(1, max(0, value)) }
 
   static func numeric(_ object: Object) throws -> Double {
     guard let value = object.value as? NumericConvertible else { throw Error.typeCheck }

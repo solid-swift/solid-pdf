@@ -135,6 +135,185 @@ struct GraphicsSemanticsTests {
     #expect(stroke.before.path.currentPoint == GraphicsPoint(x: 4, y: 5))
     #expect(stroke.after.path.isEmpty)
   }
+
+  @Test func deviceColorsClampAndConvertAccordingToPLRM() async throws {
+    let values: [RealValue] = try await Interpreter.result(
+      content: "1.5 -.5 .25 setrgbcolor currentrgbcolor currentgray currentcmykcolor",
+      count: 8
+    )
+    let actual = values.map(\.value).reversed()
+    let expected = [1.0, 0.0, 0.25, 0.3275, 0.0, 1.0, 0.75, 0.0]
+    for (actual, expected) in zip(actual, expected) {
+      #expect(abs(actual - expected) < 1e-12)
+    }
+  }
+
+  @Test func arcsAndTangentArcsAppendDeviceSpaceCurves() async throws {
+    let result = try await Interpreter.render(
+      content: "0 0 moveto 10 10 5 0 180 arc 20 10 20 20 2 arcto currentpoint",
+      to: EventGraphicsTarget()
+    )
+    let values = try await result.context.results()
+    #expect(values.count == 6)
+    #expect(result.output.contains { event in
+      if case .path(.arc(center: GraphicsPoint(x: 10, y: 10), radius: 5, startDegrees: 0, endDegrees: 180)) =
+        event.operation
+      {
+        return true
+      }
+      return false
+    })
+    #expect(result.output.contains { event in
+      if case .path(.arcTo) = event.operation { return true }
+      return false
+    })
+  }
+
+  @Test func rectangleOperatorsBatchAndPreserveOrClearTheCurrentPath() async throws {
+    let result = try await Interpreter.render(
+      content: "1 1 moveto [0 0 10 10 12 0 -2 5] rectfill currentpoint 0 0 20 20 rectclip",
+      to: EventGraphicsTarget()
+    )
+    let values = try await result.context.results()
+    let numbers = try values.map { try $0.value(as: RealValue.self).value }
+    #expect(numbers.reversed() == [1, 1])
+    #expect(result.output.contains { event in
+      if case .paint(.fillRectangles(let paths)) = event.operation { return paths.count == 2 }
+      return false
+    })
+    #expect(result.output.last?.after.path.isEmpty == true)
+  }
+
+  @Test func copyPageErasesAtLanguageLevelThreeWithoutResettingGraphicsState() async throws {
+    let result = try await Interpreter.render(
+      content: "4 setlinewidth 0 0 10 10 rectfill copypage currentlinewidth showpage",
+      to: RecordingGraphicsTarget()
+    )
+    let values = try await result.context.results()
+    #expect(try values.first?.value(as: RealValue.self).value == 4)
+    #expect(result.output.pages.count == 2)
+    #expect(result.output.pages[0].effects.count == 1)
+    #expect(result.output.pages[1].effects.isEmpty)
+  }
+
+  @Test func sampledImagesUseBoundedNormalizedTransfers() async throws {
+    let result = try await Interpreter.render(
+      content: "2 2 8 [2 0 0 2 0 0] <00ff> image showpage",
+      to: RecordingGraphicsTarget()
+    )
+    let page = try #require(result.output.pages.first)
+    guard case .image(let image, _) = try #require(page.effects.first) else {
+      Issue.record("Expected an image effect")
+      return
+    }
+    #expect(image.descriptor.width == 2)
+    #expect(image.descriptor.height == 2)
+    #expect(image.components == [0, 1, 0, 1])
+  }
+
+  @Test func imageDictionaryAndColorImagePreserveComponentModels() async throws {
+    let dictionaryResult = try await Interpreter.render(
+      content: "0 0 1 setrgbcolor << /ImageType 1 /Width 1 /Height 1 /BitsPerComponent 8 "
+        + "/ImageMatrix [1 0 0 1 0 0] /Decode [0 1 0 1 0 1] /DataSource <ff8000> >> image showpage",
+      to: RecordingGraphicsTarget()
+    )
+    guard case .image(let dictionaryImage, _) = try #require(dictionaryResult.output.pages.first?.effects.first) else {
+      Issue.record("Expected a dictionary image effect")
+      return
+    }
+    #expect(dictionaryImage.descriptor.kind == .color(.deviceRGB))
+    #expect(dictionaryImage.components == [1, Float(128.0 / 255.0), 0])
+
+    let colorResult = try await Interpreter.render(
+      content: "1 1 8 [1 0 0 1 0 0] <00ff00> false 3 colorimage showpage",
+      to: RecordingGraphicsTarget()
+    )
+    guard case .image(let colorImage, _) = try #require(colorResult.output.pages.first?.effects.first) else {
+      Issue.record("Expected a colorimage effect")
+      return
+    }
+    #expect(colorImage.descriptor.kind == .color(.deviceRGB))
+    #expect(colorImage.components == [0, 1, 0])
+  }
+
+  @Test func imageSamplesSupportTwelveBitsMasksPlanarSourcesAndPrematureEnd() async throws {
+    let twelveBit = try await Interpreter.render(
+      content: "2 1 12 [2 0 0 1 0 0] <000fff> image showpage",
+      to: RecordingGraphicsTarget()
+    )
+    guard case .image(let twelveBitImage, _) = try #require(twelveBit.output.pages.first?.effects.first) else {
+      Issue.record("Expected a 12-bit image effect")
+      return
+    }
+    #expect(twelveBitImage.components == [0, 1])
+
+    let mask = try await Interpreter.render(
+      content: "1 0 0 setrgbcolor 2 1 true [2 0 0 1 0 0] <80> imagemask showpage",
+      to: RecordingGraphicsTarget()
+    )
+    guard case .image(let maskImage, _) = try #require(mask.output.pages.first?.effects.first) else {
+      Issue.record("Expected an imagemask effect")
+      return
+    }
+    #expect(maskImage.descriptor.kind == .mask(.deviceRGB(red: 1, green: 0, blue: 0)))
+    #expect(maskImage.components == [1, 0])
+
+    let planar = try await Interpreter.render(
+      content: "1 1 8 [1 0 0 1 0 0] <ff> <00> <80> true 3 colorimage showpage",
+      to: RecordingGraphicsTarget()
+    )
+    guard case .image(let planarImage, _) = try #require(planar.output.pages.first?.effects.first) else {
+      Issue.record("Expected a planar colorimage effect")
+      return
+    }
+    #expect(planarImage.components == [1, 0, Float(128.0 / 255.0)])
+
+    let partial = try await Interpreter.render(
+      content: "/n 0 def 2 2 8 [2 0 0 2 0 0] {n 0 eq {/n 1 def <00ff>} {<>} ifelse} image showpage",
+      to: RecordingGraphicsTarget()
+    )
+    guard case .image(let partialImage, _) = try #require(partial.output.pages.first?.effects.first) else {
+      Issue.record("Expected a partial image effect")
+      return
+    }
+    #expect(partialImage.components == [0, 1])
+  }
+
+  @Test func fileImageSourcesConsumeOnlyRequiredBytes() async throws {
+    let values = try await Interpreter.results(
+      content: "/f (ABC) /ReusableStreamDecode filter def "
+        + "2 1 8 [2 0 0 1 0 0] f image f read"
+    )
+    #expect(try values[0].value(as: IntegerValue.self).value == 67)
+    #expect(try values[1].value(as: BooleanValue.self).value)
+  }
+
+  @Test func imageSourcesShareTheLogicalCursorAndFailedTransfersCanRecover() async throws {
+    let inline = try await Interpreter.render(
+      content: "1 1 8 [1 0 0 1 0 0] currentfile image A 42 showpage",
+      to: RecordingGraphicsTarget()
+    )
+    let inlineValues = try await inline.context.results()
+    #expect(try inlineValues.first?.value(as: IntegerValue.self).value == 42)
+    guard case .image(let inlineImage, _) = try #require(inline.output.pages.first?.effects.first) else {
+      Issue.record("Expected an inline image effect")
+      return
+    }
+    #expect(inlineImage.components == [Float(65.0 / 255.0)])
+
+    let recovered = try await Interpreter.render(
+      content: "{1 1 8 [1 0 0 1 0 0] {doesnotexist} image} stopped pop "
+        + "1 1 8 [1 0 0 1 0 0] <ff> image showpage",
+      to: RecordingGraphicsTarget()
+    )
+    let page = try #require(recovered.output.pages.first)
+    #expect(page.effects.count == 1)
+    guard case .image(let recoveredImage, _) = try #require(page.effects.first) else {
+      Issue.record("Expected the recovered image effect")
+      return
+    }
+    #expect(recoveredImage.components == [1])
+  }
 }
 
 private struct EventGraphicsTarget: GraphicsTarget {

@@ -6,6 +6,7 @@ enum LanguageLimits {
   static let maximumGraphicsStackDepth = 1_000
   static let maximumClipStackDepth = 1_000
   static let maximumClipConstraints = 10_000
+  static let maximumImageRowBytes = 20 * 1_024 * 1_024
 
   static func validateNameLength(_ length: Int) throws {
     guard length <= maximumNameLength else {

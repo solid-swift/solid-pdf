@@ -31,6 +31,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     private var surface: OpaquePointer?
     private var canvas: OpaquePointer?
     private var lifecycle = Lifecycle.active
+    private var activeImage: (descriptor: GraphicsImageDescriptor, state: GraphicsStateSnapshot, components: [Float])?
 
     fileprivate init(
       pixelWidth: Int,
@@ -66,17 +67,59 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         try fill(event.before.path, rule: rule, state: event.before, in: canvas)
       case .paint(.stroke):
         try stroke(event.before.path, state: event.before, in: canvas)
-      case .page(.show):
+      case .paint(.fillRectangles(let paths)):
+        try fillRectangles(paths, state: event.before, in: canvas)
+      case .paint(.strokeRectangles(let paths, let matrix)):
+        try strokeRectangles(paths, matrix: matrix, state: event.before, in: canvas)
+      case .page(.show), .page(.copy):
         try showPage()
       default:
         break
       }
     }
 
+    /// Begins one sampled-image transfer.
+    public func beginImage(_ event: GraphicsEvent) throws {
+      guard lifecycle == .active,
+        activeImage == nil,
+        case .paint(.image(let descriptor)) = event.operation
+      else {
+        throw SolidPostScript.Error.ioError
+      }
+      activeImage = (descriptor, event.before, [])
+    }
+
+    /// Consumes one bounded group of complete sampled-image rows.
+    public func writeImageRows(_ rows: GraphicsImageRows) throws {
+      guard var image = activeImage else { throw SolidPostScript.Error.ioError }
+      let rowWidth = image.descriptor.width * image.descriptor.kind.componentCount
+      let expectedStart = image.components.count / rowWidth
+      guard rows.startRow == expectedStart, rows.components.count == rows.rowCount * rowWidth else {
+        throw SolidPostScript.Error.ioError
+      }
+      image.components.append(contentsOf: rows.components)
+      activeImage = image
+    }
+
+    /// Commits and paints the active sampled image.
+    public func endImage() throws {
+      guard let image = activeImage, lifecycle == .active, let canvas else {
+        throw SolidPostScript.Error.ioError
+      }
+      activeImage = nil
+      try draw(GraphicsImage(descriptor: image.descriptor, components: image.components), state: image.state, in: canvas)
+    }
+
+    /// Abandons the active sampled image without painting it.
+    public func abortImage() {
+      activeImage = nil
+    }
+
     /// Completes the render and discards the current untransmitted page.
     public func finish() throws -> sending [RasterImage] {
       guard lifecycle == .active else { throw SolidPostScript.Error.ioError }
       lifecycle = .finished
+      activeImage = nil
       releasePage()
       let output = pages
       pages.removeAll()
@@ -87,6 +130,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     public func abort() {
       guard lifecycle == .active else { return }
       lifecycle = .aborted
+      activeImage = nil
       releasePage()
       pages.removeAll()
     }
@@ -235,11 +279,20 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       state: GraphicsStateSnapshot,
       in canvas: OpaquePointer
     ) throws {
-      guard let inverse = state.matrix.inverted else { return }
+      try stroke(path, matrix: state.matrix, state: state, in: canvas)
+    }
+
+    private func stroke(
+      _ path: GraphicsPath,
+      matrix: GraphicsMatrix,
+      state: GraphicsStateSnapshot,
+      in canvas: OpaquePointer
+    ) throws {
+      guard let inverse = matrix.inverted else { return }
       plutovg_canvas_save(canvas)
       defer { plutovg_canvas_restore(canvas) }
       try replay(state.clip, in: canvas)
-      try setMatrix(state.matrix.concatenated(with: rasterMatrix), in: canvas)
+      try setMatrix(matrix.concatenated(with: rasterMatrix), in: canvas)
       try add(path.transformed(by: inverse), to: canvas)
       try setPaint(state.paint, in: canvas)
       plutovg_canvas_set_line_width(canvas, try float(state.lineWidth))
@@ -258,6 +311,35 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       plutovg_canvas_stroke(canvas)
     }
 
+    private func fillRectangles(
+      _ paths: [GraphicsPath],
+      state: GraphicsStateSnapshot,
+      in canvas: OpaquePointer
+    ) throws {
+      plutovg_canvas_save(canvas)
+      defer { plutovg_canvas_restore(canvas) }
+      try replay(state.clip, in: canvas)
+      try setMatrix(rasterMatrix, in: canvas)
+      try add(GraphicsPath(elements: paths.flatMap(\.elements)), to: canvas)
+      try setPaint(state.paint, in: canvas)
+      plutovg_canvas_fill(canvas)
+    }
+
+    private func strokeRectangles(
+      _ paths: [GraphicsPath],
+      matrix: GraphicsMatrix?,
+      state: GraphicsStateSnapshot,
+      in canvas: OpaquePointer
+    ) throws {
+      let effectiveMatrix = matrix?.concatenated(with: state.matrix) ?? state.matrix
+      try stroke(
+        GraphicsPath(elements: paths.flatMap(\.elements)),
+        matrix: effectiveMatrix,
+        state: state,
+        in: canvas
+      )
+    }
+
     private func replay(_ clip: GraphicsClip, in canvas: OpaquePointer) throws {
       try setMatrix(rasterMatrix, in: canvas)
       try addRect(clip.imageableBounds, to: canvas)
@@ -267,6 +349,79 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         setFillRule(constraint.rule, in: canvas)
         plutovg_canvas_clip(canvas)
       }
+    }
+
+    private func draw(
+      _ image: GraphicsImage,
+      state: GraphicsStateSnapshot,
+      in canvas: OpaquePointer
+    ) throws {
+      let descriptor = image.descriptor
+      let rowWidth = descriptor.width * descriptor.kind.componentCount
+      let renderedHeight = rowWidth == 0 ? 0 : image.components.count / rowWidth
+      guard descriptor.width > 0,
+        renderedHeight > 0,
+        renderedHeight <= descriptor.height,
+        image.components.count == renderedHeight * rowWidth
+      else { return }
+      var data = image.premultipliedRGBA8()
+      plutovg_canvas_save(canvas)
+      defer { plutovg_canvas_restore(canvas) }
+      try replay(state.clip, in: canvas)
+      try setMatrix(rasterMatrix, in: canvas)
+      let imagePath = try imageBoundary(descriptor, renderedHeight: renderedHeight)
+      try add(imagePath, to: canvas)
+      var textureMatrix = try plutoMatrix(descriptor.imageToDevice)
+      try data.withUnsafeMutableBytes { bytes in
+        guard let base = bytes.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+          throw SolidPostScript.Error.ioError
+        }
+        plutovg_convert_rgba_to_argb(
+          base,
+          base,
+          Int32(descriptor.width),
+          Int32(renderedHeight),
+          Int32(descriptor.width * 4)
+        )
+        guard let imageSurface = plutovg_surface_create_for_data(
+          base,
+          Int32(descriptor.width),
+          Int32(renderedHeight),
+          Int32(descriptor.width * 4)
+        ) else {
+          throw SolidPostScript.Error.ioError
+        }
+        defer { plutovg_surface_destroy(imageSurface) }
+        plutovg_canvas_set_texture(
+          canvas,
+          imageSurface,
+          PLUTOVG_TEXTURE_TYPE_PLAIN,
+          1,
+          &textureMatrix
+        )
+        plutovg_canvas_fill(canvas)
+        plutovg_canvas_set_rgb(canvas, 0, 0, 0)
+      }
+    }
+
+    private func imageBoundary(
+      _ descriptor: GraphicsImageDescriptor,
+      renderedHeight: Int
+    ) throws -> GraphicsPath {
+      let matrix = descriptor.imageToDevice
+      let points = [
+        GraphicsPoint(x: 0, y: 0),
+        GraphicsPoint(x: Double(descriptor.width), y: 0),
+        GraphicsPoint(x: Double(descriptor.width), y: Double(renderedHeight)),
+        GraphicsPoint(x: 0, y: Double(renderedHeight)),
+      ].map(matrix.transform)
+      return GraphicsPath(elements: [
+        .move(to: points[0]),
+        .line(to: points[1]),
+        .line(to: points[2]),
+        .line(to: points[3]),
+        .close,
+      ])
     }
 
     private func clipToImageableBounds(in canvas: OpaquePointer) throws {
@@ -317,6 +472,9 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       case .deviceGray(let gray):
         let component = try float(gray)
         plutovg_canvas_set_rgb(canvas, component, component, component)
+      case .deviceRGB, .deviceCMYK:
+        let rgb = paint.rgbComponents
+        plutovg_canvas_set_rgb(canvas, try float(rgb.red), try float(rgb.green), try float(rgb.blue))
       }
     }
 
@@ -325,7 +483,12 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     }
 
     private func setMatrix(_ matrix: GraphicsMatrix, in canvas: OpaquePointer) throws {
-      var native = plutovg_matrix_t(
+      var native = try plutoMatrix(matrix)
+      plutovg_canvas_set_matrix(canvas, &native)
+    }
+
+    private func plutoMatrix(_ matrix: GraphicsMatrix) throws -> plutovg_matrix_t {
+      plutovg_matrix_t(
         a: try float(matrix.a),
         b: try float(matrix.b),
         c: try float(matrix.c),
@@ -333,7 +496,6 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         e: try float(matrix.tx),
         f: try float(matrix.ty)
       )
-      plutovg_canvas_set_matrix(canvas, &native)
     }
 
     private func float(_ value: Double) throws -> Float {

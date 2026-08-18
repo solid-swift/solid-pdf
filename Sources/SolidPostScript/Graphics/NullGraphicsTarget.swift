@@ -18,7 +18,7 @@ public struct NullGraphicsTarget: GraphicsTarget, Sendable {
 
     /// Processes one graphics event.
     public func process(_ event: GraphicsEvent) {
-      if case .page(.show) = event.operation {
+      if case .page = event.operation {
         pages.append(())
       }
     }

@@ -18,6 +18,6 @@ public enum Operators {
     + arrayOps + packedArrayOps + dictionaryOps + stringOps + arithmeticOps + trigonometricOps + mathOps + randomOps
     + relationalOps + logicalBitwiseOps + fileOps + binaryObjectOps + filterOps + parameterOps + resourceOperators
     + timeOps + vmOps + userObjectsOps + hostLifecycleOps
-    + graphicsStateOps + matrixOps + pathOps + paintOps
+    + graphicsStateOps + matrixOps + pathOps + arcOps + rectangleOps + paintOps + imageOps
 
 }

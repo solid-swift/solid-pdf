@@ -11,6 +11,7 @@ extension Operators {
     EvenOddFillPath.instance,
     StrokePath.instance,
     ShowPage.instance,
+    CopyPage.instance,
   ]
 
   enum InitializeClip: OperatorValue {
@@ -87,6 +88,16 @@ extension Operators {
       let after = GraphicsCanonicalState.initial(for: context.graphicsDeviceDescriptor)
       try context.emitGraphicsOperation(.page(.show), before: before, after: after)
       context.graphicsState = after
+    }
+  }
+
+  enum CopyPage: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["copypage"]
+
+    func execute(context: isolated Context) async throws {
+      let state = context.graphicsState
+      try context.emitGraphicsOperation(.page(.copy), before: state, after: state)
     }
   }
 

@@ -17,6 +17,8 @@ public enum GraphicsOperation: Sendable, Hashable {
     case setMiterLimit(Double)
     case setDash(GraphicsDash)
     case setGray(Double)
+    case setRGB(red: Double, green: Double, blue: Double)
+    case setCMYK(cyan: Double, magenta: Double, yellow: Double, black: Double)
   }
 
   /// A current-transformation operation.
@@ -41,6 +43,9 @@ public enum GraphicsOperation: Sendable, Hashable {
       control2: GraphicsPoint,
       end: GraphicsPoint
     )
+    case arc(center: GraphicsPoint, radius: Double, startDegrees: Double, endDegrees: Double)
+    case arcNegative(center: GraphicsPoint, radius: Double, startDegrees: Double, endDegrees: Double)
+    case arcTo(corner: GraphicsPoint, following: GraphicsPoint, radius: Double)
     case close
   }
 
@@ -48,6 +53,7 @@ public enum GraphicsOperation: Sendable, Hashable {
   public enum Clip: Sendable, Hashable {
     case initialize
     case intersect(GraphicsFillRule)
+    case intersectRectangles([GraphicsPath])
   }
 
   /// A painting operation.
@@ -55,11 +61,15 @@ public enum GraphicsOperation: Sendable, Hashable {
     case erasePage
     case fill(GraphicsFillRule)
     case stroke
+    case fillRectangles([GraphicsPath])
+    case strokeRectangles(paths: [GraphicsPath], matrix: GraphicsMatrix?)
+    case image(GraphicsImageDescriptor)
   }
 
   /// A page-lifecycle operation.
   public enum Page: Sendable, Hashable {
     case show
+    case copy
   }
 
   case state(State)

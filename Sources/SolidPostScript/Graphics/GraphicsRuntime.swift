@@ -68,6 +68,36 @@ extension Context {
     }
   }
 
+  func beginGraphicsImage(_ descriptor: GraphicsImageDescriptor) throws {
+    let snapshot = graphicsState.snapshot
+    let event = GraphicsEvent(operation: .paint(.image(descriptor)), before: snapshot, after: snapshot)
+    do {
+      try graphicsEventConsumer?.beginImage(event)
+    } catch {
+      throw Error.ioError
+    }
+  }
+
+  func writeGraphicsImageRows(_ rows: GraphicsImageRows) throws {
+    do {
+      try graphicsEventConsumer?.writeImageRows(rows)
+    } catch {
+      throw Error.ioError
+    }
+  }
+
+  func endGraphicsImage() throws {
+    do {
+      try graphicsEventConsumer?.endImage()
+    } catch {
+      throw Error.ioError
+    }
+  }
+
+  func abortGraphicsImage() {
+    graphicsEventConsumer?.abortImage()
+  }
+
   func makeDashObject() throws -> Object {
     if let dashSource = graphicsState.dashSource {
       return dashSource

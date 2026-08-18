@@ -71,4 +71,67 @@ struct GraphicsTargetTests {
     let output = renderer.finish()
     #expect(output.pages.isEmpty)
   }
+
+  @Test func sampledImageRowsAreTransferredInBoundedCompleteBatches() async throws {
+    let row = String(repeating: "00", count: 64)
+    let result = try await Interpreter.render(
+      content: "64 40 8 [64 0 0 40 0 0] <\(row)> image",
+      to: ImageTransferTarget()
+    )
+
+    #expect(result.output.totalRows == 40)
+    #expect(result.output.maximumRowsPerTransfer <= 32)
+    #expect(result.output.maximumComponentsPerTransfer <= 64 * 32)
+  }
+}
+
+private struct ImageTransferTarget: GraphicsTarget {
+  typealias PageOutput = Void
+  typealias Output = Summary
+
+  struct Summary: Sendable {
+    let totalRows: Int
+    let maximumRowsPerTransfer: Int
+    let maximumComponentsPerTransfer: Int
+  }
+
+  final class Renderer: GraphicsRenderer {
+    typealias PageOutput = Void
+    typealias Output = Summary
+
+    var pages: [Void] = []
+    private var totalRows = 0
+    private var maximumRows = 0
+    private var maximumComponents = 0
+
+    func process(_ event: GraphicsEvent) {}
+
+    func beginImage(_ event: GraphicsEvent) {
+      totalRows = 0
+      maximumRows = 0
+      maximumComponents = 0
+    }
+
+    func writeImageRows(_ rows: GraphicsImageRows) {
+      totalRows += rows.rowCount
+      maximumRows = max(maximumRows, rows.rowCount)
+      maximumComponents = max(maximumComponents, rows.components.count)
+    }
+
+    func endImage() {}
+
+    func finish() -> sending Summary {
+      Summary(
+        totalRows: totalRows,
+        maximumRowsPerTransfer: maximumRows,
+        maximumComponentsPerTransfer: maximumComponents
+      )
+    }
+
+    func abort() {}
+  }
+
+  let deviceDescriptor = GraphicsDeviceDescriptor.letter
+
+  func makeRenderer() -> sending Renderer { Renderer() }
 }

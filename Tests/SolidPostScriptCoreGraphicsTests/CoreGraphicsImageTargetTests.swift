@@ -62,12 +62,45 @@ struct CoreGraphicsImageTargetTests {
     #expect(try gray(atX: 20, y: 20, in: image) > 0.9)
   }
 
+  @Test func deviceColorsRectanglesImagesAndCopyPageRender() async throws {
+    let program = """
+    0 0 1 setrgbcolor 0 10 20 10 rectfill
+    20 10 scale
+    2 1 8 [2 0 0 1 0 0] <ff000000ff00> false 3 colorimage
+    copypage showpage
+    """
+    let result = try await Interpreter.render(
+      content: program,
+      to: CoreGraphicsImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+
+    #expect(result.output.count == 2)
+    let copied = try #require(result.output.first)
+    let erased = try #require(result.output.last)
+    #expect(try rgb(atX: 5, y: 15, in: copied).red > 0.9)
+    #expect(try rgb(atX: 15, y: 15, in: copied).green > 0.9)
+    #expect(try rgb(atX: 10, y: 5, in: copied).blue > 0.9)
+    #expect(try gray(atX: 10, y: 10, in: erased) > 0.9)
+  }
+
   private func gray(atX x: Int, y: Int, in image: CGImage) throws -> Double {
     let provider = try #require(image.dataProvider)
     let data = try #require(provider.data)
     let bytes = try #require(CFDataGetBytePtr(data))
     let offset = y * image.bytesPerRow + x * 4
     return Double(bytes[offset]) / 255
+  }
+
+  private func rgb(
+    atX x: Int,
+    y: Int,
+    in image: CGImage
+  ) throws -> (red: Double, green: Double, blue: Double) {
+    let provider = try #require(image.dataProvider)
+    let data = try #require(provider.data)
+    let bytes = try #require(CFDataGetBytePtr(data))
+    let offset = y * image.bytesPerRow + x * 4
+    return (Double(bytes[offset]) / 255, Double(bytes[offset + 1]) / 255, Double(bytes[offset + 2]) / 255)
   }
 }
 #endif

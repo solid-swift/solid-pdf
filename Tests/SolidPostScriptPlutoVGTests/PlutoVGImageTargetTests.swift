@@ -197,6 +197,27 @@ struct PlutoVGImageTargetTests {
     #expect(try self.gray(atX: 10, y: 10, in: grayImage).isApproximatelyEqual(to: 0.5, tolerance: 0.05))
   }
 
+  @Test func deviceColorsRectanglesImagesAndCopyPageRender() async throws {
+    let program = """
+    0 0 1 setrgbcolor 0 10 20 10 rectfill
+    20 10 scale
+    2 1 8 [2 0 0 1 0 0] <ff000000ff00> false 3 colorimage
+    copypage showpage
+    """
+    let result = try await Interpreter.render(
+      content: program,
+      to: PlutoVGImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+
+    #expect(result.output.count == 2)
+    let copied = try #require(result.output.first)
+    let erased = try #require(result.output.last)
+    #expect(try rgb(atX: 5, y: 15, in: copied).red > 0.9)
+    #expect(try rgb(atX: 15, y: 15, in: copied).green > 0.9)
+    #expect(try rgb(atX: 10, y: 5, in: copied).blue > 0.9)
+    #expect(try gray(atX: 10, y: 10, in: erased) > 0.9)
+  }
+
   #if canImport(CoreGraphics)
   @Test func coreGraphicsAndPlutoVGAgreeAwayFromAntialiasedEdges() async throws {
     let program = "0.25 setgray 5 5 moveto 35 5 lineto 35 35 lineto 5 35 lineto closepath fill showpage"
@@ -230,6 +251,22 @@ struct PlutoVGImageTargetTests {
       throw SolidPostScript.Error.rangeCheck
     }
     return Double(image.data[offset + 3]) / 255
+  }
+
+  private func rgb(
+    atX x: Int,
+    y: Int,
+    in image: RasterImage
+  ) throws -> (red: Double, green: Double, blue: Double) {
+    let offset = y * image.bytesPerRow + x * 4
+    guard x >= 0, x < image.width, y >= 0, y < image.height, offset + 3 < image.data.count else {
+      throw SolidPostScript.Error.rangeCheck
+    }
+    return (
+      Double(image.data[offset]) / 255,
+      Double(image.data[offset + 1]) / 255,
+      Double(image.data[offset + 2]) / 255
+    )
   }
 
   #if canImport(CoreGraphics)
