@@ -8,7 +8,7 @@ public struct RasterCanvas: ~Copyable {
   public let height: Int
 
   private let limits: RasterLimits
-  private var pixels: [UInt8]
+  private var pixels: Data
   private var clip: RasterClip
   private var compiledClip: [CoverageSpan]
   private var compiledConstraintCount: Int?
@@ -30,9 +30,9 @@ public struct RasterCanvas: ~Copyable {
       width * height * 4 <= limits.maximumSurfaceBytes
     else { throw .limitExceeded }
     let color = try RasterCompositor.premultiplied(background)
-    var initialPixels = [UInt8](repeating: 0, count: width * height * 4)
-    initialPixels.withUnsafeMutableBufferPointer { buffer in
-      var span = MutableSpan(_unsafeStart: buffer.baseAddress!, count: buffer.count)
+    var initialPixels = Data(count: width * height * 4)
+    initialPixels.withUnsafeMutableBytes { buffer in
+      var span = MutableSpan(_unsafeStart: buffer.baseAddress!.assumingMemoryBound(to: UInt8.self), count: buffer.count)
       RasterCompositor.clear(color, pixels: &span)
     }
     self.width = width
@@ -85,7 +85,7 @@ public struct RasterCanvas: ~Copyable {
     let surfaceWidth = width
     let visible = visibleSpans
     withPixels { span in
-      RasterCompositor.composite(source, spans: visible, width: surfaceWidth, pixels: &span)
+      RasterCompositor.composite(source, spans: visible.span, width: surfaceWidth, pixels: &span)
     }
   }
 
@@ -129,22 +129,27 @@ public struct RasterCanvas: ~Copyable {
     let boundarySpans = try rasterize(boundary, rule: .winding)
     try compileClip()
     intersectWithClip(boundarySpans)
-    let source = [UInt8](image.data)
     let destinationWidth = width
     let visible = visibleSpans
-    withPixels { span in
-      RasterCompositor.compositeImage(
-        source: source,
-        sourceWidth: image.width,
-        sourceHeight: image.height,
-        sourceBytesPerRow: image.bytesPerRow,
-        sourceFormat: image.pixelFormat,
-        inverseTransform: inverse,
-        interpolation: interpolation,
-        spans: visible,
-        destinationWidth: destinationWidth,
-        pixels: &span
+    image.data.withUnsafeBytes { sourceBuffer in
+      let source = Span(
+        _unsafeStart: sourceBuffer.baseAddress!.assumingMemoryBound(to: UInt8.self),
+        count: sourceBuffer.count
       )
+      withPixels { span in
+        RasterCompositor.compositeImage(
+          source: source,
+          sourceWidth: image.width,
+          sourceHeight: image.height,
+          sourceBytesPerRow: image.bytesPerRow,
+          sourceFormat: image.pixelFormat,
+          inverseTransform: inverse,
+          interpolation: interpolation,
+          spans: visible.span,
+          destinationWidth: destinationWidth,
+          pixels: &span
+        )
+      }
     }
   }
 
@@ -155,6 +160,7 @@ public struct RasterCanvas: ~Copyable {
     guard !finished else { throw .finishedCanvas }
     finished = true
     var output = pixels
+    pixels = Data()
     if pixelFormat == .rgba8Unorm {
       unpremultiply(&output)
     }
@@ -163,7 +169,7 @@ public struct RasterCanvas: ~Copyable {
       height: height,
       bytesPerRow: width * 4,
       pixelFormat: pixelFormat,
-      data: Data(output)
+      data: output
     )
   }
 
@@ -224,22 +230,28 @@ public struct RasterCanvas: ~Copyable {
   private mutating func withPixels(
     _ body: (inout MutableSpan<UInt8>) -> Void
   ) {
-    pixels.withUnsafeMutableBufferPointer { buffer in
-      var span = MutableSpan(_unsafeStart: buffer.baseAddress!, count: buffer.count)
+    pixels.withUnsafeMutableBytes { buffer in
+      var span = MutableSpan(
+        _unsafeStart: buffer.baseAddress!.assumingMemoryBound(to: UInt8.self),
+        count: buffer.count
+      )
       body(&span)
     }
   }
 
-  private func unpremultiply(_ bytes: inout [UInt8]) {
-    var offset = 0
-    while offset < bytes.count {
-      let alpha = UInt16(bytes[offset + 3])
-      if alpha > 0, alpha < 255 {
-        bytes[offset] = UInt8(min(255, (UInt16(bytes[offset]) * 255 + alpha / 2) / alpha))
-        bytes[offset + 1] = UInt8(min(255, (UInt16(bytes[offset + 1]) * 255 + alpha / 2) / alpha))
-        bytes[offset + 2] = UInt8(min(255, (UInt16(bytes[offset + 2]) * 255 + alpha / 2) / alpha))
+  private func unpremultiply(_ data: inout Data) {
+    data.withUnsafeMutableBytes { buffer in
+      let bytes = buffer.bindMemory(to: UInt8.self)
+      var offset = 0
+      while offset < bytes.count {
+        let alpha = UInt16(bytes[offset + 3])
+        if alpha > 0, alpha < 255 {
+          bytes[offset] = UInt8(min(255, (UInt16(bytes[offset]) * 255 + alpha / 2) / alpha))
+          bytes[offset + 1] = UInt8(min(255, (UInt16(bytes[offset + 1]) * 255 + alpha / 2) / alpha))
+          bytes[offset + 2] = UInt8(min(255, (UInt16(bytes[offset + 2]) * 255 + alpha / 2) / alpha))
+        }
+        offset += 4
       }
-      offset += 4
     }
   }
 }

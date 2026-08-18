@@ -17,12 +17,14 @@ enum RasterCompositor {
 
   static func composite(
     _ sourceColor: SIMD4<UInt16>,
-    spans: [CoverageSpan],
+    spans: borrowing Span<CoverageSpan>,
     width: Int,
     pixels: inout MutableSpan<UInt8>
   ) {
     let base = sourceColor
-    for span in spans where span.coverage > 0 {
+    for spanIndex in 0..<spans.count {
+      let span = spans[spanIndex]
+      guard span.coverage > 0 else { continue }
       var offset = (span.y * width + span.x) * 4
       let end = offset + span.length * 4
       let coverage = UInt16(span.coverage)
@@ -33,6 +35,16 @@ enum RasterCompositor {
         (base[2] * coverage + 127) / 255,
         sourceAlpha
       )
+      if sourceAlpha == 255 {
+        while offset < end {
+          pixels[offset] = UInt8(source[0])
+          pixels[offset + 1] = UInt8(source[1])
+          pixels[offset + 2] = UInt8(source[2])
+          pixels[offset + 3] = 255
+          offset += 4
+        }
+        continue
+      }
       while offset < end {
         let destination = SIMD4<UInt16>(
           UInt16(pixels[offset]),
@@ -51,29 +63,78 @@ enum RasterCompositor {
   }
 
   static func compositeImage(
-    source: [UInt8],
+    source: borrowing Span<UInt8>,
     sourceWidth: Int,
     sourceHeight: Int,
     sourceBytesPerRow: Int,
     sourceFormat: RasterPixelFormat,
     inverseTransform: RasterAffineTransform,
     interpolation: RasterInterpolation,
-    spans: [CoverageSpan],
+    spans: borrowing Span<CoverageSpan>,
     destinationWidth: Int,
     pixels: inout MutableSpan<UInt8>
   ) {
-    for span in spans where span.coverage > 0 {
+    if inverseTransform.a == 1,
+      inverseTransform.b == 0,
+      inverseTransform.c == 0,
+      inverseTransform.d == 1,
+      inverseTransform.tx.rounded() == inverseTransform.tx,
+      inverseTransform.ty.rounded() == inverseTransform.ty,
+      inverseTransform.tx >= Double(Int.min + 1_024),
+      inverseTransform.tx <= Double(Int.max - 1_024),
+      inverseTransform.ty >= Double(Int.min + 1_024),
+      inverseTransform.ty <= Double(Int.max - 1_024)
+    {
+      compositeIntegerTranslationImage(
+        source: source,
+        sourceWidth: sourceWidth,
+        sourceHeight: sourceHeight,
+        sourceBytesPerRow: sourceBytesPerRow,
+        sourceFormat: sourceFormat,
+        translationX: Int(inverseTransform.tx),
+        translationY: Int(inverseTransform.ty),
+        spans: spans,
+        destinationWidth: destinationWidth,
+        pixels: &pixels
+      )
+      return
+    }
+    if inverseTransform.b == 0, inverseTransform.c == 0 {
+      compositeAxisAlignedImage(
+        source: source,
+        sourceWidth: sourceWidth,
+        sourceHeight: sourceHeight,
+        sourceBytesPerRow: sourceBytesPerRow,
+        sourceFormat: sourceFormat,
+        inverseTransform: inverseTransform,
+        interpolation: interpolation,
+        spans: spans,
+        destinationWidth: destinationWidth,
+        pixels: &pixels
+      )
+      return
+    }
+
+    for spanIndex in 0..<spans.count {
+      let span = spans[spanIndex]
+      guard span.coverage > 0 else { continue }
       var destinationOffset = (span.y * destinationWidth + span.x) * 4
-      for x in span.x..<(span.x + span.length) {
-        let sourcePoint = inverseTransform.transform(RasterPoint(x: Double(x) + 0.5, y: Double(span.y) + 0.5))
+      let destinationY = Double(span.y) + 0.5
+      var sourceX = inverseTransform.a * (Double(span.x) + 0.5)
+        + inverseTransform.c * destinationY
+        + inverseTransform.tx
+      var sourceY = inverseTransform.b * (Double(span.x) + 0.5)
+        + inverseTransform.d * destinationY
+        + inverseTransform.ty
+      for _ in 0..<span.length {
         let sample = sample(
           source,
           width: sourceWidth,
           height: sourceHeight,
           bytesPerRow: sourceBytesPerRow,
           format: sourceFormat,
-          x: sourcePoint.x,
-          y: sourcePoint.y,
+          x: sourceX,
+          y: sourceY,
           interpolation: interpolation
         )
         composite(
@@ -83,6 +144,88 @@ enum RasterCompositor {
           pixels: &pixels
         )
         destinationOffset += 4
+        sourceX += inverseTransform.a
+        sourceY += inverseTransform.b
+      }
+    }
+  }
+
+  private static func compositeIntegerTranslationImage(
+    source: borrowing Span<UInt8>,
+    sourceWidth: Int,
+    sourceHeight: Int,
+    sourceBytesPerRow: Int,
+    sourceFormat: RasterPixelFormat,
+    translationX: Int,
+    translationY: Int,
+    spans: borrowing Span<CoverageSpan>,
+    destinationWidth: Int,
+    pixels: inout MutableSpan<UInt8>
+  ) {
+    for spanIndex in 0..<spans.count {
+      let span = spans[spanIndex]
+      let sourceY = span.y + translationY
+      guard span.coverage > 0,
+        sourceY >= 0,
+        sourceY < sourceHeight
+      else { continue }
+
+      let clippedStart = max(span.x, -translationX)
+      let clippedEnd = min(span.x + span.length, sourceWidth - translationX)
+      guard clippedStart < clippedEnd else { continue }
+      var sourceOffset = sourceY * sourceBytesPerRow + (clippedStart + translationX) * 4
+      var destinationOffset = (span.y * destinationWidth + clippedStart) * 4
+      for _ in clippedStart..<clippedEnd {
+        let sample = pixel(source, format: sourceFormat, offset: sourceOffset)
+        composite(
+          source: sample,
+          coverage: UInt16(span.coverage),
+          destinationOffset: destinationOffset,
+          pixels: &pixels
+        )
+        sourceOffset += 4
+        destinationOffset += 4
+      }
+    }
+  }
+
+  private static func compositeAxisAlignedImage(
+    source: borrowing Span<UInt8>,
+    sourceWidth: Int,
+    sourceHeight: Int,
+    sourceBytesPerRow: Int,
+    sourceFormat: RasterPixelFormat,
+    inverseTransform: RasterAffineTransform,
+    interpolation: RasterInterpolation,
+    spans: borrowing Span<CoverageSpan>,
+    destinationWidth: Int,
+    pixels: inout MutableSpan<UInt8>
+  ) {
+    for spanIndex in 0..<spans.count {
+      let span = spans[spanIndex]
+      guard span.coverage > 0 else { continue }
+      var destinationOffset = (span.y * destinationWidth + span.x) * 4
+      var sourceX = inverseTransform.a * (Double(span.x) + 0.5) + inverseTransform.tx
+      let sourceY = inverseTransform.d * (Double(span.y) + 0.5) + inverseTransform.ty
+      for _ in 0..<span.length {
+        let sample = sample(
+          source,
+          width: sourceWidth,
+          height: sourceHeight,
+          bytesPerRow: sourceBytesPerRow,
+          format: sourceFormat,
+          x: sourceX,
+          y: sourceY,
+          interpolation: interpolation
+        )
+        composite(
+          source: sample,
+          coverage: UInt16(span.coverage),
+          destinationOffset: destinationOffset,
+          pixels: &pixels
+        )
+        destinationOffset += 4
+        sourceX += inverseTransform.a
       }
     }
   }
@@ -103,7 +246,7 @@ enum RasterCompositor {
   }
 
   private static func sample(
-    _ bytes: [UInt8],
+    _ bytes: borrowing Span<UInt8>,
     width: Int,
     height: Int,
     bytesPerRow: Int,
@@ -145,7 +288,7 @@ enum RasterCompositor {
   }
 
   private static func pixel(
-    _ bytes: [UInt8],
+    _ bytes: borrowing Span<UInt8>,
     width: Int,
     height: Int,
     bytesPerRow: Int,
@@ -155,6 +298,14 @@ enum RasterCompositor {
   ) -> SIMD4<UInt16> {
     guard x >= 0, y >= 0, x < width, y < height else { return .zero }
     let offset = y * bytesPerRow + x * 4
+    return pixel(bytes, format: format, offset: offset)
+  }
+
+  private static func pixel(
+    _ bytes: borrowing Span<UInt8>,
+    format: RasterPixelFormat,
+    offset: Int
+  ) -> SIMD4<UInt16> {
     let alpha = UInt16(bytes[offset + 3])
     if format == .rgba8UnormPremultiplied {
       return SIMD4(UInt16(bytes[offset]), UInt16(bytes[offset + 1]), UInt16(bytes[offset + 2]), alpha)
@@ -173,6 +324,13 @@ enum RasterCompositor {
     destinationOffset: Int,
     pixels: inout MutableSpan<UInt8>
   ) {
+    if coverage == 255, source[3] == 255 {
+      pixels[destinationOffset] = UInt8(source[0])
+      pixels[destinationOffset + 1] = UInt8(source[1])
+      pixels[destinationOffset + 2] = UInt8(source[2])
+      pixels[destinationOffset + 3] = 255
+      return
+    }
     let covered = (source &* SIMD4(repeating: coverage) &+ SIMD4(repeating: 127))
       / SIMD4(repeating: 255)
     let destination = SIMD4<UInt16>(
