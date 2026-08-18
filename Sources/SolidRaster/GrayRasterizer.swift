@@ -7,17 +7,10 @@ enum GrayRasterizer {
   private static let pixelBits: Int64 = 8
   private static let onePixel: Int64 = 1 << pixelBits
 
-  private struct Cell {
-    var cover: Int64 = 0
-    var area: Int64 = 0
-  }
-
-  private struct Worker {
+  private struct Worker: ~Copyable {
     let width: Int
     let height: Int
-    let maximumCells: Int
-    var rows: [Int: [Int: Cell]] = [:]
-    var cellCount = 0
+    var arena: RasterCellArena
     var ex: Int64 = 0
     var ey: Int64 = 0
     var area: Int64 = 0
@@ -244,16 +237,7 @@ enum GrayRasterizer {
 
     mutating func recordCell() throws(RasterError) {
       guard !invalid, area != 0 || cover != 0 else { return }
-      guard cellCount < maximumCells else { throw .limitExceeded }
-      let row = Int(ey)
-      let column = Int(ex)
-      var cells = rows[row] ?? [:]
-      var cell = cells[column] ?? Cell()
-      if cells[column] == nil { cellCount += 1 }
-      cell.area += area
-      cell.cover += cover
-      cells[column] = cell
-      rows[row] = cells
+      try arena.record(column: Int(ex), row: Int(ey), area: area, cover: cover)
     }
   }
 
@@ -265,8 +249,11 @@ enum GrayRasterizer {
     limits: RasterLimits
   ) throws(RasterError) -> [CoverageSpan] {
     let flattened = try PathFlattener.flatten(path)
-    let estimatedCellLimit = max(1, limits.maximumScratchBytes / 32)
-    var worker = Worker(width: width, height: height, maximumCells: estimatedCellLimit)
+    var worker = try Worker(
+      width: width,
+      height: height,
+      arena: RasterCellArena(height: height, maximumScratchBytes: limits.maximumScratchBytes)
+    )
     for subpath in flattened.subpaths where subpath.points.count > 1 {
       let first = subpath.points[0]
       try worker.move(to: first)
@@ -280,64 +267,6 @@ enum GrayRasterizer {
       }
     }
     try worker.finish()
-    return sweep(rows: worker.rows, rule: rule, width: width)
-  }
-
-  private static func sweep(
-    rows: [Int: [Int: Cell]],
-    rule: RasterFillRule,
-    width: Int
-  ) -> [CoverageSpan] {
-    var spans: [CoverageSpan] = []
-    for y in rows.keys.sorted() {
-      guard let row = rows[y] else { continue }
-      var cover: Int64 = 0
-      var x = 0
-      for column in row.keys.sorted() {
-        guard let cell = row[column] else { continue }
-        if column > x, cover != 0 {
-          appendSpan(x: x, y: y, length: column - x, area: cover * onePixel * 2, rule: rule, to: &spans)
-        }
-        cover += cell.cover
-        let area = cover * onePixel * 2 - cell.area
-        if area != 0, column >= 0 {
-          appendSpan(x: column, y: y, length: 1, area: area, rule: rule, to: &spans)
-        }
-        x = column + 1
-      }
-      if width > x, cover != 0 {
-        appendSpan(x: x, y: y, length: width - x, area: cover * onePixel * 2, rule: rule, to: &spans)
-      }
-    }
-    return spans
-  }
-
-  private static func appendSpan(
-    x: Int,
-    y: Int,
-    length: Int,
-    area: Int64,
-    rule: RasterFillRule,
-    to spans: inout [CoverageSpan]
-  ) {
-    var coverage = Int(abs(area) >> (pixelBits * 2 + 1 - 8))
-    if rule == .evenOdd {
-      coverage &= 511
-      coverage = coverage > 256 ? 512 - coverage : coverage
-      if coverage == 256 { coverage = 255 }
-    } else if coverage >= 256 {
-      coverage = 255
-    }
-    guard coverage > 0, length > 0, x >= 0 else { return }
-    let value = UInt8(min(255, coverage))
-    if let last = spans.last,
-      last.y == y,
-      last.x + last.length == x,
-      last.coverage == value
-    {
-      spans[spans.count - 1].length += length
-    } else {
-      spans.append(CoverageSpan(x: x, y: y, length: length, coverage: value))
-    }
+    return worker.arena.sweep(rule: rule, width: width)
   }
 }
