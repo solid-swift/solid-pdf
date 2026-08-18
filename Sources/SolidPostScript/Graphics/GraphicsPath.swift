@@ -62,6 +62,22 @@ public struct GraphicsPath: Sendable, Hashable {
     return points
   }
 
+  func transformed(by matrix: GraphicsMatrix) -> Self {
+    Self(elements: elements.map { element in
+      switch element {
+      case .move(let point): .move(to: matrix.transform(point))
+      case .line(let point): .line(to: matrix.transform(point))
+      case .curve(let control1, let control2, let end):
+        .curve(
+          control1: matrix.transform(control1),
+          control2: matrix.transform(control2),
+          end: matrix.transform(end)
+        )
+      case .close: .close
+      }
+    })
+  }
+
   func reversedPath() throws -> Self {
     struct Segment {
       let start: GraphicsPoint
