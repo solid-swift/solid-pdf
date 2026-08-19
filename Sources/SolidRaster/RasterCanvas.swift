@@ -186,6 +186,75 @@ public struct RasterCanvas: ~Copyable {
     }
   }
 
+  /// Draws an image through an independently transformed opacity mask and the current clip.
+  public mutating func draw(
+    _ image: RasterImage,
+    transform: RasterAffineTransform,
+    interpolation: RasterInterpolation = .nearest,
+    mask: RasterMask,
+    maskTransform: RasterAffineTransform,
+    maskInterpolation: RasterInterpolation = .nearest
+  ) throws(RasterError) {
+    try requireActive()
+    guard let inverse = transform.inverted,
+      let inverseMask = maskTransform.inverted,
+      image.width > 0,
+      image.height > 0,
+      mask.width > 0,
+      mask.height > 0,
+      image.data.count <= limits.maximumSurfaceBytes,
+      mask.data.count <= limits.maximumSurfaceBytes
+    else { throw .invalidImage }
+    let first = transform.transform(RasterPoint(x: 0, y: 0))
+    let second = transform.transform(RasterPoint(x: Double(image.width), y: 0))
+    let third = transform.transform(RasterPoint(x: Double(image.width), y: Double(image.height)))
+    let fourth = transform.transform(RasterPoint(x: 0, y: Double(image.height)))
+    let boundary = RasterPath(elements: [
+      .move(to: first),
+      .line(to: second),
+      .line(to: third),
+      .line(to: fourth),
+      .close,
+    ])
+    let boundarySpans = try rasterize(boundary, rule: .winding)
+    try compileClip()
+    intersectWithClip(boundarySpans)
+    let destinationWidth = width
+    let visible = visibleSpans
+    image.data.withUnsafeBytes { sourceBuffer in
+      mask.data.withUnsafeBytes { maskBuffer in
+        let source = Span(
+          _unsafeStart: sourceBuffer.baseAddress!.assumingMemoryBound(to: UInt8.self),
+          count: sourceBuffer.count
+        )
+        let maskSource = Span(
+          _unsafeStart: maskBuffer.baseAddress!.assumingMemoryBound(to: UInt8.self),
+          count: maskBuffer.count
+        )
+        withPixels { span in
+          RasterCompositor.compositeImage(
+            source: source,
+            sourceWidth: image.width,
+            sourceHeight: image.height,
+            sourceBytesPerRow: image.bytesPerRow,
+            sourceFormat: image.pixelFormat,
+            inverseTransform: inverse,
+            interpolation: interpolation,
+            mask: maskSource,
+            maskWidth: mask.width,
+            maskHeight: mask.height,
+            maskBytesPerRow: mask.bytesPerRow,
+            inverseMaskTransform: inverseMask,
+            maskInterpolation: maskInterpolation,
+            spans: visible.span,
+            destinationWidth: destinationWidth,
+            pixels: &span
+          )
+        }
+      }
+    }
+  }
+
   /// Consumes the canvas and returns an immutable top-left-origin image.
   public consuming func finish(
     pixelFormat: RasterPixelFormat = .rgba8Unorm

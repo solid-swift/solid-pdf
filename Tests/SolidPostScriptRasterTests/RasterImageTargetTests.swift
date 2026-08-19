@@ -26,6 +26,39 @@ import Testing
     #expect(image.data[15] == 0)
   }
 
+  @Test func explicitAndColorKeyMasksRenderThroughNativeRaster() async throws {
+    let explicit = try await Interpreter.render(
+      content: """
+      /DeviceRGB setcolorspace
+      << /ImageType 3 /InterleaveType 3
+         /DataDict << /ImageType 1 /Width 2 /Height 1 /BitsPerComponent 8
+           /ImageMatrix [.1 0 0 .05 0 0] /Decode [0 1 0 1 0 1]
+           /DataSource <ff000000ff00> >>
+         /MaskDict << /ImageType 1 /Width 2 /Height 1 /BitsPerComponent 1
+           /ImageMatrix [.1 0 0 .05 0 0] /Decode [0 1] /DataSource <80> >>
+      >> image showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+    let explicitImage = try #require(explicit.output.first)
+    #expect(try gray(x: 5, y: 10, image: explicitImage) > 0.9)
+    #expect(try rgb(x: 15, y: 10, image: explicitImage).green > 0.9)
+
+    let colorKey = try await Interpreter.render(
+      content: """
+      /DeviceRGB setcolorspace
+      << /ImageType 4 /Width 2 /Height 1 /BitsPerComponent 8
+         /ImageMatrix [.1 0 0 .05 0 0] /Decode [0 1 0 1 0 1]
+         /MaskColor [255 0 0] /DataSource <ff00000000ff>
+      >> image showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+    let colorKeyImage = try #require(colorKey.output.first)
+    #expect(try gray(x: 5, y: 10, image: colorKeyImage) > 0.9)
+    #expect(try rgb(x: 15, y: 10, image: colorKeyImage).blue > 0.9)
+  }
+
   @Test func tilingPatternsRepeatTheirTransparentKeyCell() async throws {
     let result = try await Interpreter.render(
       content: """
@@ -321,6 +354,41 @@ import Testing
     let image = try #require(result.output.first)
     #expect(try gray(x: 5, y: 5, image: image) < 0.1)
     #expect(try gray(x: 0, y: 0, image: image) > 0.9)
+  }
+
+  @Test func maskedImagesReplayInsideFormsAndColoredPatterns() async throws {
+    let maskedImage = """
+    /DeviceRGB setcolorspace
+    << /ImageType 4 /Width 2 /Height 1 /BitsPerComponent 8
+       /ImageMatrix [.1 0 0 .05 0 0] /Decode [0 1 0 1 0 1]
+       /MaskColor [255 0 0] /DataSource <ff00000000ff>
+    >> image
+    """
+    let form = try await Interpreter.render(
+      content: """
+      << /FormType 1 /BBox [0 0 20 20] /Matrix matrix
+         /PaintProc { pop \(maskedImage) }
+      >> execform showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+    let formImage = try #require(form.output.first)
+    #expect(try gray(x: 5, y: 10, image: formImage) > 0.9)
+    #expect(try rgb(x: 15, y: 10, image: formImage).blue > 0.9)
+
+    let pattern = try await Interpreter.render(
+      content: """
+      /p << /PatternType 1 /PaintType 1 /TilingType 1
+        /BBox [0 0 20 20] /XStep 20 /YStep 20
+        /PaintProc { pop \(maskedImage) }
+      >> matrix makepattern def
+      /Pattern setcolorspace p setcolor 0 0 20 20 rectfill showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+    let patternImage = try #require(pattern.output.first)
+    #expect(try gray(x: 5, y: 10, image: patternImage) > 0.9)
+    #expect(try rgb(x: 15, y: 10, image: patternImage).blue > 0.9)
   }
 
   private func gray(x: Int, y: Int, image: RasterImage) throws -> Double {

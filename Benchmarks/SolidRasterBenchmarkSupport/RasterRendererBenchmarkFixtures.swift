@@ -20,6 +20,9 @@ public enum RasterRendererBenchmarkFixtures {
     "Repeated Form Replay",
     "Nested Form Replay",
     "Form Pattern and Shading",
+    "2 MP Aligned Explicit Mask",
+    "2 MP Independent Explicit Mask",
+    "2 MP Color-Key Mask",
   ]
 
   /// Creates every comparison workload without including fixture construction in measurements.
@@ -72,7 +75,91 @@ public enum RasterRendererBenchmarkFixtures {
       page: page
     )
     let formWorkloads = try formWorkloads(descriptor: descriptor, state: emptyState, page: page)
-    return pathWorkloads + [nearest, bilinear, combined] + graphicsWorkloads + formWorkloads
+    let maskWorkloads = try maskedImageWorkloads()
+    return pathWorkloads + [nearest, bilinear, combined] + graphicsWorkloads + formWorkloads + maskWorkloads
+  }
+
+  private static func maskedImageWorkloads() throws -> [RasterRendererBenchmarkWorkload] {
+    let width = 1_920
+    let height = 1_080
+    return try [
+      maskedImageWorkload(
+        name: names[16],
+        width: width,
+        height: height,
+        maskWidth: width,
+        maskHeight: height,
+        descriptor: .explicit(width: width, height: height, maskToDevice: .identity, interpolate: false)
+      ),
+      maskedImageWorkload(
+        name: names[17],
+        width: width,
+        height: height,
+        maskWidth: width / 2,
+        maskHeight: height / 2,
+        descriptor: .explicit(
+          width: width / 2,
+          height: height / 2,
+          maskToDevice: GraphicsMatrix(a: 2, b: 0, c: 0, d: 2, tx: 0, ty: 0),
+          interpolate: true
+        )
+      ),
+      maskedImageWorkload(
+        name: names[18],
+        width: width,
+        height: height,
+        maskWidth: width,
+        maskHeight: height,
+        descriptor: .colorKey(ranges: [GraphicsImageSampleRange(lowerBound: 0, upperBound: 31)])
+      ),
+    ]
+  }
+
+  private static func maskedImageWorkload(
+    name: String,
+    width: Int,
+    height: Int,
+    maskWidth: Int,
+    maskHeight: Int,
+    descriptor mask: GraphicsImageMaskDescriptor
+  ) throws -> RasterRendererBenchmarkWorkload {
+    let device = deviceDescriptor(width: width, height: height)
+    let graphicsState = state(width: width, height: height)
+    let descriptor = GraphicsImageDescriptor(
+      width: width,
+      height: height,
+      kind: .color(.deviceGray),
+      imageToDevice: .identity,
+      mask: mask
+    )
+    var components = [Float]()
+    components.reserveCapacity(width * height)
+    for y in 0..<height {
+      for x in 0..<width {
+        components.append(Float((x ^ y) & 0xff) / 255)
+      }
+    }
+    var opacities = [Float]()
+    opacities.reserveCapacity(maskWidth * maskHeight)
+    for y in 0..<maskHeight {
+      for x in 0..<maskWidth {
+        opacities.append((x + y).isMultiple(of: 2) ? 1 : 0)
+      }
+    }
+    let begin = event(.paint(.image(descriptor)), state: graphicsState)
+    return try RasterRendererBenchmarkWorkload(
+      name: name,
+      pixelWidth: width,
+      pixelHeight: height,
+      deviceDescriptor: device,
+      commands: [
+        .beginImage(begin),
+        .imageRows(GraphicsImageRows(startRow: 0, rowCount: height, components: components)),
+        .imageMaskRows(GraphicsImageMaskRows(startRow: 0, rowCount: maskHeight, opacities: opacities)),
+        .endImage,
+        .process(pageEvent(state: graphicsState)),
+      ]
+    )
   }
 
   private static func formWorkloads(

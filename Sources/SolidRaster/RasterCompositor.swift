@@ -193,6 +193,77 @@ enum RasterCompositor {
     }
   }
 
+  static func compositeImage(
+    source: borrowing Span<UInt8>,
+    sourceWidth: Int,
+    sourceHeight: Int,
+    sourceBytesPerRow: Int,
+    sourceFormat: RasterPixelFormat,
+    inverseTransform: RasterAffineTransform,
+    interpolation: RasterInterpolation,
+    mask: borrowing Span<UInt8>,
+    maskWidth: Int,
+    maskHeight: Int,
+    maskBytesPerRow: Int,
+    inverseMaskTransform: RasterAffineTransform,
+    maskInterpolation: RasterInterpolation,
+    spans: borrowing Span<CoverageSpan>,
+    destinationWidth: Int,
+    pixels: inout MutableSpan<UInt8>
+  ) {
+    for spanIndex in 0..<spans.count {
+      let span = spans[spanIndex]
+      guard span.coverage > 0 else { continue }
+      var destinationOffset = (span.y * destinationWidth + span.x) * 4
+      let destinationY = Double(span.y) + 0.5
+      var sourceX = inverseTransform.a * (Double(span.x) + 0.5)
+        + inverseTransform.c * destinationY
+        + inverseTransform.tx
+      var sourceY = inverseTransform.b * (Double(span.x) + 0.5)
+        + inverseTransform.d * destinationY
+        + inverseTransform.ty
+      var maskX = inverseMaskTransform.a * (Double(span.x) + 0.5)
+        + inverseMaskTransform.c * destinationY
+        + inverseMaskTransform.tx
+      var maskY = inverseMaskTransform.b * (Double(span.x) + 0.5)
+        + inverseMaskTransform.d * destinationY
+        + inverseMaskTransform.ty
+      for _ in 0..<span.length {
+        let color = sample(
+          source,
+          width: sourceWidth,
+          height: sourceHeight,
+          bytesPerRow: sourceBytesPerRow,
+          format: sourceFormat,
+          x: sourceX,
+          y: sourceY,
+          interpolation: interpolation
+        )
+        let opacity = sampleMask(
+          mask,
+          width: maskWidth,
+          height: maskHeight,
+          bytesPerRow: maskBytesPerRow,
+          x: maskX,
+          y: maskY,
+          interpolation: maskInterpolation
+        )
+        let coverage = (UInt16(span.coverage) * opacity + 127) / 255
+        composite(
+          source: color,
+          coverage: coverage,
+          destinationOffset: destinationOffset,
+          pixels: &pixels
+        )
+        destinationOffset += 4
+        sourceX += inverseTransform.a
+        sourceY += inverseTransform.b
+        maskX += inverseMaskTransform.a
+        maskY += inverseMaskTransform.b
+      }
+    }
+  }
+
   private static func compositeIntegerTranslationImage(
     source: borrowing Span<UInt8>,
     sourceWidth: Int,
@@ -328,6 +399,78 @@ enum RasterCompositor {
       }
       return result
     }
+  }
+
+  private static func sampleMask(
+    _ bytes: borrowing Span<UInt8>,
+    width: Int,
+    height: Int,
+    bytesPerRow: Int,
+    x: Double,
+    y: Double,
+    interpolation: RasterInterpolation
+  ) -> UInt16 {
+    switch interpolation {
+    case .nearest:
+      return maskPixel(
+        bytes,
+        width: width,
+        height: height,
+        bytesPerRow: bytesPerRow,
+        x: Int(floor(x)),
+        y: Int(floor(y))
+      )
+    case .linear:
+      let sampleX = x - 0.5
+      let sampleY = y - 0.5
+      let x0 = Int(floor(sampleX))
+      let y0 = Int(floor(sampleY))
+      let fractionX = max(0, min(1, sampleX - Double(x0)))
+      let fractionY = max(0, min(1, sampleY - Double(y0)))
+      let top = Double(maskPixel(
+        bytes,
+        width: width,
+        height: height,
+        bytesPerRow: bytesPerRow,
+        x: x0,
+        y: y0
+      )) * (1 - fractionX) + Double(maskPixel(
+        bytes,
+        width: width,
+        height: height,
+        bytesPerRow: bytesPerRow,
+        x: x0 + 1,
+        y: y0
+      )) * fractionX
+      let bottom = Double(maskPixel(
+        bytes,
+        width: width,
+        height: height,
+        bytesPerRow: bytesPerRow,
+        x: x0,
+        y: y0 + 1
+      )) * (1 - fractionX) + Double(maskPixel(
+        bytes,
+        width: width,
+        height: height,
+        bytesPerRow: bytesPerRow,
+        x: x0 + 1,
+        y: y0 + 1
+      )) * fractionX
+      return UInt16((top * (1 - fractionY) + bottom * fractionY).rounded())
+    }
+  }
+
+  private static func maskPixel(
+    _ bytes: borrowing Span<UInt8>,
+    width: Int,
+    height: Int,
+    bytesPerRow: Int,
+    x: Int,
+    y: Int
+  ) -> UInt16 {
+    guard x >= 0, y >= 0, x < width, y < height else { return 0 }
+    return UInt16(bytes[y * bytesPerRow + x])
   }
 
   private static func pixel(

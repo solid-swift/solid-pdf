@@ -14,6 +14,7 @@ public enum RasterBenchmarkReplay {
         case .process(let event): try renderer.process(event)
         case .beginImage(let event): try renderer.beginImage(event)
         case .imageRows(let rows): try renderer.writeImageRows(rows)
+        case .imageMaskRows(let rows): try renderer.writeImageMaskRows(rows)
         case .endImage: try renderer.endImage()
         }
       }

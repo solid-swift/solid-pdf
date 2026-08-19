@@ -10,6 +10,8 @@ public struct RasterRendererBenchmarkWorkload: Sendable {
     case beginImage(GraphicsEvent)
     /// Supplies complete sampled-image rows.
     case imageRows(GraphicsImageRows)
+    /// Supplies complete sampled-image opacity rows.
+    case imageMaskRows(GraphicsImageMaskRows)
     /// Commits the active sampled image.
     case endImage
   }
@@ -66,7 +68,7 @@ public struct RasterRendererBenchmarkWorkload: Sendable {
   }
 
   private static func hasValidImageOrdering(_ commands: [Command]) -> Bool {
-    var pendingImage: (descriptor: GraphicsImageDescriptor, nextRow: Int)?
+    var pendingImage: (descriptor: GraphicsImageDescriptor, nextRow: Int, nextMaskRow: Int)?
     for command in commands {
       switch command {
       case .process:
@@ -77,7 +79,7 @@ public struct RasterRendererBenchmarkWorkload: Sendable {
           descriptor.width > 0,
           descriptor.height > 0
         else { return false }
-        pendingImage = (descriptor, 0)
+        pendingImage = (descriptor, 0, 0)
       case .imageRows(let rows):
         guard var image = pendingImage,
           rows.startRow == image.nextRow,
@@ -90,11 +92,35 @@ public struct RasterRendererBenchmarkWorkload: Sendable {
         image.nextRow += rows.rowCount
         guard image.nextRow <= image.descriptor.height else { return false }
         pendingImage = image
+      case .imageMaskRows(let rows):
+        guard var image = pendingImage,
+          let dimensions = maskDimensions(image.descriptor),
+          rows.startRow == image.nextMaskRow,
+          rows.rowCount > 0,
+          rows.rowCount <= Int.max / dimensions.width,
+          rows.opacities.count == rows.rowCount * dimensions.width
+        else { return false }
+        image.nextMaskRow += rows.rowCount
+        guard image.nextMaskRow <= dimensions.height else { return false }
+        pendingImage = image
       case .endImage:
         guard let image = pendingImage, image.nextRow == image.descriptor.height else { return false }
+        if let dimensions = maskDimensions(image.descriptor) {
+          guard image.nextMaskRow == dimensions.height else { return false }
+        } else {
+          guard image.nextMaskRow == 0 else { return false }
+        }
         pendingImage = nil
       }
     }
     return pendingImage == nil
+  }
+
+  private static func maskDimensions(_ descriptor: GraphicsImageDescriptor) -> (width: Int, height: Int)? {
+    switch descriptor.mask {
+    case .explicit(let width, let height, _, _): (width, height)
+    case .colorKey: (descriptor.width, descriptor.height)
+    case nil: nil
+    }
   }
 }

@@ -267,6 +267,45 @@ struct PlutoVGImageTargetTests {
     #expect(try gray(atX: 20, y: 20, in: plutoImage).isApproximatelyEqual(to: 0.25, tolerance: 0.05))
     #expect(try gray(atX: 20, y: 20, in: coreGraphicsImage).isApproximatelyEqual(to: 0.25, tolerance: 0.05))
   }
+
+  @Test func coreGraphicsAndPlutoVGAgreeForExplicitAndColorKeyMasks() async throws {
+    for program in [
+      """
+      /DeviceRGB setcolorspace
+      << /ImageType 3 /InterleaveType 3
+         /DataDict << /ImageType 1 /Width 2 /Height 1 /BitsPerComponent 8
+           /ImageMatrix [.1 0 0 .05 0 0] /Decode [0 1 0 1 0 1]
+           /DataSource <ff000000ff00> >>
+         /MaskDict << /ImageType 1 /Width 2 /Height 1 /BitsPerComponent 1
+           /ImageMatrix [.1 0 0 .05 0 0] /Decode [0 1] /DataSource <80> >>
+      >> image showpage
+      """,
+      """
+      /DeviceRGB setcolorspace
+      << /ImageType 4 /Width 2 /Height 1 /BitsPerComponent 8
+         /ImageMatrix [.1 0 0 .05 0 0] /Decode [0 1 0 1 0 1]
+         /MaskColor [255 0 0] /DataSource <ff00000000ff>
+      >> image showpage
+      """,
+    ] {
+      let pluto = try await Interpreter.render(
+        content: program,
+        to: PlutoVGImageTarget(pixelWidth: 20, pixelHeight: 20)
+      )
+      let coreGraphics = try await Interpreter.render(
+        content: program,
+        to: CoreGraphicsImageTarget(pixelWidth: 20, pixelHeight: 20)
+      )
+      let plutoImage = try #require(pluto.output.first)
+      let coreGraphicsImage = try #require(coreGraphics.output.first)
+
+      for point in [(5, 10), (15, 10)] {
+        let plutoGray = try gray(atX: point.0, y: point.1, in: plutoImage)
+        let coreGraphicsGray = try gray(atX: point.0, y: point.1, in: coreGraphicsImage)
+        #expect(plutoGray.isApproximatelyEqual(to: coreGraphicsGray, tolerance: 0.05))
+      }
+    }
+  }
   #endif
 
   @Test func typeOneFormsReplayIntoPlutoVGPages() async throws {

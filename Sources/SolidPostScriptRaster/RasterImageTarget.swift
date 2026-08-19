@@ -36,7 +36,9 @@ where
     private var activeImage: (
       descriptor: GraphicsImageDescriptor,
       state: GraphicsStateSnapshot,
-      converter: ColorEngine.Session.ImageConverter
+      converter: ColorEngine.Session.ImageConverter,
+      maskOpacities: [Float],
+      nextMaskRow: Int
     )?
     private var cachedGraphicsClip: GraphicsClip?
     private var cachedRasterClip: RasterClip?
@@ -106,7 +108,9 @@ where
       activeImage = (
         descriptor,
         event.before,
-        try colorSession.makeImageConverter(for: descriptor)
+        try colorSession.makeImageConverter(for: descriptor),
+        [],
+        0
       )
     }
 
@@ -116,6 +120,23 @@ where
       try image.converter.write(rows)
     }
 
+    /// Receives complete sampled-image mask rows in order.
+    public func writeImageMaskRows(_ rows: GraphicsImageMaskRows) throws {
+      guard var image = activeImage,
+        let (width, height) = maskDimensions(for: image.descriptor),
+        width > 0,
+        height > 0,
+        rows.rowCount > 0,
+        rows.startRow == image.nextMaskRow,
+        rows.rowCount <= height - image.nextMaskRow,
+        rows.rowCount <= Int.max / width,
+        rows.opacities.count == rows.rowCount * width
+      else { throw SolidPostScript.Error.ioError }
+      image.maskOpacities.append(contentsOf: rows.opacities)
+      image.nextMaskRow += rows.rowCount
+      activeImage = image
+    }
+
     /// Validates and paints the active sampled image.
     public func endImage() throws {
       guard let image = activeImage, lifecycle == .active else { throw SolidPostScript.Error.ioError }
@@ -123,7 +144,11 @@ where
       try draw(
         image.converter.finish(),
         descriptor: image.descriptor,
-        state: image.state
+        state: image.state,
+        mask: try rasterMask(
+          descriptor: image.descriptor,
+          opacities: image.maskOpacities
+        )
       )
     }
 
@@ -328,7 +353,12 @@ where
             components: image.components,
             sourceComponents: image.sourceComponents
           ))
-          try draw(converter.finish(), descriptor: image.descriptor, state: state)
+          try draw(
+            converter.finish(),
+            descriptor: image.descriptor,
+            state: state,
+            mask: try rasterMask(descriptor: image.descriptor, opacities: image.mask?.opacities ?? [])
+          )
         } catch {
           converter.abort()
           throw error
@@ -372,7 +402,8 @@ where
           kind: kind,
           sourceColorSpace: image.descriptor.sourceColorSpace,
           imageToDevice: image.descriptor.imageToDevice.concatenated(with: translation),
-          interpolate: image.descriptor.interpolate
+          interpolate: image.descriptor.interpolate,
+          mask: image.descriptor.mask?.transformed(by: translation)
         )
         let converter = try colorSession.makeImageConverter(for: descriptor)
         do {
@@ -401,7 +432,15 @@ where
             smoothness: state.smoothness,
             pathBoundingBox: state.pathBoundingBox
           )
-          try draw(converter.finish(), descriptor: descriptor, state: state)
+          try draw(
+            converter.finish(),
+            descriptor: descriptor,
+            state: state,
+            mask: try rasterMask(
+              descriptor: descriptor,
+              opacities: image.mask?.opacities ?? []
+            )
+          )
         } catch {
           converter.abort()
           throw error
@@ -632,7 +671,8 @@ where
     private func draw(
       _ image: RasterImage,
       descriptor: GraphicsImageDescriptor,
-      state: GraphicsStateSnapshot
+      state: GraphicsStateSnapshot,
+      mask: RasterMask? = nil
     ) throws {
       let renderedHeight = image.height
       guard descriptor.width > 0,
@@ -642,11 +682,58 @@ where
       else { return }
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(state.clip))
-        try canvas.draw(
-          image,
-          transform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
-          interpolation: descriptor.interpolate ? .linear : .nearest
-        )
+        if let mask, case .explicit(_, _, let maskToDevice, let maskInterpolate) = descriptor.mask {
+          try canvas.draw(
+            image,
+            transform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
+            interpolation: descriptor.interpolate ? .linear : .nearest,
+            mask: mask,
+            maskTransform: maskToDevice.concatenated(with: rasterMatrix).raster,
+            maskInterpolation: maskInterpolate ? .linear : .nearest
+          )
+        } else if let mask {
+          try canvas.draw(
+            image,
+            transform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
+            interpolation: descriptor.interpolate ? .linear : .nearest,
+            mask: mask,
+            maskTransform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
+            maskInterpolation: descriptor.interpolate ? .linear : .nearest
+          )
+        } else {
+          try canvas.draw(
+            image,
+            transform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
+            interpolation: descriptor.interpolate ? .linear : .nearest
+          )
+        }
+      }
+    }
+
+    private func maskDimensions(for descriptor: GraphicsImageDescriptor) -> (width: Int, height: Int)? {
+      switch descriptor.mask {
+      case .explicit(let width, let height, _, _): (width, height)
+      case .colorKey: (descriptor.width, descriptor.height)
+      case nil: nil
+      }
+    }
+
+    private func rasterMask(descriptor: GraphicsImageDescriptor, opacities: [Float]) throws -> RasterMask? {
+      guard let (width, height) = maskDimensions(for: descriptor) else { return nil }
+      guard width > 0,
+        height > 0,
+        width <= Int.max / height,
+        width * height <= RasterLimits.default.maximumSurfaceBytes,
+        opacities.count <= width * height
+      else { throw SolidPostScript.Error.ioError }
+      var bytes = Data(repeating: 0, count: width * height)
+      for index in opacities.indices {
+        bytes[index] = UInt8((min(1, max(0, opacities[index])) * 255).rounded())
+      }
+      do {
+        return try RasterMask(width: width, height: height, bytesPerRow: width, data: bytes)
+      } catch {
+        throw SolidPostScript.Error.ioError
       }
     }
 

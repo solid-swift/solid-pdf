@@ -39,7 +39,9 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     private var activeImage: (
       descriptor: GraphicsImageDescriptor,
       state: GraphicsStateSnapshot,
-      converter: NativeGraphicsColorImageConverter
+      converter: NativeGraphicsColorImageConverter,
+      maskOpacities: [Float],
+      nextMaskRow: Int
     )?
 
     fileprivate init(
@@ -113,7 +115,9 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       activeImage = (
         descriptor,
         event.before,
-        try colorSession.makeImageConverter(for: descriptor)
+        try colorSession.makeImageConverter(for: descriptor),
+        [],
+        0
       )
     }
 
@@ -121,6 +125,23 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     public func writeImageRows(_ rows: GraphicsImageRows) throws {
       guard let image = activeImage else { throw SolidPostScript.Error.ioError }
       try image.converter.write(rows)
+    }
+
+    /// Consumes one bounded group of complete sampled-image mask rows.
+    public func writeImageMaskRows(_ rows: GraphicsImageMaskRows) throws {
+      guard var image = activeImage,
+        let (width, height) = maskDimensions(for: image.descriptor),
+        width > 0,
+        height > 0,
+        rows.rowCount > 0,
+        rows.startRow == image.nextMaskRow,
+        rows.rowCount <= height - image.nextMaskRow,
+        rows.rowCount <= Int.max / width,
+        rows.opacities.count == rows.rowCount * width
+      else { throw SolidPostScript.Error.ioError }
+      image.maskOpacities.append(contentsOf: rows.opacities)
+      image.nextMaskRow += rows.rowCount
+      activeImage = image
     }
 
     /// Commits and paints the active sampled image.
@@ -133,6 +154,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         image.converter.finish(),
         descriptor: image.descriptor,
         state: image.state,
+        mask: try rasterMask(descriptor: image.descriptor, opacities: image.maskOpacities),
         in: canvas
       )
     }
@@ -426,7 +448,13 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
             components: image.components,
             sourceComponents: image.sourceComponents
           ))
-          try draw(converter.finish(), descriptor: image.descriptor, state: state, in: canvas)
+          try draw(
+            converter.finish(),
+            descriptor: image.descriptor,
+            state: state,
+            mask: try rasterMask(descriptor: image.descriptor, opacities: image.mask?.opacities ?? []),
+            in: canvas
+          )
         } catch {
           converter.abort()
           throw error
@@ -460,7 +488,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
           kind: kind,
           sourceColorSpace: image.descriptor.sourceColorSpace,
           imageToDevice: image.descriptor.imageToDevice.concatenated(with: translation),
-          interpolate: image.descriptor.interpolate
+          interpolate: image.descriptor.interpolate,
+          mask: image.descriptor.mask?.transformed(by: translation)
         )
         let converter = try colorSession.makeImageConverter(for: descriptor)
         do {
@@ -491,7 +520,13 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
             smoothness: imageState.smoothness,
             pathBoundingBox: imageState.pathBoundingBox
           )
-          try draw(converter.finish(), descriptor: descriptor, state: state, in: canvas)
+          try draw(
+            converter.finish(),
+            descriptor: descriptor,
+            state: state,
+            mask: try rasterMask(descriptor: descriptor, opacities: image.mask?.opacities ?? []),
+            in: canvas
+          )
         } catch {
           converter.abort()
           throw error
@@ -764,8 +799,17 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       _ image: RasterImage,
       descriptor: GraphicsImageDescriptor,
       state: GraphicsStateSnapshot,
+      mask: RasterMask? = nil,
       in canvas: OpaquePointer
     ) throws {
+      if let mask {
+        if let masked = try alignedMaskedImage(image, mask: mask, descriptor: descriptor) {
+          try draw(masked, descriptor: descriptor, state: state, in: canvas)
+          return
+        }
+        try drawPortableMaskedImage(image, mask: mask, descriptor: descriptor, state: state, in: canvas)
+        return
+      }
       let renderedHeight = image.height
       guard descriptor.width > 0,
         renderedHeight > 0,
@@ -810,6 +854,151 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         plutovg_canvas_fill(canvas)
         plutovg_canvas_set_rgb(canvas, 0, 0, 0)
       }
+    }
+
+    private func alignedMaskedImage(
+      _ image: RasterImage,
+      mask: RasterMask,
+      descriptor: GraphicsImageDescriptor
+    ) throws -> RasterImage? {
+      let maskTransform: GraphicsMatrix
+      let maskInterpolation: Bool
+      switch descriptor.mask {
+      case .explicit(let width, let height, let transform, let interpolate):
+        guard width == descriptor.width, height == descriptor.height else { return nil }
+        maskTransform = transform
+        maskInterpolation = interpolate
+      case .colorKey:
+        maskTransform = descriptor.imageToDevice
+        maskInterpolation = descriptor.interpolate
+      case nil:
+        return nil
+      }
+      guard mask.width == descriptor.width,
+        mask.height >= image.height,
+        maskTransform == descriptor.imageToDevice,
+        maskInterpolation == descriptor.interpolate
+      else { return nil }
+
+      var data = image.data
+      for row in 0..<image.height {
+        for column in 0..<image.width {
+          let opacity = UInt16(mask.data[row * mask.bytesPerRow + column])
+          let offset = row * image.bytesPerRow + column * 4
+          if image.pixelFormat == .rgba8UnormPremultiplied {
+            data[offset] = UInt8((UInt16(data[offset]) * opacity + 127) / 255)
+            data[offset + 1] = UInt8((UInt16(data[offset + 1]) * opacity + 127) / 255)
+            data[offset + 2] = UInt8((UInt16(data[offset + 2]) * opacity + 127) / 255)
+          }
+          data[offset + 3] = UInt8((UInt16(data[offset + 3]) * opacity + 127) / 255)
+        }
+      }
+      do {
+        return try RasterImage(
+          width: image.width,
+          height: image.height,
+          bytesPerRow: image.bytesPerRow,
+          pixelFormat: image.pixelFormat,
+          data: data
+        )
+      } catch {
+        throw SolidPostScript.Error.ioError
+      }
+    }
+
+    private func drawPortableMaskedImage(
+      _ image: RasterImage,
+      mask: RasterMask,
+      descriptor: GraphicsImageDescriptor,
+      state: GraphicsStateSnapshot,
+      in canvas: OpaquePointer
+    ) throws {
+      do {
+        var overlay = try RasterCanvas(width: pixelWidth, height: pixelHeight)
+        try overlay.setClip(RasterClip(
+          imageableBounds: transformedBounds(state.clip.imageableBounds, by: rasterMatrix).raster,
+          constraints: state.clip.constraints.map {
+            RasterClipConstraint(
+              path: $0.path.transformed(by: rasterMatrix).rasterPath,
+              rule: $0.rule == .evenOdd ? .evenOdd : .winding
+            )
+          }
+        ))
+        let maskTransform: GraphicsMatrix
+        let maskInterpolation: RasterInterpolation
+        if case .explicit(_, _, let explicitTransform, let interpolate) = descriptor.mask {
+          maskTransform = explicitTransform
+          maskInterpolation = interpolate ? .linear : .nearest
+        } else {
+          maskTransform = descriptor.imageToDevice
+          maskInterpolation = descriptor.interpolate ? .linear : .nearest
+        }
+        try overlay.draw(
+          image,
+          transform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
+          interpolation: descriptor.interpolate ? .linear : .nearest,
+          mask: mask,
+          maskTransform: maskTransform.concatenated(with: rasterMatrix).raster,
+          maskInterpolation: maskInterpolation
+        )
+        let raster = try overlay.finish(pixelFormat: .rgba8UnormPremultiplied)
+        guard let inverseRaster = rasterMatrix.inverted else { throw SolidPostScript.Error.ioError }
+        try draw(
+          raster,
+          descriptor: GraphicsImageDescriptor(
+            width: pixelWidth,
+            height: pixelHeight,
+            kind: .color(.deviceRGB),
+            imageToDevice: inverseRaster
+          ),
+          state: state,
+          in: canvas
+        )
+      } catch {
+        if error is SolidPostScript.Error { throw error }
+        throw SolidPostScript.Error.ioError
+      }
+    }
+
+    private func maskDimensions(for descriptor: GraphicsImageDescriptor) -> (width: Int, height: Int)? {
+      switch descriptor.mask {
+      case .explicit(let width, let height, _, _): (width, height)
+      case .colorKey: (descriptor.width, descriptor.height)
+      case nil: nil
+      }
+    }
+
+    private func rasterMask(descriptor: GraphicsImageDescriptor, opacities: [Float]) throws -> RasterMask? {
+      guard let (width, height) = maskDimensions(for: descriptor) else { return nil }
+      guard width > 0,
+        height > 0,
+        width <= Int.max / height,
+        width * height <= RasterLimits.default.maximumSurfaceBytes,
+        opacities.count <= width * height
+      else { throw SolidPostScript.Error.ioError }
+      var data = Data(repeating: 0, count: width * height)
+      for index in opacities.indices {
+        data[index] = UInt8((min(1, max(0, opacities[index])) * 255).rounded())
+      }
+      do {
+        return try RasterMask(width: width, height: height, bytesPerRow: width, data: data)
+      } catch {
+        throw SolidPostScript.Error.ioError
+      }
+    }
+
+    private func transformedBounds(_ rect: GraphicsRect, by matrix: GraphicsMatrix) -> GraphicsRect {
+      let points = [
+        GraphicsPoint(x: rect.x, y: rect.y),
+        GraphicsPoint(x: rect.maxX, y: rect.y),
+        GraphicsPoint(x: rect.maxX, y: rect.maxY),
+        GraphicsPoint(x: rect.x, y: rect.maxY),
+      ].map(matrix.transform)
+      let minX = points.map(\.x).min()!
+      let maxX = points.map(\.x).max()!
+      let minY = points.map(\.y).min()!
+      let maxY = points.map(\.y).max()!
+      return GraphicsRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
     private func imageBoundary(
@@ -1004,6 +1193,18 @@ private extension GraphicsLineJoin {
 }
 
 private extension GraphicsPath {
+  var rasterPath: RasterPath {
+    RasterPath(elements: elements.map { element in
+      switch element {
+      case .move(let point): .move(to: point.raster)
+      case .line(let point): .line(to: point.raster)
+      case .curve(let control1, let control2, let end):
+        .cubic(control1: control1.raster, control2: control2.raster, end: end.raster)
+      case .close: .close
+      }
+    })
+  }
+
   static func rectangle(_ rect: GraphicsRect) -> Self {
     Self(elements: [
       .move(to: GraphicsPoint(x: rect.x, y: rect.y)),
@@ -1036,4 +1237,12 @@ private extension GraphicsPath {
 
 private extension GraphicsPoint {
   var raster: RasterPoint { RasterPoint(x: x, y: y) }
+}
+
+private extension GraphicsMatrix {
+  var raster: RasterAffineTransform { .init(a: a, b: b, c: c, d: d, tx: tx, ty: ty) }
+}
+
+private extension GraphicsRect {
+  var raster: RasterRect { .init(x: x, y: y, width: width, height: height) }
 }

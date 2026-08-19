@@ -20,7 +20,8 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       state: GraphicsStateSnapshot,
       components: [Float],
       sourceComponents: [Float],
-      maskOpacities: [Float]
+      maskOpacities: [Float],
+      nextMaskRow: Int
     )?
     private var aborted = false
 
@@ -63,7 +64,7 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       guard !aborted, activeImage == nil, case .paint(.image(let descriptor)) = event.operation else {
         throw Error.ioError
       }
-      activeImage = (descriptor, event.before, [], [], [])
+      activeImage = (descriptor, event.before, [], [], [], 0)
     }
 
     /// Records one bounded group of sampled-image rows.
@@ -78,8 +79,18 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
 
     /// Records one bounded group of explicit mask rows.
     public func writeImageMaskRows(_ rows: GraphicsImageMaskRows) throws {
-      guard var image = activeImage else { throw Error.ioError }
+      guard var image = activeImage,
+        let dimensions = maskDimensions(for: image.descriptor),
+        dimensions.width > 0,
+        dimensions.height > 0,
+        rows.rowCount > 0,
+        rows.startRow == image.nextMaskRow,
+        rows.rowCount <= dimensions.height - image.nextMaskRow,
+        rows.rowCount <= Int.max / dimensions.width,
+        rows.opacities.count == rows.rowCount * dimensions.width
+      else { throw Error.ioError }
       image.maskOpacities.append(contentsOf: rows.opacities)
+      image.nextMaskRow += rows.rowCount
       activeImage = image
     }
 
@@ -120,6 +131,14 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       activeImage = nil
       effects.removeAll()
       pages.removeAll()
+    }
+
+    private func maskDimensions(for descriptor: GraphicsImageDescriptor) -> (width: Int, height: Int)? {
+      switch descriptor.mask {
+      case .explicit(let width, let height, _, _): (width, height)
+      case .colorKey: (descriptor.width, descriptor.height)
+      case nil: nil
+      }
     }
   }
 

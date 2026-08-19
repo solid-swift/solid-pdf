@@ -35,7 +35,12 @@ private extension GraphicsEffect {
       else { return nil }
       let first = componentBytes.addingReportingOverflow(sourceBytes)
       guard !first.overflow else { return nil }
-      let second = first.partialValue.addingReportingOverflow(256)
+      guard let maskBytes = checkedProduct(image.mask?.opacities.count ?? 0, MemoryLayout<Float>.stride) else {
+        return nil
+      }
+      let masked = first.partialValue.addingReportingOverflow(maskBytes)
+      guard !masked.overflow else { return nil }
+      let second = masked.partialValue.addingReportingOverflow(256)
       return second.overflow ? nil : second.partialValue
     case .shading(let shading, _):
       guard let triangleBytes = checkedProduct(

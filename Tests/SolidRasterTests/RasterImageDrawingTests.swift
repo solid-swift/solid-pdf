@@ -90,4 +90,26 @@ import Testing
     #expect(image.data.count == 100)
     #expect(image.data.contains { $0 != 255 })
   }
+
+  @Test func imageAndMaskUseIndependentTransforms() throws {
+    let source = try RasterImage(
+      width: 2,
+      height: 1,
+      bytesPerRow: 8,
+      pixelFormat: .rgba8Unorm,
+      data: Data([255, 0, 0, 255, 255, 0, 0, 255])
+    )
+    let mask = try RasterMask(width: 1, height: 1, bytesPerRow: 1, data: Data([255]))
+    var canvas = try RasterCanvas(width: 4, height: 2)
+    try canvas.draw(
+      source,
+      transform: RasterAffineTransform(a: 2, b: 0, c: 0, d: 2, tx: 0, ty: 0),
+      mask: mask,
+      maskTransform: RasterAffineTransform(a: 2, b: 0, c: 0, d: 2, tx: 2, ty: 0)
+    )
+    let image = try canvas.finish()
+
+    #expect(Array(image.data[0..<4]) == [255, 255, 255, 255])
+    #expect(Array(image.data[8..<12]) == [255, 0, 0, 255])
+  }
 }

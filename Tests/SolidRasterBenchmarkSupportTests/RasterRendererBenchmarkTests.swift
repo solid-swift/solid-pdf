@@ -25,6 +25,11 @@ import Testing
       return
     }
     #expect(image.commands.contains(.endImage))
+
+    let masked = try #require(workloads.first { $0.name == "2 MP Independent Explicit Mask" })
+    #expect(masked.commands.contains { command in
+      if case .imageMaskRows = command { true } else { false }
+    })
   }
 
   @Test func invalidFixturesAreRejectedTransactionally() {
@@ -55,6 +60,33 @@ import Testing
         pixelHeight: 10,
         deviceDescriptor: descriptor,
         commands: [.beginImage(begin), .process(page)]
+      )
+    }
+
+    let maskedDescriptor = GraphicsImageDescriptor(
+      width: 1,
+      height: 1,
+      kind: .color(.deviceGray),
+      imageToDevice: .identity,
+      mask: .explicit(width: 1, height: 1, maskToDevice: .identity, interpolate: false)
+    )
+    let maskedBegin = GraphicsEvent(
+      operation: .paint(.image(maskedDescriptor)),
+      before: state,
+      after: state
+    )
+    #expect(throws: RasterRendererBenchmarkWorkload.ValidationError.invalidFixture) {
+      try RasterRendererBenchmarkWorkload(
+        name: "incomplete mask",
+        pixelWidth: 10,
+        pixelHeight: 10,
+        deviceDescriptor: descriptor,
+        commands: [
+          .beginImage(maskedBegin),
+          .imageRows(GraphicsImageRows(startRow: 0, rowCount: 1, components: [1])),
+          .endImage,
+          .process(page),
+        ]
       )
     }
   }
