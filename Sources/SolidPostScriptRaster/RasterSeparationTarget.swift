@@ -80,6 +80,8 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
         try paintShading(shading, clip: event.before.clip, state: event.before)
       case .paint(.form(let form)):
         try paintForm(form, depth: 0)
+      case .paint(.text(let run)):
+        try paintText(run, state: event.before, depth: 0)
       default:
         break
       }
@@ -538,8 +540,22 @@ private extension RasterSeparationTarget.Renderer {
       try paintShading(shading, clip: state.clip, state: state)
     case .form(let form, _):
       try paintForm(form, depth: depth)
-    case .text:
-      break
+    case .text(let run, let state):
+      try paintText(run, state: state, depth: depth)
+    }
+  }
+
+  func paintText(_ run: GraphicsGlyphRun, state: GraphicsStateSnapshot, depth: Int) throws {
+    guard depth < 16 else { throw SolidPostScript.Error.ioError }
+    for placement in run.glyphs {
+      switch placement.glyph.program {
+      case .outline(let path):
+        try fill(path.transformed(by: placement.transform), rule: .winding, state: state, depth: depth)
+      case .displayList(let list):
+        for effect in list.effects { try replayFormEffect(effect, depth: depth + 1) }
+      case .bitmap, .empty, .missing:
+        break
+      }
     }
   }
 }

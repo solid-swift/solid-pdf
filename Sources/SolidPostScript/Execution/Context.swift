@@ -96,6 +96,7 @@ public actor Context {
   var uncoloredPatternExecutionDepth = 0
   var imageDataSourceCallbackDepth = 0
   var activeImageDictionaries: [(dictionary: DictionaryValue, revision: UInt64)] = []
+  var activeGlyphBuild: GlyphBuildState?
   var graphicsStack: [GraphicsStackFrame] = []
   var pageDeviceCallbackStack: [PageDeviceCallback] = []
   private var executionBoundarySequence: UInt64 = 0
@@ -114,7 +115,10 @@ public actor Context {
     let dictionaries = NameInterningContext.$table.withValue(environment.nameTable) {
       Self.defaultDictionaries(
         interactiveExecutiveEnabled: environment.hostConfiguration.interactiveExecutiveEnabled,
-        jobServerEnabled: jobServerEnabled
+        jobServerEnabled: jobServerEnabled,
+        globalFontDirectory: environment.globalFontDirectory,
+        standardEncoding: environment.standardEncoding,
+        isoLatin1Encoding: environment.isoLatin1Encoding
       )
     }
     self.dictionaries = DictionaryStack(dictionaries)
@@ -142,7 +146,11 @@ public actor Context {
     let userParameters = environment.userParameters()
     self.userParameters = userParameters
     let dictionaries = NameInterningContext.$table.withValue(environment.nameTable) {
-      Self.defaultDictionaries()
+      Self.defaultDictionaries(
+        globalFontDirectory: environment.globalFontDirectory,
+        standardEncoding: environment.standardEncoding,
+        isoLatin1Encoding: environment.isoLatin1Encoding
+      )
     }
     self.dictionaries = DictionaryStack(dictionaries)
     neverThrow(try environment.nameTable.intern(dictionaries))
@@ -467,6 +475,7 @@ public actor Context {
     "errordict",
     "statusdict",
     "userdict",
+    "FontDirectory",
   ]
 
   internal func run(untilExecutionDepth targetDepth: Int) async throws {
@@ -1462,12 +1471,35 @@ public actor Context {
 
   /// Performs the ``defaultDictionaries`` operation.
   nonisolated public static func defaultDictionaries() -> [Object] {
-    defaultDictionaries(interactiveExecutiveEnabled: true, jobServerEnabled: false)
+    defaultDictionaries(
+      interactiveExecutiveEnabled: true,
+      jobServerEnabled: false,
+      globalFontDirectory: nil,
+      standardEncoding: nil,
+      isoLatin1Encoding: nil
+    )
+  }
+
+  nonisolated static func defaultDictionaries(
+    globalFontDirectory: Object,
+    standardEncoding: Object,
+    isoLatin1Encoding: Object
+  ) -> [Object] {
+    defaultDictionaries(
+      interactiveExecutiveEnabled: true,
+      jobServerEnabled: false,
+      globalFontDirectory: globalFontDirectory,
+      standardEncoding: standardEncoding,
+      isoLatin1Encoding: isoLatin1Encoding
+    )
   }
 
   nonisolated static func defaultDictionaries(
     interactiveExecutiveEnabled: Bool,
-    jobServerEnabled: Bool
+    jobServerEnabled: Bool,
+    globalFontDirectory: Object?,
+    standardEncoding: Object?,
+    isoLatin1Encoding: Object?
   ) -> [Object] {
     let userDict = defaultUserDictionary(jobServerEnabled: jobServerEnabled)
     let globalDict = defaultGlobalDictionary()
@@ -1475,7 +1507,10 @@ public actor Context {
       userDict: userDict,
       globalDict: globalDict,
       interactiveExecutiveEnabled: interactiveExecutiveEnabled,
-      jobServerEnabled: jobServerEnabled
+      jobServerEnabled: jobServerEnabled,
+      globalFontDirectory: globalFontDirectory,
+      standardEncoding: standardEncoding,
+      isoLatin1Encoding: isoLatin1Encoding
     )
     return [userDict, globalDict, sysDict]
   }
@@ -1486,7 +1521,10 @@ public actor Context {
       userDict: userDict,
       globalDict: globalDict,
       interactiveExecutiveEnabled: true,
-      jobServerEnabled: false
+      jobServerEnabled: false,
+      globalFontDirectory: nil,
+      standardEncoding: nil,
+      isoLatin1Encoding: nil
     )
   }
 
@@ -1494,13 +1532,24 @@ public actor Context {
     userDict: Object,
     globalDict: Object,
     interactiveExecutiveEnabled: Bool,
-    jobServerEnabled: Bool
+    jobServerEnabled: Bool,
+    globalFontDirectory: Object?,
+    standardEncoding: Object?,
+    isoLatin1Encoding: Object?
   ) -> Object {
     let errorDictionary = defaultErrorDictionary()
     let errorState = defaultErrorState()
     let statusDictionary = neverThrow(
       try Object.dictionary([:], access: .unlimited, vm: .local, kind: .literal)
     )
+    let fontDirectory = neverThrow(
+      try Object.dictionary([:], access: .unlimited, vm: .local, kind: .literal)
+    )
+    let globalFontDirectory = globalFontDirectory ?? neverThrow(
+      try Object.dictionary([:], access: .unlimited, vm: .global, kind: .literal)
+    )
+    let standardEncoding = standardEncoding ?? neverThrow(try StandardEncodings.standard())
+    let isoLatin1Encoding = isoLatin1Encoding ?? neverThrow(try StandardEncodings.isoLatin1())
     var dict: [Object: Object] = [
 
       // Constants
@@ -1515,6 +1564,11 @@ public actor Context {
       "shareddict": globalDict,
       "userdict": userDict,
       "statusdict": statusDictionary,
+      "FontDirectory": fontDirectory,
+      "GlobalFontDirectory": globalFontDirectory,
+      "SharedFontDirectory": globalFontDirectory,
+      "StandardEncoding": standardEncoding,
+      "ISOLatin1Encoding": isoLatin1Encoding,
 
       // Aspirational target; unavailable language features remain undefined.
       "languagelevel": .integer(targetLanguageLevel),

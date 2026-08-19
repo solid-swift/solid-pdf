@@ -17,6 +17,7 @@ final class FontGlyphCache: Sendable {
   struct Status: Sendable {
     let bytes: Int
     let maximumBytes: Int
+    let entries: Int
   }
 
   private struct Entry {
@@ -70,7 +71,7 @@ final class FontGlyphCache: Sendable {
   }
 
   func status() -> Status {
-    state.withLock { Status(bytes: $0.bytes, maximumBytes: $0.maximumBytes) }
+    state.withLock { Status(bytes: $0.bytes, maximumBytes: $0.maximumBytes, entries: $0.entries.count) }
   }
 
   private func footprint(_ glyph: GraphicsGlyphDescription) -> Int {
@@ -79,7 +80,8 @@ final class FontGlyphCache: Sendable {
       let size = path.elements.count.multipliedReportingOverflow(by: 56)
       return size.overflow ? .max : size.partialValue + 256
     case .bitmap(let bitmap):
-      return bitmap.coverage.count.addingReportingOverflow(256).partialValue
+      let size = bitmap.coverage.count.addingReportingOverflow(256)
+      return size.overflow ? .max : size.partialValue
     case .displayList(let list):
       return list.checkedFootprint()
     case .empty, .missing:

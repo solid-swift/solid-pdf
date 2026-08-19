@@ -1,4 +1,5 @@
 import Foundation
+import SolidFont
 import SolidPostScript
 import SolidRaster
 
@@ -99,6 +100,8 @@ where
         try paintShading(shading, clip: event.before.clip, state: event.before)
       case .paint(.form(let form)):
         try paintForm(form, depth: 0)
+      case .paint(.text(let run)):
+        try paintText(run, state: event.before, depth: 0)
       case .page(.show), .page(.copy):
         try transmitPage(event, copies: 1)
       default:
@@ -452,8 +455,8 @@ where
         try paintShading(shading, clip: state.clip, state: state)
       case .form(let nested, _):
         try paintForm(nested, depth: depth)
-      case .text:
-        break
+      case .text(let run, let state):
+        try paintText(run, state: state, depth: depth)
       }
     }
 
@@ -653,6 +656,71 @@ where
           transformed,
           rule: effectRule.raster,
           paint: try colorSession.resolve(effectPaint, deviceRendering: effectState.deviceRendering),
+          deviceRendering: deviceProgram
+        )
+      }
+    }
+
+    private func paintText(_ run: GraphicsGlyphRun, state: GraphicsStateSnapshot, depth: Int) throws {
+      guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      for placement in run.glyphs {
+        switch placement.glyph.program {
+        case .outline(let path):
+          try fill(path.transformed(by: placement.transform), rule: .winding, state: state)
+        case .displayList(let list):
+          for effect in list.effects { try replayFormEffect(effect, depth: depth + 1) }
+        case .bitmap(let bitmap):
+          try paintGlyphBitmap(bitmap, placement: placement, state: state)
+        case .empty, .missing:
+          break
+        }
+      }
+    }
+
+    private func paintGlyphBitmap(
+      _ bitmap: FontGlyphBitmap,
+      placement: GraphicsGlyphPlacement,
+      state: GraphicsStateSnapshot
+    ) throws {
+      guard bitmap.width > 0, bitmap.height > 0 else { return }
+      guard case .solid(let color) = try colorSession.resolve(
+        state.paint,
+        deviceRendering: state.deviceRendering
+      ) else { return }
+      let red = UInt8((min(1, max(0, color.red)) * 255).rounded())
+      let green = UInt8((min(1, max(0, color.green)) * 255).rounded())
+      let blue = UInt8((min(1, max(0, color.blue)) * 255).rounded())
+      let alpha = UInt8((min(1, max(0, color.alpha)) * 255).rounded())
+      var pixels = Data(count: bitmap.width * bitmap.height * 4)
+      for offset in stride(from: 0, to: pixels.count, by: 4) {
+        pixels[offset] = red; pixels[offset + 1] = green; pixels[offset + 2] = blue; pixels[offset + 3] = alpha
+      }
+      let image = try RasterImage(
+        width: bitmap.width,
+        height: bitmap.height,
+        bytesPerRow: bitmap.width * 4,
+        pixelFormat: .rgba8Unorm,
+        data: pixels
+      )
+      let mask = try RasterMask(
+        width: bitmap.width,
+        height: bitmap.height,
+        bytesPerRow: bitmap.bytesPerRow,
+        data: bitmap.coverage
+      )
+      let translation = GraphicsMatrix(
+        a: 1, b: 0, c: 0, d: 1,
+        tx: placement.origin.x + Double(bitmap.originX),
+        ty: placement.origin.y - Double(bitmap.originY)
+      ).concatenated(with: rasterMatrix)
+      let deviceProgram = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
+      try withCanvas { canvas in
+        try canvas.setClip(try rasterClip(state.clip))
+        try canvas.draw(
+          image,
+          transform: translation.raster,
+          mask: mask,
+          maskTransform: translation.raster,
           deviceRendering: deviceProgram
         )
       }

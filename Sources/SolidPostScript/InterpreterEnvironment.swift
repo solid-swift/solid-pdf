@@ -21,6 +21,9 @@ public final class InterpreterEnvironment: Sendable {
   let formCache = FormCache()
   let screenManager = ScreenManager()
   let fontManager: FontManager
+  let globalFontDirectory: Object
+  let standardEncoding: Object
+  let isoLatin1Encoding: Object
   let formInitializationRegistry = FormInitializationRegistry()
 
   /// The application integration used by this environment.
@@ -106,12 +109,22 @@ public final class InterpreterEnvironment: Sendable {
     self.monotonicInstantSource = monotonicInstantSource
     self.fontProviders = fontProviders
     self.fontManager = FontManager(providers: fontProviders)
+    self.globalFontDirectory = VMAllocationContext.$spaces.withValue(nil) {
+      try! Object.dictionary([:], access: .unlimited, vm: .global, kind: .literal)
+    }
+    self.standardEncoding = VMAllocationContext.$spaces.withValue(nil) { try! StandardEncodings.standard() }
+    self.isoLatin1Encoding = VMAllocationContext.$spaces.withValue(nil) { try! StandardEncodings.isoLatin1() }
     self.fileDevices = fileDevices
       .replacing(StandardInputFileDevice(channel: standardInput))
       .replacing(StandardOutputFileDevice(channel: standardOutput, deviceName: "stdout"))
       .replacing(StandardOutputFileDevice(channel: standardError, deviceName: "stderr", sharedFile: standardErrorFile))
     var categories = Resources.resources
     categories.merge(resourceCategories) { _, replacement in replacement }
+    if resourceCategories["FontType"] == nil {
+      var fontTypes: Set<Int32> = [0, 1, 2, 3, 9, 10, 11, 32, 42]
+      if fontProviders.contains(where: { $0.supportsChameleonFonts }) { fontTypes.insert(14) }
+      categories["FontType"] = IntegerImplicitResources(category: "FontType", values: fontTypes)
+    }
     if resourceCategories["IODevice"] == nil {
       categories["IODevice"] = IODeviceResources(fileDevices: self.fileDevices)
     }
@@ -182,6 +195,16 @@ public final class InterpreterEnvironment: Sendable {
         ResourceEntry(instance: generic, origin: .explicit, size: -1),
         for: .literalName("Generic"),
         in: .literalName("Category")
+      )
+      try initial.define(
+        ResourceEntry(instance: standardEncoding, origin: .explicit, size: -1),
+        for: .literalName("StandardEncoding"),
+        in: .literalName("Encoding")
+      )
+      try initial.define(
+        ResourceEntry(instance: isoLatin1Encoding, origin: .explicit, size: -1),
+        for: .literalName("ISOLatin1Encoding"),
+        in: .literalName("Encoding")
       )
       return initial
     }
@@ -277,6 +300,13 @@ public final class InterpreterEnvironment: Sendable {
     values["CurFontCache"] = .integer(Int32(clamping: fontStatus.bytes))
     values["MaxFontCache"] = .integer(Int32(clamping: fontStatus.maximumBytes))
     return values
+  }
+
+  func setFontCacheMaximum(_ requested: Int32, administrator: Bool) throws {
+    guard administrator else { throw Error.invalidAccess }
+    let maximum = min(max(requested, 0), Int32(FontGlyphCache.maximumBytes))
+    state.withLock { $0.values["MaxFontCache"] = .integer(maximum) }
+    fontManager.glyphCache.setMaximumBytes(Int(maximum))
   }
 
   func systemString(_ name: String) -> String? {

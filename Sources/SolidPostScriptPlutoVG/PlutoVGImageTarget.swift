@@ -106,6 +106,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         try paintShading(shading, clip: event.before.clip, state: event.before, in: canvas)
       case .paint(.form(let form)):
         try paintForm(form, in: canvas, depth: 0)
+      case .paint(.text(let run)):
+        try paintText(run, state: event.before, in: canvas, depth: 0)
       case .page(.show), .page(.copy):
         try transmitPage(event, copies: 1)
       default:
@@ -528,8 +530,27 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         try paintShading(shading, clip: state.clip, state: state, in: canvas)
       case .form(let nested, _):
         try paintForm(nested, in: canvas, depth: depth)
-      case .text:
-        break
+      case .text(let run, let state):
+        try paintText(run, state: state, in: canvas, depth: depth)
+      }
+    }
+
+    private func paintText(
+      _ run: GraphicsGlyphRun,
+      state: GraphicsStateSnapshot,
+      in canvas: OpaquePointer,
+      depth: Int
+    ) throws {
+      guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      for placement in run.glyphs {
+        switch placement.glyph.program {
+        case .outline(let path):
+          try fill(path.transformed(by: placement.transform), rule: .winding, state: state, in: canvas)
+        case .displayList(let list):
+          for effect in list.effects { try replayFormEffect(effect, in: canvas, depth: depth + 1) }
+        case .bitmap, .empty, .missing:
+          break
+        }
       }
     }
 

@@ -6,6 +6,28 @@ import SolidRaster
 import Testing
 
 @Suite struct RasterImageTargetTests {
+  @Test func type3GlyphDisplayListsRenderThroughNativeRaster() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      /F 20 dict dup begin
+        /FontType 3 def /FontMatrix [.001 0 0 .001 0 0] def
+        /FontBBox [0 0 600 700] def /Encoding StandardEncoding def
+        /CharProcs 2 dict dup begin
+          /.notdef { 0 0 setcharwidth } bind def
+          /A { 600 0 0 0 600 700 setcachedevice
+               0 0 moveto 300 700 lineto 600 0 lineto closepath fill } bind def
+        end def
+        /BuildGlyph { exch begin CharProcs exch get exec end } bind def
+      end /F exch definefont pop
+      /F findfont 100 scalefont setfont 10 10 moveto (A) show showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 100, pixelHeight: 100)
+    )
+    let image = try #require(result.output.first)
+    #expect(try gray(x: 40, y: 50, image: image) < 0.1)
+    #expect(try gray(x: 80, y: 50, image: image) > 0.9)
+  }
+
   @Test func discreteDevicesApplyHalftonesInAbsolutePixelCoordinates() async throws {
     let bounds = GraphicsRect(x: 0, y: 0, width: 4, height: 4)
     let descriptor = GraphicsDeviceDescriptor(

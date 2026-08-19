@@ -100,6 +100,8 @@ where
         try paintShading(shading, clip: event.before.clip, state: event.before, in: context)
       case .paint(.form(let form)):
         try paintForm(form, in: context, depth: 0)
+      case .paint(.text(let run)):
+        try paintText(run, state: event.before, in: context, depth: 0)
       case .page(.show), .page(.copy):
         try transmitPage(event, copies: 1)
       default:
@@ -431,8 +433,27 @@ where
         try paintShading(shading, clip: state.clip, state: state, in: context)
       case .form(let nested, _):
         try paintForm(nested, in: context, depth: depth)
-      case .text:
-        break
+      case .text(let run, let state):
+        try paintText(run, state: state, in: context, depth: depth)
+      }
+    }
+
+    private func paintText(
+      _ run: GraphicsGlyphRun,
+      state: GraphicsStateSnapshot,
+      in context: CGContext,
+      depth: Int
+    ) throws {
+      guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      for placement in run.glyphs {
+        switch placement.glyph.program {
+        case .outline(let path):
+          try fill(path.transformed(by: placement.transform), rule: .winding, state: state, in: context)
+        case .displayList(let list):
+          for effect in list.effects { try replayFormEffect(effect, in: context, depth: depth + 1) }
+        case .bitmap, .empty, .missing:
+          break
+        }
       }
     }
 

@@ -13,11 +13,11 @@ public enum Resources {
 
   /// The standard LanguageLevel 3 resource-category providers.
   public static let resources: [Object: any ResourceCategory] = [
-    "Font": StandardResourceCategory(category: "Font", instanceType: .dictionary),
+    "Font": FontResources(),
     "CIDFont": StandardResourceCategory(category: "CIDFont", instanceType: .dictionary),
     "CMap": StandardResourceCategory(category: "CMap", instanceType: .dictionary),
     "FontSet": StandardResourceCategory(category: "FontSet", instanceType: .dictionary),
-    "Encoding": StandardResourceCategory(category: "Encoding", instanceType: .array),
+    "Encoding": EncodingResources(),
     "Form": FormResources(),
     "Pattern": PatternResources(),
     "ProcSet": ProcSetResources(procSets: [ColorRenderingProcSet()]),

@@ -66,6 +66,7 @@ public enum GraphicsOperation: Sendable, Hashable {
     case clippingPath
     case appendUserPath
     case exportUserPath
+    case textOutline
   }
 
   /// A clipping operation.
