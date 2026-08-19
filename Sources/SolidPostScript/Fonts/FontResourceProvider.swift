@@ -50,11 +50,21 @@ public protocol FontResourceProvider: Sendable {
   func resolve(_ query: FontResourceQuery) async throws -> FontProviderFace?
   /// Resolves one glyph from a previously returned face.
   func glyph(_ selector: FontGlyphSelector, in face: FontProviderFace) async throws -> FontGlyph?
+  /// Font asset formats this provider can open without host discovery.
+  var supportedAssetFormats: Set<FontAsset.Format> { get }
+  /// Opens one concrete embedded font asset.
+  func open(_ asset: FontAsset) async throws -> FontProviderFace?
   /// Whether this provider can execute FontType 14 Chameleon fonts.
   var supportsChameleonFonts: Bool { get }
 }
 
 extension FontResourceProvider {
+  /// Providers do not open embedded assets unless they opt in explicitly.
+  public var supportedAssetFormats: Set<FontAsset.Format> { [] }
+
+  /// The default provider implementation does not open embedded assets.
+  public func open(_ asset: FontAsset) async throws -> FontProviderFace? { nil }
+
   /// Providers do not support Chameleon fonts unless they opt in explicitly.
   public var supportsChameleonFonts: Bool { false }
 }
