@@ -93,7 +93,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["showpage"]
 
     func execute(context: isolated Context) async throws {
-      guard context.patternExecutionDepth == 0 else { throw Error.undefined }
+      guard context.encapsulatedPaintDepth == 0 else { throw Error.undefined }
       let before = context.graphicsState
       var after = before
       after.initializeGraphics(for: context.graphicsDeviceDescriptor)
@@ -107,7 +107,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["copypage"]
 
     func execute(context: isolated Context) async throws {
-      guard context.patternExecutionDepth == 0 else { throw Error.undefined }
+      guard context.encapsulatedPaintDepth == 0 else { throw Error.undefined }
       let state = context.graphicsState
       try context.emitGraphicsOperation(.page(.copy), before: state, after: state)
     }

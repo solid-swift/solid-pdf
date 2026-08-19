@@ -97,6 +97,7 @@ public struct PackedArrayValue: CollectionValue, CompositeValue, VMStoredComposi
   /// The virtual-memory domain containing this packed array.
   public var vm: VM { ref.vm }
   var allocation: VMAllocation { ref.allocation }
+  var revision: UInt64 { ref.versionedRead { _ in () }.revision }
   var allocationFootprint: Int { Self.footprint(for: ref.uncheckedRead { $0.value.count }) }
 
   /// The ``count`` value.

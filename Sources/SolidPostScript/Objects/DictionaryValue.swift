@@ -229,6 +229,13 @@ public struct DictionaryValue: CompositeValue, VMStoredCompositeValue {
     return try prepareMutation(entries: [key: value])
   }
 
+  func prepareInterpreterUpdateObject(_ value: Object, forKey key: Object) throws -> PreparedMutation {
+    let key = try key.dictionaryKey
+    try key.checkStorage(in: ref.vm)
+    try value.checkStorage(in: ref.vm)
+    return try prepareMutation(entries: [key: value], requiresWriteAccess: false)
+  }
+
   func prepareUpdateObjects(forKeysIn dict: DictionaryValue) throws -> PreparedMutation {
     let source = try dict.ref.read { state in
       Dictionary(uniqueKeysWithValues: state.value.map { ($0.key.object, $0.value.object) })
@@ -333,9 +340,9 @@ public struct DictionaryValue: CompositeValue, VMStoredCompositeValue {
     return normalized
   }
 
-  private func prepareMutation(entries: Storage) throws -> PreparedMutation {
+  private func prepareMutation(entries: Storage, requiresWriteAccess: Bool = true) throws -> PreparedMutation {
     let snapshot = try ref.versionedRead { destination in
-      try destination.access.check(.write)
+      if requiresWriteAccess { try destination.access.check(.write) }
       let addedEntryCount = entries.keys.count { destination.value[VMStoredObject($0)] == nil }
       let minimumCapacity = destination.value.count + addedEntryCount
       var projected = destination.value

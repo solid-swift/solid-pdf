@@ -19,6 +19,7 @@ public final class InterpreterEnvironment: Sendable {
   let userPathCache = UserPathCache()
   let patternCache = PatternCache()
   let formCache = FormCache()
+  let formInitializationRegistry = FormInitializationRegistry()
 
   /// The application integration used by this environment.
   public let hostConfiguration: InterpreterHostConfiguration

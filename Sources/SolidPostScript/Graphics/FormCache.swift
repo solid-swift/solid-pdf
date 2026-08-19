@@ -7,7 +7,8 @@ struct FormCacheKey: Sendable, Hashable {
   let xuid: [Int32]?
   let bounds: GraphicsRect
   let matrix: GraphicsMatrix
-  let paintProcedureIdentity: ObjectIdentifier
+  let paintProcedureIdentity: ObjectIdentifier?
+  let paintProcedureRevision: UInt64
   let device: GraphicsDeviceDescriptor
   let savedState: GraphicsStateSnapshot
 }

@@ -90,8 +90,8 @@ public actor Context {
   var graphicsDeviceDescriptor: GraphicsDeviceDescriptor = .letter
   var graphicsEventConsumer: (any GraphicsEventConsumer)?
   var graphicsState: GraphicsCanonicalState = .initial(for: .letter)
-  var activePatternAllocations: Set<ObjectIdentifier> = []
-  var patternExecutionDepth = 0
+  var activeEncapsulatedPaintAllocations: Set<ObjectIdentifier> = []
+  var encapsulatedPaintDepth = 0
   var uncoloredPatternExecutionDepth = 0
   var graphicsStack: [GraphicsStackFrame] = []
   private var executionBoundarySequence: UInt64 = 0

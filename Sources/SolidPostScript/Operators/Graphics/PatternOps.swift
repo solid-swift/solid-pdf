@@ -174,13 +174,13 @@ extension Operators {
     )
     if let cached = context.environment.patternCache.pattern(for: key) { return cached }
 
-    guard context.patternExecutionDepth < 16,
-      context.activePatternAllocations.insert(dictionary.allocation.identity).inserted
+    guard context.encapsulatedPaintDepth < 16,
+      context.activeEncapsulatedPaintAllocations.insert(dictionary.allocation.identity).inserted
     else { throw Error.limitCheck }
-    context.patternExecutionDepth += 1
+    context.encapsulatedPaintDepth += 1
     defer {
-      context.patternExecutionDepth -= 1
-      context.activePatternAllocations.remove(dictionary.allocation.identity)
+      context.encapsulatedPaintDepth -= 1
+      context.activeEncapsulatedPaintAllocations.remove(dictionary.allocation.identity)
     }
 
     let values = try numericArray(dictionary.object(forKey: "BBox"))
