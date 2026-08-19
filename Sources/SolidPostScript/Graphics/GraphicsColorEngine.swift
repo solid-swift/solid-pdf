@@ -15,8 +15,17 @@ public protocol GraphicsColorSession<ResolvedPaint, ImageConverter>: AnyObject {
 
   /// Resolves a portable paint for the session's destination.
   func resolve(_ paint: GraphicsPaint) throws -> ResolvedPaint
+  /// Resolves a bounded batch of portable paints in order.
+  func resolve(_ paints: [GraphicsPaint]) throws -> [ResolvedPaint]
   /// Creates an ordered converter for one sampled-image transfer.
   func makeImageConverter(for descriptor: GraphicsImageDescriptor) throws -> sending ImageConverter
+}
+
+extension GraphicsColorSession {
+  /// Resolves a batch by applying the scalar resolver in order.
+  public func resolve(_ paints: [GraphicsPaint]) throws -> [ResolvedPaint] {
+    try paints.map(resolve)
+  }
 }
 
 /// Converts one ordered sampled-image transfer into a target-specific image.

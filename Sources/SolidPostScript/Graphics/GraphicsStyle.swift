@@ -53,6 +53,8 @@ public enum GraphicsPaint: Sendable, Hashable {
   case deviceCMYK(cyan: Double, magenta: Double, yellow: Double, black: Double)
   /// A generalized PostScript color with portable resolved semantics.
   case color(GraphicsColorValue)
+  /// A renderer-level PostScript pattern paint.
+  case pattern(GraphicsPatternPaint)
 
   /// The equivalent DeviceGray component defined by the PLRM device-color conversions.
   public var grayComponent: Double {
@@ -66,6 +68,8 @@ public enum GraphicsPaint: Sendable, Hashable {
     case .color(let color):
       let rgb = color.rgb
       return 0.3 * rgb.red + 0.59 * rgb.green + 0.11 * rgb.blue
+    case .pattern:
+      return 0
     }
   }
 
@@ -85,6 +89,8 @@ public enum GraphicsPaint: Sendable, Hashable {
     case .color(let color):
       let rgb = color.rgb
       return (rgb.red, rgb.green, rgb.blue)
+    case .pattern:
+      return (0, 0, 0)
     }
   }
 
@@ -108,6 +114,8 @@ public enum GraphicsPaint: Sendable, Hashable {
       let yellow = 1 - rgb.blue
       let black = min(cyan, magenta, yellow)
       return (cyan - black, magenta - black, yellow - black, black)
+    case .pattern:
+      return (0, 0, 0, 1)
     }
   }
 }

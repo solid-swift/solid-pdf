@@ -1,6 +1,49 @@
 import Foundation
 
 enum RasterCompositor {
+  static func compositeGradient(
+    _ triangle: RasterGradientTriangle,
+    spans: borrowing Span<CoverageSpan>,
+    width: Int,
+    pixels: inout MutableSpan<UInt8>
+  ) {
+    let first = triangle.first.position
+    let second = triangle.second.position
+    let third = triangle.third.position
+    let denominator = (second.y - third.y) * (first.x - third.x)
+      + (third.x - second.x) * (first.y - third.y)
+    guard denominator != 0, denominator.isFinite else { return }
+    let colors = [triangle.first.color, triangle.second.color, triangle.third.color]
+    for spanIndex in 0..<spans.count {
+      let span = spans[spanIndex]
+      var offset = (span.y * width + span.x) * 4
+      let y = Double(span.y) + 0.5
+      for xIndex in span.x..<(span.x + span.length) {
+        let x = Double(xIndex) + 0.5
+        let firstWeight = ((second.y - third.y) * (x - third.x)
+          + (third.x - second.x) * (y - third.y)) / denominator
+        let secondWeight = ((third.y - first.y) * (x - third.x)
+          + (first.x - third.x) * (y - third.y)) / denominator
+        let thirdWeight = 1 - firstWeight - secondWeight
+        let color = RasterColor(
+          red: colors[0].red * firstWeight + colors[1].red * secondWeight + colors[2].red * thirdWeight,
+          green: colors[0].green * firstWeight + colors[1].green * secondWeight + colors[2].green * thirdWeight,
+          blue: colors[0].blue * firstWeight + colors[1].blue * secondWeight + colors[2].blue * thirdWeight,
+          alpha: colors[0].alpha * firstWeight + colors[1].alpha * secondWeight + colors[2].alpha * thirdWeight
+        )
+        if let source = try? premultiplied(color) {
+          composite(
+            source: source,
+            coverage: UInt16(span.coverage),
+            destinationOffset: offset,
+            pixels: &pixels
+          )
+        }
+        offset += 4
+      }
+    }
+  }
+
   static func clear(
     _ source: SIMD4<UInt16>,
     pixels: inout MutableSpan<UInt8>

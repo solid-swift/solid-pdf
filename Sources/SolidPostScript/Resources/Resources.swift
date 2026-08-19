@@ -42,9 +42,9 @@ public enum Resources {
     "FormType": ImplicitResourceCategory(category: "FormType", instanceType: .integer),
     "HalftoneType": ImplicitResourceCategory(category: "HalftoneType", instanceType: .integer),
     "ImageType": ImplicitResourceCategory(category: "ImageType", instanceType: .integer),
-    "PatternType": ImplicitResourceCategory(category: "PatternType", instanceType: .integer),
-    "FunctionType": ImplicitResourceCategory(category: "FunctionType", instanceType: .integer),
-    "ShadingType": ImplicitResourceCategory(category: "ShadingType", instanceType: .integer),
+    "PatternType": IntegerImplicitResources(category: "PatternType", values: [1, 2]),
+    "FunctionType": IntegerImplicitResources(category: "FunctionType", values: [0, 2, 3]),
+    "ShadingType": IntegerImplicitResources(category: "ShadingType", values: Set(1...7)),
     "TrappingType": ImplicitResourceCategory(category: "TrappingType", instanceType: .integer),
     "Category": CategoryResources.instance,
   ]

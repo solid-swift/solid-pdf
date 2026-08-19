@@ -26,6 +26,8 @@ extension Operators {
     CurrentFlatness.instance,
     SetStrokeAdjustment.instance,
     CurrentStrokeAdjustment.instance,
+    SetSmoothness.instance,
+    CurrentSmoothness.instance,
     SetGray.instance,
     CurrentGray.instance,
     SetRGBColor.instance,
@@ -323,6 +325,29 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       context.operands.push(.boolean(context.graphicsState.strokeAdjustment))
+    }
+  }
+
+  enum SetSmoothness: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["setsmoothness"]
+
+    func execute(context: isolated Context) async throws {
+      let requested = min(1, max(0, try numeric(context.operands.pop())))
+      let descriptor = context.graphicsDeviceDescriptor
+      let smoothness = min(descriptor.maximumSmoothness, max(descriptor.minimumSmoothness, requested))
+      try context.applyGraphicsOperation(.state(.setSmoothness(smoothness))) {
+        $0.smoothness = smoothness
+      }
+    }
+  }
+
+  enum CurrentSmoothness: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["currentsmoothness"]
+
+    func execute(context: isolated Context) async throws {
+      context.operands.push(try .real(context.graphicsState.smoothness))
     }
   }
 

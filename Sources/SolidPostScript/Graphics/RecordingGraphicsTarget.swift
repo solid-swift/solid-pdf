@@ -45,6 +45,8 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
         effects.append(.fillRectangles(paths: paths, state: event.before))
       case .paint(.strokeRectangles(let paths, let matrix)):
         effects.append(.strokeRectangles(paths: paths, matrix: matrix, state: event.before))
+      case .paint(.shading(let shading)):
+        effects.append(.shading(shading, state: event.before))
       case .page(.show), .page(.copy):
         pages.append(RecordedGraphicsPage(deviceDescriptor: descriptor, effects: effects))
         effects.removeAll(keepingCapacity: true)

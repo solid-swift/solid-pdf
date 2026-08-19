@@ -5,6 +5,25 @@ import Testing
 @Suite
 struct GraphicsSemanticsTests {
 
+  @Test func smoothnessClampsToDeviceAndSurvivesGraphicsState() async throws {
+    let device = GraphicsDeviceDescriptor(
+      mediaBounds: .init(x: 0, y: 0, width: 10, height: 10),
+      imageableBounds: .init(x: 0, y: 0, width: 10, height: 10),
+      horizontalResolution: 72,
+      verticalResolution: 72,
+      defaultMatrix: .identity,
+      minimumSmoothness: 0.1,
+      maximumSmoothness: 0.8,
+      defaultSmoothness: 0.2
+    )
+    let result = try await Interpreter.render(
+      content: "0 setsmoothness gsave 1 setsmoothness grestore currentsmoothness gstate 1 setsmoothness setgstate currentsmoothness",
+      to: RecordingGraphicsTarget(deviceDescriptor: device)
+    )
+    let values = try await result.context.results().map { try $0.value(as: RealValue.self).value }
+    #expect(values == [0.1, 0.1])
+  }
+
   @Test func graphicsStateOperatorsRestoreAndCopyState() async throws {
     let values: [RealValue] = try await Interpreter.result(
       content: """

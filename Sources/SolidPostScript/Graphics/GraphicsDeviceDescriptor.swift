@@ -16,6 +16,12 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
   public let defaultFlatness: Double
   /// Whether stroke adjustment is initially enabled.
   public let defaultStrokeAdjustment: Bool
+  /// The smallest smoothness value the device can achieve.
+  public let minimumSmoothness: Double
+  /// The largest smoothness value the device can achieve.
+  public let maximumSmoothness: Double
+  /// The initial shading smoothness.
+  public let defaultSmoothness: Double
   /// The target's process-color and destination-profile capabilities.
   public let colorDevice: GraphicsColorDeviceDescriptor
 
@@ -28,6 +34,9 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
     defaultMatrix: GraphicsMatrix,
     defaultFlatness: Double = 1,
     defaultStrokeAdjustment: Bool = false,
+    minimumSmoothness: Double = 1 / 255,
+    maximumSmoothness: Double = 1,
+    defaultSmoothness: Double = 0.02,
     colorDevice: GraphicsColorDeviceDescriptor = .sRGB
   ) {
     self.mediaBounds = mediaBounds
@@ -37,6 +46,9 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
     self.defaultMatrix = defaultMatrix
     self.defaultFlatness = defaultFlatness
     self.defaultStrokeAdjustment = defaultStrokeAdjustment
+    self.minimumSmoothness = minimumSmoothness
+    self.maximumSmoothness = maximumSmoothness
+    self.defaultSmoothness = defaultSmoothness
     self.colorDevice = colorDevice
   }
 

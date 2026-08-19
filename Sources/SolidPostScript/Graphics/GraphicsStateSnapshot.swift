@@ -30,6 +30,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
   public let flatness: Double
   /// Whether stroke adjustment is enabled.
   public let strokeAdjustment: Bool
+  /// The device-limited color-error tolerance used to tessellate shadings.
+  public let smoothness: Double
   /// The explicit device-space path bounds established by `setbbox`, if any.
   public let pathBoundingBox: GraphicsRect?
 
@@ -49,6 +51,7 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     dash: GraphicsDash,
     flatness: Double = 1,
     strokeAdjustment: Bool = false,
+    smoothness: Double = 0.02,
     pathBoundingBox: GraphicsRect? = nil
   ) {
     self.matrix = matrix
@@ -65,6 +68,7 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     self.dash = dash
     self.flatness = flatness
     self.strokeAdjustment = strokeAdjustment
+    self.smoothness = smoothness
     self.pathBoundingBox = pathBoundingBox
   }
 }

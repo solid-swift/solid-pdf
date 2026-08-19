@@ -48,6 +48,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         dashSource: dashSource?.object,
         flatness: snapshot.flatness,
         strokeAdjustment: snapshot.strokeAdjustment,
+        smoothness: snapshot.smoothness,
         pathBoundingBox: snapshot.pathBoundingBox,
         resolvedClip: resolvedClip,
         clipStack: clipStack

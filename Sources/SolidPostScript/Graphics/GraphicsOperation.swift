@@ -18,6 +18,7 @@ public enum GraphicsOperation: Sendable, Hashable {
     case setDash(GraphicsDash)
     case setFlatness(Double)
     case setStrokeAdjustment(Bool)
+    case setSmoothness(Double)
     case setGray(Double)
     case setRGB(red: Double, green: Double, blue: Double)
     case setCMYK(cyan: Double, magenta: Double, yellow: Double, black: Double)
@@ -79,6 +80,7 @@ public enum GraphicsOperation: Sendable, Hashable {
     case image(GraphicsImageDescriptor)
     case userPathFill(GraphicsFillRule)
     case userPathStroke
+    case shading(GraphicsShading)
   }
 
   /// A page-lifecycle operation.

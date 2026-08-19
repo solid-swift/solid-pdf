@@ -8,4 +8,8 @@ public enum ColorError: Error, Sendable, Hashable {
   case componentCount
   /// A lookup table would exceed its declared or implementation bounds.
   case tableSize
+  /// A function has an unsupported interpolation order or sample width.
+  case unsupportedRepresentation
+  /// A function domain, range, or stitching interval is malformed.
+  case invalidDomain
 }

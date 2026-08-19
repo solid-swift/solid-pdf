@@ -22,6 +22,8 @@ public indirect enum GraphicsColorSpaceDescription: Sendable, Hashable {
   case separation(name: String, alternative: Self)
   /// Multiple named colorants with an alternative space.
   case deviceN(names: [String], alternative: Self)
+  /// A Pattern space, optionally carrying the base space of uncolored tiling patterns.
+  case pattern(underlying: Self?)
 
   /// The number of source components accepted by the space.
   public var componentCount: Int {
@@ -30,6 +32,7 @@ public indirect enum GraphicsColorSpaceDescription: Sendable, Hashable {
     case .deviceRGB, .cieBasedABC, .cieBasedDEF: 3
     case .deviceCMYK, .cieBasedDEFG: 4
     case .deviceN(let names, _): names.count
+    case .pattern(let underlying): (underlying?.componentCount ?? 0) + 1
     }
   }
 }

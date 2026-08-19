@@ -66,6 +66,8 @@ public final class NativeGraphicsColorSession: GraphicsColorSession {
       return ColorCMYK(cyan: cyan, magenta: magenta, yellow: yellow, black: black).rgb
     case .color(let value):
       return try resolvedRGB(value)
+    case .pattern:
+      throw SolidPostScript.Error.ioError
     }
   }
 

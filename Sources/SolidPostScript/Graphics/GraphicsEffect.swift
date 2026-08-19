@@ -18,4 +18,6 @@ public enum GraphicsEffect: Sendable, Hashable {
   case strokeRectangles(paths: [GraphicsPath], matrix: GraphicsMatrix?, state: GraphicsStateSnapshot)
   /// A sampled-image effect.
   case image(GraphicsImage, state: GraphicsStateSnapshot)
+  /// A direct shading effect.
+  case shading(GraphicsShading, state: GraphicsStateSnapshot)
 }

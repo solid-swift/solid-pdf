@@ -23,6 +23,7 @@ struct GraphicsCanonicalState: Sendable {
   var dashSource: Object?
   var flatness: Double
   var strokeAdjustment: Bool
+  var smoothness: Double
   var pathBoundingBox: GraphicsRect?
   var resolvedClip: RasterRegion
   var clipStack: [GraphicsClipStackEntry]
@@ -45,6 +46,7 @@ struct GraphicsCanonicalState: Sendable {
       dashSource: nil,
       flatness: descriptor.defaultFlatness,
       strokeAdjustment: descriptor.defaultStrokeAdjustment,
+      smoothness: descriptor.defaultSmoothness,
       pathBoundingBox: nil,
       resolvedClip: (try? .rectangle(descriptor.imageableBounds.rasterRect)) ?? RasterRegion(),
       clipStack: []
@@ -67,6 +69,7 @@ struct GraphicsCanonicalState: Sendable {
       dash: dash,
       flatness: flatness,
       strokeAdjustment: strokeAdjustment,
+      smoothness: smoothness,
       pathBoundingBox: pathBoundingBox
     )
   }
@@ -95,10 +98,12 @@ struct GraphicsCanonicalState: Sendable {
   mutating func initializeGraphics(for descriptor: GraphicsDeviceDescriptor) {
     let preservedFlatness = flatness
     let preservedStrokeAdjustment = strokeAdjustment
+    let preservedSmoothness = smoothness
     let preservedClipStack = clipStack
     self = .initial(for: descriptor)
     flatness = preservedFlatness
     strokeAdjustment = preservedStrokeAdjustment
+    smoothness = preservedSmoothness
     clipStack = preservedClipStack
   }
 

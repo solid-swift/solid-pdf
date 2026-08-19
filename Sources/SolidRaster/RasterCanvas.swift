@@ -101,6 +101,41 @@ public struct RasterCanvas: ~Copyable {
     try fill(outline, rule: .winding, paint: paint)
   }
 
+  /// Paints an ordered color-interpolated triangle mesh through the current clip.
+  public mutating func paint(_ mesh: RasterGradientMesh) throws(RasterError) {
+    try requireActive()
+    guard mesh.triangles.count <= 1_000_000,
+      mesh.triangles.count <= limits.maximumScratchBytes / MemoryLayout<RasterGradientTriangle>.stride
+    else { throw .limitExceeded }
+    try compileClip()
+    let destinationWidth = width
+    for triangle in mesh.triangles {
+      let vertices = [triangle.first, triangle.second, triangle.third]
+      guard vertices.allSatisfy({
+        $0.position.x.isFinite && $0.position.y.isFinite
+          && $0.color.red.isFinite && $0.color.green.isFinite
+          && $0.color.blue.isFinite && $0.color.alpha.isFinite
+      }) else { throw .invalidGeometry }
+      let path = RasterPath(elements: [
+        .move(to: triangle.first.position),
+        .line(to: triangle.second.position),
+        .line(to: triangle.third.position),
+        .close,
+      ])
+      let spans = try rasterize(path, rule: .winding)
+      intersectWithClip(spans)
+      let visible = visibleSpans
+      withPixels { pixels in
+        RasterCompositor.compositeGradient(
+          triangle,
+          spans: visible.span,
+          width: destinationWidth,
+          pixels: &pixels
+        )
+      }
+    }
+  }
+
   /// Draws an image through an affine transformation and the current clip.
   public mutating func draw(
     _ image: RasterImage,
