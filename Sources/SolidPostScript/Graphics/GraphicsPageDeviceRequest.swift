@@ -10,17 +10,21 @@ public struct GraphicsPageDeviceRequest: Sendable, Hashable {
   public let imagingBoundingBox: GraphicsRect?
   /// The requested copy count, or `nil` to use `#copies`.
   public let numberOfCopies: Int?
+  /// The requested process and named-colorant configuration.
+  public let colorants: GraphicsColorantConfiguration
 
   /// Creates a page-device request.
   public init(
     pageSize: GraphicsSize,
     resolution: GraphicsSize,
     imagingBoundingBox: GraphicsRect?,
-    numberOfCopies: Int?
+    numberOfCopies: Int?,
+    colorants: GraphicsColorantConfiguration = .compositeRGB
   ) {
     self.pageSize = pageSize
     self.resolution = resolution
     self.imagingBoundingBox = imagingBoundingBox
     self.numberOfCopies = numberOfCopies
+    self.colorants = colorants
   }
 }

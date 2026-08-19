@@ -27,6 +27,16 @@ public protocol GraphicsColorSession<ResolvedPaint, ImageConverter>: AnyObject {
     _ paints: [GraphicsPaint],
     deviceRendering: GraphicsDeviceRenderingSnapshot
   ) throws -> [ResolvedPaint]
+  /// Resolves a portable paint into subtractive device colorants.
+  func resolveColorants(
+    _ paint: GraphicsPaint,
+    configuration: GraphicsColorantConfiguration
+  ) throws -> GraphicsColorantPaint
+  /// Resolves a bounded paint batch into subtractive device colorants.
+  func resolveColorants(
+    _ paints: [GraphicsPaint],
+    configuration: GraphicsColorantConfiguration
+  ) throws -> [GraphicsColorantPaint]
   /// Creates an ordered converter for one sampled-image transfer.
   func makeImageConverter(for descriptor: GraphicsImageDescriptor) throws -> sending ImageConverter
   /// Creates an image converter that applies the captured device-rendering controls.
@@ -37,6 +47,22 @@ public protocol GraphicsColorSession<ResolvedPaint, ImageConverter>: AnyObject {
 }
 
 extension GraphicsColorSession {
+  /// Applies the portable PLRM process-color mappings.
+  public func resolveColorants(
+    _ paint: GraphicsPaint,
+    configuration: GraphicsColorantConfiguration
+  ) throws -> GraphicsColorantPaint {
+    try GraphicsColorantResolver.resolve(paint, configuration: configuration)
+  }
+
+  /// Resolves a colorant batch in order.
+  public func resolveColorants(
+    _ paints: [GraphicsPaint],
+    configuration: GraphicsColorantConfiguration
+  ) throws -> [GraphicsColorantPaint] {
+    try paints.map { try resolveColorants($0, configuration: configuration) }
+  }
+
   /// Resolves a batch by applying the scalar resolver in order.
   public func resolve(_ paints: [GraphicsPaint]) throws -> [ResolvedPaint] {
     try paints.map(resolve)

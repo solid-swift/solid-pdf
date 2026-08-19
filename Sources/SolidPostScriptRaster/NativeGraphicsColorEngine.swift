@@ -122,6 +122,8 @@ public final class NativeGraphicsColorSession: GraphicsColorSession {
       }
     case .named(_, _, _, let alternative):
       return try resolvedRGB(alternative)
+    case .directColorants:
+      return ColorRGB(red: 0, green: 0, blue: 0)
     }
   }
 

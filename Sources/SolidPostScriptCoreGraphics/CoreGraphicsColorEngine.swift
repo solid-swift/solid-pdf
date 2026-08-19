@@ -153,6 +153,8 @@ public final class CoreGraphicsColorSession: CoreGraphicsCompatibleColorSession 
       return converted
     case .named(_, _, _, let alternative):
       return try resolve(alternative)
+    case .directColorants:
+      return try destinationColor(red: 0, green: 0, blue: 0)
     }
   }
 

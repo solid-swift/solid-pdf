@@ -14,6 +14,8 @@ public struct GraphicsPageDeviceConfiguration: Sendable, Hashable {
   public let name: String
   /// The realized target descriptor.
   public let descriptor: GraphicsDeviceDescriptor
+  /// The realized process and named-colorant configuration.
+  public let colorants: GraphicsColorantConfiguration
 
   /// Creates a page-device configuration.
   public init(
@@ -22,7 +24,8 @@ public struct GraphicsPageDeviceConfiguration: Sendable, Hashable {
     imagingBoundingBox: GraphicsRect?,
     numberOfCopies: Int?,
     name: String,
-    descriptor: GraphicsDeviceDescriptor
+    descriptor: GraphicsDeviceDescriptor,
+    colorants: GraphicsColorantConfiguration = .compositeRGB
   ) {
     self.identifier = identifier
     self.pageSize = pageSize
@@ -30,5 +33,6 @@ public struct GraphicsPageDeviceConfiguration: Sendable, Hashable {
     self.numberOfCopies = numberOfCopies
     self.name = name
     self.descriptor = descriptor
+    self.colorants = colorants
   }
 }

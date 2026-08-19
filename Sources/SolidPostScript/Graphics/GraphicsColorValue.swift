@@ -22,6 +22,12 @@ public indirect enum GraphicsColorValue: Sendable, Hashable {
     tints: [Double],
     alternative: Self
   )
+  /// Colorants selected directly on the active device without evaluating an alternative transform.
+  case directColorants(
+    space: GraphicsColorSpaceDescription,
+    colorants: [String],
+    tints: [Double]
+  )
 
   /// A nominal RGB fallback for bitmap devices without native named-color support.
   public var rgb: ColorRGB {
@@ -38,6 +44,8 @@ public indirect enum GraphicsColorValue: Sendable, Hashable {
         ?? ColorRGB(red: 0, green: 0, blue: 0)
     case .named(_, _, _, let alternative):
       return alternative.rgb
+    case .directColorants:
+      return ColorRGB(red: 0, green: 0, blue: 0)
     }
   }
 }
