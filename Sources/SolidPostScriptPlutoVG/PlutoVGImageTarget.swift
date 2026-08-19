@@ -561,6 +561,33 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       in canvas: OpaquePointer,
       depth: Int
     ) throws {
+      if case .text(let run, let textState) = effect {
+        for placement in run.glyphs {
+          switch placement.glyph.program {
+          case .outline(let path):
+            try replayPatternEffect(
+              .fill(path: path.transformed(by: placement.transform), rule: .winding, state: textState),
+              translation: translation,
+              underlying: underlying,
+              in: canvas,
+              depth: depth + 1
+            )
+          case .displayList(let list):
+            for nested in list.effects {
+              try replayPatternEffect(
+                nested,
+                translation: translation,
+                underlying: underlying,
+                in: canvas,
+                depth: depth + 1
+              )
+            }
+          case .bitmap, .empty, .missing:
+            break
+          }
+        }
+        return
+      }
       if case .image(let image, let imageState) = effect {
         let translatedConstraints = imageState.clip.constraints.map {
           GraphicsClipConstraint(path: $0.path.transformed(by: translation), rule: $0.rule)
@@ -688,7 +715,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         )
         return
       case .text:
-        return
+        preconditionFailure("Text effects are handled before vector replay")
       }
 
       let selectedPaint = underlying ?? state.paint

@@ -115,6 +115,15 @@ let package = Package(
       ],
       plugins: lintPlugins
     ),
+    .testTarget(
+      name: "SolidPostScriptFontBackendTests",
+      dependencies: [
+        "SolidPostScript",
+        "SolidPostScriptCoreText",
+        "SolidPostScriptFreeType",
+      ],
+      plugins: lintPlugins
+    ),
     .target(
       name: "SolidPostScriptRaster",
       dependencies: ["SolidPostScript", "SolidRaster"],

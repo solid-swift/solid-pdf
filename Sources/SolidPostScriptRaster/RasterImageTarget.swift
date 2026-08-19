@@ -542,6 +542,37 @@ where
         }
         return
       }
+      if case .text(let run, let textState) = effect {
+        for placement in run.glyphs {
+          switch placement.glyph.program {
+          case .outline(let path):
+            try replay(
+              .fill(path: path.transformed(by: placement.transform), rule: .winding, state: textState),
+              translatedBy: translation,
+              underlying: underlying,
+              through: paintedPath,
+              rule: paintedRule,
+              clip: clip,
+              depth: depth + 1
+            )
+          case .displayList(let list):
+            for nested in list.effects {
+              try replay(
+                nested,
+                translatedBy: translation,
+                underlying: underlying,
+                through: paintedPath,
+                rule: paintedRule,
+                clip: clip,
+                depth: depth + 1
+              )
+            }
+          case .bitmap, .empty, .missing:
+            break
+          }
+        }
+        return
+      }
       let effectPath: GraphicsPath
       let effectRule: GraphicsFillRule
       let effectState: GraphicsStateSnapshot
@@ -624,7 +655,7 @@ where
         )
         return
       case .text:
-        return
+        preconditionFailure("Text effects are handled before vector replay")
       }
 
       let translatedConstraints = effectState.clip.constraints.map {

@@ -28,6 +28,33 @@ import Testing
     #expect(try gray(x: 80, y: 50, image: image) > 0.9)
   }
 
+  @Test func textEffectsReplayInsideTilingPatterns() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      /F 20 dict dup begin
+        /FontType 3 def /FontMatrix [.001 0 0 .001 0 0] def
+        /FontBBox [0 0 600 700] def /Encoding StandardEncoding def
+        /BuildGlyph {
+          pop pop 600 0 setcharwidth
+          0 0 moveto 300 700 lineto 600 0 lineto closepath fill
+        } bind def
+      end /F exch definefont pop
+      /F findfont 10 scalefont setfont
+      /P << /PatternType 1 /PaintType 1 /TilingType 1
+        /BBox [0 0 10 10] /XStep 10 /YStep 10
+        /PaintProc { pop 0 setgray 0 0 moveto (A) show }
+      >> matrix makepattern def
+      [/Pattern] setcolorspace P setcolor 0 0 40 40 rectfill showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 40, pixelHeight: 40)
+    )
+    let image = try #require(result.output.first)
+    let containsInk = stride(from: 0, to: image.data.count, by: 4).contains { offset in
+      image.data[offset] < 128
+    }
+    #expect(containsInk)
+  }
+
   @Test func discreteDevicesApplyHalftonesInAbsolutePixelCoordinates() async throws {
     let bounds = GraphicsRect(x: 0, y: 0, width: 4, height: 4)
     let descriptor = GraphicsDeviceDescriptor(
