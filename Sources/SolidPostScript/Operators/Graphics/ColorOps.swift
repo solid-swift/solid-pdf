@@ -24,14 +24,18 @@ extension Operators {
       try requireColorOperationAllowed(context)
       let object = try context.operands.pop()
       let space = try await parseColorSpace(object, context: context)
+      let selection = PostScriptColorSelection.direct(
+        space,
+        availableColorants: availableColorants(in: context)
+      )
       let components = space.initialComponents
       let paint: GraphicsPaint = if case .pattern = space {
         .pattern(.empty)
       } else {
-        .color(try await resolveColor(components, in: space, context: context))
+        .color(try await resolveColor(components, in: selection, context: context))
       }
       try context.applyGraphicsOperation(.state(.setColorSpace(space.description))) {
-        $0.colorSpace = space
+        $0.colorSelection = selection
         $0.colorComponents = components
         $0.patternSource = nil
         $0.paint = paint
@@ -97,7 +101,11 @@ extension Operators {
       let count = context.graphicsState.colorSpace.componentCount
       let rawComponents = try context.operands.pop(count: count).reversed().map(numeric)
       let components = context.graphicsState.colorSpace.normalized(rawComponents)
-      let paint = try await resolveColor(components, in: context.graphicsState.colorSpace, context: context)
+      let paint = try await resolveColor(
+        components,
+        in: context.graphicsState.colorSelection,
+        context: context
+      )
       try context.applyGraphicsOperation(.state(.setColor(paint))) {
         $0.colorComponents = components
         $0.patternSource = nil
@@ -299,7 +307,7 @@ extension Operators {
   ) throws {
     try requireColorOperationAllowed(context)
     try context.applyGraphicsOperation(.state(.setRGB(red: red, green: green, blue: blue))) {
-      $0.colorSpace = .deviceRGB(nil)
+      $0.colorSelection = .direct(.deviceRGB(nil))
       $0.colorComponents = [red, green, blue]
       $0.patternSource = nil
       $0.paint = .deviceRGB(red: red, green: green, blue: blue)
@@ -396,10 +404,34 @@ extension Operators {
     in space: PostScriptColorSpace,
     context: isolated Context
   ) async throws -> GraphicsColorValue {
-    guard rawComponents.count == space.componentCount, rawComponents.allSatisfy(\.isFinite) else {
+    let selection = PostScriptColorSelection.direct(
+      space,
+      availableColorants: availableColorants(in: context)
+    )
+    return try await resolveColor(rawComponents, in: selection, context: context)
+  }
+
+  static func resolveColor(
+    _ rawComponents: [Double],
+    in selection: PostScriptColorSelection,
+    context: isolated Context
+  ) async throws -> GraphicsColorValue {
+    guard rawComponents.count == selection.source.componentCount,
+      rawComponents.allSatisfy(\.isFinite)
+    else {
       throw Error.typeCheck
     }
-    switch space {
+    return try await resolveColor(rawComponents, route: selection.route, context: context)
+  }
+
+  private static func resolveColor(
+    _ rawComponents: [Double],
+    route: PostScriptColorSelection.Route,
+    context: isolated Context
+  ) async throws -> GraphicsColorValue {
+    switch route {
+    case .colorSpace(let space):
+      switch space {
     case .deviceGray:
       return .deviceGray(clamped(rawComponents[0]))
     case .deviceRGB:
@@ -424,7 +456,10 @@ extension Operators {
         context: context
       )
       return .cie(space: space.description, source: rawComponents, xyz: xyz, device: device)
-    case .indexed(_, let base, let maximum, let lookup):
+      default:
+        preconditionFailure("Selected color route contains a composite leaf")
+      }
+    case .indexed(let base, let maximum, let lookup):
       let index = min(maximum, max(0, Int(rawComponents[0].rounded())))
       let values: [Double]
       if let string = lookup.value as? StringValue {
@@ -432,42 +467,33 @@ extension Operators {
         let offset = index * base.componentCount
         values = data[offset..<(offset + base.componentCount)].map { Double($0) / 255 }
       } else {
-        values = try await executeTransform(lookup, inputs: [Double(index)], outputs: base.componentCount, context: context)
+        values = try await executeTransform(
+          lookup,
+          inputs: [Double(index)],
+          outputs: base.componentCount,
+          context: context
+        )
       }
-      return try await resolveColor(values, in: base, context: context)
-    case .separation(_, let name, let alternative, let transform):
+      return try await resolveColor(values, route: base, context: context)
+    case .directColorants(let space, let names):
       let tints = rawComponents.map(clamped)
-      if name == "All" || name == "None" || availableColorants(in: context).contains(name) {
-        return .directColorants(space: space.description, colorants: [name], tints: tints)
-      }
+      return .directColorants(space: space, colorants: names, tints: tints)
+    case .alternative(let space, let names, let transform, let alternative):
+      let tints = rawComponents.map(clamped)
       let values = try await executeTransform(
         transform,
         inputs: tints,
         outputs: alternative.componentCount,
         context: context
       )
-      let fallback = try await resolveColor(values, in: alternative, context: context)
-      return .named(space: space.description, colorants: [name], tints: tints, alternative: fallback)
-    case .deviceN(_, let names, let alternative, let transform):
-      let tints = rawComponents.map(clamped)
-      let available = availableColorants(in: context)
-      if names.allSatisfy(available.contains) {
-        return .directColorants(space: space.description, colorants: names, tints: tints)
-      }
-      let values = try await executeTransform(
-        transform,
-        inputs: tints,
-        outputs: alternative.componentCount,
-        context: context
-      )
-      let fallback = try await resolveColor(values, in: alternative, context: context)
-      return .named(space: space.description, colorants: names, tints: tints, alternative: fallback)
+      let fallback = try await resolveColor(values, route: alternative, context: context)
+      return .named(space: space, colorants: names, tints: tints, alternative: fallback)
     case .pattern:
       throw Error.typeCheck
     }
   }
 
-  private static func availableColorants(in context: isolated Context) -> Set<String> {
+  static func availableColorants(in context: isolated Context) -> Set<String> {
     Set(context.graphicsState.device.configuration?.colorants.availableColorants.map(\.name) ?? [])
   }
 

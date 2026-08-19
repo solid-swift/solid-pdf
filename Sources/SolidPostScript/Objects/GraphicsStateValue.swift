@@ -41,7 +41,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     var resolvedClip: RasterRegion
     var clipStack: [GraphicsClipStackEntry]
     var dashSource: VMStoredObject?
-    var colorSpace: VMStoredColorSpace
+    var colorSelection: PostScriptColorSelection.Stored
     var colorComponents: [Double]
     var patternSource: VMStoredObject?
     var colorRenderingSource: VMStoredObject?
@@ -60,7 +60,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       self.resolvedClip = state.resolvedClip
       self.clipStack = state.clipStack
       self.dashSource = state.dashSource.map(VMStoredObject.init)
-      self.colorSpace = VMStoredColorSpace(state.colorSpace)
+      self.colorSelection = PostScriptColorSelection.Stored(state.colorSelection)
       self.colorComponents = state.colorComponents
       self.patternSource = state.patternSource.map(VMStoredObject.init)
       self.colorRenderingSource = state.colorRenderingSource.map(VMStoredObject.init)
@@ -81,7 +81,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         path: snapshot.path,
         clip: snapshot.clip,
         paint: snapshot.paint,
-        colorSpace: colorSpace.colorSpace,
+        colorSelection: colorSelection.value,
         colorComponents: colorComponents,
         patternSource: patternSource?.object,
         colorRenderingSource: colorRenderingSource?.object,
@@ -133,7 +133,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         [$0.dashSource, $0.colorRenderingSource, $0.patternSource, $0.blackGenerationSource,
           $0.undercolorRemovalSource, $0.halftoneSource, $0.fontSource].compactMap { $0?.allocation }
           + $0.transferFunctionSources.compactMap { $0?.allocation }
-          + $0.colorSpace.storedObjects.compactMap(\.allocation)
+          + $0.colorSelection.storedObjects.compactMap(\.allocation)
           + ($0.pageDeviceParameters?.storedObjects.compactMap(\.allocation) ?? [])
       },
       snapshotCopy: { Storage($0.canonical) },
@@ -141,12 +141,12 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         [$0.dashSource, $0.colorRenderingSource, $0.patternSource, $0.blackGenerationSource,
           $0.undercolorRemovalSource, $0.halftoneSource, $0.fontSource].compactMap { $0 }
           + $0.transferFunctionSources.compactMap { $0 }
-          + $0.colorSpace.storedObjects
+          + $0.colorSelection.storedObjects
           + ($0.pageDeviceParameters?.storedObjects ?? [])
       },
       identifyEdges: { storage, allocation in
         storage.dashSource?.identifyEdgeSource(allocation)
-        storage.colorSpace.identifyEdges(from: allocation)
+        storage.colorSelection.identifyEdges(from: allocation)
         storage.colorRenderingSource?.identifyEdgeSource(allocation)
         storage.transferFunctionSources.forEach { $0?.identifyEdgeSource(allocation) }
         storage.blackGenerationSource?.identifyEdgeSource(allocation)
@@ -163,7 +163,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         $0.resolvedClip = RasterRegion()
         $0.clipStack.removeAll()
         $0.dashSource = nil
-        $0.colorSpace = VMStoredColorSpace(.deviceGray(nil))
+        $0.colorSelection = PostScriptColorSelection.Stored(.direct(.deviceGray(nil)))
         $0.colorComponents = [0]
         $0.colorRenderingSource = nil
         $0.transferFunctionSources = [nil, nil, nil, nil]
@@ -177,7 +177,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       }
     )
     storage.dashSource?.identifyEdgeSource(ref.allocation)
-    storage.colorSpace.identifyEdges(from: ref.allocation)
+    storage.colorSelection.identifyEdges(from: ref.allocation)
     storage.colorRenderingSource?.identifyEdgeSource(ref.allocation)
     storage.transferFunctionSources.forEach { $0?.identifyEdgeSource(ref.allocation) }
     storage.blackGenerationSource?.identifyEdgeSource(ref.allocation)
@@ -222,7 +222,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     try context.preflightAllocation(bytes: max(0, newFootprint - oldFootprint), vm: vm)
     try ref.write {
       storage.dashSource?.identifyEdgeSource(ref.allocation)
-      storage.colorSpace.identifyEdges(from: ref.allocation)
+      storage.colorSelection.identifyEdges(from: ref.allocation)
       storage.colorRenderingSource?.identifyEdgeSource(ref.allocation)
       storage.transferFunctionSources.forEach { $0?.identifyEdgeSource(ref.allocation) }
       storage.blackGenerationSource?.identifyEdgeSource(ref.allocation)
@@ -239,7 +239,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
   /// Records restorable state in a snapshot builder.
   public func save(to snapshot: Snapshot.Builder) {
     state().dashSource?.save(to: snapshot)
-    state().colorSpace.retainedObjects.forEach { $0.save(to: snapshot) }
+    state().colorSelection.retainedObjects.forEach { $0.save(to: snapshot) }
     state().colorRenderingSource?.save(to: snapshot)
     state().transferFunctionSources.forEach { $0?.save(to: snapshot) }
     state().blackGenerationSource?.save(to: snapshot)
@@ -286,7 +286,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
 
   func refreshStoredEdges() {
     ref.uncheckedRead { $0.value.dashSource?.refreshEdge() }
-    ref.uncheckedRead { $0.value.colorSpace.refreshEdges() }
+    ref.uncheckedRead { $0.value.colorSelection.refreshEdges() }
     ref.uncheckedRead { $0.value.colorRenderingSource?.refreshEdge() }
     ref.uncheckedRead { $0.value.transferFunctionSources.forEach { $0?.refreshEdge() } }
     ref.uncheckedRead { $0.value.blackGenerationSource?.refreshEdge() }

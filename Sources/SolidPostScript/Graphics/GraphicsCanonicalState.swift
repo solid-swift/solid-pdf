@@ -13,7 +13,7 @@ struct GraphicsCanonicalState: Sendable {
   var path: GraphicsPath
   var clip: GraphicsClip
   var paint: GraphicsPaint
-  var colorSpace: PostScriptColorSpace
+  var colorSelection: PostScriptColorSelection
   var colorComponents: [Double]
   var patternSource: Object?
   var colorRenderingSource: Object?
@@ -39,6 +39,8 @@ struct GraphicsCanonicalState: Sendable {
   var resolvedClip: RasterRegion
   var clipStack: [GraphicsClipStackEntry]
 
+  var colorSpace: PostScriptColorSpace { colorSelection.source }
+
   static func initial(
     for descriptor: GraphicsDeviceDescriptor,
     device: PostScriptDeviceRecord? = nil
@@ -50,7 +52,7 @@ struct GraphicsCanonicalState: Sendable {
       path: GraphicsPath(),
       clip: GraphicsClip(imageableBounds: descriptor.imageableBounds),
       paint: .deviceGray(0),
-      colorSpace: .deviceGray(nil),
+      colorSelection: .direct(.deviceGray(nil)),
       colorComponents: [0],
       patternSource: nil,
       colorRenderingSource: nil,
@@ -84,7 +86,7 @@ struct GraphicsCanonicalState: Sendable {
       path: path,
       clip: clip,
       paint: paint,
-      colorSpace: colorSpace.description,
+      colorSpace: colorSelection.source.description,
       colorComponents: colorComponents,
       overprint: overprint,
       lineWidth: lineWidth,
@@ -156,7 +158,7 @@ struct GraphicsCanonicalState: Sendable {
 
   func checkStorage(in vm: VM) throws {
     try dashSource?.checkStorage(in: vm)
-    for object in colorSpace.retainedObjects { try object.checkStorage(in: vm) }
+    for object in colorSelection.retainedObjects { try object.checkStorage(in: vm) }
     try colorRenderingSource?.checkStorage(in: vm)
     for source in transferFunctionSources { try source?.checkStorage(in: vm) }
     try blackGenerationSource?.checkStorage(in: vm)

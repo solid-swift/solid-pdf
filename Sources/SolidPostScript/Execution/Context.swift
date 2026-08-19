@@ -1021,7 +1021,7 @@ public actor Context {
     }
 
     graphicsState.dashSource?.save(to: builder)
-    graphicsState.colorSpace.retainedObjects.forEach { $0.save(to: builder) }
+    graphicsState.colorSelection.retainedObjects.forEach { $0.save(to: builder) }
     graphicsState.colorRenderingSource?.save(to: builder)
     graphicsState.transferFunctionSources.forEach { $0?.save(to: builder) }
     graphicsState.blackGenerationSource?.save(to: builder)
@@ -1031,7 +1031,7 @@ public actor Context {
     graphicsState.patternSource?.save(to: builder)
     for frame in graphicsStack {
       frame.state.dashSource?.save(to: builder)
-      frame.state.colorSpace.retainedObjects.forEach { $0.save(to: builder) }
+      frame.state.colorSelection.retainedObjects.forEach { $0.save(to: builder) }
       frame.state.colorRenderingSource?.save(to: builder)
       frame.state.transferFunctionSources.forEach { $0?.save(to: builder) }
       frame.state.blackGenerationSource?.save(to: builder)

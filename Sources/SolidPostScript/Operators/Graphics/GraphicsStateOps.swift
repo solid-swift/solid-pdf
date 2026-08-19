@@ -362,7 +362,7 @@ extension Operators {
       try requireColorOperationAllowed(context)
       let gray = min(1, max(0, try numeric(context.operands.pop())))
       try context.applyGraphicsOperation(.state(.setGray(gray))) {
-        $0.colorSpace = .deviceGray(nil)
+        $0.colorSelection = .direct(.deviceGray(nil))
         $0.colorComponents = [gray]
         $0.patternSource = nil
         $0.paint = .deviceGray(gray)
@@ -393,7 +393,7 @@ extension Operators {
       let green = clamped(try numeric(operands[1]))
       let blue = clamped(try numeric(operands[0]))
       try context.applyGraphicsOperation(.state(.setRGB(red: red, green: green, blue: blue))) {
-        $0.colorSpace = .deviceRGB(nil)
+        $0.colorSelection = .direct(.deviceRGB(nil))
         $0.colorComponents = [red, green, blue]
         $0.patternSource = nil
         $0.paint = .deviceRGB(red: red, green: green, blue: blue)
@@ -435,7 +435,7 @@ extension Operators {
         yellow: yellow,
         black: black
       ))) {
-        $0.colorSpace = .deviceCMYK(nil)
+        $0.colorSelection = .direct(.deviceCMYK(nil))
         $0.colorComponents = [cyan, magenta, yellow, black]
         $0.patternSource = nil
         $0.paint = .deviceCMYK(cyan: cyan, magenta: magenta, yellow: yellow, black: black)

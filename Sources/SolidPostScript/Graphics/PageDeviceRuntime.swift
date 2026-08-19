@@ -265,19 +265,19 @@ extension Context {
   private func selectInitialColor(for colorants: GraphicsColorantConfiguration) {
     switch colorants.processModel {
     case .deviceGray:
-      graphicsState.colorSpace = .deviceGray(nil)
+      graphicsState.colorSelection = .direct(.deviceGray(nil))
       graphicsState.colorComponents = [0]
       graphicsState.paint = .deviceGray(0)
     case .deviceRGB, .deviceRGBK:
-      graphicsState.colorSpace = .deviceRGB(nil)
+      graphicsState.colorSelection = .direct(.deviceRGB(nil))
       graphicsState.colorComponents = [0, 0, 0]
       graphicsState.paint = .deviceRGB(red: 0, green: 0, blue: 0)
     case .deviceCMY, .deviceCMYK:
-      graphicsState.colorSpace = .deviceCMYK(nil)
+      graphicsState.colorSelection = .direct(.deviceCMYK(nil))
       graphicsState.colorComponents = [0, 0, 0, 1]
       graphicsState.paint = .deviceCMYK(cyan: 0, magenta: 0, yellow: 0, black: 1)
     case .deviceN:
-      graphicsState.colorSpace = .deviceGray(nil)
+      graphicsState.colorSelection = .direct(.deviceGray(nil))
       graphicsState.colorComponents = [0]
       graphicsState.paint = .deviceGray(0)
     }

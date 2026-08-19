@@ -94,6 +94,10 @@ extension Operators {
       }
       let source = try makePatternColorSpaceObject(underlying, context: context)
       let space = PostScriptColorSpace.pattern(source: source, underlying: underlying)
+      let selection = PostScriptColorSelection.direct(
+        space,
+        availableColorants: availableColorants(in: context)
+      )
       let paint = try await resolvePattern(
         pattern,
         dictionary: dictionary,
@@ -102,7 +106,7 @@ extension Operators {
         context: context
       )
       try context.applyGraphicsOperation(.state(.setColorSpace(space.description))) {
-        $0.colorSpace = space
+        $0.colorSelection = selection
         $0.colorComponents = components
         $0.patternSource = pattern
         $0.paint = .pattern(paint)
