@@ -108,14 +108,14 @@ public final class NativeGraphicsColorSession: GraphicsColorSession {
 public final class NativeGraphicsColorImageConverter: GraphicsColorImageConverter {
   private let descriptor: GraphicsImageDescriptor
   private let maskPaint: RasterPaint?
-  private var bytes = Data()
+  private var bytes: Data
   private var nextRow = 0
   private var aborted = false
 
   init(descriptor: GraphicsImageDescriptor, maskPaint: RasterPaint?, byteCapacity: Int) {
     self.descriptor = descriptor
     self.maskPaint = maskPaint
-    bytes.reserveCapacity(min(byteCapacity, 64 * 1_024))
+    self.bytes = Data(repeating: 0, count: byteCapacity)
   }
 
   /// Converts and appends a bounded group of complete rows.
@@ -133,17 +133,21 @@ public final class NativeGraphicsColorImageConverter: GraphicsColorImageConverte
     else {
       throw SolidPostScript.Error.ioError
     }
-    appendRGBA(rows.components, componentCount: componentCount)
+    writeRGBA(
+      rows.components,
+      componentCount: componentCount,
+      destinationOffset: rows.startRow * descriptor.width * 4
+    )
     nextRow += rows.rowCount
   }
 
   /// Completes conversion and returns the immutable image.
   public func finish() throws -> sending RasterImage {
-    guard !aborted, nextRow > 0 else { throw SolidPostScript.Error.ioError }
+    guard !aborted else { throw SolidPostScript.Error.ioError }
     do {
       return try RasterImage(
         width: descriptor.width,
-        height: nextRow,
+        height: descriptor.height,
         bytesPerRow: descriptor.width * 4,
         pixelFormat: .rgba8UnormPremultiplied,
         data: bytes
@@ -159,7 +163,8 @@ public final class NativeGraphicsColorImageConverter: GraphicsColorImageConverte
     bytes.removeAll()
   }
 
-  private func appendRGBA(_ components: [Float], componentCount: Int) {
+  private func writeRGBA(_ components: [Float], componentCount: Int, destinationOffset: Int) {
+    var destinationOffset = destinationOffset
     for offset in stride(from: 0, to: components.count, by: componentCount) {
       let red: Float
       let green: Float
@@ -189,10 +194,11 @@ public final class NativeGraphicsColorImageConverter: GraphicsColorImageConverte
         green = Float(color.green) * alpha
         blue = Float(color.blue) * alpha
       }
-      bytes.append(UInt8((min(1, max(0, red)) * 255).rounded()))
-      bytes.append(UInt8((min(1, max(0, green)) * 255).rounded()))
-      bytes.append(UInt8((min(1, max(0, blue)) * 255).rounded()))
-      bytes.append(UInt8((min(1, max(0, alpha)) * 255).rounded()))
+      bytes[destinationOffset] = UInt8((min(1, max(0, red)) * 255).rounded())
+      bytes[destinationOffset + 1] = UInt8((min(1, max(0, green)) * 255).rounded())
+      bytes[destinationOffset + 2] = UInt8((min(1, max(0, blue)) * 255).rounded())
+      bytes[destinationOffset + 3] = UInt8((min(1, max(0, alpha)) * 255).rounded())
+      destinationOffset += 4
     }
   }
 }

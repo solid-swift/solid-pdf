@@ -333,6 +333,60 @@ struct GraphicsSemanticsTests {
     }
     #expect(recoveredImage.components == [1])
   }
+
+  @Test func imageProceduresMustRemainSynchronizedAndCannotPerformGraphics() async throws {
+    let synchronized = try await Interpreter.results(
+      content: """
+      /DeviceRGB setcolorspace
+      { << /ImageType 1 /Width 1 /Height 1 /BitsPerComponent 8
+           /ImageMatrix [1 0 0 1 0 0] /Decode [0 1 0 1 0 1]
+           /MultipleDataSources true
+           /DataSource [{<00>} {<0000>} {<00>}]
+        >> image } stopped
+      $error /errorname get
+      """
+    )
+    #expect(try synchronized[0].value(as: NameValue.self).value == "rangecheck")
+    #expect(try synchronized[1].value(as: BooleanValue.self).value)
+
+    let graphics = try await Interpreter.results(
+      content: "{ 1 1 8 [1 0 0 1 0 0] {0 setgray <ff>} image } stopped $error /errorname get"
+    )
+    #expect(try graphics[0].value(as: NameValue.self).value == "undefined")
+    #expect(try graphics[1].value(as: BooleanValue.self).value)
+  }
+
+  @Test func imageProceduresCannotMutateTheActiveImageDictionary() async throws {
+    let values = try await Interpreter.results(
+      content: """
+      /d << /ImageType 1 /Width 1 /Height 1 /BitsPerComponent 8
+            /ImageMatrix [1 0 0 1 0 0] /Decode [0 1] >> def
+      d /DataSource {d /Width 2 put <ff>} put
+      {d image} stopped $error /errorname get
+      """
+    )
+    #expect(try values[0].value(as: NameValue.self).value == "undefined")
+    #expect(try values[1].value(as: BooleanValue.self).value)
+  }
+
+  @Test func planarFileSourcesMustHaveDistinctUltimateSources() async throws {
+    let values = try await Interpreter.results(
+      content: """
+      /source (000000>) /ReusableStreamDecode filter def
+      /red source /ASCIIHexDecode filter def
+      /green source /ASCIIHexDecode filter def
+      /blue (<00>) /ASCIIHexDecode filter def
+      /DeviceRGB setcolorspace
+      { << /ImageType 1 /Width 1 /Height 1 /BitsPerComponent 8
+           /ImageMatrix [1 0 0 1 0 0] /Decode [0 1 0 1 0 1]
+           /MultipleDataSources true /DataSource [red green blue]
+        >> image } stopped
+      $error /errorname get
+      """
+    )
+    #expect(try values[0].value(as: NameValue.self).value == "rangecheck")
+    #expect(try values[1].value(as: BooleanValue.self).value)
+  }
 }
 
 private struct EventGraphicsTarget: GraphicsTarget {

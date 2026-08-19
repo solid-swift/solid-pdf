@@ -6,6 +6,26 @@ import SolidRaster
 import Testing
 
 @Suite struct RasterImageTargetTests {
+  @Test func incompleteImageTransfersKeepMissingRowsTransparent() throws {
+    let descriptor = GraphicsImageDescriptor(
+      width: 2,
+      height: 2,
+      kind: .color(.deviceGray),
+      imageToDevice: .identity
+    )
+    let session = try NativeGraphicsColorEngine().makeSession(for: .letter)
+    let converter = try session.makeImageConverter(for: descriptor)
+    try converter.write(GraphicsImageRows(startRow: 0, rowCount: 1, components: [0, 1]))
+    let image = try converter.finish()
+
+    #expect(image.width == 2)
+    #expect(image.height == 2)
+    #expect(image.data[3] == 255)
+    #expect(image.data[7] == 255)
+    #expect(image.data[11] == 0)
+    #expect(image.data[15] == 0)
+  }
+
   @Test func tilingPatternsRepeatTheirTransparentKeyCell() async throws {
     let result = try await Interpreter.render(
       content: """

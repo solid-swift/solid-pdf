@@ -9,7 +9,7 @@ import Foundation
 import SolidIO
 import Synchronization
 
-final class DecodingFilterFile: ContextualFile, VMManagedFileGraph, Sendable {
+final class DecodingFilterFile: ContextualFile, FileSourceIdentityProviding, VMManagedFileGraph, Sendable {
 
   private enum SourceKind: Sendable, Equatable {
     case file
@@ -379,6 +379,11 @@ final class DecodingFilterFile: ContextualFile, VMManagedFileGraph, Sendable {
 
   private var sourceString: StringValue {
     source.object.value as! StringValue
+  }
+
+  var ultimateSourceIdentity: ObjectIdentifier {
+    guard sourceKind == .file else { return ObjectIdentifier(self) }
+    return sourceFile.file.ultimateSourceIdentity
   }
 
   private func beginOperation() throws {

@@ -107,10 +107,17 @@ public struct GraphicsImage: Sendable, Hashable {
     self.sourceComponents = sourceComponents
   }
 
+  /// The number of complete source rows retained in this image.
+  public var completedRowCount: Int {
+    guard descriptor.width > 0 else { return 0 }
+    return min(descriptor.height, components.count / (descriptor.width * descriptor.kind.componentCount))
+  }
+
   /// Returns premultiplied RGBA8 pixels in source-row order.
   public func premultipliedRGBA8() -> Data {
     let componentCount = descriptor.kind.componentCount
-    var result = Data(capacity: descriptor.width * descriptor.height * 4)
+    var result = Data(repeating: 0, count: descriptor.width * descriptor.height * 4)
+    var destinationOffset = 0
     for offset in stride(from: 0, to: components.count, by: componentCount) {
       let red: Float
       let green: Float
@@ -143,10 +150,12 @@ public struct GraphicsImage: Sendable, Hashable {
         green = Float(rgb.green) * alpha
         blue = Float(rgb.blue) * alpha
       }
-      result.append(UInt8((min(1, max(0, red)) * 255).rounded()))
-      result.append(UInt8((min(1, max(0, green)) * 255).rounded()))
-      result.append(UInt8((min(1, max(0, blue)) * 255).rounded()))
-      result.append(UInt8((min(1, max(0, alpha)) * 255).rounded()))
+      guard destinationOffset + 3 < result.count else { break }
+      result[destinationOffset] = UInt8((min(1, max(0, red)) * 255).rounded())
+      result[destinationOffset + 1] = UInt8((min(1, max(0, green)) * 255).rounded())
+      result[destinationOffset + 2] = UInt8((min(1, max(0, blue)) * 255).rounded())
+      result[destinationOffset + 3] = UInt8((min(1, max(0, alpha)) * 255).rounded())
+      destinationOffset += 4
     }
     return result
   }

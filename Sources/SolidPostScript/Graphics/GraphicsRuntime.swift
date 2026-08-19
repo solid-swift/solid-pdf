@@ -53,6 +53,7 @@ extension Context {
     _ operation: GraphicsOperation,
     mutate: (inout GraphicsCanonicalState) throws -> Void
   ) throws {
+    guard imageDataSourceCallbackDepth == 0 else { throw Error.undefined }
     let before = graphicsState.snapshot
     var next = graphicsState
     try mutate(&next)
@@ -70,6 +71,7 @@ extension Context {
     before: GraphicsCanonicalState,
     after: GraphicsCanonicalState
   ) throws {
+    guard imageDataSourceCallbackDepth == 0 else { throw Error.undefined }
     let event = GraphicsEvent(operation: operation, before: before.snapshot, after: after.snapshot)
     do {
       try graphicsEventConsumer?.process(event)
@@ -79,6 +81,7 @@ extension Context {
   }
 
   func beginGraphicsImage(_ descriptor: GraphicsImageDescriptor) throws {
+    guard imageDataSourceCallbackDepth == 0 else { throw Error.undefined }
     let snapshot = graphicsState.snapshot
     let event = GraphicsEvent(operation: .paint(.image(descriptor)), before: snapshot, after: snapshot)
     do {
@@ -106,6 +109,15 @@ extension Context {
 
   func abortGraphicsImage() {
     graphicsEventConsumer?.abortImage()
+  }
+
+  func executeImageDataSource(_ procedure: Object) async throws {
+    imageDataSourceCallbackDepth += 1
+    defer { imageDataSourceCallbackDepth -= 1 }
+    try await execute(proc: procedure)
+    guard activeImageDictionaries.allSatisfy({ $0.dictionary.revision == $0.revision }) else {
+      throw Error.undefined
+    }
   }
 
   func makeDashObject() throws -> Object {

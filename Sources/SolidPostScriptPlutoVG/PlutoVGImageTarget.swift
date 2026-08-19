@@ -422,7 +422,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         do {
           try converter.write(GraphicsImageRows(
             startRow: 0,
-            rowCount: image.descriptor.height,
+            rowCount: image.completedRowCount,
             components: image.components,
             sourceComponents: image.sourceComponents
           ))
@@ -466,7 +466,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         do {
           try converter.write(GraphicsImageRows(
             startRow: 0,
-            rowCount: descriptor.height,
+            rowCount: image.completedRowCount,
             components: image.components,
             sourceComponents: image.sourceComponents
           ))

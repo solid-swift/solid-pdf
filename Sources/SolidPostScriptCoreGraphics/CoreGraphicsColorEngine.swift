@@ -136,7 +136,7 @@ public final class CoreGraphicsColorImageConverter: GraphicsColorImageConverter 
   private let descriptor: GraphicsImageDescriptor
   private let destinationColorSpace: CGColorSpace
   private let maskComponents: [CGFloat]?
-  private var bytes = Data()
+  private var bytes: Data
   private var nextRow = 0
   private var aborted = false
 
@@ -149,7 +149,7 @@ public final class CoreGraphicsColorImageConverter: GraphicsColorImageConverter 
     self.descriptor = descriptor
     self.destinationColorSpace = destinationColorSpace
     self.maskComponents = maskComponents
-    bytes.reserveCapacity(min(byteCapacity, 64 * 1_024))
+    self.bytes = Data(repeating: 0, count: byteCapacity)
   }
 
   /// Converts and appends a bounded group of complete rows.
@@ -167,18 +167,22 @@ public final class CoreGraphicsColorImageConverter: GraphicsColorImageConverter 
     else {
       throw SolidPostScript.Error.ioError
     }
-    appendRGBA(rows.components, componentCount: componentCount)
+    writeRGBA(
+      rows.components,
+      componentCount: componentCount,
+      destinationOffset: rows.startRow * descriptor.width * 4
+    )
     nextRow += rows.rowCount
   }
 
   /// Completes bulk destination conversion and returns the immutable image.
   public func finish() throws -> sending CGImage {
-    guard !aborted, nextRow > 0 else { throw SolidPostScript.Error.ioError }
+    guard !aborted else { throw SolidPostScript.Error.ioError }
     let sourceSpace = CGColorSpace(name: CGColorSpace.sRGB)!
     guard let provider = CGDataProvider(data: bytes as CFData),
       let source = CGImage(
         width: descriptor.width,
-        height: nextRow,
+        height: descriptor.height,
         bitsPerComponent: 8,
         bitsPerPixel: 32,
         bytesPerRow: descriptor.width * 4,
@@ -194,14 +198,14 @@ public final class CoreGraphicsColorImageConverter: GraphicsColorImageConverter 
     guard let context = CGContext(
       data: nil,
       width: descriptor.width,
-      height: nextRow,
+      height: descriptor.height,
       bitsPerComponent: 8,
       bytesPerRow: descriptor.width * 4,
       space: destinationColorSpace,
       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
     ) else { throw SolidPostScript.Error.ioError }
     context.setBlendMode(.copy)
-    context.draw(source, in: CGRect(x: 0, y: 0, width: descriptor.width, height: nextRow))
+    context.draw(source, in: CGRect(x: 0, y: 0, width: descriptor.width, height: descriptor.height))
     guard let converted = context.makeImage() else { throw SolidPostScript.Error.ioError }
     return converted
   }
@@ -212,7 +216,8 @@ public final class CoreGraphicsColorImageConverter: GraphicsColorImageConverter 
     bytes.removeAll()
   }
 
-  private func appendRGBA(_ components: [Float], componentCount: Int) {
+  private func writeRGBA(_ components: [Float], componentCount: Int, destinationOffset: Int) {
+    var destinationOffset = destinationOffset
     for offset in stride(from: 0, to: components.count, by: componentCount) {
       let red: Float
       let green: Float
@@ -242,10 +247,11 @@ public final class CoreGraphicsColorImageConverter: GraphicsColorImageConverter 
         green = Float(color[min(1, color.count - 1)]) * alpha
         blue = Float(color[min(2, color.count - 1)]) * alpha
       }
-      bytes.append(UInt8((min(1, max(0, red)) * 255).rounded()))
-      bytes.append(UInt8((min(1, max(0, green)) * 255).rounded()))
-      bytes.append(UInt8((min(1, max(0, blue)) * 255).rounded()))
-      bytes.append(UInt8((min(1, max(0, alpha)) * 255).rounded()))
+      bytes[destinationOffset] = UInt8((min(1, max(0, red)) * 255).rounded())
+      bytes[destinationOffset + 1] = UInt8((min(1, max(0, green)) * 255).rounded())
+      bytes[destinationOffset + 2] = UInt8((min(1, max(0, blue)) * 255).rounded())
+      bytes[destinationOffset + 3] = UInt8((min(1, max(0, alpha)) * 255).rounded())
+      destinationOffset += 4
     }
   }
 }

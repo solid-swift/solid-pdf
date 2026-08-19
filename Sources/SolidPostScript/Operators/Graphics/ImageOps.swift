@@ -13,7 +13,9 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["image"]
 
     func execute(context: isolated Context) async throws {
-      guard context.uncoloredPatternExecutionDepth == 0 else { throw Error.undefined }
+      guard context.uncoloredPatternExecutionDepth == 0,
+        context.imageDataSourceCallbackDepth == 0
+      else { throw Error.undefined }
       let specification: ImageSpecification
       if let dictionary = try? context.operands.peek().value(as: DictionaryValue.self) {
         _ = try context.operands.pop()
@@ -30,6 +32,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["imagemask"]
 
     func execute(context: isolated Context) async throws {
+      guard context.imageDataSourceCallbackDepth == 0 else { throw Error.undefined }
       let specification: ImageSpecification
       if let dictionary = try? context.operands.peek().value(as: DictionaryValue.self) {
         _ = try context.operands.pop()
@@ -62,7 +65,9 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["colorimage"]
 
     func execute(context: isolated Context) async throws {
-      guard context.uncoloredPatternExecutionDepth == 0 else { throw Error.undefined }
+      guard context.uncoloredPatternExecutionDepth == 0,
+        context.imageDataSourceCallbackDepth == 0
+      else { throw Error.undefined }
       let componentCount = Int(try context.operands.pop().value(as: IntegerValue.self).value)
       guard let colorSpace = GraphicsImageColorSpace(rawValue: componentCount) else { throw Error.rangeCheck }
       let multiple = try context.operands.pop().value(as: BooleanValue.self).value
@@ -102,6 +107,7 @@ extension Operators {
     let interpolate: Bool
     var sources: [ImageDataSource]
     let multipleDataSources: Bool
+    let dictionaries: [DictionaryValue]
 
     init(
       width: Int,
@@ -113,7 +119,8 @@ extension Operators {
       decode: [Double],
       interpolate: Bool,
       sources: [ImageDataSource],
-      multipleDataSources: Bool
+      multipleDataSources: Bool,
+      dictionaries: [DictionaryValue] = []
     ) throws {
       guard width >= 0, height >= 0 else { throw Error.rangeCheck }
       guard [1, 2, 4, 8, 12].contains(bitsPerComponent) else { throw Error.rangeCheck }
@@ -136,6 +143,7 @@ extension Operators {
       self.interpolate = interpolate
       self.sources = sources
       self.multipleDataSources = multipleDataSources
+      self.dictionaries = dictionaries
     }
 
     var sourceComponentCount: Int { sourceColorSpace?.componentCount ?? kind.componentCount }
@@ -198,7 +206,7 @@ extension Operators {
         return try await context.read(max: max, from: file.file)
       case .procedure:
         let originalDepth = context.operands.depth
-        try await context.execute(proc: object)
+        try await context.executeImageDataSource(object)
         guard context.operands.depth == originalDepth + 1 else { throw Error.typeCheck }
         let string: StringValue = try context.operands.popAs()
         try string.access.check(.read)
@@ -287,7 +295,8 @@ extension Operators {
       decode: decode,
       interpolate: interpolate,
       sources: sources,
-      multipleDataSources: multiple
+      multipleDataSources: multiple,
+      dictionaries: [dictionary]
     )
   }
 
@@ -303,7 +312,7 @@ extension Operators {
     }
     if first.kind == .file {
       let identities = try sources.map { source in
-        ObjectIdentifier(try source.object.value(as: FileValue.self).file)
+        try source.object.value(as: FileValue.self).file.ultimateSourceIdentity
       }
       guard Set(identities).count == identities.count else { throw Error.rangeCheck }
     }
@@ -314,6 +323,9 @@ extension Operators {
     context: isolated Context
   ) async throws {
     var specification = initial
+    let previousDictionaries = context.activeImageDictionaries
+    context.activeImageDictionaries = specification.dictionaries.map { ($0, $0.revision) }
+    defer { context.activeImageDictionaries = previousDictionaries }
     guard let imageToUser = specification.imageMatrix.inverted else { throw Error.undefinedResult }
     let descriptor = GraphicsImageDescriptor(
       width: specification.width,
@@ -330,7 +342,7 @@ extension Operators {
         return
       }
 
-      let componentCount = specification.kind.componentCount
+        let componentCount = specification.kind.componentCount
       let rowsPerTransfer = max(1, min(32, 65_536 / max(1, specification.width * componentCount)))
       var startRow = 0
       while startRow < specification.height {
@@ -388,7 +400,7 @@ extension Operators {
           guard lengths.allSatisfy({ $0 == lengths[0] }) else { throw Error.rangeCheck }
         }
       }
-      var planes: [[Float]] = []
+      var planes: [DecodedSamples] = []
       planes.reserveCapacity(componentCount)
       for index in 0..<componentCount {
         let data: Data
@@ -409,35 +421,50 @@ extension Operators {
         ))
       }
       let decoded = (0..<specification.width).flatMap { sample in
-        (0..<componentCount).map { planes[$0][sample] }
+        (0..<componentCount).map { planes[$0].decoded[sample] }
       }
-      return try await resolveImageRow(decoded, specification: specification, context: context)
+      let raw = (0..<specification.width).flatMap { sample in
+        (0..<componentCount).map { planes[$0].raw[sample] }
+      }
+      return try await resolveImageRow(
+        decoded,
+        rawComponents: raw,
+        specification: specification,
+        context: context
+      )
     }
 
     let sampleCount = specification.width * componentCount
     let bytesPerRow = (sampleCount * specification.bitsPerComponent + 7) / 8
     guard let data = try await specification.sources[0].read(count: bytesPerRow, context: context) else { return nil }
-    let decoded = decodeSamples(
+    let samples = decodeSamples(
       data,
       count: sampleCount,
       bits: specification.bitsPerComponent,
       decode: specification.decode
     )
-    return try await resolveImageRow(decoded, specification: specification, context: context)
+    return try await resolveImageRow(
+      samples.decoded,
+      rawComponents: samples.raw,
+      specification: specification,
+      context: context
+    )
   }
 
   struct ImageRow {
     let components: [Float]
     let sourceComponents: [Float]?
+    let rawComponents: [UInt16]
   }
 
   static func resolveImageRow(
     _ components: [Float],
+    rawComponents: [UInt16],
     specification: ImageSpecification,
     context: isolated Context
   ) async throws -> ImageRow {
     guard let sourceSpace = specification.sourceColorSpace else {
-      return ImageRow(components: components, sourceComponents: nil)
+      return ImageRow(components: components, sourceComponents: nil, rawComponents: rawComponents)
     }
     var alternative: [Float] = []
     alternative.reserveCapacity(specification.width * 3)
@@ -449,7 +476,12 @@ extension Operators {
       alternative.append(Float(rgb.green))
       alternative.append(Float(rgb.blue))
     }
-    return ImageRow(components: alternative, sourceComponents: components)
+    return ImageRow(components: alternative, sourceComponents: components, rawComponents: rawComponents)
+  }
+
+  struct DecodedSamples {
+    let decoded: [Float]
+    let raw: [UInt16]
   }
 
   static func decodeSamples(
@@ -457,11 +489,13 @@ extension Operators {
     count: Int,
     bits: Int,
     decode: [Double]
-  ) -> [Float] {
+  ) -> DecodedSamples {
     let maximum = Double((1 << bits) - 1)
     let componentCount = decode.count / 2
-    var result: [Float] = []
-    result.reserveCapacity(count)
+    var decoded: [Float] = []
+    decoded.reserveCapacity(count)
+    var rawSamples: [UInt16] = []
+    rawSamples.reserveCapacity(count)
     var bitOffset = 0
     for sampleIndex in 0..<count {
       var raw = 0
@@ -473,9 +507,10 @@ extension Operators {
       let component = sampleIndex % componentCount
       let lower = decode[component * 2]
       let upper = decode[component * 2 + 1]
-      let decoded = lower + Double(raw) / maximum * (upper - lower)
-      result.append(Float(min(1, max(0, decoded))))
+      let decodedValue = lower + Double(raw) / maximum * (upper - lower)
+      rawSamples.append(UInt16(raw))
+      decoded.append(Float(min(1, max(0, decodedValue))))
     }
-    return result
+    return DecodedSamples(decoded: decoded, raw: rawSamples)
   }
 }

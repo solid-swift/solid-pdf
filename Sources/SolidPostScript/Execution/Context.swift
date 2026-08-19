@@ -93,6 +93,8 @@ public actor Context {
   var activeEncapsulatedPaintAllocations: Set<ObjectIdentifier> = []
   var encapsulatedPaintDepth = 0
   var uncoloredPatternExecutionDepth = 0
+  var imageDataSourceCallbackDepth = 0
+  var activeImageDictionaries: [(dictionary: DictionaryValue, revision: UInt64)] = []
   var graphicsStack: [GraphicsStackFrame] = []
   private var executionBoundarySequence: UInt64 = 0
   private var executionTimingDepth = 0
