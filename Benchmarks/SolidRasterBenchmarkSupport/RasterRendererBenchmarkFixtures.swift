@@ -17,6 +17,9 @@ public enum RasterRendererBenchmarkFixtures {
     "Radial Gradient",
     "Million-Vertex Mesh",
     "Patch Fallback Mesh",
+    "Repeated Form Replay",
+    "Nested Form Replay",
+    "Form Pattern and Shading",
   ]
 
   /// Creates every comparison workload without including fixture construction in measurements.
@@ -68,7 +71,89 @@ public enum RasterRendererBenchmarkFixtures {
       state: emptyState,
       page: page
     )
-    return pathWorkloads + [nearest, bilinear, combined] + graphicsWorkloads
+    let formWorkloads = try formWorkloads(descriptor: descriptor, state: emptyState, page: page)
+    return pathWorkloads + [nearest, bilinear, combined] + graphicsWorkloads + formWorkloads
+  }
+
+  private static func formWorkloads(
+    descriptor: GraphicsDeviceDescriptor,
+    state: GraphicsStateSnapshot,
+    page: GraphicsEvent
+  ) throws -> [RasterRendererBenchmarkWorkload] {
+    let cell = rectangle(GraphicsRect(x: 8, y: 8, width: 48, height: 48))
+    let cellState = replacing(state, path: cell, paint: .deviceRGB(red: 0.1, green: 0.4, blue: 0.8))
+    let leaf = GraphicsForm(
+      bounds: GraphicsRect(x: 0, y: 0, width: 64, height: 64),
+      matrix: .identity,
+      deviceDescriptor: descriptor,
+      compilationState: cellState,
+      displayList: GraphicsDisplayList(effects: [.fill(path: cell, rule: .winding, state: cellState)])
+    )
+    let repeated = Array(
+      repeating: RasterRendererBenchmarkWorkload.Command.process(event(.paint(.form(leaf)), state: state)),
+      count: 1_000
+    ) + [.process(page)]
+
+    var nested = leaf
+    for _ in 0..<12 {
+      nested = GraphicsForm(
+        bounds: leaf.bounds,
+        matrix: .identity,
+        deviceDescriptor: descriptor,
+        compilationState: state,
+        displayList: GraphicsDisplayList(effects: [.form(nested, state: state)])
+      )
+    }
+
+    let pattern = GraphicsTilingPattern(
+      paintType: 1,
+      tilingType: 1,
+      bounds: GraphicsRect(x: 0, y: 0, width: 64, height: 64),
+      xStep: 64,
+      yStep: 64,
+      matrix: .identity,
+      displayList: leaf.displayList
+    )
+    let surface = graphicsSurfacePath(
+      width: Int(descriptor.mediaBounds.width),
+      height: Int(descriptor.mediaBounds.height)
+    )
+    let patternedState = replacing(state, path: surface, paint: .pattern(.tiling(pattern, underlying: nil)))
+    let shading = gradientShading(type: 2, radial: false)
+    let mixed = GraphicsForm(
+      bounds: descriptor.mediaBounds,
+      matrix: .identity,
+      deviceDescriptor: descriptor,
+      compilationState: patternedState,
+      displayList: GraphicsDisplayList(effects: [
+        .fill(path: surface, rule: .winding, state: patternedState),
+        .shading(shading, state: state),
+      ])
+    )
+
+    return try [
+      RasterRendererBenchmarkWorkload(
+        name: names[13],
+        pixelWidth: Int(descriptor.mediaBounds.width),
+        pixelHeight: Int(descriptor.mediaBounds.height),
+        deviceDescriptor: descriptor,
+        commands: repeated
+      ),
+      workload(
+        name: names[14],
+        descriptor: descriptor,
+        state: state,
+        operation: .paint(.form(nested)),
+        page: page
+      ),
+      workload(
+        name: names[15],
+        descriptor: descriptor,
+        state: state,
+        operation: .paint(.form(mixed)),
+        page: page
+      ),
+    ]
   }
 
   private static func patternAndShadingWorkloads(

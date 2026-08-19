@@ -168,6 +168,20 @@ struct CoreGraphicsImageTargetTests {
     #expect(abs(vector.blue - mask.blue) < 0.02)
   }
 
+  @Test func typeOneFormsReplayIntoCoreGraphicsPages() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      << /FormType 1 /BBox [2 2 8 8] /Matrix matrix
+         /PaintProc { pop 0 setgray 2 2 6 6 rectfill }
+      >> execform showpage
+      """,
+      to: CoreGraphicsImageTarget(pixelWidth: 10, pixelHeight: 10)
+    )
+    let image = try #require(result.output.first)
+    #expect(try gray(atX: 5, y: 5, in: image) < 0.1)
+    #expect(try gray(atX: 0, y: 0, in: image) > 0.9)
+  }
+
   private func gray(atX x: Int, y: Int, in image: CGImage) throws -> Double {
     let provider = try #require(image.dataProvider)
     let data = try #require(provider.data)

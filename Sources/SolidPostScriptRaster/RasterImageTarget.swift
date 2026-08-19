@@ -88,6 +88,8 @@ where
         )
       case .paint(.shading(let shading)):
         try paintShading(shading, clip: event.before.clip)
+      case .paint(.form(let form)):
+        try paintForm(form, depth: 0)
       case .page(.show), .page(.copy):
         try transmitPage()
       default:
@@ -295,6 +297,49 @@ where
       }
     }
 
+    private func paintForm(_ form: GraphicsForm, depth: Int) throws {
+      guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      for effect in form.displayList.effects {
+        try replayFormEffect(effect, depth: depth + 1)
+      }
+    }
+
+    private func replayFormEffect(_ effect: GraphicsEffect, depth: Int) throws {
+      switch effect {
+      case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
+        try fill(path, rule: rule, state: state)
+      case .stroke(let path, let state):
+        try stroke(path, matrix: state.matrix, state: state)
+      case .userPathStroke(let outline, let state):
+        try fill(outline, rule: .winding, state: state)
+      case .erase:
+        try erasePage()
+      case .fillRectangles(let paths, let state):
+        try fill(GraphicsPath(elements: paths.flatMap(\.elements)), rule: .winding, state: state)
+      case .strokeRectangles(let paths, let matrix, let state):
+        let effectiveMatrix = matrix?.concatenated(with: state.matrix) ?? state.matrix
+        try stroke(GraphicsPath(elements: paths.flatMap(\.elements)), matrix: effectiveMatrix, state: state)
+      case .image(let image, let state):
+        let converter = try colorSession.makeImageConverter(for: image.descriptor)
+        do {
+          try converter.write(GraphicsImageRows(
+            startRow: 0,
+            rowCount: image.descriptor.height,
+            components: image.components,
+            sourceComponents: image.sourceComponents
+          ))
+          try draw(converter.finish(), descriptor: image.descriptor, state: state)
+        } catch {
+          converter.abort()
+          throw error
+        }
+      case .shading(let shading, let state):
+        try paintShading(shading, clip: state.clip)
+      case .form(let nested, _):
+        try paintForm(nested, depth: depth)
+      }
+    }
+
     private func replay(
       _ effect: GraphicsEffect,
       translatedBy translation: GraphicsMatrix,
@@ -367,7 +412,19 @@ where
       let effectRule: GraphicsFillRule
       let effectState: GraphicsStateSnapshot
       switch effect {
-      case .form:
+      case .form(let form, _):
+        guard depth < 16 else { throw SolidPostScript.Error.ioError }
+        for nested in form.displayList.effects {
+          try replay(
+            nested,
+            translatedBy: translation,
+            underlying: underlying,
+            through: paintedPath,
+            rule: paintedRule,
+            clip: clip,
+            depth: depth + 1
+          )
+        }
         return
       case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
         effectPath = path.transformed(by: translation)

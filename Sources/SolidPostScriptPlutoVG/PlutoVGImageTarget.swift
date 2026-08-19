@@ -93,6 +93,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         try strokeRectangles(paths, matrix: matrix, state: event.before, in: canvas)
       case .paint(.shading(let shading)):
         try paintShading(shading, clip: event.before.clip, in: canvas)
+      case .paint(.form(let form)):
+        try paintForm(form, in: canvas, depth: 0)
       case .page(.show), .page(.copy):
         try showPage()
       default:
@@ -389,6 +391,53 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       }
     }
 
+    private func paintForm(_ form: GraphicsForm, in canvas: OpaquePointer, depth: Int) throws {
+      guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      for effect in form.displayList.effects {
+        try replayFormEffect(effect, in: canvas, depth: depth + 1)
+      }
+    }
+
+    private func replayFormEffect(_ effect: GraphicsEffect, in canvas: OpaquePointer, depth: Int) throws {
+      switch effect {
+      case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
+        try fill(path, rule: rule, state: state, in: canvas)
+      case .stroke(let path, let state):
+        try stroke(path, state: state, in: canvas)
+      case .userPathStroke(let outline, let state):
+        try fill(outline, rule: .winding, state: state, in: canvas)
+      case .erase:
+        try erasePage(in: canvas)
+      case .fillRectangles(let paths, let state):
+        try fill(
+          GraphicsPath(elements: paths.flatMap(\.elements)),
+          rule: .winding,
+          state: state,
+          in: canvas
+        )
+      case .strokeRectangles(let paths, let matrix, let state):
+        try strokeRectangles(paths, matrix: matrix, state: state, in: canvas)
+      case .image(let image, let state):
+        let converter = try colorSession.makeImageConverter(for: image.descriptor)
+        do {
+          try converter.write(GraphicsImageRows(
+            startRow: 0,
+            rowCount: image.descriptor.height,
+            components: image.components,
+            sourceComponents: image.sourceComponents
+          ))
+          try draw(converter.finish(), descriptor: image.descriptor, state: state, in: canvas)
+        } catch {
+          converter.abort()
+          throw error
+        }
+      case .shading(let shading, let state):
+        try paintShading(shading, clip: state.clip, in: canvas)
+      case .form(let nested, _):
+        try paintForm(nested, in: canvas, depth: depth)
+      }
+    }
+
     private func replayPatternEffect(
       _ effect: GraphicsEffect,
       translation: GraphicsMatrix,
@@ -453,7 +502,17 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       let rule: GraphicsFillRule
       let state: GraphicsStateSnapshot
       switch effect {
-      case .form:
+      case .form(let form, _):
+        guard depth < 16 else { throw SolidPostScript.Error.ioError }
+        for nested in form.displayList.effects {
+          try replayPatternEffect(
+            nested,
+            translation: translation,
+            underlying: underlying,
+            in: canvas,
+            depth: depth + 1
+          )
+        }
         return
       case .fill(let value, let valueRule, let valueState),
            .userPathFill(let value, let valueRule, let valueState):

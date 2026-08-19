@@ -79,6 +79,8 @@ where
         try strokeRectangles(paths, matrix: matrix, state: event.before, in: context)
       case .paint(.shading(let shading)):
         try paintShading(shading, clip: event.before.clip, in: context)
+      case .paint(.form(let form)):
+        try paintForm(form, in: context, depth: 0)
       case .page(.show), .page(.copy):
         guard let image = context.makeImage() else { throw SolidPostScript.Error.ioError }
         let next = try Self.makePage(
@@ -280,6 +282,53 @@ where
       }
     }
 
+    private func paintForm(_ form: GraphicsForm, in context: CGContext, depth: Int) throws {
+      guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      for effect in form.displayList.effects {
+        try replayFormEffect(effect, in: context, depth: depth + 1)
+      }
+    }
+
+    private func replayFormEffect(_ effect: GraphicsEffect, in context: CGContext, depth: Int) throws {
+      switch effect {
+      case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
+        try fill(path, rule: rule, state: state, in: context)
+      case .stroke(let path, let state):
+        try stroke(path, state: state, in: context)
+      case .userPathStroke(let outline, let state):
+        try fill(outline, rule: .winding, state: state, in: context)
+      case .erase:
+        erasePage(context)
+      case .fillRectangles(let paths, let state):
+        try fill(
+          GraphicsPath(elements: paths.flatMap(\.elements)),
+          rule: .winding,
+          state: state,
+          in: context
+        )
+      case .strokeRectangles(let paths, let matrix, let state):
+        try strokeRectangles(paths, matrix: matrix, state: state, in: context)
+      case .image(let image, let state):
+        let converter = try colorSession.makeImageConverter(for: image.descriptor)
+        do {
+          try converter.write(GraphicsImageRows(
+            startRow: 0,
+            rowCount: image.descriptor.height,
+            components: image.components,
+            sourceComponents: image.sourceComponents
+          ))
+          try draw(converter.finish(), descriptor: image.descriptor, state: state, in: context)
+        } catch {
+          converter.abort()
+          throw error
+        }
+      case .shading(let shading, let state):
+        try paintShading(shading, clip: state.clip, in: context)
+      case .form(let nested, _):
+        try paintForm(nested, in: context, depth: depth)
+      }
+    }
+
     private func replayPatternEffect(
       _ effect: GraphicsEffect,
       translation: GraphicsMatrix,
@@ -345,7 +394,17 @@ where
       let rule: GraphicsFillRule
       let state: GraphicsStateSnapshot
       switch effect {
-      case .form:
+      case .form(let form, _):
+        guard depth < 16 else { throw SolidPostScript.Error.ioError }
+        for nested in form.displayList.effects {
+          try replayPatternEffect(
+            nested,
+            translation: translation,
+            underlying: underlying,
+            in: context,
+            depth: depth + 1
+          )
+        }
         return
       case .fill(let value, let valueRule, let valueState),
            .userPathFill(let value, let valueRule, let valueState):

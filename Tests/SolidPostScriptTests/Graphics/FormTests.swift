@@ -112,4 +112,89 @@ import Testing
     #expect(try values[1].value(as: NameValue.self).value == "undefined")
     #expect(try values[0].value(as: NameValue.self).value == "doesnotexist")
   }
+
+  @Test func recordingPreservesNestedFormIdentity() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      /inner << /FormType 1 /BBox [0 0 4 4] /Matrix matrix
+        /PaintProc { pop 0 0 4 4 rectfill } >> def
+      /outer << /FormType 1 /BBox [0 0 8 8] /Matrix matrix
+        /PaintProc { pop inner execform } >> def
+      outer execform showpage
+      """,
+      to: RecordingGraphicsTarget()
+    )
+    let page = try #require(result.output.pages.first)
+    guard case .form(let outer, _) = try #require(page.effects.first),
+      case .form(let inner, _) = try #require(outer.displayList.effects.first)
+    else {
+      Issue.record("Expected semantic nested form effects")
+      return
+    }
+    #expect(inner.displayList.effects.count == 1)
+  }
+
+  @Test func localFirstUseInitializationParticipatesInSaveRestore() async throws {
+    let context = try await Interpreter.execute(content: """
+      /f << /FormType 1 /BBox [0 0 1 1] /Matrix matrix /PaintProc { pop } >> def
+      save /saved exch def f execform
+      saved restore
+      f /Implementation known f wcheck
+      f execform f /Implementation known f rcheck
+      """)
+    let values = try await context.results()
+    #expect(try values[3].value(as: BooleanValue.self).value == false)
+    #expect(try values[2].value(as: BooleanValue.self).value)
+    #expect(try values[1].value(as: BooleanValue.self).value)
+    #expect(try values[0].value(as: BooleanValue.self).value)
+  }
+
+  @Test func xuidCacheIsReusableAcrossContextsWithoutRetainingVMObjects() async throws {
+    let environment = InterpreterEnvironment()
+    let first = try await Interpreter.render(
+      content: """
+      << /FormType 1 /XUID [4107] /BBox [0 0 4 4] /Matrix matrix
+         /PaintProc { pop 0 setgray 0 0 4 4 rectfill }
+      >> execform showpage
+      """,
+      to: RecordingGraphicsTarget(),
+      environment: environment
+    )
+    let second = try await Interpreter.render(
+      content: """
+      /painted false def
+      << /FormType 1 /XUID [4107] /BBox [0 0 4 4] /Matrix matrix
+         /PaintProc { pop /painted true store }
+      >> execform painted showpage
+      """,
+      to: RecordingGraphicsTarget(),
+      environment: environment
+    )
+    let values = try await second.context.results()
+    #expect(try values[0].value(as: BooleanValue.self).value == false)
+    #expect(first.output.pages.first?.effects == second.output.pages.first?.effects)
+  }
+
+  @Test func concurrentFormCacheUseIsEnvironmentSafe() async throws {
+    let environment = InterpreterEnvironment()
+    let program = """
+      << /FormType 1 /XUID [4108] /BBox [0 0 4 4] /Matrix matrix
+         /PaintProc { pop 0.5 setgray 0 0 4 4 rectfill }
+      >> execform showpage
+      """
+
+    async let first = Interpreter.render(
+      content: program,
+      to: RecordingGraphicsTarget(),
+      environment: environment
+    )
+    async let second = Interpreter.render(
+      content: program,
+      to: RecordingGraphicsTarget(),
+      environment: environment
+    )
+    let (firstResult, secondResult) = try await (first, second)
+
+    #expect(firstResult.output.pages == secondResult.output.pages)
+  }
 }

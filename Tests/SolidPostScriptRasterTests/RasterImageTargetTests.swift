@@ -289,6 +289,20 @@ import Testing
     }
   }
 
+  @Test func typeOneFormsReplayIntoNativeRasterPages() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      << /FormType 1 /BBox [2 2 8 8] /Matrix matrix
+         /PaintProc { pop 0 setgray 2 2 6 6 rectfill }
+      >> execform showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 10, pixelHeight: 10)
+    )
+    let image = try #require(result.output.first)
+    #expect(try gray(x: 5, y: 5, image: image) < 0.1)
+    #expect(try gray(x: 0, y: 0, image: image) > 0.9)
+  }
+
   private func gray(x: Int, y: Int, image: RasterImage) throws -> Double {
     let offset = y * image.bytesPerRow + x * 4
     guard x >= 0, y >= 0, x < image.width, y < image.height, offset + 3 < image.data.count else {
