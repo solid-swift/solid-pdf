@@ -31,6 +31,8 @@ public enum GraphicsOperation: Sendable, Hashable {
     case setUndercolorRemoval
     case setHalftone
     case setFont(GraphicsFontDescription)
+    case setTrappingParameters(GraphicsTrappingParameters)
+    case setTrappingZone(GraphicsTrappingZone)
   }
 
   /// A current-transformation operation.

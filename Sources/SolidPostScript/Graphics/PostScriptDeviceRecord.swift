@@ -1,11 +1,19 @@
 import Foundation
 import Synchronization
 
+struct PostScriptDeviceTrappingState: Sendable {
+  let snapshot: GraphicsTrappingSnapshot
+  let defaultZones: [GraphicsTrappingZone]
+  let trapSetNameSource: Object?
+}
+
 final class PostScriptDeviceRecord: Sendable {
   struct State: Sendable {
     var configuration: GraphicsPageDeviceConfiguration?
     var pageNumber: Int
     var trapping: GraphicsTrappingSnapshot
+    var defaultTrappingZones: [GraphicsTrappingZone]
+    var trapSetNameSource: Object?
   }
 
   let identifier: GraphicsDeviceIdentifier
@@ -22,7 +30,9 @@ final class PostScriptDeviceRecord: Sendable {
         enabled: configuration.trappingEnabled,
         details: configuration.trappingDetails,
         parameters: configuration.descriptor.trapping.defaultParameters
-      )
+      ),
+      defaultTrappingZones: [],
+      trapSetNameSource: nil
     ))
     self.nullDescriptor = nil
   }
@@ -30,7 +40,13 @@ final class PostScriptDeviceRecord: Sendable {
   init(nullDescriptor descriptor: GraphicsDeviceDescriptor) {
     self.identifier = GraphicsDeviceIdentifier()
     self.kind = .null
-    self.state = Mutex(State(configuration: nil, pageNumber: 0, trapping: .disabled))
+    self.state = Mutex(State(
+      configuration: nil,
+      pageNumber: 0,
+      trapping: .disabled,
+      defaultTrappingZones: [],
+      trapSetNameSource: nil
+    ))
     self.nullDescriptor = descriptor
   }
 
@@ -76,8 +92,60 @@ final class PostScriptDeviceRecord: Sendable {
     state.withLock { $0.trapping }
   }
 
-  func updateTrapping(_ trapping: GraphicsTrappingSnapshot) {
-    state.withLock { $0.trapping = trapping }
+  var trapSetNameSource: Object? {
+    state.withLock { $0.trapSetNameSource }
+  }
+
+  func updateTrapping(_ trapping: GraphicsTrappingSnapshot, trapSetNameSource: Object?) {
+    state.withLock {
+      $0.trapping = trapping
+      $0.trapSetNameSource = trapSetNameSource
+    }
+  }
+
+  func captureDefaultTrappingZones() {
+    state.withLock { $0.defaultTrappingZones = $0.trapping.zones }
+  }
+
+  func restoreDefaultTrappingZones() {
+    state.withLock {
+      $0.trapping = GraphicsTrappingSnapshot(
+        enabled: $0.trapping.enabled,
+        details: $0.trapping.details,
+        parameters: $0.trapping.parameters,
+        zones: $0.defaultTrappingZones
+      )
+    }
+  }
+
+  func discardPageTrappingZones() {
+    state.withLock {
+      $0.trapping = GraphicsTrappingSnapshot(
+        enabled: $0.trapping.enabled,
+        details: $0.trapping.details,
+        parameters: $0.trapping.parameters,
+        zones: []
+      )
+      $0.defaultTrappingZones = []
+    }
+  }
+
+  func savedTrappingState() -> PostScriptDeviceTrappingState {
+    state.withLock {
+      PostScriptDeviceTrappingState(
+        snapshot: $0.trapping,
+        defaultZones: $0.defaultTrappingZones,
+        trapSetNameSource: $0.trapSetNameSource
+      )
+    }
+  }
+
+  func restoreTrappingState(_ saved: PostScriptDeviceTrappingState) {
+    state.withLock {
+      $0.trapping = saved.snapshot
+      $0.defaultTrappingZones = saved.defaultZones
+      $0.trapSetNameSource = saved.trapSetNameSource
+    }
   }
 
   static func page(descriptor: GraphicsDeviceDescriptor) -> PostScriptDeviceRecord {

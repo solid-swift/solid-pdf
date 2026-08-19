@@ -18,6 +18,7 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
     capabilities: GraphicsPageDeviceCapabilities,
     name: String
   ) throws {
+    let descriptor = descriptor.withTrappingCapabilities(capabilities.trapping)
     guard descriptor.horizontalResolution.isFinite,
       descriptor.verticalResolution.isFinite,
       descriptor.horizontalResolution > 0,
@@ -289,6 +290,30 @@ private extension GraphicsDeviceDescriptor {
       deviceRendering: deviceRendering,
       colorants: colorants,
       trapping: trapping
+    )
+  }
+
+
+  func withTrappingCapabilities(_ capabilities: GraphicsTrappingCapabilities) -> Self {
+    Self(
+      mediaBounds: mediaBounds,
+      imageableBounds: imageableBounds,
+      horizontalResolution: horizontalResolution,
+      verticalResolution: verticalResolution,
+      defaultMatrix: defaultMatrix,
+      defaultFlatness: defaultFlatness,
+      defaultStrokeAdjustment: defaultStrokeAdjustment,
+      minimumSmoothness: minimumSmoothness,
+      maximumSmoothness: maximumSmoothness,
+      defaultSmoothness: defaultSmoothness,
+      colorDevice: colorDevice,
+      deviceRendering: deviceRendering,
+      colorants: colorants,
+      trapping: GraphicsTrappingDescriptor(
+        capabilities: capabilities,
+        defaultDetails: trapping.defaultDetails,
+        defaultParameters: trapping.defaultParameters
+      )
     )
   }
 }

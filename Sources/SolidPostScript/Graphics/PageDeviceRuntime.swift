@@ -2,6 +2,7 @@ import Foundation
 
 extension Context {
   enum PageDeviceCallback {
+    case install
     case beginPage
     case endPage
     case policyReport
@@ -113,6 +114,7 @@ extension Context {
       if transmit {
         try transmitCurrentPage(.show)
       }
+      oldState.device.discardPageTrappingZones()
       do {
         try graphicsEventConsumer?.deactivateDevice(oldState.device.snapshot)
       } catch {
@@ -131,11 +133,13 @@ extension Context {
     } catch {
       throw Error.ioError
     }
-    try await executePageDeviceProcedure(parameters.install, callback: .beginPage, operands: [])
+    try await executePageDeviceProcedure(parameters.install, callback: .install, operands: [])
+    record.captureDefaultTrappingZones()
     try applyInstalledDefaultMatrix()
     try applyGraphicsOperation(.paint(.erasePage)) { _ in }
     graphicsState.initializeGraphics(for: graphicsDeviceDescriptor)
     selectInitialColor(for: configuration.colorants)
+    try installCurrentOutputDeviceResource()
     try await callBeginPage()
   }
 
@@ -169,6 +173,7 @@ extension Context {
     let transmit = try await callEndPage(reason: 0)
     if transmit { try transmitCurrentPage(.show) }
     graphicsState.device.incrementPageNumber()
+    graphicsState.device.restoreDefaultTrappingZones()
     graphicsState.initializeGraphics(for: graphicsDeviceDescriptor)
     try await callBeginPage()
   }
@@ -177,6 +182,7 @@ extension Context {
     guard graphicsState.device.kind == .page else { return }
     let transmit = try await callEndPage(reason: 0)
     if transmit { try transmitCurrentPage(.copy) }
+    graphicsState.device.restoreDefaultTrappingZones()
     try await callBeginPage()
   }
 
@@ -185,6 +191,7 @@ extension Context {
     if try await callEndPage(reason: 2) {
       try transmitCurrentPage(.show)
     }
+    graphicsState.device.discardPageTrappingZones()
     do {
       try graphicsEventConsumer?.deactivateDevice(graphicsState.device.snapshot)
     } catch {

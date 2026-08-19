@@ -496,9 +496,14 @@ extension Operators {
         let previous = details[name]
         let reportedName = try colorant.object(forKeyIfExists: .literalName("ColorantName"))
           .map { try $0.value(as: NameValue.self).value } ?? previous?.colorantName ?? name
-        let kind = try colorant.object(forKeyIfExists: .literalName("ColorantType"))
-          .map { try $0.value(as: NameValue.self).value }
-          .flatMap(GraphicsTrappingColorantType.init(rawValue:)) ?? previous?.colorantType ?? .normal
+        let kind: GraphicsTrappingColorantType
+        if let object = try colorant.object(forKeyIfExists: .literalName("ColorantType")) {
+          let name = try object.value(as: NameValue.self).value
+          guard let value = GraphicsTrappingColorantType(rawValue: name) else { throw Error.rangeCheck }
+          kind = value
+        } else {
+          kind = previous?.colorantType ?? .normal
+        }
         let density = try colorant.object(forKeyIfExists: .literalName("NeutralDensity"))
           .map(trappingNumber) ?? previous?.neutralDensity ?? 1
         guard (0.001...10).contains(density) else { throw Error.rangeCheck }
