@@ -84,7 +84,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     self.font = font
   }
 
-  func replacingDevice(_ device: GraphicsDeviceSnapshot) -> Self {
+  /// Returns a copy using the caller's current device-owned lifecycle state.
+  public func replacingDevice(_ device: GraphicsDeviceSnapshot) -> Self {
     Self(
       matrix: matrix,
       path: path,

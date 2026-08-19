@@ -32,6 +32,31 @@ let benchmarks: @Sendable () -> Void = {
   }
   let colorConverter = NativeColorConverter()
   let lookupTable = try! colorLookupTable()
+  let trappingPaths = (0..<64).map { index in
+    let x = Double(index) * Double(pathWidth) / 64
+    let nextX = Double(index + 1) * Double(pathWidth) / 64
+    return RasterPath(elements: [
+      .move(to: RasterPoint(x: x, y: 0)),
+      .line(to: RasterPoint(x: nextX, y: 0)),
+      .line(to: RasterPoint(x: nextX, y: Double(pathHeight))),
+      .line(to: RasterPoint(x: x, y: Double(pathHeight))),
+      .close,
+    ])
+  }
+  let trappingProgram = RasterTrappingProgram(
+    enabled: true,
+    width: 2,
+    stepLimit: 0.5,
+    colorScaling: 1,
+    blackDensityLimit: 1,
+    blackColorLimit: 0.5,
+    blackWidth: 1,
+    slidingLimit: 1,
+    trapsImagesToObjects: false,
+    trapsInsideImages: false,
+    neutralDensities: ["Cyan": 0.7, "Magenta": 0.7, "Yellow": 0.2, "Black": 1.7],
+    zones: [RasterTrappingZone(path: surfacePath, stepLimit: 0.5, colorScaling: 1, width: 2)]
+  )
 
   let metrics: [BenchmarkMetric] = [
     .wallClock,
@@ -133,6 +158,26 @@ let benchmarks: @Sendable () -> Void = {
         ),
         deviceRendering: program
       )
+      blackHole(try! canvas.finish())
+    }
+  }
+
+  Benchmark("CMYK Dense Vector Trapping", configuration: configuration) { benchmark in
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      var canvas = try! RasterColorantCanvas(
+        width: pathWidth,
+        height: pathHeight,
+        colorants: ["Cyan", "Magenta", "Yellow", "Black"]
+      )
+      try! canvas.configureTrapping(trappingProgram)
+      for (index, path) in trappingPaths.enumerated() {
+        let paint =
+          index.isMultiple(of: 2)
+          ? RasterColorantPaint(tints: ["Cyan": 1])
+          : RasterColorantPaint(tints: ["Magenta": 1])
+        try! canvas.fill(path, rule: .winding, paint: paint)
+      }
       blackHole(try! canvas.finish())
     }
   }

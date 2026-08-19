@@ -58,6 +58,7 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
 
     /// Processes one validated graphics event for both the diagnostic and plate renderers.
     public func process(_ event: GraphicsEvent) throws {
+      activeDevice = event.after.device
       if case .page = event.operation {
         try transmitPage(event, copies: 1)
         return
@@ -342,11 +343,13 @@ private extension RasterSeparationTarget.Renderer {
   func takeColorantCanvas() throws -> RasterColorantCanvas {
     if let canvas = colorantCanvas.take() { return consume canvas }
     do {
-      return try RasterColorantCanvas(
+      var canvas = try RasterColorantCanvas(
         width: Int(descriptor.mediaBounds.width.rounded()),
         height: Int(descriptor.mediaBounds.height.rounded()),
         colorants: descriptor.colorants.availableColorants.map(\.name)
       )
+      try canvas.configureTrapping(try trappingSession.resolve(activeDevice.trapping, for: descriptor))
+      return consume canvas
     } catch {
       throw SolidPostScript.Error.ioError
     }
@@ -416,8 +419,10 @@ private extension RasterSeparationTarget.Renderer {
     state: GraphicsStateSnapshot,
     paint: GraphicsPaint? = nil,
     clip: GraphicsClip? = nil,
-    depth: Int = 0
+    depth: Int = 0,
+    markKind: RasterTrappingMarkKind = .vector
   ) throws {
+    let state = state.replacingDevice(activeDevice)
     let effectivePaint = paint ?? state.paint
     if case .pattern(let pattern) = effectivePaint {
       try paintPattern(
@@ -432,12 +437,14 @@ private extension RasterSeparationTarget.Renderer {
     }
     let program = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
     try withColorantCanvas { canvas in
+      try canvas.configureTrapping(try trappingSession.resolve(state.device.trapping, for: descriptor))
       try canvas.setClip(try rasterClip(clip ?? state.clip))
       try canvas.fill(
         path.transformed(by: rasterMatrix).rasterPath,
         rule: rule.raster,
         paint: try rasterPaint(effectivePaint, state: state),
-        deviceRendering: program
+        deviceRendering: program,
+        markKind: markKind
       )
     }
   }
@@ -447,6 +454,7 @@ private extension RasterSeparationTarget.Renderer {
     matrix: GraphicsMatrix,
     state: GraphicsStateSnapshot
   ) throws {
+    let state = state.replacingDevice(activeDevice)
     if case .pattern = state.paint {
       let outline = try GraphicsPathGeometry.strokeOutline(path: path, state: state, matrix: matrix)
       try fill(outline, rule: .winding, state: state)
@@ -468,6 +476,7 @@ private extension RasterSeparationTarget.Renderer {
       dashPhase: state.dash.phase
     )
     try withColorantCanvas { canvas in
+      try canvas.configureTrapping(try trappingSession.resolve(state.device.trapping, for: descriptor))
       try canvas.setClip(try rasterClip(state.clip))
       try canvas.stroke(
         path.transformed(by: inverse).rasterPath,
@@ -484,6 +493,7 @@ private extension RasterSeparationTarget.Renderer {
     clip: GraphicsClip,
     state: GraphicsStateSnapshot
   ) throws {
+    let state = state.replacingDevice(activeDevice)
     let effectiveClip = GraphicsClip(
       imageableBounds: clip.imageableBounds,
       constraints: clip.constraints + (shading.clipPath.map {
@@ -522,6 +532,7 @@ private extension RasterSeparationTarget.Renderer {
     }
     let program = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
     try withColorantCanvas { canvas in
+      try canvas.configureTrapping(try trappingSession.resolve(state.device.trapping, for: descriptor))
       try canvas.setClip(try rasterClip(effectiveClip))
       if let background = shading.background {
         try canvas.fill(
@@ -570,11 +581,18 @@ private extension RasterSeparationTarget.Renderer {
   }
 
   func paintText(_ run: GraphicsGlyphRun, state: GraphicsStateSnapshot, depth: Int) throws {
+    let state = state.replacingDevice(activeDevice)
     guard depth < 16 else { throw SolidPostScript.Error.ioError }
     for placement in run.glyphs {
       switch placement.glyph.program {
       case .outline(let path):
-        try fill(path.transformed(by: placement.transform), rule: .winding, state: state, depth: depth)
+        try fill(
+          path.transformed(by: placement.transform),
+          rule: .winding,
+          state: state,
+          depth: depth,
+          markKind: .text
+        )
       case .displayList(let list):
         for effect in list.effects { try replayFormEffect(effect, depth: depth + 1) }
       case .bitmap, .empty, .missing:
@@ -996,6 +1014,7 @@ private extension RasterSeparationTarget.Renderer {
   }
 
   func paintImage(_ image: GraphicsImage, state: GraphicsStateSnapshot) throws {
+    let state = state.replacingDevice(activeDevice)
     let rowCount = image.completedRowCount
     guard rowCount > 0 else { return }
     let (planes, stencil) = try imagePlanes(image, rowCount: rowCount, state: state)
@@ -1019,6 +1038,7 @@ private extension RasterSeparationTarget.Renderer {
     }
     let program = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
     try withColorantCanvas { canvas in
+      try canvas.configureTrapping(try trappingSession.resolve(state.device.trapping, for: descriptor))
       try canvas.setClip(try rasterClip(state.clip))
       try canvas.draw(
         planes,

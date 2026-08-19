@@ -335,6 +335,33 @@ struct RasterSeparationTargetTests {
     #expect(magentaPlates[1].tint.data.allSatisfy { $0 == 255 })
   }
 
+  @Test func enabledTrappingAddsAnOverprintedPlateMarkAtAZoneBoundary() async throws {
+    let trapped = try await renderAdjacentProcessColors(trapping: true)
+    let untrapped = try await renderAdjacentProcessColors(trapping: false)
+    let trappedCyan = try #require(trapped.plates.first { $0.colorant == "Cyan" }).tint
+    let untrappedCyan = try #require(untrapped.plates.first { $0.colorant == "Cyan" }).tint
+
+    #expect(untrappedCyan.data[5 * 20 + 10] == 0)
+    #expect(trappedCyan.data[5 * 20 + 10] > 0)
+    #expect(trappedCyan.data[5 * 20 + 12] == 0)
+  }
+
+  private func renderAdjacentProcessColors(trapping: Bool) async throws -> RasterSeparatedPage {
+    let result = try await Interpreter.render(
+      content: """
+        /Trapping /ProcSet findresource begin
+        << /Trapping \(trapping) >> setpagedevice
+        << /TrapWidth 1 >> settrapparams
+        newpath 0 0 moveto 20 0 lineto 20 10 lineto 0 10 lineto closepath settrapzone
+        1 0 0 0 setcmykcolor 0 0 10 10 rectfill
+        0 1 0 0 setcmykcolor 10 0 10 10 rectfill
+        showpage
+      """,
+      to: smallTarget(width: 20, height: 10)
+    )
+    return try #require(result.output.first)
+  }
+
   private func smallTarget(width: Int, height: Int) -> RasterSeparationTarget {
     let bounds = GraphicsRect(x: 0, y: 0, width: Double(width), height: Double(height))
     return RasterSeparationTarget(deviceDescriptor: GraphicsDeviceDescriptor(
