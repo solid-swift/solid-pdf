@@ -23,6 +23,12 @@ public struct NullGraphicsTarget: GraphicsTarget, Sendable {
       }
     }
 
+    /// Records the requested number of discarded page transmissions.
+    public func transmitPage(_ event: GraphicsEvent, copies: Int) throws {
+      guard copies >= 0 else { throw Error.ioError }
+      pages.append(contentsOf: repeatElement((), count: copies))
+    }
+
     /// Completes the render.
     public func finish() -> sending Void {}
 

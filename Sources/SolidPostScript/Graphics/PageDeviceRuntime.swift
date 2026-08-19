@@ -70,7 +70,11 @@ extension Context {
     operands callbackOperands: [Object]
   ) async throws {
     pageDeviceCallbackStack.append(callback)
-    defer { _ = pageDeviceCallbackStack.popLast() }
+    let operandLimit = operands.reserveAdditionalDepth(callbackOperands.count)
+    defer {
+      operands.setMaximumDepth(operandLimit)
+      _ = pageDeviceCallbackStack.popLast()
+    }
     try await execute(proc: procedure, ops: callbackOperands)
   }
 
@@ -82,7 +86,7 @@ extension Context {
     try await executePageDeviceProcedure(
       parameters.endPage,
       callback: .endPage,
-      operands: [try pageNumberObject(), .integer(reason)]
+      operands: [.integer(reason), try pageNumberObject()]
     )
     return try operands.popAs(BooleanValue.self).value
   }
@@ -107,14 +111,13 @@ extension Context {
     if oldState.device.kind == .page {
       let transmit = try await callEndPage(reason: 2)
       if transmit {
-        let event = GraphicsEvent(
-          operation: .page(.show),
-          before: graphicsState.snapshot,
-          after: graphicsState.snapshot
-        )
-        try graphicsEventConsumer?.transmitPage(event, copies: effectiveCopyCount())
+        try transmitCurrentPage(.show)
       }
-      try graphicsEventConsumer?.deactivateDevice(oldState.device.snapshot)
+      do {
+        try graphicsEventConsumer?.deactivateDevice(oldState.device.snapshot)
+      } catch {
+        throw Error.ioError
+      }
     }
 
     let record = PostScriptDeviceRecord(configuration: configuration)
@@ -136,7 +139,6 @@ extension Context {
 
   func activateNullDevice() throws {
     guard graphicsState.device.kind != .null else { return }
-    suspendedPageStates.append(graphicsState)
     let record = PostScriptDeviceRecord.null()
     graphicsDeviceDescriptor = record.descriptor
     graphicsState = .initial(for: record.descriptor, device: record)
@@ -148,12 +150,93 @@ extension Context {
     }
   }
 
+  func transmitCurrentPage(_ operation: GraphicsOperation.Page) throws {
+    let state = graphicsState
+    let event = GraphicsEvent(operation: .page(operation), before: state.snapshot, after: state.snapshot)
+    do {
+      try graphicsEventConsumer?.transmitPage(event, copies: effectiveCopyCount())
+    } catch let error as Error {
+      throw error
+    } catch {
+      throw Error.ioError
+    }
+  }
+
+  func showCurrentPage() async throws {
+    guard graphicsState.device.kind == .page else { return }
+    let transmit = try await callEndPage(reason: 0)
+    if transmit { try transmitCurrentPage(.show) }
+    graphicsState.device.incrementPageNumber()
+    graphicsState.initializeGraphics(for: graphicsDeviceDescriptor)
+    try await callBeginPage()
+  }
+
+  func copyCurrentPage() async throws {
+    guard graphicsState.device.kind == .page else { return }
+    let transmit = try await callEndPage(reason: 0)
+    if transmit { try transmitCurrentPage(.copy) }
+    try await callBeginPage()
+  }
+
+  func finishCurrentPageDevice() async throws {
+    guard graphicsState.device.kind == .page else { return }
+    if try await callEndPage(reason: 2) {
+      try transmitCurrentPage(.show)
+    }
+    do {
+      try graphicsEventConsumer?.deactivateDevice(graphicsState.device.snapshot)
+    } catch {
+      throw Error.ioError
+    }
+  }
+
+  func transitionGraphicsState(to state: GraphicsCanonicalState) async throws {
+    let current = graphicsState
+    if current.device.identifier == state.device.identifier {
+      graphicsState = state
+      graphicsDeviceDescriptor = state.device.descriptor
+      return
+    }
+
+    if current.device.kind == .null || state.device.kind == .null {
+      graphicsState = state
+      graphicsDeviceDescriptor = state.device.descriptor
+      do {
+        try graphicsEventConsumer?.activateDevice(state.device.snapshot)
+      } catch {
+        throw Error.ioError
+      }
+      return
+    }
+
+    if try await callEndPage(reason: 2) { try transmitCurrentPage(.show) }
+    do {
+      try graphicsEventConsumer?.deactivateDevice(current.device.snapshot)
+    } catch {
+      throw Error.ioError
+    }
+    graphicsState = state
+    graphicsDeviceDescriptor = state.device.descriptor
+    do {
+      try graphicsEventConsumer?.activateDevice(state.device.snapshot)
+    } catch {
+      throw Error.ioError
+    }
+    try await callBeginPage()
+  }
+
   func effectiveCopyCount() throws -> Int {
-    if let copies = graphicsState.device.configuration?.numberOfCopies { return copies }
-    let object = try dictionaries.object(forKey: .literalName("#copies"))
-    let count = try object.value(as: IntegerValue.self).value
-    guard count >= 0 else { throw Error.rangeCheck }
-    return Int(count)
+    let count: Int
+    if let copies = graphicsState.device.configuration?.numberOfCopies {
+      count = copies
+    } else {
+      let object = try dictionaries.object(forKey: .literalName("#copies"))
+      let value = try object.value(as: IntegerValue.self).value
+      guard value >= 0 else { throw Error.rangeCheck }
+      count = Int(value)
+    }
+    guard count <= LanguageLimits.maximumPageCopies else { throw Error.limitCheck }
+    return count
   }
 
   private func pageNumberObject() throws -> Object {

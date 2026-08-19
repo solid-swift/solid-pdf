@@ -26,11 +26,13 @@ where
       case aborted
     }
 
-    private let pixelWidth: Int
-    private let pixelHeight: Int
-    private let descriptor: GraphicsDeviceDescriptor
+    private var pixelWidth: Int
+    private var pixelHeight: Int
+    private var descriptor: GraphicsDeviceDescriptor
     private let colorSession: ColorEngine.Session
-    private let rasterMatrix: GraphicsMatrix
+    private var rasterMatrix: GraphicsMatrix
+    private var activeDeviceIdentifier: GraphicsDeviceIdentifier?
+    private var renderingEnabled = true
     private var canvas: RasterCanvas?
     private var lifecycle = Lifecycle.active
     private var activeImage: (
@@ -93,7 +95,7 @@ where
       case .paint(.form(let form)):
         try paintForm(form, depth: 0)
       case .page(.show), .page(.copy):
-        try transmitPage()
+        try transmitPage(event, copies: 1)
       default:
         break
       }
@@ -141,8 +143,10 @@ where
     public func endImage() throws {
       guard let image = activeImage, lifecycle == .active else { throw SolidPostScript.Error.ioError }
       activeImage = nil
+      let resolved = try image.converter.finish()
+      guard renderingEnabled else { return }
       try draw(
-        image.converter.finish(),
+        resolved,
         descriptor: image.descriptor,
         state: image.state,
         mask: try rasterMask(
@@ -156,6 +160,55 @@ where
     public func abortImage() {
       activeImage?.converter.abort()
       activeImage = nil
+    }
+
+    /// Activates page geometry negotiated by the render's page-device session.
+    public func activateDevice(_ device: GraphicsDeviceSnapshot) throws {
+      guard lifecycle == .active else { throw SolidPostScript.Error.ioError }
+      if device.kind == .null {
+        renderingEnabled = false
+        return
+      }
+      renderingEnabled = true
+      guard activeDeviceIdentifier != device.identifier else { return }
+      let width = Int(device.descriptor.mediaBounds.width.rounded())
+      let height = Int(device.descriptor.mediaBounds.height.rounded())
+      try Self.validate(pixelWidth: width, pixelHeight: height, descriptor: device.descriptor)
+      activeDeviceIdentifier = device.identifier
+      pixelWidth = width
+      pixelHeight = height
+      descriptor = device.descriptor
+      rasterMatrix = Self.makeRasterMatrix(device.descriptor)
+      canvas = nil
+      cachedGraphicsClip = nil
+      cachedRasterClip = nil
+    }
+
+    /// Discards the page raster owned by a deactivated device.
+    public func deactivateDevice(_ device: GraphicsDeviceSnapshot) {
+      if activeDeviceIdentifier == device.identifier {
+        canvas = nil
+        activeDeviceIdentifier = nil
+      }
+    }
+
+    /// Transmits immutable copies of the current page and starts a fresh raster.
+    public func transmitPage(_ event: GraphicsEvent, copies: Int) throws {
+      guard lifecycle == .active, copies >= 0 else { throw SolidPostScript.Error.ioError }
+      guard renderingEnabled else { return }
+      if copies == 0 {
+        canvas = nil
+        return
+      }
+      let current = try takeCanvas()
+      do {
+        let image = try current.finish()
+        canvas = nil
+        pages.append(contentsOf: repeatElement(image, count: copies))
+      } catch {
+        canvas = nil
+        throw SolidPostScript.Error.ioError
+      }
     }
 
     /// Completes the render and discards its untransmitted page.
@@ -223,10 +276,22 @@ where
       }
     }
 
+    private static func makeRasterMatrix(_ descriptor: GraphicsDeviceDescriptor) -> GraphicsMatrix {
+      GraphicsMatrix(
+        a: 1,
+        b: 0,
+        c: 0,
+        d: -1,
+        tx: -descriptor.mediaBounds.x,
+        ty: descriptor.mediaBounds.maxY
+      )
+    }
+
     private func withCanvas(_ body: (inout RasterCanvas) throws -> Void) throws {
       guard lifecycle == .active else {
         throw SolidPostScript.Error.ioError
       }
+      guard renderingEnabled else { return }
       var current = try takeCanvas()
       do {
         try body(&current)
@@ -733,19 +798,6 @@ where
       do {
         return try RasterMask(width: width, height: height, bytesPerRow: width, data: bytes)
       } catch {
-        throw SolidPostScript.Error.ioError
-      }
-    }
-
-    private func transmitPage() throws {
-      guard lifecycle == .active else { throw SolidPostScript.Error.ioError }
-      let current = try takeCanvas()
-      do {
-        let image = try current.finish()
-        canvas = nil
-        pages.append(image)
-      } catch {
-        canvas = nil
         throw SolidPostScript.Error.ioError
       }
     }

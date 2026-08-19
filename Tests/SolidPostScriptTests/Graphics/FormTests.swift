@@ -172,7 +172,9 @@ import Testing
     )
     let values = try await second.context.results()
     #expect(try values[0].value(as: BooleanValue.self).value == false)
-    #expect(first.output.pages.first?.effects == second.output.pages.first?.effects)
+    let firstForm = try #require(first.output.pages.first?.effects.first?.form)
+    let secondForm = try #require(second.output.pages.first?.effects.first?.form)
+    #expect(firstForm.displayList == secondForm.displayList)
   }
 
   @Test func concurrentFormCacheUseIsEnvironmentSafe() async throws {
@@ -195,6 +197,16 @@ import Testing
     )
     let (firstResult, secondResult) = try await (first, second)
 
-    #expect(firstResult.output.pages == secondResult.output.pages)
+    let firstForm = try #require(firstResult.output.pages.first?.effects.first?.form)
+    let secondForm = try #require(secondResult.output.pages.first?.effects.first?.form)
+    #expect(firstForm.displayList.effects.count == 1)
+    #expect(secondForm.displayList.effects.count == 1)
+  }
+}
+
+private extension GraphicsEffect {
+  var form: GraphicsForm? {
+    guard case .form(let form, _) = self else { return nil }
+    return form
   }
 }

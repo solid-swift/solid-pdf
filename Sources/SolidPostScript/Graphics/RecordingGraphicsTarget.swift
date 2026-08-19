@@ -13,8 +13,9 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
     /// Pages transmitted so far.
     public private(set) var pages: [RecordedGraphicsPage] = []
 
-    private let descriptor: GraphicsDeviceDescriptor
+    private var descriptor: GraphicsDeviceDescriptor
     private var effects: [GraphicsEffect] = []
+    private var renderingEnabled = true
     private var activeImage: (
       descriptor: GraphicsImageDescriptor,
       state: GraphicsStateSnapshot,
@@ -31,7 +32,7 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
 
     /// Processes one graphics event.
     public func process(_ event: GraphicsEvent) {
-      guard !aborted else { return }
+      guard !aborted, renderingEnabled else { return }
       switch event.operation {
       case .paint(.erasePage):
         effects.append(.erase(state: event.before))
@@ -52,7 +53,7 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       case .paint(.form(let form)):
         effects.append(.form(form, state: event.before))
       case .page(.show), .page(.copy):
-        pages.append(RecordedGraphicsPage(deviceDescriptor: descriptor, effects: effects))
+        pages.append(RecordedGraphicsPage(deviceDescriptor: event.before.device.descriptor, effects: effects))
         effects.removeAll(keepingCapacity: true)
       default:
         break
@@ -97,6 +98,10 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
     /// Commits the recorded sampled image.
     public func endImage() throws {
       guard let image = activeImage else { throw Error.ioError }
+      guard renderingEnabled else {
+        activeImage = nil
+        return
+      }
       if !image.components.isEmpty, image.descriptor.width > 0, image.descriptor.height > 0 {
         effects.append(
           .image(
@@ -118,6 +123,25 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
     /// Abandons the active sampled image without recording it.
     public func abortImage() {
       activeImage = nil
+    }
+
+    /// Selects the descriptor associated with the active virtual device.
+    public func activateDevice(_ device: GraphicsDeviceSnapshot) {
+      renderingEnabled = device.kind == .page
+      if renderingEnabled { descriptor = device.descriptor }
+    }
+
+    /// Discards the raster memory associated with a deactivated page device.
+    public func deactivateDevice(_ device: GraphicsDeviceSnapshot) {
+      effects.removeAll(keepingCapacity: true)
+    }
+
+    /// Records the requested immutable copies and clears the transmitted page.
+    public func transmitPage(_ event: GraphicsEvent, copies: Int) throws {
+      guard copies >= 0 else { throw Error.ioError }
+      let page = RecordedGraphicsPage(deviceDescriptor: event.before.device.descriptor, effects: effects)
+      pages.append(contentsOf: repeatElement(page, count: copies))
+      effects.removeAll(keepingCapacity: true)
     }
 
     /// Completes the recording and discards the untransmitted final page.

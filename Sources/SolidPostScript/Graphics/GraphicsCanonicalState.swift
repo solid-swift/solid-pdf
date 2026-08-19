@@ -107,6 +107,7 @@ struct GraphicsCanonicalState: Sendable {
 
   mutating func initializeGraphics(for descriptor: GraphicsDeviceDescriptor) {
     let preservedDevice = device
+    let preservedPageDeviceParameters = pageDeviceParameters
     let preservedColorRenderingSource = colorRenderingSource
     let preservedOverprint = overprint
     let preservedFlatness = flatness
@@ -114,6 +115,7 @@ struct GraphicsCanonicalState: Sendable {
     let preservedSmoothness = smoothness
     let preservedClipStack = clipStack
     self = .initial(for: descriptor, device: preservedDevice)
+    pageDeviceParameters = preservedPageDeviceParameters
     colorRenderingSource = preservedColorRenderingSource
     overprint = preservedOverprint
     flatness = preservedFlatness

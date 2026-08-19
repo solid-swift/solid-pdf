@@ -94,11 +94,7 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       guard context.encapsulatedPaintDepth == 0 else { throw Error.undefined }
-      let before = context.graphicsState
-      var after = before
-      after.initializeGraphics(for: context.graphicsDeviceDescriptor)
-      try context.emitGraphicsOperation(.page(.show), before: before, after: after)
-      context.graphicsState = after
+      try await context.showCurrentPage()
     }
   }
 
@@ -108,8 +104,7 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       guard context.encapsulatedPaintDepth == 0 else { throw Error.undefined }
-      let state = context.graphicsState
-      try context.emitGraphicsOperation(.page(.copy), before: state, after: state)
+      try await context.copyCurrentPage()
     }
   }
 

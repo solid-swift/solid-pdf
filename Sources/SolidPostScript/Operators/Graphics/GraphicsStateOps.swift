@@ -69,7 +69,7 @@ extension Operators {
       if removesFrame {
         _ = context.graphicsStack.popLast()
       }
-      context.graphicsState = after
+      try await context.transitionGraphicsState(to: after)
     }
   }
 
@@ -83,7 +83,7 @@ extension Operators {
         if case .languageSave = $0.kind { return true }
         return false
       }
-      let after: GraphicsCanonicalState
+      var after: GraphicsCanonicalState
       var nextStack = context.graphicsStack
       if let languageIndex {
         after = context.graphicsStack[languageIndex].state
@@ -92,11 +92,12 @@ extension Operators {
         after = first.state
         nextStack.removeAll()
       } else {
-        after = .initial(for: context.graphicsDeviceDescriptor)
+        after = .initial(for: context.graphicsDeviceDescriptor, device: context.graphicsState.device)
+        after.pageDeviceParameters = context.graphicsState.pageDeviceParameters
       }
       try context.emitGraphicsOperation(.state(.restoreAll), before: before, after: after)
       context.graphicsStack = nextStack
-      context.graphicsState = after
+      try await context.transitionGraphicsState(to: after)
     }
   }
 
@@ -173,7 +174,9 @@ extension Operators {
     func execute(context: isolated Context) async throws {
       let value: GraphicsStateValue = try context.operands.popAs()
       let state = value.state()
-      try context.applyGraphicsOperation(.state(.setGraphicsState)) { $0 = state }
+      let before = context.graphicsState
+      try context.emitGraphicsOperation(.state(.setGraphicsState), before: before, after: state)
+      try await context.transitionGraphicsState(to: state)
     }
   }
 

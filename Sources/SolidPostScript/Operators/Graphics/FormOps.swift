@@ -145,6 +145,14 @@ extension Operators {
     context: isolated Context
   ) -> FormCacheKey {
     let usesXUID = definition.xuid != nil
+    let state = context.graphicsState.snapshot
+    let cacheDevice = GraphicsDeviceSnapshot(
+      identifier: .cacheKey,
+      kind: state.device.kind,
+      descriptor: state.device.descriptor,
+      pageNumber: 0,
+      numberOfCopies: nil
+    )
     return FormCacheKey(
       identity: usesXUID ? nil : dictionary.allocation.identity,
       revision: usesXUID ? 0 : dictionary.revision,
@@ -154,7 +162,7 @@ extension Operators {
       paintProcedureIdentity: usesXUID ? nil : definition.paintProcedureIdentity,
       paintProcedureRevision: usesXUID ? 0 : definition.paintProcedureRevision,
       device: context.graphicsDeviceDescriptor,
-      savedState: context.graphicsState.snapshot
+      savedState: state.replacingDevice(cacheDevice)
     )
   }
 }

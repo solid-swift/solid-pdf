@@ -81,7 +81,7 @@ private extension Context {
     operands = OperandStack()
   }
 
-  func restoreNameTestSnapshot(_ snapshot: Snapshot) throws {
-    try snapshot.restore(to: self)
+  func restoreNameTestSnapshot(_ snapshot: Snapshot) async throws {
+    try await snapshot.restore(to: self)
   }
 }

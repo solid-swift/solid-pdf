@@ -28,11 +28,13 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     private static let maximumBitmapBytes = 512 * 1_024 * 1_024
     private static let maximumDimension = (1 << 15) - 1
 
-    private let pixelWidth: Int
-    private let pixelHeight: Int
-    private let descriptor: GraphicsDeviceDescriptor
+    private var pixelWidth: Int
+    private var pixelHeight: Int
+    private var descriptor: GraphicsDeviceDescriptor
     private let colorSession: NativeGraphicsColorSession
-    private let rasterMatrix: GraphicsMatrix
+    private var rasterMatrix: GraphicsMatrix
+    private var activeDeviceIdentifier: GraphicsDeviceIdentifier?
+    private var renderingEnabled = true
     private var surface: OpaquePointer?
     private var canvas: OpaquePointer?
     private var lifecycle = Lifecycle.active
@@ -72,7 +74,9 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
 
     /// Processes one graphics event using its authoritative state snapshots.
     public func process(_ event: GraphicsEvent) throws {
-      guard lifecycle == .active, let canvas else { throw SolidPostScript.Error.ioError }
+      guard lifecycle == .active else { throw SolidPostScript.Error.ioError }
+      guard renderingEnabled else { return }
+      guard let canvas else { throw SolidPostScript.Error.ioError }
       switch event.operation {
       case .paint(.erasePage):
         try erasePage(in: canvas)
@@ -98,7 +102,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       case .paint(.form(let form)):
         try paintForm(form, in: canvas, depth: 0)
       case .page(.show), .page(.copy):
-        try showPage()
+        try transmitPage(event, copies: 1)
       default:
         break
       }
@@ -146,12 +150,15 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
 
     /// Commits and paints the active sampled image.
     public func endImage() throws {
-      guard let image = activeImage, lifecycle == .active, let canvas else {
+      guard let image = activeImage, lifecycle == .active else {
         throw SolidPostScript.Error.ioError
       }
       activeImage = nil
+      let resolved = try image.converter.finish()
+      guard renderingEnabled else { return }
+      guard let canvas else { throw SolidPostScript.Error.ioError }
       try draw(
-        image.converter.finish(),
+        resolved,
         descriptor: image.descriptor,
         state: image.state,
         mask: try rasterMask(descriptor: image.descriptor, opacities: image.maskOpacities),
@@ -163,6 +170,52 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     public func abortImage() {
       activeImage?.converter.abort()
       activeImage = nil
+    }
+
+    /// Activates page geometry negotiated by the page-device session.
+    public func activateDevice(_ device: GraphicsDeviceSnapshot) throws {
+      guard lifecycle == .active else { throw SolidPostScript.Error.ioError }
+      if device.kind == .null {
+        renderingEnabled = false
+        return
+      }
+      renderingEnabled = true
+      guard activeDeviceIdentifier != device.identifier else { return }
+      let width = Int(device.descriptor.mediaBounds.width.rounded())
+      let height = Int(device.descriptor.mediaBounds.height.rounded())
+      try Self.validate(pixelWidth: width, pixelHeight: height, descriptor: device.descriptor)
+      let page = try Self.makePage(pixelWidth: width, pixelHeight: height)
+      releasePage()
+      pixelWidth = width
+      pixelHeight = height
+      descriptor = device.descriptor
+      rasterMatrix = Self.makeRasterMatrix(device.descriptor)
+      surface = page.surface
+      canvas = page.canvas
+      activeDeviceIdentifier = device.identifier
+    }
+
+    /// Discards the page raster owned by a deactivated device.
+    public func deactivateDevice(_ device: GraphicsDeviceSnapshot) {
+      if activeDeviceIdentifier == device.identifier {
+        releasePage()
+        activeDeviceIdentifier = nil
+      }
+    }
+
+    /// Transmits immutable copies of the current page and starts a fresh surface.
+    public func transmitPage(_ event: GraphicsEvent, copies: Int) throws {
+      guard lifecycle == .active, copies >= 0 else { throw SolidPostScript.Error.ioError }
+      guard renderingEnabled else { return }
+      guard let surface else { throw SolidPostScript.Error.ioError }
+      if copies > 0 {
+        let image = try snapshot(surface)
+        pages.append(contentsOf: repeatElement(image, count: copies))
+      }
+      let next = try Self.makePage(pixelWidth: pixelWidth, pixelHeight: pixelHeight)
+      releasePage()
+      self.surface = next.surface
+      self.canvas = next.canvas
     }
 
     /// Completes the render and discards the current untransmitted page.
@@ -258,16 +311,6 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       }
     }
 
-    private func showPage() throws {
-      guard let surface else { throw SolidPostScript.Error.ioError }
-      let image = try snapshot(surface)
-      let next = try Self.makePage(pixelWidth: pixelWidth, pixelHeight: pixelHeight)
-      releasePage()
-      self.surface = next.surface
-      self.canvas = next.canvas
-      pages.append(image)
-    }
-
     private func snapshot(_ surface: OpaquePointer) throws -> RasterImage {
       let width = Int(plutovg_surface_get_width(surface))
       let height = Int(plutovg_surface_get_height(surface))
@@ -297,6 +340,17 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         bytesPerRow: bytesPerRow,
         pixelFormat: .rgba8Unorm,
         data: data
+      )
+    }
+
+    private static func makeRasterMatrix(_ descriptor: GraphicsDeviceDescriptor) -> GraphicsMatrix {
+      GraphicsMatrix(
+        a: 1,
+        b: 0,
+        c: 0,
+        d: -1,
+        tx: -descriptor.mediaBounds.x,
+        ty: descriptor.mediaBounds.maxY
       )
     }
 

@@ -6,6 +6,19 @@ import SolidRaster
 import Testing
 
 @Suite struct RasterImageTargetTests {
+  @Test func adaptivePageDevicesProduceMixedRasterDimensions() async throws {
+    let result = try await Interpreter.render(
+      content: """
+        << /PageSize [10 20] >> setpagedevice showpage
+        << /PageSize [30 15] >> setpagedevice showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+
+    #expect(result.output.map(\.width) == [10, 30])
+    #expect(result.output.map(\.height) == [20, 15])
+  }
+
   @Test func incompleteImageTransfersKeepMissingRowsTransparent() throws {
     let descriptor = GraphicsImageDescriptor(
       width: 2,

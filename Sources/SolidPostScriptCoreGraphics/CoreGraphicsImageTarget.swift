@@ -21,11 +21,13 @@ where
     /// Images transmitted by `showpage` so far.
     public private(set) var pages: [CGImage] = []
 
-    private let pixelWidth: Int
-    private let pixelHeight: Int
-    private let descriptor: GraphicsDeviceDescriptor
+    private var pixelWidth: Int
+    private var pixelHeight: Int
+    private var descriptor: GraphicsDeviceDescriptor
     private let colorSession: ColorEngine.Session
-    private let rasterMatrix: GraphicsMatrix
+    private var rasterMatrix: GraphicsMatrix
+    private var activeDeviceIdentifier: GraphicsDeviceIdentifier?
+    private var renderingEnabled = true
     private var context: CGContext?
     private var activeImage: (
       descriptor: GraphicsImageDescriptor,
@@ -67,6 +69,7 @@ where
 
     /// Processes one graphics event using its authoritative state snapshots.
     public func process(_ event: GraphicsEvent) throws {
+      guard renderingEnabled else { return }
       guard let context else { throw SolidPostScript.Error.ioError }
       switch event.operation {
       case .paint(.erasePage):
@@ -93,15 +96,7 @@ where
       case .paint(.form(let form)):
         try paintForm(form, in: context, depth: 0)
       case .page(.show), .page(.copy):
-        guard let image = context.makeImage() else { throw SolidPostScript.Error.ioError }
-        let next = try Self.makePage(
-          pixelWidth: pixelWidth,
-          pixelHeight: pixelHeight,
-          descriptor: descriptor,
-          colorSpace: colorSession.destinationColorSpace
-        )
-        pages.append(image)
-        self.context = next
+        try transmitPage(event, copies: 1)
       default:
         break
       }
@@ -146,10 +141,13 @@ where
 
     /// Commits and paints the active sampled image.
     public func endImage() throws {
-      guard let image = activeImage, let context else { throw SolidPostScript.Error.ioError }
+      guard let image = activeImage else { throw SolidPostScript.Error.ioError }
       activeImage = nil
+      let resolved = try image.converter.finish()
+      guard renderingEnabled else { return }
+      guard let context else { throw SolidPostScript.Error.ioError }
       try draw(
-        image.converter.finish(),
+        resolved,
         descriptor: image.descriptor,
         state: image.state,
         mask: try rasterMask(descriptor: image.descriptor, opacities: image.maskOpacities),
@@ -161,6 +159,54 @@ where
     public func abortImage() {
       activeImage?.converter.abort()
       activeImage = nil
+    }
+
+    /// Activates page geometry negotiated by the page-device session.
+    public func activateDevice(_ device: GraphicsDeviceSnapshot) throws {
+      if device.kind == .null {
+        renderingEnabled = false
+        return
+      }
+      renderingEnabled = true
+      guard activeDeviceIdentifier != device.identifier else { return }
+      let width = Int(device.descriptor.mediaBounds.width.rounded())
+      let height = Int(device.descriptor.mediaBounds.height.rounded())
+      pixelWidth = width
+      pixelHeight = height
+      descriptor = device.descriptor
+      rasterMatrix = Self.makeRasterMatrix(device.descriptor)
+      context = try Self.makePage(
+        pixelWidth: width,
+        pixelHeight: height,
+        descriptor: device.descriptor,
+        colorSpace: colorSession.destinationColorSpace
+      )
+      activeDeviceIdentifier = device.identifier
+    }
+
+    /// Discards the raster owned by a deactivated device.
+    public func deactivateDevice(_ device: GraphicsDeviceSnapshot) {
+      if activeDeviceIdentifier == device.identifier {
+        context = nil
+        activeDeviceIdentifier = nil
+      }
+    }
+
+    /// Transmits immutable copies of the current bitmap and starts a fresh page.
+    public func transmitPage(_ event: GraphicsEvent, copies: Int) throws {
+      guard copies >= 0 else { throw SolidPostScript.Error.ioError }
+      guard renderingEnabled else { return }
+      guard let context else { throw SolidPostScript.Error.ioError }
+      if copies > 0 {
+        guard let image = context.makeImage() else { throw SolidPostScript.Error.ioError }
+        pages.append(contentsOf: repeatElement(image, count: copies))
+      }
+      self.context = try Self.makePage(
+        pixelWidth: pixelWidth,
+        pixelHeight: pixelHeight,
+        descriptor: descriptor,
+        colorSpace: colorSession.destinationColorSpace
+      )
     }
 
     /// Completes the job and discards the current untransmitted page.
@@ -216,6 +262,17 @@ where
       context.fill(CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
       context.clip(to: descriptor.imageableBounds.cgRect)
       return context
+    }
+
+    private static func makeRasterMatrix(_ descriptor: GraphicsDeviceDescriptor) -> GraphicsMatrix {
+      GraphicsMatrix(
+        a: 1,
+        b: 0,
+        c: 0,
+        d: -1,
+        tx: -descriptor.mediaBounds.x,
+        ty: descriptor.mediaBounds.maxY
+      )
     }
 
     private func erasePage(_ context: CGContext) {

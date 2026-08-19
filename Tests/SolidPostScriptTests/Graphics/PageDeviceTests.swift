@@ -83,4 +83,108 @@ struct PageDeviceTests {
     #expect(try values[3].value(as: RealValue.self).value == 0)
     #expect(try values[2].value(as: RealValue.self).value == 1)
   }
+
+  @Test func pageLifecycleUsesCountsReasonsAndConfiguredCopies() async throws {
+    let result = try await Interpreter.render(
+      content: """
+        /begins 0 def /lastBegin -1 def /lastReason -1 def
+        << /NumCopies 2
+           /BeginPage { /lastBegin exch def /begins begins 1 add def }
+           /EndPage { /lastReason exch def pop lastReason 2 ne }
+        >> setpagedevice
+        showpage
+        begins lastBegin
+      """,
+      to: RecordingGraphicsTarget()
+    )
+    let values = try await result.context.results()
+
+    #expect(result.output.pages.count == 2)
+    #expect(try values[0].value(as: IntegerValue.self).value == 1)
+    #expect(try values[1].value(as: IntegerValue.self).value == 2)
+    let lastReason: IntegerValue = try await result.context.currentDictionary()
+      .objectValue(forKey: "lastReason")
+    #expect(lastReason.value == 2)
+  }
+
+  @Test func customEndPageCanTransmitAnIncompleteFinalPage() async throws {
+    let result = try await Interpreter.render(
+      content: """
+        << /EndPage { pop pop true } >> setpagedevice
+        0 0 moveto 10 0 lineto stroke
+      """,
+      to: RecordingGraphicsTarget()
+    )
+
+    #expect(result.output.pages.count == 1)
+    if let page = result.output.pages.first {
+      #expect(page.effects.count == 2)
+    }
+  }
+
+  @Test func adaptiveRenderRecordsMixedPageGeometry() async throws {
+    let result = try await Interpreter.render(
+      content: """
+        << /PageSize [100 120] >> setpagedevice showpage
+        << /PageSize [200 80] >> setpagedevice showpage
+      """,
+      to: RecordingGraphicsTarget()
+    )
+
+    #expect(result.output.pages.map(\.deviceDescriptor.mediaBounds.width) == [100, 200])
+    #expect(result.output.pages.map(\.deviceDescriptor.mediaBounds.height) == [120, 80])
+  }
+
+  @Test func nullDeviceSuspendsAndRestoresPageMarksAcrossGSave() async throws {
+    let result = try await Interpreter.render(
+      content: """
+        0 0 moveto 10 0 lineto stroke
+        gsave nulldevice 0 0 moveto 20 0 lineto stroke grestore
+        0 0 moveto 30 0 lineto stroke showpage
+      """,
+      to: RecordingGraphicsTarget()
+    )
+
+    #expect(result.output.pages.count == 1)
+    #expect(result.output.pages[0].effects.count == 2)
+  }
+
+  @Test func zeroCopiesStillClearsThePage() async throws {
+    let result = try await Interpreter.render(
+      content: """
+        << /NumCopies 0 >> setpagedevice
+        0 0 moveto 10 0 lineto stroke showpage
+      """,
+      to: RecordingGraphicsTarget()
+    )
+
+    #expect(result.output.pages.isEmpty)
+  }
+
+  @Test func nullNumCopiesUsesDynamicUserDictionaryValue() async throws {
+    let result = try await Interpreter.render(
+      content: """
+        << /NumCopies null >> setpagedevice
+        /#copies 3 def showpage
+      """,
+      to: RecordingGraphicsTarget()
+    )
+
+    #expect(result.output.pages.count == 3)
+  }
+
+  @Test func copyPageDoesNotIncrementTheShowPageCount() async throws {
+    let result = try await Interpreter.render(
+      content: """
+        /lastBegin -1 def
+        << /BeginPage { /lastBegin exch def } >> setpagedevice
+        copypage lastBegin
+      """,
+      to: RecordingGraphicsTarget()
+    )
+    let values = try await result.context.results()
+
+    #expect(result.output.pages.count == 1)
+    #expect(try values[0].value(as: IntegerValue.self).value == 0)
+  }
 }

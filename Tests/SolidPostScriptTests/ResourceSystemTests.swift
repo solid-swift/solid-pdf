@@ -589,8 +589,8 @@ private extension Context {
     try await pushAndRun(source: .file(file, access: .readOnly, vm: .local, kind: .executable))
   }
 
-  func restoreResourceSnapshot(_ snapshot: Snapshot) throws {
-    try snapshot.restore(to: self)
+  func restoreResourceSnapshot(_ snapshot: Snapshot) async throws {
+    try await snapshot.restore(to: self)
   }
 
   func peekOperandAfterExecuting(_ content: String) async throws -> StringValue {

@@ -12,6 +12,19 @@ import SolidPostScriptCoreGraphics
 @Suite
 struct PlutoVGImageTargetTests {
 
+  @Test func adaptivePageDevicesProduceMixedRasterDimensions() async throws {
+    let result = try await Interpreter.render(
+      content: """
+        << /PageSize [10 20] >> setpagedevice showpage
+        << /PageSize [30 15] >> setpagedevice showpage
+      """,
+      to: PlutoVGImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+
+    #expect(result.output.map(\.width) == [10, 30])
+    #expect(result.output.map(\.height) == [20, 15])
+  }
+
   @Test func tilingPatternsRepeatTheirTransparentKeyCell() async throws {
     let result = try await Interpreter.render(
       content: """

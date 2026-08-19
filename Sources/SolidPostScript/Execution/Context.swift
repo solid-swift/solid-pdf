@@ -98,7 +98,6 @@ public actor Context {
   var activeImageDictionaries: [(dictionary: DictionaryValue, revision: UInt64)] = []
   var graphicsStack: [GraphicsStackFrame] = []
   var pageDeviceCallbackStack: [PageDeviceCallback] = []
-  var suspendedPageStates: [GraphicsCanonicalState] = []
   private var executionBoundarySequence: UInt64 = 0
   private var executionTimingDepth = 0
   private var hostSuspensionDepth = 0
@@ -330,11 +329,14 @@ public actor Context {
     precondition(graphicsEventConsumer == nil, "A PostScript context cannot run overlapping renders")
     try resetGraphics(for: pageDeviceSession.initialConfiguration)
     graphicsPageDeviceSession = pageDeviceSession
+    try ensurePageDevice()
     graphicsEventConsumer = renderer
     do {
+      try renderer.activateDevice(graphicsState.device.snapshot)
       try await executeStart()
       try await prepareIdiomResources()
       try await pushAndRun(source: source)
+      try await finishCurrentPageDevice()
       let output = try renderer.finish()
       graphicsEventConsumer = nil
       graphicsPageDeviceSession = nil
@@ -382,6 +384,7 @@ public actor Context {
   func beginSessionJob() async throws {
     try await withUserTimeAccounting {
       try beginJob(persistent: false, authorization: .ordinary)
+      try ensurePageDevice()
       try await prepareIdiomResources()
     }
   }
@@ -1160,10 +1163,10 @@ public actor Context {
     dictionaries.clear()
     await closeFilesForJob(allocatedAfter: job.localBoundary, globalBoundary: job.globalBoundary)
     if job.persistent, let pendingSave = languageSaves.first {
-      try pendingSave.restore(to: self)
+      try await pendingSave.restore(to: self)
     }
     if let snapshot = job.snapshot {
-      try snapshot.restore(to: self)
+      try await snapshot.restore(to: self)
     }
     guard job.resourceTransactionIndex < resourceLoadTransactions.count else {
       throw Error.invalidRestore

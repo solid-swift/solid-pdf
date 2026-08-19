@@ -12,4 +12,12 @@ public struct GraphicsDeviceIdentifier: Sendable, Hashable {
   init(rawValue: UUID) {
     self.rawValue = rawValue
   }
+
+  static let cacheKey = Self(rawValue: UUID(uuid: (
+    0, 0, 0, 0,
+    0, 0,
+    0, 0,
+    0, 0,
+    0, 0, 0, 0, 0, 0
+  )))
 }

@@ -75,4 +75,26 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     self.pathBoundingBox = pathBoundingBox
     self.device = device
   }
+
+  func replacingDevice(_ device: GraphicsDeviceSnapshot) -> Self {
+    Self(
+      matrix: matrix,
+      path: path,
+      clip: clip,
+      paint: paint,
+      colorSpace: colorSpace,
+      colorComponents: colorComponents,
+      overprint: overprint,
+      lineWidth: lineWidth,
+      lineCap: lineCap,
+      lineJoin: lineJoin,
+      miterLimit: miterLimit,
+      dash: dash,
+      flatness: flatness,
+      strokeAdjustment: strokeAdjustment,
+      smoothness: smoothness,
+      pathBoundingBox: pathBoundingBox,
+      device: device
+    )
+  }
 }

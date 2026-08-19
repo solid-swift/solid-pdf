@@ -65,11 +65,13 @@ public actor InterpreterSession {
       try await context.beginSessionJob()
       try await environment.emit(.jobStarted(persistent: false))
       try await context.pushAndRun(source: source)
+      try await context.finishCurrentPageDevice()
       let persistent = await context.currentJobPersistent
       try await context.finishSessionJob()
       try await environment.emit(.jobFinished(persistent: persistent))
       return context
     } catch Error.control(.stop) {
+      try await context.finishCurrentPageDevice()
       let persistent = await context.currentJobPersistent
       try await context.finishSessionJob()
       try await environment.emit(.jobFinished(persistent: persistent))

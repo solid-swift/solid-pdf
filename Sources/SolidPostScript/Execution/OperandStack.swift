@@ -31,6 +31,13 @@ struct OperandStack {
     self.maximumDepth = maximumDepth
   }
 
+  mutating func reserveAdditionalDepth(_ count: Int) -> Int {
+    let previousMaximum = maximumDepth
+    let (reservedMaximum, overflow) = max(maximumDepth, depth).addingReportingOverflow(count)
+    maximumDepth = overflow ? .max : reservedMaximum
+    return previousMaximum
+  }
+
   mutating func throwIfOverflowed() throws {
     guard overflowed else { return }
     overflowed = false

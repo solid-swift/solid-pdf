@@ -244,7 +244,7 @@ public final class Snapshot: Sendable {
     releaseAccounting()
   }
 
-  internal func restore(to context: isolated Context) throws {
+  internal func restore(to context: isolated Context) async throws {
 
     try check(context: context)
 
@@ -275,7 +275,7 @@ public final class Snapshot: Sendable {
       context.objectFormat = objectFormat
       context.userParameters = userParameters
       context.localResources = localResources
-      context.graphicsState = graphicsState
+      try await context.transitionGraphicsState(to: graphicsState)
       context.graphicsStack = graphicsStack
       context.saveDepth = saveDepth
       context.applyUserParameterLimits()
