@@ -367,6 +367,8 @@ where
       let effectRule: GraphicsFillRule
       let effectState: GraphicsStateSnapshot
       switch effect {
+      case .form:
+        return
       case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
         effectPath = path.transformed(by: translation)
         effectRule = rule

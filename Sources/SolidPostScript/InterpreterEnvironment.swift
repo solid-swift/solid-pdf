@@ -18,6 +18,7 @@ public final class InterpreterEnvironment: Sendable {
   let monotonicInstantSource: any MonotonicInstantSource
   let userPathCache = UserPathCache()
   let patternCache = PatternCache()
+  let formCache = FormCache()
 
   /// The application integration used by this environment.
   public let hostConfiguration: InterpreterHostConfiguration
@@ -249,6 +250,9 @@ public final class InterpreterEnvironment: Sendable {
     let patternStatus = patternCache.status()
     values["CurPatternCache"] = .integer(Int32(clamping: patternStatus.bytes))
     values["MaxPatternCache"] = .integer(Int32(clamping: patternStatus.maximumBytes))
+    let formStatus = formCache.status()
+    values["CurFormCache"] = .integer(Int32(clamping: formStatus.bytes))
+    values["MaxFormCache"] = .integer(Int32(clamping: formStatus.maximumBytes))
     return values
   }
 
@@ -348,6 +352,11 @@ public final class InterpreterEnvironment: Sendable {
       return value
     }
     patternCache.setMaximumBytes(Int(patternMaximum))
+    let formMaximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxFormCache"] else { return 0 }
+      return value
+    }
+    formCache.setMaximumBytes(Int(formMaximum))
   }
 
 

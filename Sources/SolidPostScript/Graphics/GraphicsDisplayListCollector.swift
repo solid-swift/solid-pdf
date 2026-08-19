@@ -1,6 +1,6 @@
 import Foundation
 
-final class PatternDisplayListConsumer: GraphicsEventConsumer {
+final class GraphicsDisplayListCollector: GraphicsEventConsumer {
   private(set) var effects: [GraphicsEffect] = []
   private var activeImage: (
     descriptor: GraphicsImageDescriptor,
@@ -27,6 +27,8 @@ final class PatternDisplayListConsumer: GraphicsEventConsumer {
       effects.append(.strokeRectangles(paths: paths, matrix: matrix, state: event.before))
     case .paint(.shading(let shading)):
       effects.append(.shading(shading, state: event.before))
+    case .paint(.form(let form)):
+      effects.append(.form(form, state: event.before))
     case .page:
       throw Error.undefined
     default:
@@ -62,6 +64,7 @@ final class PatternDisplayListConsumer: GraphicsEventConsumer {
   }
 
   func abortImage() { activeImage = nil }
+
   func abort() {
     activeImage = nil
     effects.removeAll()

@@ -120,13 +120,7 @@ final class PatternCache: Sendable {
   }
 
   private static func footprint(_ pattern: GraphicsTilingPattern) -> Int {
-    var bytes = 256
-    for effect in pattern.displayList.effects {
-      let addition = bytes.addingReportingOverflow(footprint(effect))
-      guard !addition.overflow else { return .max }
-      bytes = addition.partialValue
-    }
-    return bytes
+    pattern.displayList.checkedFootprint()
   }
 
   private func evict(bytes: Int, state: inout State) {
@@ -156,25 +150,4 @@ final class PatternCache: Sendable {
     }
   }
 
-  private static func footprint(_ effect: GraphicsEffect) -> Int {
-    switch effect {
-    case .fill(let path, _, _), .stroke(let path, _), .userPathFill(let path, _, _),
-         .userPathStroke(let path, _):
-      path.elements.count * 56 + 256
-    case .fillRectangles(let paths, _), .strokeRectangles(let paths, _, _):
-      paths.reduce(256) { partial, path in
-        let elementBytes = path.elements.count.multipliedReportingOverflow(by: 56)
-        guard !elementBytes.overflow else { return .max }
-        let total = partial.addingReportingOverflow(elementBytes.partialValue)
-        return total.overflow ? .max : total.partialValue
-      }
-    case .image(let image, _):
-      image.components.count * MemoryLayout<Float>.stride
-        + (image.sourceComponents?.count ?? 0) * MemoryLayout<Float>.stride + 256
-    case .shading(let shading, _):
-      shading.mesh.triangles.count * MemoryLayout<GraphicsShadingTriangle>.stride + 256
-    case .erase:
-      128
-    }
-  }
 }

@@ -81,6 +81,7 @@ public enum GraphicsOperation: Sendable, Hashable {
     case userPathFill(GraphicsFillRule)
     case userPathStroke
     case shading(GraphicsShading)
+    case form(GraphicsForm)
   }
 
   /// A page-lifecycle operation.

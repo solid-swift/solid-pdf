@@ -20,4 +20,6 @@ public enum GraphicsEffect: Sendable, Hashable {
   case image(GraphicsImage, state: GraphicsStateSnapshot)
   /// A direct shading effect.
   case shading(GraphicsShading, state: GraphicsStateSnapshot)
+  /// A reusable Type 1 form effect.
+  case form(GraphicsForm, state: GraphicsStateSnapshot)
 }

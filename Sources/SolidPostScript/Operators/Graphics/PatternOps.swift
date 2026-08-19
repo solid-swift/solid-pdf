@@ -202,7 +202,7 @@ extension Operators {
       rule: .winding,
       flatness: savedState.flatness
     )
-    let consumer = PatternDisplayListConsumer()
+    let consumer = GraphicsDisplayListCollector()
     let callerState = context.graphicsState
     let callerStack = context.graphicsStack
     let callerOperands = context.operands
