@@ -1,4 +1,5 @@
 import Foundation
+import SolidColor
 
 /// The rule used to determine the inside of a path.
 public enum GraphicsFillRule: Sendable, Hashable {
@@ -50,6 +51,8 @@ public enum GraphicsPaint: Sendable, Hashable {
   case deviceRGB(red: Double, green: Double, blue: Double)
   /// A DeviceCMYK paint.
   case deviceCMYK(cyan: Double, magenta: Double, yellow: Double, black: Double)
+  /// A generalized PostScript color with portable resolved semantics.
+  case color(GraphicsColorValue)
 
   /// The equivalent DeviceGray component defined by the PLRM device-color conversions.
   public var grayComponent: Double {
@@ -60,6 +63,9 @@ public enum GraphicsPaint: Sendable, Hashable {
       return 0.3 * red + 0.59 * green + 0.11 * blue
     case .deviceCMYK(let cyan, let magenta, let yellow, let black):
       return 1 - min(1, 0.3 * cyan + 0.59 * magenta + 0.11 * yellow + black)
+    case .color(let color):
+      let rgb = color.rgb
+      return 0.3 * rgb.red + 0.59 * rgb.green + 0.11 * rgb.blue
     }
   }
 
@@ -76,6 +82,9 @@ public enum GraphicsPaint: Sendable, Hashable {
         1 - min(1, magenta + black),
         1 - min(1, yellow + black)
       )
+    case .color(let color):
+      let rgb = color.rgb
+      return (rgb.red, rgb.green, rgb.blue)
     }
   }
 
@@ -92,6 +101,13 @@ public enum GraphicsPaint: Sendable, Hashable {
       return (cyan - black, magenta - black, yellow - black, black)
     case .deviceCMYK(let cyan, let magenta, let yellow, let black):
       return (cyan, magenta, yellow, black)
+    case .color(let color):
+      let rgb = color.rgb
+      let cyan = 1 - rgb.red
+      let magenta = 1 - rgb.green
+      let yellow = 1 - rgb.blue
+      let black = min(cyan, magenta, yellow)
+      return (cyan - black, magenta - black, yellow - black, black)
     }
   }
 }

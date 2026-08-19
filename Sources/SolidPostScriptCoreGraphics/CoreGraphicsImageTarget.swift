@@ -284,7 +284,7 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
       case .deviceGray(let gray):
         context.setFillColor(gray: gray, alpha: 1)
         context.setStrokeColor(gray: gray, alpha: 1)
-      case .deviceRGB, .deviceCMYK:
+      case .deviceRGB, .deviceCMYK, .color:
         let rgb = paint.rgbComponents
         context.setFillColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
         context.setStrokeColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)

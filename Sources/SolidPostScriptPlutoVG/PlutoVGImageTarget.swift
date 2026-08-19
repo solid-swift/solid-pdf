@@ -482,7 +482,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       case .deviceGray(let gray):
         let component = try float(gray)
         plutovg_canvas_set_rgb(canvas, component, component, component)
-      case .deviceRGB, .deviceCMYK:
+      case .deviceRGB, .deviceCMYK, .color:
         let rgb = paint.rgbComponents
         plutovg_canvas_set_rgb(canvas, try float(rgb.red), try float(rgb.green), try float(rgb.blue))
       }

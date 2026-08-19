@@ -95,6 +95,7 @@ extension Operators {
     let bitsPerComponent: Int
     let imageMatrix: GraphicsMatrix
     let kind: GraphicsImageKind
+    let sourceColorSpace: PostScriptColorSpace?
     let decode: [Double]
     let interpolate: Bool
     var sources: [ImageDataSource]
@@ -106,6 +107,7 @@ extension Operators {
       bitsPerComponent: Int,
       imageMatrix: GraphicsMatrix,
       kind: GraphicsImageKind,
+      sourceColorSpace: PostScriptColorSpace? = nil,
       decode: [Double],
       interpolate: Bool,
       sources: [ImageDataSource],
@@ -114,9 +116,10 @@ extension Operators {
       guard width >= 0, height >= 0 else { throw Error.rangeCheck }
       guard [1, 2, 4, 8, 12].contains(bitsPerComponent) else { throw Error.rangeCheck }
       guard imageMatrix.inverted != nil else { throw Error.undefinedResult }
-      guard decode.count == kind.componentCount * 2 else { throw Error.rangeCheck }
-      guard sources.count == (multipleDataSources ? kind.componentCount : 1) else { throw Error.rangeCheck }
-      let (samplesPerRow, samplesOverflow) = width.multipliedReportingOverflow(by: kind.componentCount)
+      let sourceComponentCount = sourceColorSpace?.componentCount ?? kind.componentCount
+      guard decode.count == sourceComponentCount * 2 else { throw Error.rangeCheck }
+      guard sources.count == (multipleDataSources ? sourceComponentCount : 1) else { throw Error.rangeCheck }
+      let (samplesPerRow, samplesOverflow) = width.multipliedReportingOverflow(by: sourceComponentCount)
       let (bitsPerRow, bitsOverflow) = samplesPerRow.multipliedReportingOverflow(by: bitsPerComponent)
       guard !samplesOverflow, !bitsOverflow, bitsPerRow <= LanguageLimits.maximumImageRowBytes * 8 else {
         throw Error.limitCheck
@@ -126,11 +129,14 @@ extension Operators {
       self.bitsPerComponent = bitsPerComponent
       self.imageMatrix = imageMatrix
       self.kind = kind
+      self.sourceColorSpace = sourceColorSpace
       self.decode = decode
       self.interpolate = interpolate
       self.sources = sources
       self.multipleDataSources = multipleDataSources
     }
+
+    var sourceComponentCount: Int { sourceColorSpace?.componentCount ?? kind.componentCount }
   }
 
   struct ImageDataSource {
@@ -234,13 +240,25 @@ extension Operators {
     let interpolate = try dictionary.objectValue(forKeyIfExists: "Interpolate", as: BooleanValue.self)?.value
       ?? false
     let kind: GraphicsImageKind
-    switch context.graphicsState.paint {
-    case .deviceGray:
-      kind = mask ? .mask(context.graphicsState.paint) : .color(.deviceGray)
-    case .deviceRGB:
-      kind = mask ? .mask(context.graphicsState.paint) : .color(.deviceRGB)
-    case .deviceCMYK:
-      kind = mask ? .mask(context.graphicsState.paint) : .color(.deviceCMYK)
+    let sourceColorSpace: PostScriptColorSpace?
+    if mask {
+      kind = .mask(context.graphicsState.paint)
+      sourceColorSpace = nil
+    } else {
+      switch context.graphicsState.colorSpace {
+      case .deviceGray:
+        kind = .color(.deviceGray)
+        sourceColorSpace = nil
+      case .deviceRGB:
+        kind = .color(.deviceRGB)
+        sourceColorSpace = nil
+      case .deviceCMYK:
+        kind = .color(.deviceCMYK)
+        sourceColorSpace = nil
+      default:
+        kind = .color(.deviceRGB)
+        sourceColorSpace = context.graphicsState.colorSpace
+      }
     }
     guard !mask || (!multiple && bits == 1) else { throw Error.rangeCheck }
     let decodeArray = try dictionary.object(forKey: "Decode").value(as: ArrayValue.self)
@@ -262,6 +280,7 @@ extension Operators {
       bitsPerComponent: bits,
       imageMatrix: matrix,
       kind: kind,
+      sourceColorSpace: sourceColorSpace,
       decode: decode,
       interpolate: interpolate,
       sources: sources,
@@ -297,6 +316,7 @@ extension Operators {
       width: specification.width,
       height: specification.height,
       kind: specification.kind,
+      sourceColorSpace: specification.sourceColorSpace?.description,
       imageToDevice: imageToUser.concatenated(with: context.graphicsState.matrix),
       interpolate: specification.interpolate
     )
@@ -314,16 +334,24 @@ extension Operators {
         let rowCount = min(rowsPerTransfer, specification.height - startRow)
         var components: [Float] = []
         components.reserveCapacity(rowCount * specification.width * componentCount)
+        var sourceComponents: [Float] = []
+        sourceComponents.reserveCapacity(
+          rowCount * specification.width * specification.sourceComponentCount
+        )
         var completedRows = 0
         for _ in 0..<rowCount {
           guard let row = try await readImageRow(&specification, context: context) else { break }
-          components.append(contentsOf: row)
+          components.append(contentsOf: row.components)
+          sourceComponents.append(contentsOf: row.sourceComponents ?? [])
           completedRows += 1
         }
         guard completedRows > 0 else { break }
-        try context.writeGraphicsImageRows(
-          GraphicsImageRows(startRow: startRow, rowCount: completedRows, components: components)
-        )
+        try context.writeGraphicsImageRows(GraphicsImageRows(
+          startRow: startRow,
+          rowCount: completedRows,
+          components: components,
+          sourceComponents: sourceComponents.isEmpty ? nil : sourceComponents
+        ))
         startRow += completedRows
         if completedRows < rowCount { break }
       }
@@ -337,8 +365,8 @@ extension Operators {
   static func readImageRow(
     _ specification: inout ImageSpecification,
     context: isolated Context
-  ) async throws -> [Float]? {
-    let componentCount = specification.kind.componentCount
+  ) async throws -> ImageRow? {
+    let componentCount = specification.sourceComponentCount
     if specification.multipleDataSources {
       let bitsPerPlane = specification.width * specification.bitsPerComponent
       let bytesPerPlane = (bitsPerPlane + 7) / 8
@@ -377,20 +405,48 @@ extension Operators {
           decode: Array(specification.decode[(index * 2)..<(index * 2 + 2)])
         ))
       }
-      return (0..<specification.width).flatMap { sample in
+      let decoded = (0..<specification.width).flatMap { sample in
         (0..<componentCount).map { planes[$0][sample] }
       }
+      return try await resolveImageRow(decoded, specification: specification, context: context)
     }
 
     let sampleCount = specification.width * componentCount
     let bytesPerRow = (sampleCount * specification.bitsPerComponent + 7) / 8
     guard let data = try await specification.sources[0].read(count: bytesPerRow, context: context) else { return nil }
-    return decodeSamples(
+    let decoded = decodeSamples(
       data,
       count: sampleCount,
       bits: specification.bitsPerComponent,
       decode: specification.decode
     )
+    return try await resolveImageRow(decoded, specification: specification, context: context)
+  }
+
+  struct ImageRow {
+    let components: [Float]
+    let sourceComponents: [Float]?
+  }
+
+  static func resolveImageRow(
+    _ components: [Float],
+    specification: ImageSpecification,
+    context: isolated Context
+  ) async throws -> ImageRow {
+    guard let sourceSpace = specification.sourceColorSpace else {
+      return ImageRow(components: components, sourceComponents: nil)
+    }
+    var alternative: [Float] = []
+    alternative.reserveCapacity(specification.width * 3)
+    for offset in stride(from: 0, to: components.count, by: sourceSpace.componentCount) {
+      let source = components[offset..<(offset + sourceSpace.componentCount)].map(Double.init)
+      let resolved = try await resolveColor(source, in: sourceSpace, context: context)
+      let rgb = resolved.rgb
+      alternative.append(Float(rgb.red))
+      alternative.append(Float(rgb.green))
+      alternative.append(Float(rgb.blue))
+    }
+    return ImageRow(components: alternative, sourceComponents: components)
   }
 
   static func decodeSamples(

@@ -995,8 +995,12 @@ public actor Context {
     }
 
     graphicsState.dashSource?.save(to: builder)
+    graphicsState.colorSpace.retainedObjects.forEach { $0.save(to: builder) }
+    graphicsState.colorRenderingSource?.save(to: builder)
     for frame in graphicsStack {
       frame.state.dashSource?.save(to: builder)
+      frame.state.colorSpace.retainedObjects.forEach { $0.save(to: builder) }
+      frame.state.colorRenderingSource?.save(to: builder)
     }
 
     if scope == .job {

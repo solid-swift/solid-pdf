@@ -62,6 +62,7 @@ public final class SemanticGraphicsColorSession: GraphicsColorSession {
 public final class SemanticGraphicsColorImageConverter: GraphicsColorImageConverter {
   private let descriptor: GraphicsImageDescriptor
   private var components: [Float] = []
+  private var sourceComponents: [Float] = []
   private var nextRow = 0
   private var aborted = false
 
@@ -75,18 +76,26 @@ public final class SemanticGraphicsColorImageConverter: GraphicsColorImageConver
     let expected = rows.rowCount * descriptor.width * descriptor.kind.componentCount
     guard !aborted, rows.startRow == nextRow, rows.components.count == expected else { throw Error.ioError }
     components.append(contentsOf: rows.components)
+    if let source = rows.sourceComponents {
+      sourceComponents.append(contentsOf: source)
+    }
     nextRow += rows.rowCount
   }
 
   /// Returns the completed portable image.
   public func finish() throws -> sending GraphicsImage {
     guard !aborted else { throw Error.ioError }
-    return GraphicsImage(descriptor: descriptor, components: components)
+    return GraphicsImage(
+      descriptor: descriptor,
+      components: components,
+      sourceComponents: sourceComponents.isEmpty ? nil : sourceComponents
+    )
   }
 
   /// Abandons retained samples.
   public func abort() {
     aborted = true
     components.removeAll()
+    sourceComponents.removeAll()
   }
 }

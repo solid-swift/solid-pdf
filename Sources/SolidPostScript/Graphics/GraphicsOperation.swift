@@ -21,6 +21,10 @@ public enum GraphicsOperation: Sendable, Hashable {
     case setGray(Double)
     case setRGB(red: Double, green: Double, blue: Double)
     case setCMYK(cyan: Double, magenta: Double, yellow: Double, black: Double)
+    case setColorSpace(GraphicsColorSpaceDescription)
+    case setColor(GraphicsColorValue)
+    case setColorRendering
+    case setOverprint(Bool)
   }
 
   /// A current-transformation operation.

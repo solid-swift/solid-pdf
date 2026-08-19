@@ -37,6 +37,8 @@ public struct GraphicsImageDescriptor: Sendable, Hashable {
   public let height: Int
   /// The interpretation of normalized sample components.
   public let kind: GraphicsImageKind
+  /// The semantic PostScript source space when samples were converted to an alternative device space.
+  public let sourceColorSpace: GraphicsColorSpaceDescription?
   /// The transformation from image space to device space.
   public let imageToDevice: GraphicsMatrix
   /// Whether the target should interpolate between samples.
@@ -47,12 +49,14 @@ public struct GraphicsImageDescriptor: Sendable, Hashable {
     width: Int,
     height: Int,
     kind: GraphicsImageKind,
+    sourceColorSpace: GraphicsColorSpaceDescription? = nil,
     imageToDevice: GraphicsMatrix,
     interpolate: Bool = false
   ) {
     self.width = width
     self.height = height
     self.kind = kind
+    self.sourceColorSpace = sourceColorSpace
     self.imageToDevice = imageToDevice
     self.interpolate = interpolate
   }
@@ -66,12 +70,20 @@ public struct GraphicsImageRows: Sendable, Hashable {
   public let rowCount: Int
   /// Row-major normalized components in the range appropriate for the image kind.
   public let components: [Float]
+  /// Original semantic source components when `components` contains a pre-evaluated alternative color.
+  public let sourceComponents: [Float]?
 
   /// Creates a row transfer.
-  public init(startRow: Int, rowCount: Int, components: [Float]) {
+  public init(
+    startRow: Int,
+    rowCount: Int,
+    components: [Float],
+    sourceComponents: [Float]? = nil
+  ) {
     self.startRow = startRow
     self.rowCount = rowCount
     self.components = components
+    self.sourceComponents = sourceComponents
   }
 }
 
@@ -81,11 +93,18 @@ public struct GraphicsImage: Sendable, Hashable {
   public let descriptor: GraphicsImageDescriptor
   /// All normalized components in source row order.
   public let components: [Float]
+  /// Original semantic components retained by recording targets, when available.
+  public let sourceComponents: [Float]?
 
   /// Creates a complete sampled image.
-  public init(descriptor: GraphicsImageDescriptor, components: [Float]) {
+  public init(
+    descriptor: GraphicsImageDescriptor,
+    components: [Float],
+    sourceComponents: [Float]? = nil
+  ) {
     self.descriptor = descriptor
     self.components = components
+    self.sourceComponents = sourceComponents
   }
 
   /// Returns premultiplied RGBA8 pixels in source-row order.

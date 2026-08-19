@@ -10,6 +10,12 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
   public let clip: GraphicsClip
   /// The current paint.
   public let paint: GraphicsPaint
+  /// The current color-space description.
+  public let colorSpace: GraphicsColorSpaceDescription
+  /// The current components in the current color space.
+  public let colorComponents: [Double]
+  /// Whether overprinting is enabled.
+  public let overprint: Bool
   /// The current line width.
   public let lineWidth: Double
   /// The current line-cap style.
@@ -33,6 +39,9 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     path: GraphicsPath,
     clip: GraphicsClip,
     paint: GraphicsPaint,
+    colorSpace: GraphicsColorSpaceDescription = .deviceGray,
+    colorComponents: [Double] = [0],
+    overprint: Bool = false,
     lineWidth: Double,
     lineCap: GraphicsLineCap,
     lineJoin: GraphicsLineJoin,
@@ -46,6 +55,9 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     self.path = path
     self.clip = clip
     self.paint = paint
+    self.colorSpace = colorSpace
+    self.colorComponents = colorComponents
+    self.overprint = overprint
     self.lineWidth = lineWidth
     self.lineCap = lineCap
     self.lineJoin = lineJoin

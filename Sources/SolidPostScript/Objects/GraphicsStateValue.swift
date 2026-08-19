@@ -14,12 +14,20 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     var resolvedClip: RasterRegion
     var clipStack: [GraphicsClipStackEntry]
     var dashSource: VMStoredObject?
+    var colorSpace: VMStoredColorSpace
+    var colorComponents: [Double]
+    var colorRenderingSource: VMStoredObject?
+    var overprint: Bool
 
     init(_ state: GraphicsCanonicalState) {
       self.snapshot = state.snapshot
       self.resolvedClip = state.resolvedClip
       self.clipStack = state.clipStack
       self.dashSource = state.dashSource.map(VMStoredObject.init)
+      self.colorSpace = VMStoredColorSpace(state.colorSpace)
+      self.colorComponents = state.colorComponents
+      self.colorRenderingSource = state.colorRenderingSource.map(VMStoredObject.init)
+      self.overprint = state.overprint
     }
 
     var canonical: GraphicsCanonicalState {
@@ -28,6 +36,10 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         path: snapshot.path,
         clip: snapshot.clip,
         paint: snapshot.paint,
+        colorSpace: colorSpace.colorSpace,
+        colorComponents: colorComponents,
+        colorRenderingSource: colorRenderingSource?.object,
+        overprint: overprint,
         lineWidth: snapshot.lineWidth,
         lineCap: snapshot.lineCap,
         lineJoin: snapshot.lineJoin,
@@ -62,18 +74,34 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       vm: vm,
       chargedBytes: Self.footprint(storage),
       footprint: Self.footprint,
-      children: { $0.dashSource?.allocation.map { [$0] } ?? [] },
+      children: {
+        [$0.dashSource, $0.colorRenderingSource].compactMap { $0?.allocation }
+          + $0.colorSpace.storedObjects.compactMap(\.allocation)
+      },
       snapshotCopy: { Storage($0.canonical) },
-      storedObjects: { $0.dashSource.map { [$0] } ?? [] },
-      identifyEdges: { storage, allocation in storage.dashSource?.identifyEdgeSource(allocation) },
+      storedObjects: {
+        [$0.dashSource, $0.colorRenderingSource].compactMap { $0 }
+          + $0.colorSpace.storedObjects
+      },
+      identifyEdges: { storage, allocation in
+        storage.dashSource?.identifyEdgeSource(allocation)
+        storage.colorSpace.identifyEdges(from: allocation)
+        storage.colorRenderingSource?.identifyEdgeSource(allocation)
+      },
       clear: {
         $0.snapshot = GraphicsCanonicalState.initial(for: .letter).snapshot
         $0.resolvedClip = RasterRegion()
         $0.clipStack.removeAll()
         $0.dashSource = nil
+        $0.colorSpace = VMStoredColorSpace(.deviceGray(nil))
+        $0.colorComponents = [0]
+        $0.colorRenderingSource = nil
+        $0.overprint = false
       }
     )
     storage.dashSource?.identifyEdgeSource(ref.allocation)
+    storage.colorSpace.identifyEdges(from: ref.allocation)
+    storage.colorRenderingSource?.identifyEdgeSource(ref.allocation)
     self.ref = ref
     self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
   }
@@ -110,6 +138,8 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     try context.preflightAllocation(bytes: max(0, newFootprint - oldFootprint), vm: vm)
     try ref.write {
       storage.dashSource?.identifyEdgeSource(ref.allocation)
+      storage.colorSpace.identifyEdges(from: ref.allocation)
+      storage.colorRenderingSource?.identifyEdgeSource(ref.allocation)
       $0.value = storage
     }
     allocation.updateFootprint(to: newFootprint)
@@ -118,6 +148,8 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
   /// Records restorable state in a snapshot builder.
   public func save(to snapshot: Snapshot.Builder) {
     state().dashSource?.save(to: snapshot)
+    state().colorSpace.retainedObjects.forEach { $0.save(to: snapshot) }
+    state().colorRenderingSource?.save(to: snapshot)
     ref.save(to: snapshot)
   }
 
@@ -151,6 +183,8 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
 
   func refreshStoredEdges() {
     ref.uncheckedRead { $0.value.dashSource?.refreshEdge() }
+    ref.uncheckedRead { $0.value.colorSpace.refreshEdges() }
+    ref.uncheckedRead { $0.value.colorRenderingSource?.refreshEdge() }
   }
 
   private static func footprint(_ storage: Storage) -> Int {
@@ -165,13 +199,17 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     let clipStackTrapezoids = storage.clipStack.reduce(0) {
       add($0, $1.region.trapezoids.count)
     }
+    let colorBytes = multiply(storage.colorComponents.count, MemoryLayout<Double>.stride)
     return add(
       add(64, multiply(storage.snapshot.path.elements.count, 56)),
       add(
         multiply(storage.snapshot.clip.constraints.count, 64),
         add(
           multiply(storage.resolvedClip.trapezoids.count, 56),
-          add(multiply(storage.clipStack.count, 32), multiply(clipStackTrapezoids, 56))
+          add(
+            multiply(storage.clipStack.count, 32),
+            add(multiply(clipStackTrapezoids, 56), colorBytes)
+          )
         )
       )
     )

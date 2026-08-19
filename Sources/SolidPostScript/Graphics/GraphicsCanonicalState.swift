@@ -11,6 +11,10 @@ struct GraphicsCanonicalState: Sendable {
   var path: GraphicsPath
   var clip: GraphicsClip
   var paint: GraphicsPaint
+  var colorSpace: PostScriptColorSpace
+  var colorComponents: [Double]
+  var colorRenderingSource: Object?
+  var overprint: Bool
   var lineWidth: Double
   var lineCap: GraphicsLineCap
   var lineJoin: GraphicsLineJoin
@@ -29,6 +33,10 @@ struct GraphicsCanonicalState: Sendable {
       path: GraphicsPath(),
       clip: GraphicsClip(imageableBounds: descriptor.imageableBounds),
       paint: .deviceGray(0),
+      colorSpace: .deviceGray(nil),
+      colorComponents: [0],
+      colorRenderingSource: nil,
+      overprint: false,
       lineWidth: 1,
       lineCap: .butt,
       lineJoin: .miter,
@@ -49,6 +57,9 @@ struct GraphicsCanonicalState: Sendable {
       path: path,
       clip: clip,
       paint: paint,
+      colorSpace: colorSpace.description,
+      colorComponents: colorComponents,
+      overprint: overprint,
       lineWidth: lineWidth,
       lineCap: lineCap,
       lineJoin: lineJoin,
@@ -93,6 +104,8 @@ struct GraphicsCanonicalState: Sendable {
 
   func checkStorage(in vm: VM) throws {
     try dashSource?.checkStorage(in: vm)
+    for object in colorSpace.retainedObjects { try object.checkStorage(in: vm) }
+    try colorRenderingSource?.checkStorage(in: vm)
   }
 }
 

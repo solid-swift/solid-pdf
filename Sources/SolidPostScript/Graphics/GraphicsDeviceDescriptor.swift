@@ -16,6 +16,8 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
   public let defaultFlatness: Double
   /// Whether stroke adjustment is initially enabled.
   public let defaultStrokeAdjustment: Bool
+  /// The target's process-color and destination-profile capabilities.
+  public let colorDevice: GraphicsColorDeviceDescriptor
 
   /// Creates a graphics device descriptor.
   public init(
@@ -25,7 +27,8 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
     verticalResolution: Double,
     defaultMatrix: GraphicsMatrix,
     defaultFlatness: Double = 1,
-    defaultStrokeAdjustment: Bool = false
+    defaultStrokeAdjustment: Bool = false,
+    colorDevice: GraphicsColorDeviceDescriptor = .sRGB
   ) {
     self.mediaBounds = mediaBounds
     self.imageableBounds = imageableBounds
@@ -34,6 +37,7 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
     self.defaultMatrix = defaultMatrix
     self.defaultFlatness = defaultFlatness
     self.defaultStrokeAdjustment = defaultStrokeAdjustment
+    self.colorDevice = colorDevice
   }
 
   /// The installation-default Letter page at 72 dots per inch.

@@ -15,7 +15,12 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
 
     private let descriptor: GraphicsDeviceDescriptor
     private var effects: [GraphicsEffect] = []
-    private var activeImage: (descriptor: GraphicsImageDescriptor, state: GraphicsStateSnapshot, components: [Float])?
+    private var activeImage: (
+      descriptor: GraphicsImageDescriptor,
+      state: GraphicsStateSnapshot,
+      components: [Float],
+      sourceComponents: [Float]
+    )?
     private var aborted = false
 
     fileprivate init(descriptor: GraphicsDeviceDescriptor) {
@@ -53,13 +58,16 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       guard !aborted, activeImage == nil, case .paint(.image(let descriptor)) = event.operation else {
         throw Error.ioError
       }
-      activeImage = (descriptor, event.before, [])
+      activeImage = (descriptor, event.before, [], [])
     }
 
     /// Records one bounded group of sampled-image rows.
     public func writeImageRows(_ rows: GraphicsImageRows) throws {
       guard var image = activeImage else { throw Error.ioError }
       image.components.append(contentsOf: rows.components)
+      if let source = rows.sourceComponents {
+        image.sourceComponents.append(contentsOf: source)
+      }
       activeImage = image
     }
 
@@ -68,7 +76,14 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       guard let image = activeImage else { throw Error.ioError }
       if !image.components.isEmpty, image.descriptor.width > 0, image.descriptor.height > 0 {
         effects.append(
-          .image(GraphicsImage(descriptor: image.descriptor, components: image.components), state: image.state)
+          .image(
+            GraphicsImage(
+              descriptor: image.descriptor,
+              components: image.components,
+              sourceComponents: image.sourceComponents.isEmpty ? nil : image.sourceComponents
+            ),
+            state: image.state
+          )
         )
       }
       activeImage = nil
