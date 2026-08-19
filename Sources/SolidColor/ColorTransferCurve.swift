@@ -6,6 +6,8 @@ public enum ColorTransferCurve: Sendable, Hashable {
   case linear
   /// Raises a nonnegative component to `gamma`.
   case gamma(Double)
+  /// Applies the IEC 61966-2-1 sRGB encoding transfer function.
+  case sRGB
   /// Linearly interpolates a uniformly sampled table over zero through one.
   case table([Double])
 
@@ -18,6 +20,11 @@ public enum ColorTransferCurve: Sendable, Hashable {
     case .gamma(let gamma):
       guard gamma.isFinite, gamma > 0 else { throw .invalidValue }
       return pow(max(0, component), gamma)
+    case .sRGB:
+      let value = max(0, component)
+      return value <= 0.003_130_8
+        ? 12.92 * value
+        : 1.055 * pow(value, 1 / 2.4) - 0.055
     case .table(let values):
       guard !values.isEmpty, values.allSatisfy(\.isFinite) else { throw .invalidValue }
       guard values.count > 1 else { return values[0] }

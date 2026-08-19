@@ -83,6 +83,59 @@ struct CoreGraphicsImageTargetTests {
     #expect(try gray(atX: 10, y: 10, in: erased) > 0.9)
   }
 
+  @Test func namedColorsAndGeneralizedImagesUseCoreGraphicsColorSessions() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      [/Separation /Spot /DeviceRGB {dup 1 exch sub 0}] setcolorspace
+      .25 setcolor 0 10 20 10 rectfill
+      << /ImageType 1 /Width 1 /Height 1 /BitsPerComponent 8
+         /ImageMatrix [.05 0 0 .1 0 0] /Decode [0 1] /DataSource <40>
+      >> image showpage
+      """,
+      to: CoreGraphicsImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+    let image = try #require(result.output.first)
+    let vector = try rgb(atX: 10, y: 5, in: image)
+    let sampled = try rgb(atX: 10, y: 15, in: image)
+    #expect(abs(vector.red - 0.25) < 0.03)
+    #expect(abs(vector.green - 0.75) < 0.03)
+    #expect(abs(sampled.red - 64.0 / 255.0) < 0.03)
+    #expect(abs(sampled.green - 191.0 / 255.0) < 0.03)
+  }
+
+  @Test func outputRetainsTheConfiguredCoreGraphicsDestinationSpace() async throws {
+    let displayP3 = try #require(CGColorSpace(name: CGColorSpace.displayP3))
+    let result = try await Interpreter.render(
+      content: "1 0 0 setrgbcolor 0 0 10 10 rectfill showpage",
+      to: CoreGraphicsImageTarget(
+        pixelWidth: 10,
+        pixelHeight: 10,
+        destinationColorSpace: displayP3
+      )
+    )
+    #expect(try #require(result.output.first).colorSpace == displayP3)
+  }
+
+  @Test func imageMasksUseTheSameStagingSpaceAsVectorPaints() async throws {
+    let displayP3 = try #require(CGColorSpace(name: CGColorSpace.displayP3))
+    let result = try await Interpreter.render(
+      content: """
+      1 .2 .1 setrgbcolor 0 0 10 10 rectfill showpage
+      1 .2 .1 setrgbcolor 10 10 scale 1 1 true [1 0 0 1 0 0] <80> imagemask showpage
+      """,
+      to: CoreGraphicsImageTarget(
+        pixelWidth: 10,
+        pixelHeight: 10,
+        destinationColorSpace: displayP3
+      )
+    )
+    let vector = try rgb(atX: 5, y: 5, in: #require(result.output.first))
+    let mask = try rgb(atX: 5, y: 5, in: #require(result.output.last))
+    #expect(abs(vector.red - mask.red) < 0.02)
+    #expect(abs(vector.green - mask.green) < 0.02)
+    #expect(abs(vector.blue - mask.blue) < 0.02)
+  }
+
   private func gray(atX x: Int, y: Int, in image: CGImage) throws -> Double {
     let provider = try #require(image.dataProvider)
     let data = try #require(provider.data)

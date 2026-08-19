@@ -44,6 +44,15 @@ public struct ColorDestinationProfile: Sendable, Hashable {
       0.2126729, 0.7151522, 0.0721750,
       0.0193339, 0.1191920, 0.9503041,
     ]),
-    transferCurves: [.linear, .linear, .linear]
+    transferCurves: [.sRGB, .sRGB, .sRGB]
+  )
+
+  /// A linear one-component gray destination profile.
+  public static let deviceGray = try! Self(model: .gray, transferCurves: [.linear])
+
+  /// A linear four-component process-CMYK destination profile.
+  public static let deviceCMYK = try! Self(
+    model: .cmyk,
+    transferCurves: [.linear, .linear, .linear, .linear]
   )
 }

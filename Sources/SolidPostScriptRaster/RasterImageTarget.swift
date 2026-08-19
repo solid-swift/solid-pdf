@@ -2,8 +2,12 @@ import Foundation
 import SolidPostScript
 import SolidRaster
 
-/// A portable PostScript graphics target backed entirely by native Swift rasterization.
-public struct RasterImageTarget: GraphicsTarget, Sendable {
+/// A portable PostScript raster target parameterized by a compatible color engine.
+public struct ColorManagedRasterImageTarget<ColorEngine: GraphicsColorEngine>: GraphicsTarget, Sendable
+where
+  ColorEngine.Session.ResolvedPaint == RasterPaint,
+  ColorEngine.Session.ImageConverter.ResolvedImage == RasterImage
+{
   public typealias PageOutput = RasterImage
   public typealias Output = [RasterImage]
 
@@ -11,6 +15,7 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
   public final class Renderer: GraphicsRenderer {
     public typealias PageOutput = RasterImage
     public typealias Output = [RasterImage]
+    public typealias ColorSession = ColorEngine.Session
 
     /// Images transmitted by page operations so far.
     public private(set) var pages: [RasterImage] = []
@@ -24,18 +29,29 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
     private let pixelWidth: Int
     private let pixelHeight: Int
     private let descriptor: GraphicsDeviceDescriptor
+    private let colorSession: ColorEngine.Session
     private let rasterMatrix: GraphicsMatrix
     private var canvas: RasterCanvas?
     private var lifecycle = Lifecycle.active
-    private var activeImage: (descriptor: GraphicsImageDescriptor, state: GraphicsStateSnapshot, components: [Float])?
+    private var activeImage: (
+      descriptor: GraphicsImageDescriptor,
+      state: GraphicsStateSnapshot,
+      converter: ColorEngine.Session.ImageConverter
+    )?
     private var cachedGraphicsClip: GraphicsClip?
     private var cachedRasterClip: RasterClip?
 
-    fileprivate init(pixelWidth: Int, pixelHeight: Int, descriptor: GraphicsDeviceDescriptor) throws {
+    fileprivate init(
+      pixelWidth: Int,
+      pixelHeight: Int,
+      descriptor: GraphicsDeviceDescriptor,
+      colorSession: ColorEngine.Session
+    ) throws {
       try Self.validate(pixelWidth: pixelWidth, pixelHeight: pixelHeight, descriptor: descriptor)
       self.pixelWidth = pixelWidth
       self.pixelHeight = pixelHeight
       self.descriptor = descriptor
+      self.colorSession = colorSession
       rasterMatrix = GraphicsMatrix(
         a: 1,
         b: 0,
@@ -83,31 +99,33 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
         activeImage == nil,
         case .paint(.image(let descriptor)) = event.operation
       else { throw SolidPostScript.Error.ioError }
-      activeImage = (descriptor, event.before, [])
+      activeImage = (
+        descriptor,
+        event.before,
+        try colorSession.makeImageConverter(for: descriptor)
+      )
     }
 
     /// Receives complete sampled-image rows in order.
     public func writeImageRows(_ rows: GraphicsImageRows) throws {
-      guard var image = activeImage else { throw SolidPostScript.Error.ioError }
-      let rowWidth = image.descriptor.width * image.descriptor.kind.componentCount
-      guard rowWidth > 0,
-        rows.startRow == image.components.count / rowWidth,
-        rows.rowCount <= Int.max / rowWidth,
-        rows.components.count == rows.rowCount * rowWidth
-      else { throw SolidPostScript.Error.ioError }
-      image.components.append(contentsOf: rows.components)
-      activeImage = image
+      guard let image = activeImage else { throw SolidPostScript.Error.ioError }
+      try image.converter.write(rows)
     }
 
     /// Validates and paints the active sampled image.
     public func endImage() throws {
       guard let image = activeImage, lifecycle == .active else { throw SolidPostScript.Error.ioError }
       activeImage = nil
-      try draw(GraphicsImage(descriptor: image.descriptor, components: image.components), state: image.state)
+      try draw(
+        image.converter.finish(),
+        descriptor: image.descriptor,
+        state: image.state
+      )
     }
 
     /// Abandons the active sampled image.
     public func abortImage() {
+      activeImage?.converter.abort()
       activeImage = nil
     }
 
@@ -115,6 +133,7 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
     public func finish() throws -> sending [RasterImage] {
       guard lifecycle == .active else { throw SolidPostScript.Error.ioError }
       lifecycle = .finished
+      activeImage?.converter.abort()
       activeImage = nil
       canvas = nil
       let output = pages
@@ -126,6 +145,7 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
     public func abort() {
       guard lifecycle == .active else { return }
       lifecycle = .aborted
+      activeImage?.converter.abort()
       activeImage = nil
       canvas = nil
       pages.removeAll()
@@ -193,7 +213,7 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
       let transformed = path.transformed(by: rasterMatrix).rasterPath
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(state.clip))
-        try canvas.fill(transformed, rule: rule.raster, paint: state.paint.raster)
+        try canvas.fill(transformed, rule: rule.raster, paint: try colorSession.resolve(state.paint))
       }
     }
 
@@ -222,7 +242,7 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
         try canvas.stroke(
           path.transformed(by: inverse).rasterPath,
           style: style,
-          paint: state.paint.raster,
+          paint: try colorSession.resolve(state.paint),
           transform: strokeTransform
         )
       }
@@ -237,31 +257,21 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
       }
     }
 
-    private func draw(_ image: GraphicsImage, state: GraphicsStateSnapshot) throws {
-      let descriptor = image.descriptor
-      let rowWidth = descriptor.width * descriptor.kind.componentCount
-      let renderedHeight = rowWidth == 0 ? 0 : image.components.count / rowWidth
+    private func draw(
+      _ image: RasterImage,
+      descriptor: GraphicsImageDescriptor,
+      state: GraphicsStateSnapshot
+    ) throws {
+      let renderedHeight = image.height
       guard descriptor.width > 0,
         renderedHeight > 0,
         renderedHeight <= descriptor.height,
-        image.components.count == renderedHeight * rowWidth
+        image.width == descriptor.width
       else { return }
-      let rasterImage: RasterImage
-      do {
-        rasterImage = try RasterImage(
-          width: descriptor.width,
-          height: renderedHeight,
-          bytesPerRow: descriptor.width * 4,
-          pixelFormat: .rgba8UnormPremultiplied,
-          data: image.premultipliedRGBA8()
-        )
-      } catch {
-        throw SolidPostScript.Error.ioError
-      }
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(state.clip))
         try canvas.draw(
-          rasterImage,
+          image,
           transform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
           interpolation: descriptor.interpolate ? .linear : .nearest
         )
@@ -325,7 +335,44 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
   public let pixelWidth: Int
   /// Page height in pixels.
   public let pixelHeight: Int
+  /// The color engine used by this target.
+  public let colorEngine: ColorEngine
 
+  /// Creates a bitmap target using an explicit PostScript device descriptor.
+  public init(
+    pixelWidth: Int,
+    pixelHeight: Int,
+    deviceDescriptor: GraphicsDeviceDescriptor,
+    colorEngine: ColorEngine
+  ) {
+    self.pixelWidth = pixelWidth
+    self.pixelHeight = pixelHeight
+    self.deviceDescriptor = deviceDescriptor
+    self.colorEngine = colorEngine
+  }
+
+  /// Creates a renderer dedicated to one render.
+  public func makeRenderer() throws -> sending Renderer {
+    try makeRenderer(colorSession: colorEngine.makeSession(for: deviceDescriptor))
+  }
+
+  /// Creates a renderer with color conversion state prepared for this render.
+  public func makeRenderer(
+    colorSession: sending ColorEngine.Session
+  ) throws -> sending Renderer {
+    try Renderer(
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight,
+      descriptor: deviceDescriptor,
+      colorSession: colorSession
+    )
+  }
+}
+
+/// The native Swift color-managed raster target used by default.
+public typealias RasterImageTarget = ColorManagedRasterImageTarget<NativeGraphicsColorEngine>
+
+extension ColorManagedRasterImageTarget where ColorEngine == NativeGraphicsColorEngine {
   /// Creates the installation-default Letter target at 72 dots per inch.
   public init() {
     self.init(pixelWidth: 612, pixelHeight: 792)
@@ -338,10 +385,8 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
     resolution: Double = 72,
     imageableBounds: GraphicsRect? = nil
   ) {
-    self.pixelWidth = pixelWidth
-    self.pixelHeight = pixelHeight
     let media = GraphicsRect(x: 0, y: 0, width: Double(pixelWidth), height: Double(pixelHeight))
-    deviceDescriptor = GraphicsDeviceDescriptor(
+    let descriptor = GraphicsDeviceDescriptor(
       mediaBounds: media,
       imageableBounds: imageableBounds ?? media,
       horizontalResolution: resolution,
@@ -355,18 +400,24 @@ public struct RasterImageTarget: GraphicsTarget, Sendable {
         ty: 0
       )
     )
+    self.init(
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight,
+      deviceDescriptor: descriptor,
+      colorEngine: NativeGraphicsColorEngine()
+    )
   }
 
   /// Creates a bitmap target using an explicit PostScript device descriptor.
   public init(pixelWidth: Int, pixelHeight: Int, deviceDescriptor: GraphicsDeviceDescriptor) {
-    self.pixelWidth = pixelWidth
-    self.pixelHeight = pixelHeight
-    self.deviceDescriptor = deviceDescriptor
-  }
-
-  /// Creates a renderer dedicated to one render.
-  public func makeRenderer() throws -> sending Renderer {
-    try Renderer(pixelWidth: pixelWidth, pixelHeight: pixelHeight, descriptor: deviceDescriptor)
+    self.init(
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight,
+      deviceDescriptor: deviceDescriptor,
+      colorEngine: NativeGraphicsColorEngine(
+        destinationProfile: deviceDescriptor.colorDevice.destinationProfile
+      )
+    )
   }
 }
 
@@ -443,12 +494,5 @@ private extension GraphicsLineJoin {
     case .round: .round
     case .bevel: .bevel
     }
-  }
-}
-
-private extension GraphicsPaint {
-  var raster: RasterPaint {
-    let rgb = rgbComponents
-    return .solid(RasterColor(red: rgb.red, green: rgb.green, blue: rgb.blue))
   }
 }

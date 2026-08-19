@@ -1,17 +1,20 @@
 import CPlutoVG
 import Foundation
 import SolidPostScript
+import SolidPostScriptRaster
 import SolidRaster
 
 /// A portable PostScript graphics target that rasterizes pages through PlutoVG.
 public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
   public typealias PageOutput = RasterImage
   public typealias Output = [RasterImage]
+  public typealias ColorEngine = NativeGraphicsColorEngine
 
   /// The renderer dedicated to one PlutoVG image render.
   public final class Renderer: GraphicsRenderer {
     public typealias PageOutput = RasterImage
     public typealias Output = [RasterImage]
+    public typealias ColorSession = NativeGraphicsColorSession
 
     /// Images transmitted by `showpage` so far.
     public private(set) var pages: [RasterImage] = []
@@ -28,21 +31,28 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     private let pixelWidth: Int
     private let pixelHeight: Int
     private let descriptor: GraphicsDeviceDescriptor
+    private let colorSession: NativeGraphicsColorSession
     private let rasterMatrix: GraphicsMatrix
     private var surface: OpaquePointer?
     private var canvas: OpaquePointer?
     private var lifecycle = Lifecycle.active
-    private var activeImage: (descriptor: GraphicsImageDescriptor, state: GraphicsStateSnapshot, components: [Float])?
+    private var activeImage: (
+      descriptor: GraphicsImageDescriptor,
+      state: GraphicsStateSnapshot,
+      converter: NativeGraphicsColorImageConverter
+    )?
 
     fileprivate init(
       pixelWidth: Int,
       pixelHeight: Int,
-      descriptor: GraphicsDeviceDescriptor
+      descriptor: GraphicsDeviceDescriptor,
+      colorSession: NativeGraphicsColorSession
     ) throws {
       try Self.validate(pixelWidth: pixelWidth, pixelHeight: pixelHeight, descriptor: descriptor)
       self.pixelWidth = pixelWidth
       self.pixelHeight = pixelHeight
       self.descriptor = descriptor
+      self.colorSession = colorSession
       self.rasterMatrix = GraphicsMatrix(
         a: 1,
         b: 0,
@@ -91,19 +101,17 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       else {
         throw SolidPostScript.Error.ioError
       }
-      activeImage = (descriptor, event.before, [])
+      activeImage = (
+        descriptor,
+        event.before,
+        try colorSession.makeImageConverter(for: descriptor)
+      )
     }
 
     /// Consumes one bounded group of complete sampled-image rows.
     public func writeImageRows(_ rows: GraphicsImageRows) throws {
-      guard var image = activeImage else { throw SolidPostScript.Error.ioError }
-      let rowWidth = image.descriptor.width * image.descriptor.kind.componentCount
-      let expectedStart = image.components.count / rowWidth
-      guard rows.startRow == expectedStart, rows.components.count == rows.rowCount * rowWidth else {
-        throw SolidPostScript.Error.ioError
-      }
-      image.components.append(contentsOf: rows.components)
-      activeImage = image
+      guard let image = activeImage else { throw SolidPostScript.Error.ioError }
+      try image.converter.write(rows)
     }
 
     /// Commits and paints the active sampled image.
@@ -112,11 +120,17 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         throw SolidPostScript.Error.ioError
       }
       activeImage = nil
-      try draw(GraphicsImage(descriptor: image.descriptor, components: image.components), state: image.state, in: canvas)
+      try draw(
+        image.converter.finish(),
+        descriptor: image.descriptor,
+        state: image.state,
+        in: canvas
+      )
     }
 
     /// Abandons the active sampled image without painting it.
     public func abortImage() {
+      activeImage?.converter.abort()
       activeImage = nil
     }
 
@@ -124,6 +138,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     public func finish() throws -> sending [RasterImage] {
       guard lifecycle == .active else { throw SolidPostScript.Error.ioError }
       lifecycle = .finished
+      activeImage?.converter.abort()
       activeImage = nil
       releasePage()
       let output = pages
@@ -135,6 +150,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     public func abort() {
       guard lifecycle == .active else { return }
       lifecycle = .aborted
+      activeImage?.converter.abort()
       activeImage = nil
       releasePage()
       pages.removeAll()
@@ -362,19 +378,18 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     }
 
     private func draw(
-      _ image: GraphicsImage,
+      _ image: RasterImage,
+      descriptor: GraphicsImageDescriptor,
       state: GraphicsStateSnapshot,
       in canvas: OpaquePointer
     ) throws {
-      let descriptor = image.descriptor
-      let rowWidth = descriptor.width * descriptor.kind.componentCount
-      let renderedHeight = rowWidth == 0 ? 0 : image.components.count / rowWidth
+      let renderedHeight = image.height
       guard descriptor.width > 0,
         renderedHeight > 0,
         renderedHeight <= descriptor.height,
-        image.components.count == renderedHeight * rowWidth
+        image.width == descriptor.width
       else { return }
-      var data = image.premultipliedRGBA8()
+      var data = image.data
       plutovg_canvas_save(canvas)
       defer { plutovg_canvas_restore(canvas) }
       try replay(state.clip, in: canvas)
@@ -478,14 +493,9 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     }
 
     private func setPaint(_ paint: GraphicsPaint, in canvas: OpaquePointer) throws {
-      switch paint {
-      case .deviceGray(let gray):
-        let component = try float(gray)
-        plutovg_canvas_set_rgb(canvas, component, component, component)
-      case .deviceRGB, .deviceCMYK, .color:
-        let rgb = paint.rgbComponents
-        plutovg_canvas_set_rgb(canvas, try float(rgb.red), try float(rgb.green), try float(rgb.blue))
-      }
+      let resolved = try colorSession.resolve(paint)
+      guard case .solid(let color) = resolved else { throw SolidPostScript.Error.ioError }
+      plutovg_canvas_set_rgb(canvas, try float(color.red), try float(color.green), try float(color.blue))
     }
 
     private func setFillRule(_ rule: GraphicsFillRule, in canvas: OpaquePointer) {
@@ -521,6 +531,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
   public let pixelWidth: Int
   /// The page height in pixels.
   public let pixelHeight: Int
+  /// The native Swift color engine used as PlutoVG's conversion frontend.
+  public let colorEngine: NativeGraphicsColorEngine
 
   /// Creates an RGBA bitmap target with explicit pixel geometry and resolution.
   public init(
@@ -531,6 +543,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
   ) {
     self.pixelWidth = pixelWidth
     self.pixelHeight = pixelHeight
+    self.colorEngine = NativeGraphicsColorEngine()
     let mediaBounds = GraphicsRect(x: 0, y: 0, width: Double(pixelWidth), height: Double(pixelHeight))
     self.deviceDescriptor = GraphicsDeviceDescriptor(
       mediaBounds: mediaBounds,
@@ -557,11 +570,24 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     self.pixelWidth = pixelWidth
     self.pixelHeight = pixelHeight
     self.deviceDescriptor = deviceDescriptor
+    self.colorEngine = NativeGraphicsColorEngine(destinationProfile: deviceDescriptor.colorDevice.destinationProfile)
   }
 
   /// Creates a renderer dedicated to one render operation.
   public func makeRenderer() throws -> sending Renderer {
-    try Renderer(pixelWidth: pixelWidth, pixelHeight: pixelHeight, descriptor: deviceDescriptor)
+    try makeRenderer(colorSession: colorEngine.makeSession(for: deviceDescriptor))
+  }
+
+  /// Creates a renderer with color conversion state prepared for this render.
+  public func makeRenderer(
+    colorSession: sending NativeGraphicsColorSession
+  ) throws -> sending Renderer {
+    try Renderer(
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight,
+      descriptor: deviceDescriptor,
+      colorSession: colorSession
+    )
   }
 }
 

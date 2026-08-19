@@ -82,6 +82,50 @@ import Testing
     #expect(abs(nativeGray - plutoGray) < 0.02)
   }
 
+  @Test func namedColorsAndGeneralizedImagesUseNativeColorSessions() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      [/Separation /Spot /DeviceRGB {dup 1 exch sub 0}] setcolorspace
+      .25 setcolor 0 10 20 10 rectfill
+      << /ImageType 1 /Width 1 /Height 1 /BitsPerComponent 8
+         /ImageMatrix [.05 0 0 .1 0 0] /Decode [0 1] /DataSource <40>
+      >> image showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+    let image = try #require(result.output.first)
+    let vector = try rgb(x: 10, y: 5, image: image)
+    let sampled = try rgb(x: 10, y: 15, image: image)
+    #expect(abs(vector.red - 0.25) < 0.03)
+    #expect(abs(vector.green - 0.75) < 0.03)
+    #expect(abs(sampled.red - 64.0 / 255.0) < 0.03)
+    #expect(abs(sampled.green - 191.0 / 255.0) < 0.03)
+  }
+
+  @Test func genericRasterTargetAcceptsACompatibleCustomColorEngine() async throws {
+    let media = GraphicsRect(x: 0, y: 0, width: 20, height: 20)
+    let descriptor = GraphicsDeviceDescriptor(
+      mediaBounds: media,
+      imageableBounds: media,
+      horizontalResolution: 72,
+      verticalResolution: 72,
+      defaultMatrix: .identity
+    )
+    let target = ColorManagedRasterImageTarget(
+      pixelWidth: 20,
+      pixelHeight: 20,
+      deviceDescriptor: descriptor,
+      colorEngine: GreenColorEngine()
+    )
+    let result = try await Interpreter.render(
+      content: "1 0 0 setrgbcolor 0 0 20 20 rectfill showpage",
+      to: target
+    )
+    let color = try rgb(x: 10, y: 10, image: #require(result.output.first))
+    #expect(color.green > 0.9)
+    #expect(color.red < 0.1)
+  }
+
   @Test func concurrentRendersSharingEnvironmentRemainIndependent() async throws {
     let environment = InterpreterEnvironment()
     async let black = Interpreter.render(
@@ -103,6 +147,16 @@ import Testing
   @Test func invalidConfigurationAndGeometryUsePostScriptErrors() throws {
     #expect(throws: SolidPostScript.Error.configurationError) {
       _ = try RasterImageTarget(pixelWidth: 0, pixelHeight: 10).makeRenderer()
+    }
+    let session = try NativeGraphicsColorSession()
+    let oversized = GraphicsImageDescriptor(
+      width: Int.max,
+      height: 2,
+      kind: .color(.deviceRGB),
+      imageToDevice: .identity
+    )
+    #expect(throws: SolidPostScript.Error.ioError) {
+      _ = try session.makeImageConverter(for: oversized)
     }
     let target = RasterImageTarget(pixelWidth: 10, pixelHeight: 10)
     let renderer = try target.makeRenderer()
@@ -148,5 +202,23 @@ import Testing
       Double(image.data[offset + 1]) / 255,
       Double(image.data[offset + 2]) / 255
     )
+  }
+}
+
+private struct GreenColorEngine: GraphicsColorEngine {
+  func makeSession(for device: GraphicsDeviceDescriptor) -> sending GreenColorSession {
+    GreenColorSession()
+  }
+}
+
+private final class GreenColorSession: GraphicsColorSession {
+  func resolve(_ paint: GraphicsPaint) -> RasterPaint {
+    .solid(RasterColor(red: 0, green: 1, blue: 0))
+  }
+
+  func makeImageConverter(
+    for descriptor: GraphicsImageDescriptor
+  ) throws -> sending NativeGraphicsColorImageConverter {
+    try NativeGraphicsColorSession().makeImageConverter(for: descriptor)
   }
 }

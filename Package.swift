@@ -117,7 +117,7 @@ let package = Package(
     ),
     .target(
       name: "SolidPostScriptPlutoVG",
-      dependencies: ["SolidPostScript", "SolidRaster", "CPlutoVG"],
+      dependencies: ["SolidPostScript", "SolidPostScriptRaster", "SolidRaster", "CPlutoVG"],
       plugins: lintPlugins
     ),
     .testTarget(
@@ -178,6 +178,7 @@ if benchmarkEnabled {
     .executableTarget(
       name: "SolidRasterBenchmark",
       dependencies: [
+        "SolidColor",
         "SolidRaster",
         "SolidRasterBenchmarkSupport",
         .product(name: "Benchmark", package: "benchmark"),

@@ -34,4 +34,31 @@ import Testing
     #expect(abs(rgb.green - 1) < 0.000_01)
     #expect(abs(rgb.blue - 1) < 0.000_01)
   }
+
+  @Test func srgbConverterAppliesTheStandardEncodingCurve() throws {
+    let linear = ColorXYZ(x: 0.214_041, y: 0.214_041, z: 0.214_041)
+    let identityProfile = try ColorDestinationProfile(
+      model: .rgb,
+      rgbToXYZ: .identity,
+      transferCurves: [.sRGB]
+    )
+    let rgb = try NativeColorConverter(destination: identityProfile).rgb(from: linear)
+    #expect(abs(rgb.red - 0.5) < 0.000_01)
+    #expect(abs(rgb.green - 0.5) < 0.000_01)
+    #expect(abs(rgb.blue - 0.5) < 0.000_01)
+  }
+
+  @Test func destinationProfilesProduceOrderedGrayAndCMYKComponents() throws {
+    let white = ColorXYZ.d65
+    let gray = try NativeColorConverter(destination: .deviceGray).components(from: white)
+    let cmykWhite = try NativeColorConverter(destination: .deviceCMYK).components(from: white)
+    let cmykBlack = try NativeColorConverter(destination: .deviceCMYK).components(
+      from: ColorXYZ(x: 0, y: 0, z: 0)
+    )
+
+    #expect(gray == [1])
+    #expect(cmykWhite.allSatisfy { abs($0) < 0.000_01 })
+    #expect(cmykBlack[0..<3].allSatisfy { abs($0) < 0.000_01 })
+    #expect(abs(cmykBlack[3] - 1) < 0.000_01)
+  }
 }

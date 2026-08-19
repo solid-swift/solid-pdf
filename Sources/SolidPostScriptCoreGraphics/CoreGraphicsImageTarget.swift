@@ -3,8 +3,11 @@ import CoreGraphics
 import Foundation
 import SolidPostScript
 
-/// A PostScript graphics target that produces one bitmap image for each transmitted page.
-public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
+/// A Core Graphics image target parameterized by a compatible color engine.
+public struct ColorManagedCoreGraphicsImageTarget<ColorEngine: GraphicsColorEngine>: GraphicsTarget, Sendable
+where
+  ColorEngine.Session: CoreGraphicsCompatibleColorSession
+{
   public typealias PageOutput = CGImage
   public typealias Output = [CGImage]
 
@@ -12,6 +15,7 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
   public final class Renderer: GraphicsRenderer {
     public typealias PageOutput = CGImage
     public typealias Output = [CGImage]
+    public typealias ColorSession = ColorEngine.Session
 
     /// Images transmitted by `showpage` so far.
     public private(set) var pages: [CGImage] = []
@@ -19,18 +23,33 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
     private let pixelWidth: Int
     private let pixelHeight: Int
     private let descriptor: GraphicsDeviceDescriptor
+    private let colorSession: ColorEngine.Session
     private var context: CGContext?
-    private var activeImage: (descriptor: GraphicsImageDescriptor, state: GraphicsStateSnapshot, components: [Float])?
-    private static let maximumBitmapBytes = 512 * 1_024 * 1_024
+    private var activeImage: (
+      descriptor: GraphicsImageDescriptor,
+      state: GraphicsStateSnapshot,
+      converter: ColorEngine.Session.ImageConverter
+    )?
+    private static var maximumBitmapBytes: Int { 512 * 1_024 * 1_024 }
 
-    fileprivate init(pixelWidth: Int, pixelHeight: Int, descriptor: GraphicsDeviceDescriptor) throws {
+    fileprivate init(
+      pixelWidth: Int,
+      pixelHeight: Int,
+      descriptor: GraphicsDeviceDescriptor,
+      colorSession: ColorEngine.Session
+    ) throws {
+      guard colorSession.destinationColorSpace.model == .rgb else {
+        throw SolidPostScript.Error.configurationError
+      }
       self.pixelWidth = pixelWidth
       self.pixelHeight = pixelHeight
       self.descriptor = descriptor
+      self.colorSession = colorSession
       self.context = try Self.makePage(
         pixelWidth: pixelWidth,
         pixelHeight: pixelHeight,
-        descriptor: descriptor
+        descriptor: descriptor,
+        colorSpace: colorSession.destinationColorSpace
       )
     }
 
@@ -41,15 +60,15 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
       case .paint(.erasePage):
         erasePage(context)
       case .paint(.fill(let rule)):
-        fill(event.before.path, rule: rule, state: event.before, in: context)
+        try fill(event.before.path, rule: rule, state: event.before, in: context)
       case .paint(.stroke):
         try stroke(event.before.path, state: event.before, in: context)
       case .paint(.userPathFill(let rule)):
-        fill(event.before.path, rule: rule, state: event.before, in: context)
+        try fill(event.before.path, rule: rule, state: event.before, in: context)
       case .paint(.userPathStroke):
-        fill(event.before.path, rule: .winding, state: event.before, in: context)
+        try fill(event.before.path, rule: .winding, state: event.before, in: context)
       case .paint(.fillRectangles(let paths)):
-        fillRectangles(paths, state: event.before, in: context)
+        try fillRectangles(paths, state: event.before, in: context)
       case .paint(.strokeRectangles(let paths, let matrix)):
         try strokeRectangles(paths, matrix: matrix, state: event.before, in: context)
       case .page(.show), .page(.copy):
@@ -57,7 +76,8 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
         let next = try Self.makePage(
           pixelWidth: pixelWidth,
           pixelHeight: pixelHeight,
-          descriptor: descriptor
+          descriptor: descriptor,
+          colorSpace: colorSession.destinationColorSpace
         )
         pages.append(image)
         self.context = next
@@ -71,35 +91,40 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
       guard activeImage == nil, case .paint(.image(let descriptor)) = event.operation else {
         throw SolidPostScript.Error.ioError
       }
-      activeImage = (descriptor, event.before, [])
+      activeImage = (
+        descriptor,
+        event.before,
+        try colorSession.makeImageConverter(for: descriptor)
+      )
     }
 
     /// Consumes one bounded group of complete sampled-image rows.
     public func writeImageRows(_ rows: GraphicsImageRows) throws {
-      guard var image = activeImage else { throw SolidPostScript.Error.ioError }
-      let expectedStart = image.components.count / (image.descriptor.width * image.descriptor.kind.componentCount)
-      let expectedCount = rows.rowCount * image.descriptor.width * image.descriptor.kind.componentCount
-      guard rows.startRow == expectedStart, rows.components.count == expectedCount else {
-        throw SolidPostScript.Error.ioError
-      }
-      image.components.append(contentsOf: rows.components)
-      activeImage = image
+      guard let image = activeImage else { throw SolidPostScript.Error.ioError }
+      try image.converter.write(rows)
     }
 
     /// Commits and paints the active sampled image.
     public func endImage() throws {
       guard let image = activeImage, let context else { throw SolidPostScript.Error.ioError }
       activeImage = nil
-      try draw(GraphicsImage(descriptor: image.descriptor, components: image.components), state: image.state, in: context)
+      try draw(
+        image.converter.finish(),
+        descriptor: image.descriptor,
+        state: image.state,
+        in: context
+      )
     }
 
     /// Abandons the active sampled image without painting it.
     public func abortImage() {
+      activeImage?.converter.abort()
       activeImage = nil
     }
 
     /// Completes the job and discards the current untransmitted page.
     public func finish() -> sending [CGImage] {
+      activeImage?.converter.abort()
       activeImage = nil
       context = nil
       return pages
@@ -107,6 +132,7 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
 
     /// Abandons the current page and all transmitted output.
     public func abort() {
+      activeImage?.converter.abort()
       activeImage = nil
       context = nil
       pages.removeAll()
@@ -115,7 +141,8 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
     private static func makePage(
       pixelWidth: Int,
       pixelHeight: Int,
-      descriptor: GraphicsDeviceDescriptor
+      descriptor: GraphicsDeviceDescriptor,
+      colorSpace: CGColorSpace
     ) throws -> CGContext {
       guard pixelWidth > 0,
         pixelHeight > 0,
@@ -139,7 +166,7 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
         height: pixelHeight,
         bitsPerComponent: 8,
         bytesPerRow: pixelWidth * 4,
-        space: CGColorSpaceCreateDeviceRGB(),
+        space: colorSpace,
         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
       ) else {
         throw SolidPostScript.Error.ioError
@@ -162,11 +189,11 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
       rule: GraphicsFillRule,
       state: GraphicsStateSnapshot,
       in context: CGContext
-    ) {
+    ) throws {
       context.saveGState()
       replay(state.clip, in: context)
       context.addPath(path.cgPath)
-      setPaint(state.paint, in: context)
+      try setPaint(state.paint, in: context)
       context.drawPath(using: rule == .evenOdd ? .eoFill : .fill)
       context.restoreGState()
     }
@@ -183,7 +210,7 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
     ) throws {
       if state.strokeAdjustment {
         let outline = try GraphicsPathGeometry.strokeOutline(path: path, state: state, matrix: matrix)
-        fill(outline, rule: .winding, state: state, in: context)
+        try fill(outline, rule: .winding, state: state, in: context)
         return
       }
       guard let inverse = matrix.inverted else { return }
@@ -191,7 +218,7 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
       replay(state.clip, in: context)
       context.concatenate(matrix.cgAffineTransform)
       context.addPath(path.transformed(by: inverse).cgPath)
-      setPaint(state.paint, in: context)
+      try setPaint(state.paint, in: context)
       context.setLineWidth(state.lineWidth)
       context.setLineCap(state.lineCap.cgLineCap)
       context.setLineJoin(state.lineJoin.cgLineJoin)
@@ -205,11 +232,11 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
       _ paths: [GraphicsPath],
       state: GraphicsStateSnapshot,
       in context: CGContext
-    ) {
+    ) throws {
       context.saveGState()
       replay(state.clip, in: context)
       for path in paths { context.addPath(path.cgPath) }
-      setPaint(state.paint, in: context)
+      try setPaint(state.paint, in: context)
       context.fillPath()
       context.restoreGState()
     }
@@ -238,57 +265,32 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
     }
 
     private func draw(
-      _ image: GraphicsImage,
+      _ image: CGImage,
+      descriptor: GraphicsImageDescriptor,
       state: GraphicsStateSnapshot,
       in context: CGContext
     ) throws {
-      let descriptor = image.descriptor
-      let rowWidth = descriptor.width * descriptor.kind.componentCount
-      let renderedHeight = rowWidth == 0 ? 0 : image.components.count / rowWidth
+      let renderedHeight = image.height
       guard descriptor.width > 0,
         renderedHeight > 0,
         renderedHeight <= descriptor.height,
-        image.components.count == renderedHeight * rowWidth
+        image.width == descriptor.width
       else { return }
-      let data = image.premultipliedRGBA8() as CFData
-      guard let provider = CGDataProvider(data: data),
-        let cgImage = CGImage(
-          width: descriptor.width,
-          height: renderedHeight,
-          bitsPerComponent: 8,
-          bitsPerPixel: 32,
-          bytesPerRow: descriptor.width * 4,
-          space: CGColorSpaceCreateDeviceRGB(),
-          bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
-          provider: provider,
-          decode: nil,
-          shouldInterpolate: descriptor.interpolate,
-          intent: .defaultIntent
-        )
-      else {
-        throw SolidPostScript.Error.ioError
-      }
       context.saveGState()
       replay(state.clip, in: context)
       context.concatenate(descriptor.imageToDevice.cgAffineTransform)
       context.interpolationQuality = descriptor.interpolate ? .high : .none
       context.draw(
-        cgImage,
+        image,
           in: CGRect(x: 0, y: 0, width: descriptor.width, height: renderedHeight)
       )
       context.restoreGState()
     }
 
-    private func setPaint(_ paint: GraphicsPaint, in context: CGContext) {
-      switch paint {
-      case .deviceGray(let gray):
-        context.setFillColor(gray: gray, alpha: 1)
-        context.setStrokeColor(gray: gray, alpha: 1)
-      case .deviceRGB, .deviceCMYK, .color:
-        let rgb = paint.rgbComponents
-        context.setFillColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
-        context.setStrokeColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
-      }
+    private func setPaint(_ paint: GraphicsPaint, in context: CGContext) throws {
+      let color = try colorSession.resolve(paint)
+      context.setFillColor(color)
+      context.setStrokeColor(color)
     }
   }
 
@@ -298,16 +300,20 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
   public let pixelWidth: Int
   /// The page height in pixels.
   public let pixelHeight: Int
+  /// The color engine used by this target.
+  public let colorEngine: ColorEngine
 
   /// Creates an RGBA bitmap target with explicit pixel geometry and resolution.
   public init(
     pixelWidth: Int,
     pixelHeight: Int,
     resolution: Double = 72,
-    imageableBounds: GraphicsRect? = nil
+    imageableBounds: GraphicsRect? = nil,
+    colorEngine: ColorEngine
   ) {
     self.pixelWidth = pixelWidth
     self.pixelHeight = pixelHeight
+    self.colorEngine = colorEngine
     let mediaBounds = GraphicsRect(x: 0, y: 0, width: Double(pixelWidth), height: Double(pixelHeight))
     self.deviceDescriptor = GraphicsDeviceDescriptor(
       mediaBounds: mediaBounds,
@@ -327,7 +333,41 @@ public struct CoreGraphicsImageTarget: GraphicsTarget, Sendable {
 
   /// Creates a renderer dedicated to one render operation.
   public func makeRenderer() throws -> sending Renderer {
-    try Renderer(pixelWidth: pixelWidth, pixelHeight: pixelHeight, descriptor: deviceDescriptor)
+    try makeRenderer(colorSession: colorEngine.makeSession(for: deviceDescriptor))
+  }
+
+  /// Creates a renderer with color conversion state prepared for this render.
+  public func makeRenderer(
+    colorSession: sending ColorEngine.Session
+  ) throws -> sending Renderer {
+    try Renderer(
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight,
+      descriptor: deviceDescriptor,
+      colorSession: colorSession
+    )
+  }
+}
+
+/// The Core Graphics color-managed image target used by default.
+public typealias CoreGraphicsImageTarget = ColorManagedCoreGraphicsImageTarget<CoreGraphicsColorEngine>
+
+extension ColorManagedCoreGraphicsImageTarget where ColorEngine == CoreGraphicsColorEngine {
+  /// Creates an RGBA bitmap target with explicit geometry and destination color space.
+  public init(
+    pixelWidth: Int,
+    pixelHeight: Int,
+    resolution: Double = 72,
+    imageableBounds: GraphicsRect? = nil,
+    destinationColorSpace: CGColorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+  ) {
+    self.init(
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight,
+      resolution: resolution,
+      imageableBounds: imageableBounds,
+      colorEngine: CoreGraphicsColorEngine(destinationColorSpace: destinationColorSpace)
+    )
   }
 }
 
