@@ -123,6 +123,7 @@ extension Context {
     let record = PostScriptDeviceRecord(configuration: configuration)
     graphicsDeviceDescriptor = configuration.descriptor
     graphicsState = .initial(for: configuration.descriptor, device: record)
+    selectInitialColor(for: configuration.colorants)
     graphicsState.pageDeviceParameters = parameters
     graphicsStack.removeAll()
     do {
@@ -134,6 +135,7 @@ extension Context {
     try applyInstalledDefaultMatrix()
     try applyGraphicsOperation(.paint(.erasePage)) { _ in }
     graphicsState.initializeGraphics(for: graphicsDeviceDescriptor)
+    selectInitialColor(for: configuration.colorants)
     try await callBeginPage()
   }
 
@@ -252,6 +254,28 @@ extension Context {
     graphicsState.device.updateConfiguration(installed)
     graphicsDeviceDescriptor = descriptor
   }
+
+  private func selectInitialColor(for colorants: GraphicsColorantConfiguration) {
+    switch colorants.processModel {
+    case .deviceGray:
+      graphicsState.colorSpace = .deviceGray(nil)
+      graphicsState.colorComponents = [0]
+      graphicsState.paint = .deviceGray(0)
+    case .deviceRGB, .deviceRGBK:
+      graphicsState.colorSpace = .deviceRGB(nil)
+      graphicsState.colorComponents = [0, 0, 0]
+      graphicsState.paint = .deviceRGB(red: 0, green: 0, blue: 0)
+    case .deviceCMY, .deviceCMYK:
+      graphicsState.colorSpace = .deviceCMYK(nil)
+      graphicsState.colorComponents = [0, 0, 0, 1]
+      graphicsState.paint = .deviceCMYK(cyan: 0, magenta: 0, yellow: 0, black: 1)
+    case .deviceN:
+      graphicsState.colorSpace = .deviceGray(nil)
+      graphicsState.colorComponents = [0]
+      graphicsState.paint = .deviceGray(0)
+    }
+    graphicsState.patternSource = nil
+  }
 }
 
 extension GraphicsDeviceDescriptor {
@@ -267,7 +291,9 @@ extension GraphicsDeviceDescriptor {
       minimumSmoothness: minimumSmoothness,
       maximumSmoothness: maximumSmoothness,
       defaultSmoothness: defaultSmoothness,
-      colorDevice: colorDevice
+      colorDevice: colorDevice,
+      deviceRendering: deviceRendering,
+      colorants: colorants
     )
   }
 }
@@ -280,7 +306,8 @@ extension GraphicsPageDeviceConfiguration {
       imagingBoundingBox: imagingBoundingBox,
       numberOfCopies: numberOfCopies,
       name: name,
-      descriptor: descriptor
+      descriptor: descriptor,
+      colorants: colorants
     )
   }
 }

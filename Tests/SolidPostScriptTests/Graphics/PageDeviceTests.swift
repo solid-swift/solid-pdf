@@ -46,6 +46,43 @@ struct PageDeviceTests {
     #expect(try values[4].value(as: RealValue.self).value == 300)
   }
 
+  @Test func providerComputesAStorageBoundedSeparationMaximum() throws {
+    let descriptor = GraphicsDeviceDescriptor(
+      mediaBounds: GraphicsRect(x: 0, y: 0, width: 10, height: 10),
+      imageableBounds: GraphicsRect(x: 0, y: 0, width: 10, height: 10),
+      horizontalResolution: 72,
+      verticalResolution: 72,
+      defaultMatrix: .identity
+    )
+    let session = try StandardGraphicsPageDeviceProvider(
+      maximumSurfaceBytes: 400,
+      colorantCapabilities: GraphicsColorantCapabilities(
+        supportedProcessModels: [.deviceRGB, .deviceCMYK],
+        supportsSeparationOutput: true,
+        supportsOverprint: true,
+        acceptsDynamicColorants: true,
+        maximumSeparations: 250
+      )
+    ).makeSession(for: descriptor)
+    let negotiation = try session.negotiate(GraphicsPageDeviceRequest(
+      pageSize: GraphicsSize(width: 10, height: 10),
+      resolution: GraphicsSize(width: 72, height: 72),
+      imagingBoundingBox: nil,
+      numberOfCopies: 1,
+      colorants: GraphicsColorantConfiguration(
+        processModel: .deviceCMYK,
+        producesSeparations: true,
+        additionalColorants: [GraphicsColorant(name: "Spot", isProcessColorant: false)],
+        separationOrder: ["Cyan", "Magenta", "Yellow", "Black", "Spot"],
+        maximumSeparations: 250,
+        supportsOverprint: true
+      )
+    ))
+
+    #expect(negotiation.configuration.colorants.maximumSeparations == 4)
+    #expect(negotiation.unsatisfiedParameters == ["SeparationOrder"])
+  }
+
   @Test func ignoredUnknownParameterInvokesPolicyReport() async throws {
     let values = try await Interpreter.results(content: """
       /reported false def

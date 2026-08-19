@@ -73,7 +73,8 @@ final class PostScriptDeviceRecord: Sendable {
       imagingBoundingBox: nil,
       numberOfCopies: 1,
       name: "SolidVirtualPageDevice",
-      descriptor: descriptor
+      descriptor: descriptor,
+      colorants: descriptor.colorants
     ))
   }
 

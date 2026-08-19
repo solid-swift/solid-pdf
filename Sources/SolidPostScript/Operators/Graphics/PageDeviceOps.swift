@@ -103,6 +103,16 @@ extension Operators {
         imagingBoundingBox = .null
       }
       let name = Object.string(configuration.name, access: .readOnly, vm: vm, kind: .literal)
+      let separationNames = try nameArray(
+        configuration.colorants.additionalColorants.map(\.name),
+        vm: vm,
+        context: context
+      )
+      let separationOrder = try nameArray(
+        configuration.colorants.separationOrder,
+        vm: vm,
+        context: context
+      )
       let copies: Object = if let numberOfCopies = configuration.numberOfCopies,
         let integer = Object.integer(exactly: numberOfCopies)
       {
@@ -120,6 +130,11 @@ extension Operators {
         (.literalName("EndPage"), parameters.endPage),
         (.literalName("Policies"), parameters.policies),
         (.literalName("PageDeviceName"), name),
+        (.literalName("ProcessColorModel"), .literalName(configuration.colorants.processModel.rawValue)),
+        (.literalName("Separations"), .boolean(configuration.colorants.producesSeparations)),
+        (.literalName("MaxSeparations"), .integer(Int32(configuration.colorants.maximumSeparations))),
+        (.literalName("SeparationColorNames"), separationNames),
+        (.literalName("SeparationOrder"), separationOrder),
       ], access: .readOnly, vm: vm)
       context.operands.push(dictionary)
     }
@@ -174,6 +189,10 @@ extension Operators {
     var install = currentParameters.install
     var beginPage = currentParameters.beginPage
     var endPage = currentParameters.endPage
+    var processModel = currentConfiguration.colorants.processModel
+    var producesSeparations = currentConfiguration.colorants.producesSeparations
+    var additionalColorants = currentConfiguration.colorants.additionalColorants
+    var separationOrder = currentConfiguration.colorants.separationOrder
     var recovered: [String: Int32] = [:]
     let originals = entries
 
@@ -220,6 +239,28 @@ extension Operators {
         case "EndPage":
           try value.checkProcedure()
           endPage = value
+        case "ProcessColorModel":
+          let modelName = try value.value(as: NameValue.self).value
+          guard let selected = GraphicsProcessColorModel(rawValue: modelName) else {
+            try recover(name: name, value: value, policies: policies, into: &recovered)
+            continue
+          }
+          processModel = selected
+        case "Separations":
+          producesSeparations = try value.value(as: BooleanValue.self).value
+        case "MaxSeparations":
+          try recover(name: name, value: value, policies: policies, into: &recovered)
+        case "SeparationColorNames":
+          let names = try pageDeviceNameArray(value)
+          var seen = Set<String>()
+          additionalColorants = names.compactMap { colorant -> GraphicsColorant? in
+            guard !processModel.colorantNames.contains(colorant), seen.insert(colorant).inserted else {
+              return nil
+            }
+            return GraphicsColorant(name: colorant, isProcessColorant: false)
+          }
+        case "SeparationOrder":
+          separationOrder = try pageDeviceNameArray(value)
         case "PageDeviceName":
           let requested = try value.value(as: StringValue.self).readableString
           guard requested == currentConfiguration.name else {
@@ -236,12 +277,22 @@ extension Operators {
       }
     }
 
+    additionalColorants.removeAll { processModel.colorantNames.contains($0.name) }
+
     return ParsedPageDeviceRequest(
       request: GraphicsPageDeviceRequest(
         pageSize: pageSize,
         resolution: resolution,
         imagingBoundingBox: imagingBoundingBox,
-        numberOfCopies: numberOfCopies
+        numberOfCopies: numberOfCopies,
+        colorants: GraphicsColorantConfiguration(
+          processModel: processModel,
+          producesSeparations: producesSeparations,
+          additionalColorants: additionalColorants,
+          separationOrder: separationOrder,
+          maximumSeparations: currentConfiguration.colorants.maximumSeparations,
+          supportsOverprint: currentConfiguration.colorants.supportsOverprint
+        )
       ),
       parameters: PostScriptPageDeviceParameters(
         install: install,
@@ -350,6 +401,22 @@ extension Operators {
     return try values.map(numeric)
   }
 
+  private static func pageDeviceNameArray(_ object: Object) throws -> [String] {
+    let values: [Object]
+    if let array = object.value as? ArrayValue {
+      values = Array(try array.objects(in: array.range, for: .read))
+    } else if let array = object.value as? PackedArrayValue {
+      values = Array(try array.objects(in: array.range, for: .read))
+    } else {
+      throw Error.typeCheck
+    }
+    return try values.map { value in
+      if let name = value.value as? NameValue { return name.value }
+      if let string = value.value as? StringValue { return try string.readableString }
+      throw Error.typeCheck
+    }
+  }
+
   private static func numberArray(
     _ values: [Double],
     vm: VM,
@@ -361,6 +428,25 @@ extension Operators {
     )
     let array = try Object.array(
       values.map { try Object.real($0) },
+      access: .readOnly,
+      vm: vm,
+      kind: .literal
+    )
+    try context.adopt(array)
+    return array
+  }
+
+  private static func nameArray(
+    _ values: [String],
+    vm: VM,
+    context: isolated Context
+  ) throws -> Object {
+    try context.preflightAllocation(
+      bytes: context.estimatedAllocationSize(count: values.count, objectType: .array),
+      vm: vm
+    )
+    let array = try Object.array(
+      values.map(Object.literalName),
       access: .readOnly,
       vm: vm,
       kind: .literal

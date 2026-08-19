@@ -177,7 +177,10 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
     pageDeviceMode: GraphicsPageDeviceMode = .adaptive
   ) {
     self.deviceDescriptor = deviceDescriptor
-    self.pageDeviceProvider = StandardGraphicsPageDeviceProvider(mode: pageDeviceMode)
+    self.pageDeviceProvider = StandardGraphicsPageDeviceProvider(
+      mode: pageDeviceMode,
+      colorantCapabilities: .semantic
+    )
   }
 
   /// Creates a renderer dedicated to one render operation.

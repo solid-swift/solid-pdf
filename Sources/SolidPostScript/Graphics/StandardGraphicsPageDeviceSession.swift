@@ -50,7 +50,8 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       imagingBoundingBox: nil,
       numberOfCopies: 1,
       name: name,
-      descriptor: descriptor
+      descriptor: descriptor,
+      colorants: Self.initialColorants(descriptor: descriptor, capabilities: capabilities)
     )
   }
 
@@ -76,7 +77,14 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       if request.resolution != initialResolution { unsatisfied.insert("HWResolution") }
     }
 
-    let descriptor = try makeDescriptor(pageSize: selectedPageSize, resolution: selectedResolution)
+    var descriptor = try makeDescriptor(pageSize: selectedPageSize, resolution: selectedResolution)
+    let maximumSeparations = maximumSeparations(for: descriptor)
+    let colorants = negotiatedColorants(
+      request.colorants,
+      maximumSeparations: maximumSeparations,
+      unsatisfied: &unsatisfied
+    )
+    descriptor = descriptor.withColorants(colorants)
     return GraphicsPageDeviceNegotiation(
       configuration: GraphicsPageDeviceConfiguration(
         identifier: GraphicsDeviceIdentifier(),
@@ -84,7 +92,8 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
         imagingBoundingBox: request.imagingBoundingBox,
         numberOfCopies: request.numberOfCopies,
         name: name,
-        descriptor: descriptor
+        descriptor: descriptor,
+        colorants: colorants
       ),
       unsatisfiedParameters: unsatisfied
     )
@@ -134,7 +143,78 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       minimumSmoothness: initialDescriptor.minimumSmoothness,
       maximumSmoothness: initialDescriptor.maximumSmoothness,
       defaultSmoothness: initialDescriptor.defaultSmoothness,
-      colorDevice: initialDescriptor.colorDevice
+      colorDevice: initialDescriptor.colorDevice,
+      deviceRendering: initialDescriptor.deviceRendering,
+      colorants: initialDescriptor.colorants
+    )
+  }
+
+  private func negotiatedColorants(
+    _ requested: GraphicsColorantConfiguration,
+    maximumSeparations: Int,
+    unsatisfied: inout Set<String>
+  ) -> GraphicsColorantConfiguration {
+    let supported = capabilities.colorants
+    var processModel = requested.processModel
+    var producesSeparations = requested.producesSeparations
+    var additional = requested.additionalColorants
+    var order = requested.separationOrder
+
+    if !supported.supportedProcessModels.contains(processModel) {
+      unsatisfied.insert("ProcessColorModel")
+      processModel = initialConfiguration.colorants.processModel
+    }
+    if producesSeparations, !supported.supportsSeparationOutput {
+      unsatisfied.insert("Separations")
+      producesSeparations = initialConfiguration.colorants.producesSeparations
+    }
+    if !additional.isEmpty, !supported.acceptsDynamicColorants {
+      unsatisfied.insert("SeparationColorNames")
+      additional = initialConfiguration.colorants.additionalColorants
+    }
+
+    let available = Set(processModel.colorantNames + additional.map(\.name))
+    if order.contains(where: { !available.contains($0) })
+      || Set(order).count > maximumSeparations
+    {
+      unsatisfied.insert("SeparationOrder")
+      order = initialConfiguration.colorants.separationOrder
+    }
+
+    return GraphicsColorantConfiguration(
+      processModel: processModel,
+      producesSeparations: producesSeparations,
+      additionalColorants: additional,
+      separationOrder: order,
+      maximumSeparations: maximumSeparations,
+      supportsOverprint: supported.supportsOverprint
+    )
+  }
+
+  private func maximumSeparations(for descriptor: GraphicsDeviceDescriptor) -> Int {
+    let width = max(1, Int(descriptor.mediaBounds.width.rounded(.up)))
+    let height = max(1, Int(descriptor.mediaBounds.height.rounded(.up)))
+    guard width <= Int.max / height else { return 1 }
+    let planeBytes = width * height
+    return min(
+      250,
+      capabilities.colorants.maximumSeparations,
+      max(1, capabilities.maximumSurfaceBytes / planeBytes)
+    )
+  }
+
+  private static func initialColorants(
+    descriptor: GraphicsDeviceDescriptor,
+    capabilities: GraphicsPageDeviceCapabilities
+  ) -> GraphicsColorantConfiguration {
+    let selected = descriptor.colorants
+    return GraphicsColorantConfiguration(
+      processModel: selected.processModel,
+      producesSeparations: selected.producesSeparations,
+      additionalColorants: selected.additionalColorants,
+      separationOrder: selected.separationOrder,
+      maximumSeparations: min(selected.maximumSeparations, capabilities.colorants.maximumSeparations),
+      supportsOverprint: capabilities.colorants.supportsOverprint
     )
   }
 
@@ -145,5 +225,25 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
   private static func valid(_ rect: GraphicsRect) -> Bool {
     rect.x.isFinite && rect.y.isFinite && rect.width.isFinite && rect.height.isFinite
       && rect.width >= 0 && rect.height >= 0
+  }
+}
+
+private extension GraphicsDeviceDescriptor {
+  func withColorants(_ colorants: GraphicsColorantConfiguration) -> Self {
+    Self(
+      mediaBounds: mediaBounds,
+      imageableBounds: imageableBounds,
+      horizontalResolution: horizontalResolution,
+      verticalResolution: verticalResolution,
+      defaultMatrix: defaultMatrix,
+      defaultFlatness: defaultFlatness,
+      defaultStrokeAdjustment: defaultStrokeAdjustment,
+      minimumSmoothness: minimumSmoothness,
+      maximumSmoothness: maximumSmoothness,
+      defaultSmoothness: defaultSmoothness,
+      colorDevice: colorDevice,
+      deviceRendering: deviceRendering,
+      colorants: colorants
+    )
   }
 }

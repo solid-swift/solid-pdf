@@ -437,6 +437,9 @@ extension Operators {
       return try await resolveColor(values, in: base, context: context)
     case .separation(_, let name, let alternative, let transform):
       let tints = rawComponents.map(clamped)
+      if name == "All" || name == "None" || availableColorants(in: context).contains(name) {
+        return .directColorants(space: space.description, colorants: [name], tints: tints)
+      }
       let values = try await executeTransform(
         transform,
         inputs: tints,
@@ -447,6 +450,10 @@ extension Operators {
       return .named(space: space.description, colorants: [name], tints: tints, alternative: fallback)
     case .deviceN(_, let names, let alternative, let transform):
       let tints = rawComponents.map(clamped)
+      let available = availableColorants(in: context)
+      if names.allSatisfy(available.contains) {
+        return .directColorants(space: space.description, colorants: names, tints: tints)
+      }
       let values = try await executeTransform(
         transform,
         inputs: tints,
@@ -458,6 +465,10 @@ extension Operators {
     case .pattern:
       throw Error.typeCheck
     }
+  }
+
+  private static func availableColorants(in context: isolated Context) -> Set<String> {
+    Set(context.graphicsState.device.configuration?.colorants.availableColorants.map(\.name) ?? [])
   }
 
   static func resolveCIE(

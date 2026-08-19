@@ -8,7 +8,7 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
   public typealias Output = [RasterSeparatedPage]
   public typealias ColorEngine = NativeGraphicsColorEngine
   public typealias DeviceRenderingEngine = NativeGraphicsDeviceRenderingEngine
-  public typealias PageDeviceProvider = StandardGraphicsPageDeviceProvider
+  public typealias PageDeviceProvider = RasterSeparationPageDeviceProvider
 
   /// A renderer dedicated to one separated raster job.
   public final class Renderer: GraphicsRenderer {
@@ -70,7 +70,7 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
   public let deviceDescriptor: GraphicsDeviceDescriptor
   public let colorEngine: NativeGraphicsColorEngine
   public let deviceRenderingEngine = NativeGraphicsDeviceRenderingEngine()
-  public let pageDeviceProvider: StandardGraphicsPageDeviceProvider
+  public let pageDeviceProvider: RasterSeparationPageDeviceProvider
 
   /// Creates a CMYK separation target.
   public init(
@@ -100,7 +100,7 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
       colorants: colorants
     )
     colorEngine = NativeGraphicsColorEngine()
-    pageDeviceProvider = StandardGraphicsPageDeviceProvider(mode: pageDeviceMode)
+    pageDeviceProvider = RasterSeparationPageDeviceProvider(mode: pageDeviceMode)
   }
 
   public func makeRenderer() throws -> sending Renderer {

@@ -12,6 +12,8 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
   public let maximumSurfaceBytes: Int
   /// The page-device name reported to PostScript.
   public let name: String
+  /// The process and named-colorant capabilities reported by new sessions.
+  public let colorantCapabilities: GraphicsColorantCapabilities
 
   /// Creates a standard page-device provider.
   public init(
@@ -19,13 +21,15 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
     maximumPixelWidth: Int = 32_768,
     maximumPixelHeight: Int = 32_768,
     maximumSurfaceBytes: Int = 512 * 1_024 * 1_024,
-    name: String = "SolidVirtualPageDevice"
+    name: String = "SolidVirtualPageDevice",
+    colorantCapabilities: GraphicsColorantCapabilities = .compositeRGB
   ) {
     self.mode = mode
     self.maximumPixelWidth = maximumPixelWidth
     self.maximumPixelHeight = maximumPixelHeight
     self.maximumSurfaceBytes = maximumSurfaceBytes
     self.name = name
+    self.colorantCapabilities = colorantCapabilities
   }
 
   /// Creates a render-scoped standard session.
@@ -38,7 +42,8 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
         mode: mode,
         maximumPixelWidth: maximumPixelWidth,
         maximumPixelHeight: maximumPixelHeight,
-        maximumSurfaceBytes: maximumSurfaceBytes
+        maximumSurfaceBytes: maximumSurfaceBytes,
+        colorants: colorantCapabilities
       ),
       name: name
     )

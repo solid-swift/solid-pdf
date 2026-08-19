@@ -28,4 +28,14 @@ public struct GraphicsColorantCapabilities: Sendable, Hashable {
 
   /// Compatibility capabilities for an RGB composite target.
   public static let compositeRGB = Self()
+
+  /// Semantic capabilities for targets that preserve colorants without physical plate output.
+  public static let semantic = Self(
+    supportedProcessModels: Set(GraphicsProcessColorModel.allCases),
+    supportsCompositeOutput: true,
+    supportsSeparationOutput: true,
+    supportsOverprint: true,
+    acceptsDynamicColorants: true,
+    maximumSeparations: 250
+  )
 }
