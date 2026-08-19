@@ -431,6 +431,8 @@ where
         try paintShading(shading, clip: state.clip, state: state, in: context)
       case .form(let nested, _):
         try paintForm(nested, in: context, depth: depth)
+      case .text:
+        break
       }
     }
 
@@ -564,6 +566,8 @@ where
           }
         )
         try paintShading(translated, clip: translatedClip, state: shadingState, in: context)
+        return
+      case .text:
         return
       }
       let selectedPaint = underlying ?? state.paint

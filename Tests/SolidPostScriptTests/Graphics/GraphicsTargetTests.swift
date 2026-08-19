@@ -78,6 +78,12 @@ struct GraphicsTargetTests {
     #expect(result.output == 37)
   }
 
+  @Test func renderCreatesTypedFontSession() async throws {
+    let result = try await Interpreter.render(content: "", to: FontSessionTarget())
+
+    #expect(result.output == "font-session")
+  }
+
   @Test func standardPageDeviceProviderNegotiatesAdaptiveGeometry() throws {
     let provider = StandardGraphicsPageDeviceProvider(mode: .adaptive)
     let session = try provider.makeSession(for: .letter)
@@ -128,6 +134,61 @@ struct GraphicsTargetTests {
     #expect(result.output.totalRows == 40)
     #expect(result.output.maximumRowsPerTransfer <= 32)
     #expect(result.output.maximumComponentsPerTransfer <= 64 * 32)
+  }
+}
+
+private struct FontSessionTarget: GraphicsTarget {
+  typealias PageOutput = Void
+  typealias Output = String
+  typealias FontEngine = Engine
+
+  struct Engine: GraphicsFontEngine {
+    func makeSession(for device: GraphicsDeviceDescriptor) -> sending Session {
+      Session(value: "font-session")
+    }
+  }
+
+  final class Session: GraphicsFontSession {
+    let value: String
+
+    init(value: String) { self.value = value }
+
+    func prepare(_ font: GraphicsFontDescription) -> GraphicsFontDescription? { font }
+
+    func prepare(
+      _ glyph: GraphicsGlyphDescription,
+      in font: borrowing GraphicsFontDescription
+    ) -> GraphicsGlyphDescription? {
+      glyph
+    }
+  }
+
+  final class Renderer: GraphicsRenderer {
+    typealias PageOutput = Void
+    typealias Output = String
+    typealias FontSession = Session
+
+    let session: Session
+    var pages: [Void] = []
+
+    init(session: Session) { self.session = session }
+
+    func process(_ event: GraphicsEvent) {}
+    func finish() -> sending String { session.value }
+    func abort() {}
+  }
+
+  let deviceDescriptor = GraphicsDeviceDescriptor.letter
+  let fontEngine = Engine()
+
+  func makeRenderer() -> sending Renderer { Renderer(session: Session(value: "legacy")) }
+
+  func makeRenderer(
+    colorSession: sending SemanticGraphicsColorSession,
+    deviceRenderingSession: sending SemanticGraphicsDeviceRenderingSession,
+    fontSession: sending Session
+  ) -> sending Renderer {
+    Renderer(session: fontSession)
   }
 }
 

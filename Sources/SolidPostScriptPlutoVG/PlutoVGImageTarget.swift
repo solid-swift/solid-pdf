@@ -528,6 +528,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         try paintShading(shading, clip: state.clip, state: state, in: canvas)
       case .form(let nested, _):
         try paintForm(nested, in: canvas, depth: depth)
+      case .text:
+        break
       }
     }
 
@@ -663,6 +665,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
           state: shadingState,
           in: canvas
         )
+        return
+      case .text:
         return
       }
 

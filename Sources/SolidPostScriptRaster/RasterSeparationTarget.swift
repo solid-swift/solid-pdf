@@ -538,6 +538,8 @@ private extension RasterSeparationTarget.Renderer {
       try paintShading(shading, clip: state.clip, state: state)
     case .form(let form, _):
       try paintForm(form, depth: depth)
+    case .text:
+      break
     }
   }
 }
@@ -708,6 +710,8 @@ private extension RasterSeparationTarget.Renderer {
       return
     case .image, .form:
       preconditionFailure("Handled before vector replay")
+    case .text:
+      return
     }
 
     let combinedClip = translatedPatternClip(

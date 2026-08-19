@@ -73,10 +73,12 @@ public enum Interpreter {
     let source: Object = .file(file, access: .readOnly, vm: .local, kind: .executable)
     let colorSession = try target.colorEngine.makeSession(for: target.deviceDescriptor)
     let deviceRenderingSession = try target.deviceRenderingEngine.makeSession(for: target.deviceDescriptor)
+    let fontSession = try target.fontEngine.makeSession(for: target.deviceDescriptor)
     let pageDeviceSession = try target.pageDeviceProvider.makeSession(for: target.deviceDescriptor)
     let renderer = try target.makeRenderer(
       colorSession: colorSession,
-      deviceRenderingSession: deviceRenderingSession
+      deviceRenderingSession: deviceRenderingSession,
+      fontSession: fontSession
     )
     let context = Context(environment: environment)
     do {

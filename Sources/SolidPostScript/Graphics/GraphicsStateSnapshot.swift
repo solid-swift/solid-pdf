@@ -38,6 +38,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
   public let device: GraphicsDeviceSnapshot
   /// The current transfer, color-adjustment, and halftone controls.
   public let deviceRendering: GraphicsDeviceRenderingSnapshot
+  /// The current language-visible font.
+  public let font: GraphicsFontDescription
 
   /// Creates a graphics-state snapshot.
   public init(
@@ -58,7 +60,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     smoothness: Double = 0.02,
     pathBoundingBox: GraphicsRect? = nil,
     device: GraphicsDeviceSnapshot = .letter,
-    deviceRendering: GraphicsDeviceRenderingSnapshot = .continuousTone
+    deviceRendering: GraphicsDeviceRenderingSnapshot = .continuousTone,
+    font: GraphicsFontDescription = .invalid
   ) {
     self.matrix = matrix
     self.path = path
@@ -78,6 +81,7 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     self.pathBoundingBox = pathBoundingBox
     self.device = device
     self.deviceRendering = deviceRendering
+    self.font = font
   }
 
   func replacingDevice(_ device: GraphicsDeviceSnapshot) -> Self {
@@ -99,7 +103,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
       smoothness: smoothness,
       pathBoundingBox: pathBoundingBox,
       device: device,
-      deviceRendering: deviceRendering
+      deviceRendering: deviceRendering,
+      font: font
     )
   }
 }

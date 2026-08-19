@@ -37,4 +37,4 @@ SOLIDPDF_LINUX_PLATFORM=linux/amd64 Scripts/linux-build
 SOLIDPDF_LINUX_SWIFT_IMAGE=swift:6.3.3-jammy Scripts/linux-test
 ```
 
-Each checkout, Swift image, and target platform receives a distinct container and set of volumes, so worktrees and cross-architecture builds do not share incompatible products or baselines.
+Each checkout, Swift image, and target platform receives a distinct container and set of volumes, so worktrees and cross-architecture builds do not share incompatible products or baselines. Container creation also installs the FreeType and Fontconfig development packages required by `SolidPostScriptFreeType`.

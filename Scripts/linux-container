@@ -44,7 +44,7 @@ LINUX_PLATFORM="${SOLIDPDF_LINUX_PLATFORM:-$(default_platform)}"
 readonly LINUX_PLATFORM
 WORKSPACE_IDENTIFIER="$(printf '%s' "${REPOSITORY_ROOT}" | cksum | awk '{print $1}')"
 readonly WORKSPACE_IDENTIFIER
-CONFIGURATION_IDENTIFIER="$(normalized_identifier "${SWIFT_IMAGE}-${LINUX_PLATFORM}-benchmark-v3")"
+CONFIGURATION_IDENTIFIER="$(normalized_identifier "${SWIFT_IMAGE}-${LINUX_PLATFORM}-fonts-v4")"
 readonly CONFIGURATION_IDENTIFIER
 readonly CONTAINER_NAME="solidpdf-${CONFIGURATION_IDENTIFIER}-${WORKSPACE_IDENTIFIER}"
 readonly BUILD_VOLUME="${CONTAINER_NAME}-build"
@@ -88,6 +88,12 @@ function ensure_container() {
   if ! container_is_running; then
     echo "Starting ${CONTAINER_NAME}..." >&2
     docker start "${CONTAINER_NAME}" >/dev/null
+  fi
+  if ! docker exec "${CONTAINER_NAME}" test -f /var/lib/solidpdf-font-dependencies; then
+    echo "Installing FreeType and Fontconfig development packages..." >&2
+    docker exec "${CONTAINER_NAME}" apt-get update >/dev/null
+    docker exec "${CONTAINER_NAME}" apt-get install --yes pkg-config libfreetype-dev libfontconfig1-dev >/dev/null
+    docker exec "${CONTAINER_NAME}" touch /var/lib/solidpdf-font-dependencies
   fi
 }
 

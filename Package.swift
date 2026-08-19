@@ -13,10 +13,13 @@ let package = Package(
   ],
   products: [
     .library(name: "SolidColor", targets: ["SolidColor"]),
+    .library(name: "SolidFont", targets: ["SolidFont"]),
     .library(name: "SolidRaster", targets: ["SolidRaster"]),
     .library(name: "SolidPostScript", targets: ["SolidPostScript"]),
     .library(name: "SolidPostScriptRaster", targets: ["SolidPostScriptRaster"]),
     .library(name: "SolidPostScriptCoreGraphics", targets: ["SolidPostScriptCoreGraphics"]),
+    .library(name: "SolidPostScriptCoreText", targets: ["SolidPostScriptCoreText"]),
+    .library(name: "SolidPostScriptFreeType", targets: ["SolidPostScriptFreeType"]),
     .library(name: "SolidPostScriptPlutoVG", targets: ["SolidPostScriptPlutoVG"]),
   ],
   dependencies: [
@@ -29,6 +32,15 @@ let package = Package(
   targets: [
     .target(
       name: "SolidColor",
+      plugins: lintPlugins
+    ),
+    .target(
+      name: "SolidFont",
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidFontTests",
+      dependencies: ["SolidFont"],
       plugins: lintPlugins
     ),
     .testTarget(
@@ -49,6 +61,7 @@ let package = Package(
       name: "SolidPostScript",
       dependencies: [
         "SolidColor",
+        "SolidFont",
         "SolidRaster",
         .product(name: "SolidCore", package: "solid-foundation"),
         .product(name: "SolidIO", package: "solid-foundation"),
@@ -69,6 +82,37 @@ let package = Package(
     .target(
       name: "SolidPostScriptCoreGraphics",
       dependencies: ["SolidPostScript", "SolidRaster"],
+      plugins: lintPlugins
+    ),
+    .target(
+      name: "SolidPostScriptCoreText",
+      dependencies: ["SolidFont", "SolidPostScript"],
+      plugins: lintPlugins
+    ),
+    .systemLibrary(
+      name: "CFreeType",
+      pkgConfig: "freetype2",
+      providers: [
+        .apt(["libfreetype-dev"]),
+        .brew(["freetype"]),
+      ]
+    ),
+    .systemLibrary(
+      name: "CFontconfig",
+      pkgConfig: "fontconfig",
+      providers: [
+        .apt(["libfontconfig1-dev"]),
+        .brew(["fontconfig"]),
+      ]
+    ),
+    .target(
+      name: "SolidPostScriptFreeType",
+      dependencies: [
+        "SolidFont",
+        "SolidPostScript",
+        .target(name: "CFreeType", condition: .when(platforms: [.linux])),
+        .target(name: "CFontconfig", condition: .when(platforms: [.linux])),
+      ],
       plugins: lintPlugins
     ),
     .target(

@@ -20,6 +20,7 @@ public final class InterpreterEnvironment: Sendable {
   let patternCache = PatternCache()
   let formCache = FormCache()
   let screenManager = ScreenManager()
+  let fontManager: FontManager
   let formInitializationRegistry = FormInitializationRegistry()
 
   /// The application integration used by this environment.
@@ -28,6 +29,9 @@ public final class InterpreterEnvironment: Sendable {
   /// The file devices available to contexts created in this environment.
   public let fileDevices: FileDevices
 
+  /// Font-resource providers consulted in declaration order after in-VM resources.
+  public let fontProviders: [any FontResourceProvider]
+
   /// Creates an interpreter environment with file devices and optional resource-category overrides.
   ///
   /// - Parameters:
@@ -35,12 +39,14 @@ public final class InterpreterEnvironment: Sendable {
   ///   - resourceCategories: Category providers that augment or replace the standard registry.
   public convenience init(
     fileDevices: FileDevices = FileDevices(),
-    resourceCategories: [Object: any ResourceCategory] = [:]
+    resourceCategories: [Object: any ResourceCategory] = [:],
+    fontProviders: [any FontResourceProvider] = []
   ) {
     self.init(
       hostConfiguration: InterpreterHostConfiguration(),
       fileDevices: fileDevices,
-      resourceCategories: resourceCategories
+      resourceCategories: resourceCategories,
+      fontProviders: fontProviders
     )
   }
 
@@ -51,12 +57,14 @@ public final class InterpreterEnvironment: Sendable {
   public convenience init(
     standardOutput: any Sink,
     fileDevices: FileDevices = FileDevices(),
-    resourceCategories: [Object: any ResourceCategory] = [:]
+    resourceCategories: [Object: any ResourceCategory] = [:],
+    fontProviders: [any FontResourceProvider] = []
   ) {
     self.init(
       hostConfiguration: InterpreterHostConfiguration(standardOutput: standardOutput),
       fileDevices: fileDevices,
-      resourceCategories: resourceCategories
+      resourceCategories: resourceCategories,
+      fontProviders: fontProviders
     )
   }
 
@@ -64,12 +72,14 @@ public final class InterpreterEnvironment: Sendable {
   public convenience init(
     hostConfiguration: InterpreterHostConfiguration,
     fileDevices: FileDevices = FileDevices(),
-    resourceCategories: [Object: any ResourceCategory] = [:]
+    resourceCategories: [Object: any ResourceCategory] = [:],
+    fontProviders: [any FontResourceProvider] = []
   ) {
     self.init(
       hostConfiguration: hostConfiguration,
       fileDevices: fileDevices,
       resourceCategories: resourceCategories,
+      fontProviders: fontProviders,
       monotonicInstantSource: UptimeInstantSource.instance
     )
   }
@@ -78,6 +88,7 @@ public final class InterpreterEnvironment: Sendable {
     hostConfiguration: InterpreterHostConfiguration = InterpreterHostConfiguration(),
     fileDevices: FileDevices = FileDevices(),
     resourceCategories: [Object: any ResourceCategory] = [:],
+    fontProviders: [any FontResourceProvider] = [],
     monotonicInstantSource: any MonotonicInstantSource
   ) {
     let globalVMAllocationSpace = VMAllocationSpace(vm: .global)
@@ -93,6 +104,8 @@ public final class InterpreterEnvironment: Sendable {
     self.standardError = standardError
     self.standardErrorFile = standardErrorFile
     self.monotonicInstantSource = monotonicInstantSource
+    self.fontProviders = fontProviders
+    self.fontManager = FontManager(providers: fontProviders)
     self.fileDevices = fileDevices
       .replacing(StandardInputFileDevice(channel: standardInput))
       .replacing(StandardOutputFileDevice(channel: standardOutput, deviceName: "stdout"))
@@ -260,6 +273,9 @@ public final class InterpreterEnvironment: Sendable {
     values["CurStoredScreenCache"] = .integer(Int32(clamping: screenStatus.cachedBytes))
     values["MaxScreenStorage"] = .integer(Int32(clamping: screenStatus.maximumActiveBytes))
     values["MaxStoredScreenCache"] = .integer(Int32(clamping: screenStatus.maximumCachedBytes))
+    let fontStatus = fontManager.glyphCache.status()
+    values["CurFontCache"] = .integer(Int32(clamping: fontStatus.bytes))
+    values["MaxFontCache"] = .integer(Int32(clamping: fontStatus.maximumBytes))
     return values
   }
 
@@ -374,6 +390,11 @@ public final class InterpreterEnvironment: Sendable {
       return value
     }
     screenManager.setMaximumCachedBytes(Int(storedScreenMaximum))
+    let fontMaximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxFontCache"] else { return 0 }
+      return value
+    }
+    fontManager.glyphCache.setMaximumBytes(Int(fontMaximum))
   }
 
 

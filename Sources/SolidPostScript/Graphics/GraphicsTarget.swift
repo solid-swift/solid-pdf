@@ -6,10 +6,12 @@ public protocol GraphicsTarget<PageOutput, Output, Renderer>: Sendable {
   associatedtype Output
   associatedtype ColorEngine: GraphicsColorEngine = SemanticGraphicsColorEngine
   associatedtype DeviceRenderingEngine: GraphicsDeviceRenderingEngine = SemanticGraphicsDeviceRenderingEngine
+  associatedtype FontEngine: GraphicsFontEngine = SemanticGraphicsFontEngine
   associatedtype PageDeviceProvider: GraphicsPageDeviceProvider = StandardGraphicsPageDeviceProvider
   associatedtype Renderer: GraphicsRenderer<PageOutput, Output>
     where Renderer.ColorSession == ColorEngine.Session,
-      Renderer.DeviceRenderingSession == DeviceRenderingEngine.Session
+      Renderer.DeviceRenderingSession == DeviceRenderingEngine.Session,
+      Renderer.FontSession == FontEngine.Session
 
   /// The device geometry and default transformation used for the render.
   var deviceDescriptor: GraphicsDeviceDescriptor { get }
@@ -19,6 +21,9 @@ public protocol GraphicsTarget<PageOutput, Output, Renderer>: Sendable {
 
   /// The device-rendering engine used to create render-scoped transfer and halftone state.
   var deviceRenderingEngine: DeviceRenderingEngine { get }
+
+  /// The font engine used to create render-scoped glyph preparation state.
+  var fontEngine: FontEngine { get }
 
   /// The provider used to negotiate page geometry during this render.
   var pageDeviceProvider: PageDeviceProvider { get }
@@ -33,6 +38,13 @@ public protocol GraphicsTarget<PageOutput, Output, Renderer>: Sendable {
   func makeRenderer(
     colorSession: sending ColorEngine.Session,
     deviceRenderingSession: sending DeviceRenderingEngine.Session
+  ) throws -> sending Renderer
+
+  /// Creates a renderer using color, device-rendering, and font state prepared by the interpreter.
+  func makeRenderer(
+    colorSession: sending ColorEngine.Session,
+    deviceRenderingSession: sending DeviceRenderingEngine.Session,
+    fontSession: sending FontEngine.Session
   ) throws -> sending Renderer
 }
 
@@ -67,6 +79,23 @@ extension GraphicsTarget where DeviceRenderingEngine == SemanticGraphicsDeviceRe
     deviceRenderingSession: sending SemanticGraphicsDeviceRenderingSession
   ) throws -> sending Renderer {
     try makeRenderer(colorSession: colorSession)
+  }
+}
+
+extension GraphicsTarget where FontEngine == SemanticGraphicsFontEngine {
+  /// The source-compatible semantic font engine used by targets that do not select one.
+  public var fontEngine: SemanticGraphicsFontEngine { SemanticGraphicsFontEngine() }
+
+  /// Creates the existing renderer while preserving source compatibility for custom targets.
+  public func makeRenderer(
+    colorSession: sending ColorEngine.Session,
+    deviceRenderingSession: sending DeviceRenderingEngine.Session,
+    fontSession: sending SemanticGraphicsFontSession
+  ) throws -> sending Renderer {
+    try makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession
+    )
   }
 }
 
@@ -124,6 +153,7 @@ public protocol GraphicsRenderer<PageOutput, Output>: GraphicsEventConsumer {
   associatedtype Output
   associatedtype ColorSession: GraphicsColorSession = SemanticGraphicsColorSession
   associatedtype DeviceRenderingSession: GraphicsDeviceRenderingSession = SemanticGraphicsDeviceRenderingSession
+  associatedtype FontSession: GraphicsFontSession = SemanticGraphicsFontSession
 
   /// Pages transmitted so far.
   var pages: [PageOutput] { get }

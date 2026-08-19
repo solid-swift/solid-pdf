@@ -49,6 +49,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     var blackGenerationSource: VMStoredObject?
     var undercolorRemovalSource: VMStoredObject?
     var halftoneSource: VMStoredObject?
+    var fontSource: VMStoredObject?
     var overprint: Bool
     var screenLease: ScreenLease?
 
@@ -67,6 +68,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       self.blackGenerationSource = state.blackGenerationSource.map(VMStoredObject.init)
       self.undercolorRemovalSource = state.undercolorRemovalSource.map(VMStoredObject.init)
       self.halftoneSource = state.halftoneSource.map(VMStoredObject.init)
+      self.fontSource = state.fontSource.map(VMStoredObject.init)
       self.overprint = state.overprint
       self.screenLease = state.screenLease
     }
@@ -89,6 +91,8 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         halftoneSource: halftoneSource?.object,
         deviceRendering: snapshot.deviceRendering,
         screenLease: screenLease,
+        fontSource: fontSource?.object,
+        font: snapshot.font,
         overprint: overprint,
         lineWidth: snapshot.lineWidth,
         lineCap: snapshot.lineCap,
@@ -127,7 +131,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       footprint: Self.footprint,
       children: {
         [$0.dashSource, $0.colorRenderingSource, $0.patternSource, $0.blackGenerationSource,
-          $0.undercolorRemovalSource, $0.halftoneSource].compactMap { $0?.allocation }
+          $0.undercolorRemovalSource, $0.halftoneSource, $0.fontSource].compactMap { $0?.allocation }
           + $0.transferFunctionSources.compactMap { $0?.allocation }
           + $0.colorSpace.storedObjects.compactMap(\.allocation)
           + ($0.pageDeviceParameters?.storedObjects.compactMap(\.allocation) ?? [])
@@ -135,7 +139,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       snapshotCopy: { Storage($0.canonical) },
       storedObjects: {
         [$0.dashSource, $0.colorRenderingSource, $0.patternSource, $0.blackGenerationSource,
-          $0.undercolorRemovalSource, $0.halftoneSource].compactMap { $0 }
+          $0.undercolorRemovalSource, $0.halftoneSource, $0.fontSource].compactMap { $0 }
           + $0.transferFunctionSources.compactMap { $0 }
           + $0.colorSpace.storedObjects
           + ($0.pageDeviceParameters?.storedObjects ?? [])
@@ -148,6 +152,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         storage.blackGenerationSource?.identifyEdgeSource(allocation)
         storage.undercolorRemovalSource?.identifyEdgeSource(allocation)
         storage.halftoneSource?.identifyEdgeSource(allocation)
+        storage.fontSource?.identifyEdgeSource(allocation)
         storage.patternSource?.identifyEdgeSource(allocation)
         storage.pageDeviceParameters?.storedObjects.forEach { $0.identifyEdgeSource(allocation) }
       },
@@ -165,6 +170,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         $0.blackGenerationSource = nil
         $0.undercolorRemovalSource = nil
         $0.halftoneSource = nil
+        $0.fontSource = nil
         $0.patternSource = nil
         $0.pageDeviceParameters = nil
         $0.overprint = false
@@ -177,6 +183,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     storage.blackGenerationSource?.identifyEdgeSource(ref.allocation)
     storage.undercolorRemovalSource?.identifyEdgeSource(ref.allocation)
     storage.halftoneSource?.identifyEdgeSource(ref.allocation)
+    storage.fontSource?.identifyEdgeSource(ref.allocation)
     storage.patternSource?.identifyEdgeSource(ref.allocation)
     storage.pageDeviceParameters?.storedObjects.forEach { $0.identifyEdgeSource(ref.allocation) }
     self.ref = ref
@@ -221,6 +228,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       storage.blackGenerationSource?.identifyEdgeSource(ref.allocation)
       storage.undercolorRemovalSource?.identifyEdgeSource(ref.allocation)
       storage.halftoneSource?.identifyEdgeSource(ref.allocation)
+      storage.fontSource?.identifyEdgeSource(ref.allocation)
       storage.patternSource?.identifyEdgeSource(ref.allocation)
       storage.pageDeviceParameters?.storedObjects.forEach { $0.identifyEdgeSource(ref.allocation) }
       $0.value = storage
@@ -237,6 +245,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     state().blackGenerationSource?.save(to: snapshot)
     state().undercolorRemovalSource?.save(to: snapshot)
     state().halftoneSource?.save(to: snapshot)
+    state().fontSource?.save(to: snapshot)
     state().patternSource?.save(to: snapshot)
     if let parameters = state().pageDeviceParameters {
       parameters.install.save(to: snapshot)
@@ -283,6 +292,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     ref.uncheckedRead { $0.value.blackGenerationSource?.refreshEdge() }
     ref.uncheckedRead { $0.value.undercolorRemovalSource?.refreshEdge() }
     ref.uncheckedRead { $0.value.halftoneSource?.refreshEdge() }
+    ref.uncheckedRead { $0.value.fontSource?.refreshEdge() }
     ref.uncheckedRead { $0.value.pageDeviceParameters?.storedObjects.forEach { $0.refreshEdge() } }
   }
 

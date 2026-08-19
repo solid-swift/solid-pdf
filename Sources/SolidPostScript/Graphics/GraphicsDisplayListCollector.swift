@@ -31,6 +31,8 @@ final class GraphicsDisplayListCollector: GraphicsEventConsumer {
       effects.append(.shading(shading, state: event.before))
     case .paint(.form(let form)):
       effects.append(.form(form, state: event.before))
+    case .paint(.text(let run)):
+      effects.append(.text(run, state: event.before))
     case .page:
       throw Error.undefined
     default:

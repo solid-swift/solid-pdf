@@ -30,6 +30,7 @@ public enum GraphicsOperation: Sendable, Hashable {
     case setBlackGeneration
     case setUndercolorRemoval
     case setHalftone
+    case setFont(GraphicsFontDescription)
   }
 
   /// A current-transformation operation.
@@ -86,6 +87,7 @@ public enum GraphicsOperation: Sendable, Hashable {
     case userPathStroke
     case shading(GraphicsShading)
     case form(GraphicsForm)
+    case text(GraphicsGlyphRun)
   }
 
   /// A page-lifecycle operation.

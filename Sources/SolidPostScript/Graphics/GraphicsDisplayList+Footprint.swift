@@ -52,6 +52,23 @@ private extension GraphicsEffect {
     case .form(let form, _):
       guard depth < maximumDepth else { return nil }
       return form.displayList.checkedFootprint(depth: depth + 1, maximumDepth: maximumDepth)
+    case .text(let run, _):
+      return run.glyphs.reduce(256) { partial, placement in
+        let bytes: Int
+        switch placement.glyph.program {
+        case .outline(let path):
+          let product = path.elements.count.multipliedReportingOverflow(by: 56)
+          bytes = product.overflow ? .max : product.partialValue
+        case .bitmap(let bitmap):
+          bytes = bitmap.coverage.count
+        case .displayList(let list):
+          bytes = list.checkedFootprint()
+        case .empty, .missing:
+          bytes = 32
+        }
+        let total = partial.addingReportingOverflow(bytes)
+        return total.overflow ? .max : total.partialValue
+      }
     case .erase:
       return 128
     }

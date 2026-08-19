@@ -23,6 +23,8 @@ struct GraphicsCanonicalState: Sendable {
   var halftoneSource: Object?
   var deviceRendering: GraphicsDeviceRenderingSnapshot
   var screenLease: ScreenLease?
+  var fontSource: Object?
+  var font: GraphicsFontDescription
   var overprint: Bool
   var lineWidth: Double
   var lineCap: GraphicsLineCap
@@ -58,6 +60,8 @@ struct GraphicsCanonicalState: Sendable {
       halftoneSource: nil,
       deviceRendering: descriptor.deviceRendering.defaultState,
       screenLease: nil,
+      fontSource: nil,
+      font: .invalid,
       overprint: false,
       lineWidth: 1,
       lineCap: .butt,
@@ -93,7 +97,8 @@ struct GraphicsCanonicalState: Sendable {
       smoothness: smoothness,
       pathBoundingBox: pathBoundingBox,
       device: device.snapshot,
-      deviceRendering: deviceRendering
+      deviceRendering: deviceRendering,
+      font: font
     )
   }
 
@@ -157,6 +162,7 @@ struct GraphicsCanonicalState: Sendable {
     try blackGenerationSource?.checkStorage(in: vm)
     try undercolorRemovalSource?.checkStorage(in: vm)
     try halftoneSource?.checkStorage(in: vm)
+    try fontSource?.checkStorage(in: vm)
     try patternSource?.checkStorage(in: vm)
     try pageDeviceParameters?.checkStorage(in: vm)
   }

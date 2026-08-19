@@ -452,6 +452,8 @@ where
         try paintShading(shading, clip: state.clip, state: state)
       case .form(let nested, _):
         try paintForm(nested, depth: depth)
+      case .text:
+        break
       }
     }
 
@@ -617,6 +619,8 @@ where
           ),
           state: shadingState
         )
+        return
+      case .text:
         return
       }
 

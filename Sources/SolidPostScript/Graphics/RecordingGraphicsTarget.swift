@@ -52,6 +52,8 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
         effects.append(.shading(shading, state: event.before))
       case .paint(.form(let form)):
         effects.append(.form(form, state: event.before))
+      case .paint(.text(let run)):
+        effects.append(.text(run, state: event.before))
       case .page(.show), .page(.copy):
         pages.append(RecordedGraphicsPage(deviceDescriptor: event.before.device.descriptor, effects: effects))
         effects.removeAll(keepingCapacity: true)

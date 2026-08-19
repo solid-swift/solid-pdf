@@ -1015,6 +1015,7 @@ public actor Context {
     graphicsState.blackGenerationSource?.save(to: builder)
     graphicsState.undercolorRemovalSource?.save(to: builder)
     graphicsState.halftoneSource?.save(to: builder)
+    graphicsState.fontSource?.save(to: builder)
     graphicsState.patternSource?.save(to: builder)
     for frame in graphicsStack {
       frame.state.dashSource?.save(to: builder)
@@ -1024,6 +1025,7 @@ public actor Context {
       frame.state.blackGenerationSource?.save(to: builder)
       frame.state.undercolorRemovalSource?.save(to: builder)
       frame.state.halftoneSource?.save(to: builder)
+      frame.state.fontSource?.save(to: builder)
     }
 
     if scope == .job {

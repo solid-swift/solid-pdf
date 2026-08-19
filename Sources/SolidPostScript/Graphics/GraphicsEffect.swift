@@ -22,4 +22,6 @@ public enum GraphicsEffect: Sendable, Hashable {
   case shading(GraphicsShading, state: GraphicsStateSnapshot)
   /// A reusable Type 1 form effect.
   case form(GraphicsForm, state: GraphicsStateSnapshot)
+  /// A semantic text effect with portable glyph fallbacks.
+  case text(GraphicsGlyphRun, state: GraphicsStateSnapshot)
 }
