@@ -94,10 +94,7 @@ extension Operators {
       }
       let source = try makePatternColorSpaceObject(underlying, context: context)
       let space = PostScriptColorSpace.pattern(source: source, underlying: underlying)
-      let selection = PostScriptColorSelection.direct(
-        space,
-        availableColorants: availableColorants(in: context)
-      )
+      let selection = try await selectColorSpace(space, context: context)
       let paint = try await resolvePattern(
         pattern,
         dictionary: dictionary,
@@ -148,7 +145,7 @@ extension Operators {
     }
     let basePaint: GraphicsPaint?
     if let underlying {
-      basePaint = .color(try await resolveColor(components, in: underlying, context: context))
+      basePaint = graphicsPaint(try await resolveColor(components, in: underlying, context: context))
     } else {
       basePaint = nil
     }

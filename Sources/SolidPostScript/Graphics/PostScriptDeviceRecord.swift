@@ -72,7 +72,8 @@ final class PostScriptDeviceRecord: Sendable {
       descriptor: current.configuration?.descriptor ?? nullDescriptor ?? .letter,
       pageNumber: current.pageNumber,
       numberOfCopies: current.configuration?.numberOfCopies,
-      trapping: current.trapping
+      trapping: current.trapping,
+      usesCIEColor: current.configuration?.usesCIEColor ?? false
     )
   }
 

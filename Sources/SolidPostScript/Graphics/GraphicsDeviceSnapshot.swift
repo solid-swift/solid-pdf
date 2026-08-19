@@ -14,6 +14,8 @@ public struct GraphicsDeviceSnapshot: Sendable, Hashable {
   public let numberOfCopies: Int?
   /// The trapping state owned by this device and page.
   public let trapping: GraphicsTrappingSnapshot
+  /// Whether Device color spaces are remapped through Default ColorSpace resources.
+  public let usesCIEColor: Bool
 
   /// Creates a device snapshot.
   public init(
@@ -22,7 +24,8 @@ public struct GraphicsDeviceSnapshot: Sendable, Hashable {
     descriptor: GraphicsDeviceDescriptor,
     pageNumber: Int,
     numberOfCopies: Int?,
-    trapping: GraphicsTrappingSnapshot = .disabled
+    trapping: GraphicsTrappingSnapshot = .disabled,
+    usesCIEColor: Bool = false
   ) {
     self.identifier = identifier
     self.kind = kind
@@ -30,6 +33,7 @@ public struct GraphicsDeviceSnapshot: Sendable, Hashable {
     self.pageNumber = pageNumber
     self.numberOfCopies = numberOfCopies
     self.trapping = trapping
+    self.usesCIEColor = usesCIEColor
   }
 
   /// The default virtual Letter page device.

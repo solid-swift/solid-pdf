@@ -142,6 +142,7 @@ extension Operators {
         (.literalName("SeparationOrder"), separationOrder),
         (.literalName("Trapping"), .boolean(configuration.trappingEnabled)),
         (.literalName("TrappingDetails"), trappingDetails),
+        (.literalName("UseCIEColor"), .boolean(configuration.usesCIEColor)),
       ], access: .readOnly, vm: vm)
       context.operands.push(dictionary)
     }
@@ -202,6 +203,7 @@ extension Operators {
     var separationOrder = currentConfiguration.colorants.separationOrder
     var trappingEnabled = currentConfiguration.trappingEnabled
     var trappingDetails = currentConfiguration.trappingDetails
+    var usesCIEColor = currentConfiguration.usesCIEColor
     var recovered: [String: Int32] = [:]
     let originals = entries
 
@@ -274,6 +276,8 @@ extension Operators {
           trappingEnabled = try value.value(as: BooleanValue.self).value
         case "TrappingDetails":
           trappingDetails = try parseTrappingDetails(value, merging: trappingDetails)
+        case "UseCIEColor":
+          usesCIEColor = try value.value(as: BooleanValue.self).value
         case "PageDeviceName":
           let requested = try value.value(as: StringValue.self).readableString
           guard requested == currentConfiguration.name else {
@@ -308,7 +312,8 @@ extension Operators {
           rgbToDeviceN: currentConfiguration.colorants.rgbToDeviceN
         ),
         trappingEnabled: trappingEnabled,
-        trappingDetails: trappingDetails
+        trappingDetails: trappingDetails,
+        usesCIEColor: usesCIEColor
       ),
       parameters: PostScriptPageDeviceParameters(
         install: install,

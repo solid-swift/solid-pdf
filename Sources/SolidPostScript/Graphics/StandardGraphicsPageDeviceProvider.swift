@@ -16,6 +16,8 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
   public let colorantCapabilities: GraphicsColorantCapabilities
   /// The trapping implementations supported by new sessions.
   public let trappingCapabilities: GraphicsTrappingCapabilities
+  /// Whether new sessions accept Device-to-CIE color-space remapping.
+  public let supportsCIEColorRemapping: Bool
 
   /// Creates a standard page-device provider.
   public init(
@@ -25,7 +27,8 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
     maximumSurfaceBytes: Int = 512 * 1_024 * 1_024,
     name: String = "SolidVirtualPageDevice",
     colorantCapabilities: GraphicsColorantCapabilities = .compositeRGB,
-    trappingCapabilities: GraphicsTrappingCapabilities = .unsupported
+    trappingCapabilities: GraphicsTrappingCapabilities = .unsupported,
+    supportsCIEColorRemapping: Bool = true
   ) {
     self.mode = mode
     self.maximumPixelWidth = maximumPixelWidth
@@ -34,6 +37,7 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
     self.name = name
     self.colorantCapabilities = colorantCapabilities
     self.trappingCapabilities = trappingCapabilities
+    self.supportsCIEColorRemapping = supportsCIEColorRemapping
   }
 
   /// Creates a render-scoped standard session.
@@ -48,7 +52,8 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
         maximumPixelHeight: maximumPixelHeight,
         maximumSurfaceBytes: maximumSurfaceBytes,
         colorants: colorantCapabilities,
-        trapping: trappingCapabilities
+        trapping: trappingCapabilities,
+        supportsCIEColorRemapping: supportsCIEColorRemapping
       ),
       name: name
     )

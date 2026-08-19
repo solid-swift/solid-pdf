@@ -14,6 +14,8 @@ public struct GraphicsPageDeviceCapabilities: Sendable, Hashable {
   public let colorants: GraphicsColorantCapabilities
   /// The trapping implementations accepted by the provider.
   public let trapping: GraphicsTrappingCapabilities
+  /// Whether the provider accepts Device-to-CIE color-space remapping.
+  public let supportsCIEColorRemapping: Bool
 
   /// Creates page-device capabilities.
   public init(
@@ -22,7 +24,8 @@ public struct GraphicsPageDeviceCapabilities: Sendable, Hashable {
     maximumPixelHeight: Int = 32_768,
     maximumSurfaceBytes: Int = 512 * 1_024 * 1_024,
     colorants: GraphicsColorantCapabilities = .compositeRGB,
-    trapping: GraphicsTrappingCapabilities = .unsupported
+    trapping: GraphicsTrappingCapabilities = .unsupported,
+    supportsCIEColorRemapping: Bool = false
   ) {
     self.mode = mode
     self.maximumPixelWidth = maximumPixelWidth
@@ -30,5 +33,6 @@ public struct GraphicsPageDeviceCapabilities: Sendable, Hashable {
     self.maximumSurfaceBytes = maximumSurfaceBytes
     self.colorants = colorants
     self.trapping = trapping
+    self.supportsCIEColorRemapping = supportsCIEColorRemapping
   }
 }

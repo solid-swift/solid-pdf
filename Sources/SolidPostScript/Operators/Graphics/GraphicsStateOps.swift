@@ -106,9 +106,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["initgraphics"]
 
     func execute(context: isolated Context) async throws {
-      try context.applyGraphicsOperation(.state(.initialize)) {
-        $0.initializeGraphics(for: context.graphicsDeviceDescriptor)
-      }
+      try await context.initializeGraphicsState(emitOperation: true)
     }
   }
 
@@ -361,11 +359,13 @@ extension Operators {
     func execute(context: isolated Context) async throws {
       try requireColorOperationAllowed(context)
       let gray = min(1, max(0, try numeric(context.operands.pop())))
+      let selection = try await selectColorSpace(.deviceGray(nil), context: context)
+      let paint = try await resolveColor([gray], in: selection, context: context)
       try context.applyGraphicsOperation(.state(.setGray(gray))) {
-        $0.colorSelection = .direct(.deviceGray(nil))
+        $0.colorSelection = selection
         $0.colorComponents = [gray]
         $0.patternSource = nil
-        $0.paint = .deviceGray(gray)
+        $0.paint = graphicsPaint(paint)
       }
     }
   }
@@ -375,9 +375,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["currentgray"]
 
     func execute(context: isolated Context) async throws {
-      let gray = context.graphicsState.colorSpace.isDeviceSpace
-        ? context.graphicsState.paint.grayComponent
-        : 0
+      let gray = visibleDevicePaint(in: context.graphicsState)?.grayComponent ?? 0
       context.operands.push(try .real(gray))
     }
   }
@@ -392,11 +390,14 @@ extension Operators {
       let red = clamped(try numeric(operands[2]))
       let green = clamped(try numeric(operands[1]))
       let blue = clamped(try numeric(operands[0]))
+      let selection = try await selectColorSpace(.deviceRGB(nil), context: context)
+      let components = [red, green, blue]
+      let paint = try await resolveColor(components, in: selection, context: context)
       try context.applyGraphicsOperation(.state(.setRGB(red: red, green: green, blue: blue))) {
-        $0.colorSelection = .direct(.deviceRGB(nil))
-        $0.colorComponents = [red, green, blue]
+        $0.colorSelection = selection
+        $0.colorComponents = components
         $0.patternSource = nil
-        $0.paint = .deviceRGB(red: red, green: green, blue: blue)
+        $0.paint = graphicsPaint(paint)
       }
     }
   }
@@ -407,9 +408,7 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       let components: (red: Double, green: Double, blue: Double) =
-        context.graphicsState.colorSpace.isDeviceSpace
-          ? context.graphicsState.paint.rgbComponents
-          : (0, 0, 0)
+        visibleDevicePaint(in: context.graphicsState)?.rgbComponents ?? (0, 0, 0)
       context.operands.push(
         try .real(components.blue),
         try .real(components.green),
@@ -429,16 +428,19 @@ extension Operators {
       let magenta = clamped(try numeric(operands[2]))
       let yellow = clamped(try numeric(operands[1]))
       let black = clamped(try numeric(operands[0]))
+      let selection = try await selectColorSpace(.deviceCMYK(nil), context: context)
+      let components = [cyan, magenta, yellow, black]
+      let paint = try await resolveColor(components, in: selection, context: context)
       try context.applyGraphicsOperation(.state(.setCMYK(
         cyan: cyan,
         magenta: magenta,
         yellow: yellow,
         black: black
       ))) {
-        $0.colorSelection = .direct(.deviceCMYK(nil))
-        $0.colorComponents = [cyan, magenta, yellow, black]
+        $0.colorSelection = selection
+        $0.colorComponents = components
         $0.patternSource = nil
-        $0.paint = .deviceCMYK(cyan: cyan, magenta: magenta, yellow: yellow, black: black)
+        $0.paint = graphicsPaint(paint)
       }
     }
   }
@@ -449,10 +451,10 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       let components: (cyan: Double, magenta: Double, yellow: Double, black: Double)
-      if context.graphicsState.colorSpace.isDeviceSpace {
-        switch context.graphicsState.paint {
+      if let visiblePaint = visibleDevicePaint(in: context.graphicsState) {
+        switch visiblePaint {
         case .deviceRGB, .deviceGray:
-          let rgb = context.graphicsState.paint.rgbComponents
+          let rgb = visiblePaint.rgbComponents
           let cyan = 1 - rgb.red
           let magenta = 1 - rgb.green
           let yellow = 1 - rgb.blue
@@ -466,7 +468,7 @@ extension Operators {
             min(1, max(0, black))
           )
         default:
-          components = context.graphicsState.paint.cmykComponents
+          components = visiblePaint.cmykComponents
         }
       } else {
         components = (0, 0, 0, 1)

@@ -24,15 +24,12 @@ extension Operators {
       try requireColorOperationAllowed(context)
       let object = try context.operands.pop()
       let space = try await parseColorSpace(object, context: context)
-      let selection = PostScriptColorSelection.direct(
-        space,
-        availableColorants: availableColorants(in: context)
-      )
+      let selection = try await selectColorSpace(space, context: context)
       let components = space.initialComponents
       let paint: GraphicsPaint = if case .pattern = space {
         .pattern(.empty)
       } else {
-        .color(try await resolveColor(components, in: selection, context: context))
+        graphicsPaint(try await resolveColor(components, in: selection, context: context))
       }
       try context.applyGraphicsOperation(.state(.setColorSpace(space.description))) {
         $0.colorSelection = selection
@@ -109,7 +106,7 @@ extension Operators {
       try context.applyGraphicsOperation(.state(.setColor(paint))) {
         $0.colorComponents = components
         $0.patternSource = nil
-        $0.paint = .color(paint)
+        $0.paint = graphicsPaint(paint)
       }
     }
   }
@@ -156,7 +153,7 @@ extension Operators {
       case 4: (ascending, low, brightness)
       default: (brightness, low, descending)
       }
-      try setDeviceRGB(red: rgb.0, green: rgb.1, blue: rgb.2, context: context)
+      try await setDeviceRGB(red: rgb.0, green: rgb.1, blue: rgb.2, context: context)
     }
   }
 
@@ -166,8 +163,8 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       let rgb: (red: Double, green: Double, blue: Double)
-      if context.graphicsState.colorSpace.isDeviceSpace {
-        rgb = context.graphicsState.paint.rgbComponents
+      if let visiblePaint = visibleDevicePaint(in: context.graphicsState) {
+        rgb = visiblePaint.rgbComponents
       } else {
         rgb = (0, 0, 0)
       }
@@ -304,18 +301,61 @@ extension Operators {
     green: Double,
     blue: Double,
     context: isolated Context
-  ) throws {
+  ) async throws {
     try requireColorOperationAllowed(context)
+    let selection = try await selectColorSpace(.deviceRGB(nil), context: context)
+    let components = [red, green, blue]
+    let paint = try await resolveColor(components, in: selection, context: context)
     try context.applyGraphicsOperation(.state(.setRGB(red: red, green: green, blue: blue))) {
-      $0.colorSelection = .direct(.deviceRGB(nil))
-      $0.colorComponents = [red, green, blue]
+      $0.colorSelection = selection
+      $0.colorComponents = components
       $0.patternSource = nil
-      $0.paint = .deviceRGB(red: red, green: green, blue: blue)
+      $0.paint = graphicsPaint(paint)
     }
   }
 
   static func requireColorOperationAllowed(_ context: isolated Context) throws {
     guard context.uncoloredPatternExecutionDepth == 0 else { throw Error.undefined }
+  }
+
+  static func visibleDevicePaint(in state: GraphicsCanonicalState) -> GraphicsPaint? {
+    switch state.colorSpace {
+    case .deviceGray:
+      return .deviceGray(state.colorComponents[0])
+    case .deviceRGB:
+      return .deviceRGB(
+        red: state.colorComponents[0],
+        green: state.colorComponents[1],
+        blue: state.colorComponents[2]
+      )
+    case .deviceCMYK:
+      return .deviceCMYK(
+        cyan: state.colorComponents[0],
+        magenta: state.colorComponents[1],
+        yellow: state.colorComponents[2],
+        black: state.colorComponents[3]
+      )
+    default:
+      return nil
+    }
+  }
+
+  static func graphicsPaint(_ color: GraphicsColorValue) -> GraphicsPaint {
+    switch color {
+    case .deviceGray(let gray):
+      .deviceGray(gray)
+    case .deviceRGB(let rgb):
+      .deviceRGB(red: rgb.red, green: rgb.green, blue: rgb.blue)
+    case .deviceCMYK(let cmyk):
+      .deviceCMYK(
+        cyan: cmyk.cyan,
+        magenta: cmyk.magenta,
+        yellow: cmyk.yellow,
+        black: cmyk.black
+      )
+    default:
+      .color(color)
+    }
   }
 
   static func parseColorSpace(_ object: Object, context: isolated Context) async throws -> PostScriptColorSpace {
@@ -326,7 +366,7 @@ extension Operators {
       case "DeviceCMYK": return .deviceCMYK(nil)
       case "Pattern": return .pattern(source: object, underlying: nil)
       default:
-        let resource = try await ResourceRuntime.find(object, in: "ColorSpace", context: context)
+        let resource = try await findColorSpaceResource(object, context: context)
         return try await parseColorSpace(resource, context: context)
       }
     }
@@ -396,6 +436,140 @@ extension Operators {
       return .pattern(source: object, underlying: underlying)
     default:
       throw Error.rangeCheck
+    }
+  }
+
+  static func selectColorSpace(
+    _ source: PostScriptColorSpace,
+    context: isolated Context
+  ) async throws -> PostScriptColorSelection {
+    let available = availableColorants(in: context)
+    let usesCIEColor = context.graphicsState.device.configuration?.usesCIEColor ?? false
+    return PostScriptColorSelection(
+      source: source,
+      route: try await selectColorRoute(
+        source,
+        usesCIEColor: usesCIEColor,
+        availableColorants: available,
+        context: context
+      )
+    )
+  }
+
+  private static func selectColorRoute(
+    _ source: PostScriptColorSpace,
+    usesCIEColor: Bool,
+    availableColorants: Set<String>,
+    context: isolated Context
+  ) async throws -> PostScriptColorSelection.Route {
+    switch source {
+    case .deviceGray:
+      return try await remappedDeviceRoute(
+        source,
+        resourceName: "DefaultGray",
+        usesCIEColor: usesCIEColor,
+        context: context
+      )
+    case .deviceRGB:
+      return try await remappedDeviceRoute(
+        source,
+        resourceName: "DefaultRGB",
+        usesCIEColor: usesCIEColor,
+        context: context
+      )
+    case .deviceCMYK:
+      return try await remappedDeviceRoute(
+        source,
+        resourceName: "DefaultCMYK",
+        usesCIEColor: usesCIEColor,
+        context: context
+      )
+    case .cieA, .cieABC, .cieDEF, .cieDEFG:
+      return .colorSpace(source)
+    case .indexed(_, let base, let maximumIndex, let lookup):
+      return .indexed(
+        base: try await selectColorRoute(
+          base,
+          usesCIEColor: usesCIEColor,
+          availableColorants: availableColorants,
+          context: context
+        ),
+        maximumIndex: maximumIndex,
+        lookup: lookup
+      )
+    case .separation(_, let name, let alternative, let transform):
+      if name == "All" || name == "None" || availableColorants.contains(name) {
+        return .directColorants(space: source.description, names: [name])
+      }
+      return .alternative(
+        space: source.description,
+        names: [name],
+        transform: transform,
+        colorSpace: try await selectColorRoute(
+          alternative,
+          usesCIEColor: usesCIEColor,
+          availableColorants: availableColorants,
+          context: context
+        )
+      )
+    case .deviceN(_, let names, let alternative, let transform):
+      if names.allSatisfy(availableColorants.contains) {
+        return .directColorants(space: source.description, names: names)
+      }
+      return .alternative(
+        space: source.description,
+        names: names,
+        transform: transform,
+        colorSpace: try await selectColorRoute(
+          alternative,
+          usesCIEColor: usesCIEColor,
+          availableColorants: availableColorants,
+          context: context
+        )
+      )
+    case .pattern(_, let underlying):
+      let selectedUnderlying: PostScriptColorSelection.Route?
+      if let underlying {
+        selectedUnderlying = try await selectColorRoute(
+          underlying,
+          usesCIEColor: usesCIEColor,
+          availableColorants: availableColorants,
+          context: context
+        )
+      } else {
+        selectedUnderlying = nil
+      }
+      return .pattern(underlying: selectedUnderlying)
+    }
+  }
+
+  private static func remappedDeviceRoute(
+    _ source: PostScriptColorSpace,
+    resourceName: String,
+    usesCIEColor: Bool,
+    context: isolated Context
+  ) async throws -> PostScriptColorSelection.Route {
+    guard usesCIEColor else { return .colorSpace(source) }
+    let resource = try await findColorSpaceResource(.literalName(resourceName), context: context)
+    let replacement = try await parseColorSpace(resource, context: context)
+    let valid: Bool = switch (source, replacement) {
+    case (.deviceGray, .deviceGray), (.deviceGray, .cieA): true
+    case (.deviceRGB, .deviceRGB), (.deviceRGB, .cieABC), (.deviceRGB, .cieDEF): true
+    case (.deviceCMYK, .deviceCMYK), (.deviceCMYK, .cieDEFG): true
+    default: false
+    }
+    guard valid else { throw Error.rangeCheck }
+    return .colorSpace(replacement)
+  }
+
+  private static func findColorSpaceResource(
+    _ key: Object,
+    context: isolated Context
+  ) async throws -> Object {
+    do {
+      return try await ResourceRuntime.find(key, in: "ColorSpace", context: context)
+    } catch Error.undefinedResource {
+      throw Error.undefined
     }
   }
 

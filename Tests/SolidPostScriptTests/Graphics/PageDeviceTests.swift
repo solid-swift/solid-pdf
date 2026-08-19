@@ -46,6 +46,28 @@ struct PageDeviceTests {
     #expect(result.configuration.trappingDetails.type == 1001)
   }
 
+  @Test func CIEColorRemappingRequiresProviderCapability() throws {
+    let supported = try StandardGraphicsPageDeviceProvider()
+      .makeSession(for: .letter)
+    let unsupported = try StandardGraphicsPageDeviceProvider(supportsCIEColorRemapping: false)
+      .makeSession(for: .letter)
+    let request = GraphicsPageDeviceRequest(
+      pageSize: supported.initialConfiguration.pageSize,
+      resolution: GraphicsSize(width: 72, height: 72),
+      imagingBoundingBox: nil,
+      numberOfCopies: 1,
+      usesCIEColor: true
+    )
+
+    let accepted = try supported.negotiate(request)
+    #expect(accepted.unsatisfiedParameters.isEmpty)
+    #expect(accepted.configuration.usesCIEColor)
+
+    let rejected = try unsupported.negotiate(request)
+    #expect(rejected.unsatisfiedParameters == ["UseCIEColor"])
+    #expect(!rejected.configuration.usesCIEColor)
+  }
+
   @Test func outputDeviceResourceIsAutomaticAndContextLocal() async throws {
     let values = try await Interpreter.results(content: """
       /SolidVirtualPageDevice /OutputDevice resourcestatus { pop 1 eq } { false } ifelse

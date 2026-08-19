@@ -125,7 +125,7 @@ extension Context {
     let record = PostScriptDeviceRecord(configuration: configuration)
     graphicsDeviceDescriptor = configuration.descriptor
     graphicsState = .initial(for: configuration.descriptor, device: record)
-    selectInitialColor(for: configuration.colorants)
+    try await selectInitialColor(for: configuration.colorants)
     graphicsState.pageDeviceParameters = parameters
     graphicsStack.removeAll()
     do {
@@ -137,8 +137,7 @@ extension Context {
     record.captureDefaultTrappingZones()
     try applyInstalledDefaultMatrix()
     try applyGraphicsOperation(.paint(.erasePage)) { _ in }
-    graphicsState.initializeGraphics(for: graphicsDeviceDescriptor)
-    selectInitialColor(for: configuration.colorants)
+    try await initializeGraphicsState(emitOperation: false)
     try installCurrentOutputDeviceResource()
     try await callBeginPage()
   }
@@ -174,7 +173,7 @@ extension Context {
     if transmit { try transmitCurrentPage(.show) }
     graphicsState.device.incrementPageNumber()
     graphicsState.device.restoreDefaultTrappingZones()
-    graphicsState.initializeGraphics(for: graphicsDeviceDescriptor)
+    try await initializeGraphicsState(emitOperation: false)
     try await callBeginPage()
   }
 
@@ -262,26 +261,53 @@ extension Context {
     graphicsDeviceDescriptor = descriptor
   }
 
-  private func selectInitialColor(for colorants: GraphicsColorantConfiguration) {
-    switch colorants.processModel {
-    case .deviceGray:
-      graphicsState.colorSelection = .direct(.deviceGray(nil))
-      graphicsState.colorComponents = [0]
-      graphicsState.paint = .deviceGray(0)
-    case .deviceRGB, .deviceRGBK:
-      graphicsState.colorSelection = .direct(.deviceRGB(nil))
-      graphicsState.colorComponents = [0, 0, 0]
-      graphicsState.paint = .deviceRGB(red: 0, green: 0, blue: 0)
-    case .deviceCMY, .deviceCMYK:
-      graphicsState.colorSelection = .direct(.deviceCMYK(nil))
-      graphicsState.colorComponents = [0, 0, 0, 1]
-      graphicsState.paint = .deviceCMYK(cyan: 0, magenta: 0, yellow: 0, black: 1)
-    case .deviceN:
-      graphicsState.colorSelection = .direct(.deviceGray(nil))
-      graphicsState.colorComponents = [0]
-      graphicsState.paint = .deviceGray(0)
+  func initializeGraphicsState(emitOperation: Bool) async throws {
+    let initial = try await initialColor()
+    if emitOperation {
+      try applyGraphicsOperation(.state(.initialize)) {
+        $0.initializeGraphics(for: graphicsDeviceDescriptor)
+        apply(initial, to: &$0)
+      }
+    } else {
+      graphicsState.initializeGraphics(for: graphicsDeviceDescriptor)
+      apply(initial, to: &graphicsState)
     }
-    graphicsState.patternSource = nil
+  }
+
+  private struct InitialColor {
+    let selection: PostScriptColorSelection
+    let components: [Double]
+    let paint: GraphicsPaint
+  }
+
+  private func initialColor() async throws -> InitialColor {
+    let colorants = graphicsState.device.configuration?.colorants ?? graphicsDeviceDescriptor.colorants
+    let source: PostScriptColorSpace = switch colorants.processModel {
+    case .deviceGray:
+      .deviceGray(nil)
+    case .deviceRGB, .deviceRGBK:
+      .deviceRGB(nil)
+    case .deviceCMY, .deviceCMYK:
+      .deviceCMYK(nil)
+    case .deviceN:
+      .deviceGray(nil)
+    }
+    let selection = try await Operators.selectColorSpace(source, context: self)
+    let components = source.initialComponents
+    let paint = try await Operators.resolveColor(components, in: selection, context: self)
+    return InitialColor(selection: selection, components: components, paint: Operators.graphicsPaint(paint))
+  }
+
+  private func selectInitialColor(for _: GraphicsColorantConfiguration) async throws {
+    let initial = try await initialColor()
+    apply(initial, to: &graphicsState)
+  }
+
+  private func apply(_ initial: InitialColor, to state: inout GraphicsCanonicalState) {
+    state.colorSelection = initial.selection
+    state.colorComponents = initial.components
+    state.paint = initial.paint
+    state.patternSource = nil
   }
 }
 
@@ -317,7 +343,8 @@ extension GraphicsPageDeviceConfiguration {
       descriptor: descriptor,
       colorants: colorants,
       trappingEnabled: trappingEnabled,
-      trappingDetails: trappingDetails
+      trappingDetails: trappingDetails,
+      usesCIEColor: usesCIEColor
     )
   }
 }

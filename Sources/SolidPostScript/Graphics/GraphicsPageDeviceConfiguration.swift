@@ -20,6 +20,8 @@ public struct GraphicsPageDeviceConfiguration: Sendable, Hashable {
   public let trappingEnabled: Bool
   /// The installed type-specific trapping details.
   public let trappingDetails: GraphicsTrappingDetails
+  /// Whether Device color spaces are remapped through Default ColorSpace resources.
+  public let usesCIEColor: Bool
 
   /// Creates a page-device configuration.
   public init(
@@ -31,7 +33,8 @@ public struct GraphicsPageDeviceConfiguration: Sendable, Hashable {
     descriptor: GraphicsDeviceDescriptor,
     colorants: GraphicsColorantConfiguration = .compositeRGB,
     trappingEnabled: Bool = false,
-    trappingDetails: GraphicsTrappingDetails = GraphicsTrappingDetails()
+    trappingDetails: GraphicsTrappingDetails = GraphicsTrappingDetails(),
+    usesCIEColor: Bool = false
   ) {
     self.identifier = identifier
     self.pageSize = pageSize
@@ -42,5 +45,6 @@ public struct GraphicsPageDeviceConfiguration: Sendable, Hashable {
     self.colorants = colorants
     self.trappingEnabled = trappingEnabled
     self.trappingDetails = trappingDetails
+    self.usesCIEColor = usesCIEColor
   }
 }

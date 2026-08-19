@@ -54,7 +54,8 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       descriptor: descriptor,
       colorants: Self.initialColorants(descriptor: descriptor, capabilities: capabilities),
       trappingEnabled: false,
-      trappingDetails: Self.defaultTrappingDetails(for: descriptor)
+      trappingDetails: Self.defaultTrappingDetails(for: descriptor),
+      usesCIEColor: false
     )
   }
 
@@ -95,6 +96,11 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       trappingEnabled = initialConfiguration.trappingEnabled
       trappingDetails = initialConfiguration.trappingDetails
     }
+    var usesCIEColor = request.usesCIEColor
+    if usesCIEColor, !capabilities.supportsCIEColorRemapping {
+      unsatisfied.insert("UseCIEColor")
+      usesCIEColor = initialConfiguration.usesCIEColor
+    }
     return GraphicsPageDeviceNegotiation(
       configuration: GraphicsPageDeviceConfiguration(
         identifier: GraphicsDeviceIdentifier(),
@@ -105,7 +111,8 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
         descriptor: descriptor,
         colorants: colorants,
         trappingEnabled: trappingEnabled,
-        trappingDetails: trappingDetails
+        trappingDetails: trappingDetails,
+        usesCIEColor: usesCIEColor
       ),
       unsatisfiedParameters: unsatisfied
     )
