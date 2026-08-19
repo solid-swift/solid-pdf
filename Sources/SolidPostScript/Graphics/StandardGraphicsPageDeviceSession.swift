@@ -187,7 +187,8 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       additionalColorants: additional,
       separationOrder: order,
       maximumSeparations: maximumSeparations,
-      supportsOverprint: supported.supportsOverprint
+      supportsOverprint: supported.supportsOverprint,
+      rgbToDeviceN: requested.rgbToDeviceN
     )
   }
 
@@ -214,7 +215,8 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       additionalColorants: selected.additionalColorants,
       separationOrder: selected.separationOrder,
       maximumSeparations: min(selected.maximumSeparations, capabilities.colorants.maximumSeparations),
-      supportsOverprint: capabilities.colorants.supportsOverprint
+      supportsOverprint: capabilities.colorants.supportsOverprint,
+      rgbToDeviceN: selected.rgbToDeviceN
     )
   }
 

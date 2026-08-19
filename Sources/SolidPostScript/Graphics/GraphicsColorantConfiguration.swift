@@ -9,6 +9,8 @@ public struct GraphicsColorantConfiguration: Sendable, Hashable {
   public let separationOrder: [String]
   public let maximumSeparations: Int
   public let supportsOverprint: Bool
+  /// Optional bounded conversion from DeviceRGB into DeviceN process tints.
+  public let rgbToDeviceN: ColorLookupTable?
 
   /// Creates a selected colorant configuration.
   public init(
@@ -17,7 +19,8 @@ public struct GraphicsColorantConfiguration: Sendable, Hashable {
     additionalColorants: [GraphicsColorant] = [],
     separationOrder: [String] = [],
     maximumSeparations: Int = 1,
-    supportsOverprint: Bool = false
+    supportsOverprint: Bool = false,
+    rgbToDeviceN: ColorLookupTable? = nil
   ) {
     self.processModel = processModel
     self.producesSeparations = producesSeparations
@@ -25,6 +28,7 @@ public struct GraphicsColorantConfiguration: Sendable, Hashable {
     self.separationOrder = separationOrder
     self.maximumSeparations = min(250, max(1, maximumSeparations))
     self.supportsOverprint = supportsOverprint
+    self.rgbToDeviceN = rgbToDeviceN
   }
 
   /// Process colorants followed by explicitly configured named colorants.
@@ -37,6 +41,14 @@ public struct GraphicsColorantConfiguration: Sendable, Hashable {
   /// The effective physical output order.
   public var effectiveSeparationOrder: [String] {
     separationOrder.isEmpty ? availableColorants.map(\.name) : separationOrder
+  }
+
+  /// Whether the DeviceN process lookup matches the configured process colorants.
+  public var hasUsableDeviceNLookup: Bool {
+    let processCount = additionalColorants.count(where: \.isProcessColorant)
+    return rgbToDeviceN?.dimensions.count == 3
+      && rgbToDeviceN?.outputComponentCount == processCount
+      && processCount > 0
   }
 
   /// Compatibility configuration for RGB composite output.

@@ -90,6 +90,53 @@ let benchmarks: @Sendable () -> Void = {
     }
   }
 
+  for colorantCount in [4, 8] {
+    let colorants = (0..<colorantCount).map { "Colorant\($0)" }
+    let tints = Dictionary(uniqueKeysWithValues: colorants.enumerated().map {
+      ($0.element, Double($0.offset + 1) / Double(colorantCount))
+    })
+    Benchmark("\(colorantCount)-Plane Colorant Fill", configuration: configuration) { benchmark in
+      benchmark.startMeasurement()
+      for _ in benchmark.scaledIterations {
+        var canvas = try! RasterColorantCanvas(width: pathWidth, height: pathHeight, colorants: colorants)
+        try! canvas.fill(
+          surfacePath,
+          rule: .winding,
+          paint: RasterColorantPaint(tints: tints)
+        )
+        blackHole(try! canvas.finish())
+      }
+    }
+  }
+
+  Benchmark("Spot Overprint and Halftone", configuration: configuration) { benchmark in
+    let colorants = ["Cyan", "Magenta", "Yellow", "Black", "Varnish"]
+    let program = try! RasterHalftoneProgram(
+      colorantLevels: Dictionary(uniqueKeysWithValues: colorants.map { ($0, 2) }),
+      defaultScreen: bilevelProgram.defaultScreen
+    )
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      var canvas = try! RasterColorantCanvas(width: pathWidth, height: pathHeight, colorants: colorants)
+      try! canvas.fill(
+        surfacePath,
+        rule: .winding,
+        paint: RasterColorantPaint(tints: ["Varnish": 0.6]),
+        deviceRendering: program
+      )
+      try! canvas.fill(
+        surfacePath,
+        rule: .winding,
+        paint: RasterColorantPaint(
+          tints: ["Cyan": 0.4],
+          overprintsUnspecifiedColorants: true
+        ),
+        deviceRendering: program
+      )
+      blackHole(try! canvas.finish())
+    }
+  }
+
   Benchmark("1,000 Cubic Fill", configuration: configuration) { benchmark in
     benchmark.startMeasurement()
     for _ in benchmark.scaledIterations {

@@ -37,8 +37,13 @@ public final class NativeGraphicsDeviceRenderingSession: GraphicsDeviceRendering
         blueTransfer: state.effectiveTransferFunctions.blue.samples,
         grayTransfer: state.effectiveTransferFunctions.gray.samples,
         componentLevels: device.deviceRendering.quantization.levels,
+        colorantLevels: device.deviceRendering.quantization.colorantLevels,
+        defaultColorantLevels: device.deviceRendering.quantization.defaultColorantLevels,
         defaultScreen: try thresholdScreen(state.halftone),
-        colorantScreens: try colorantScreens(state.halftone)
+        colorantScreens: try colorantScreens(state.halftone),
+        colorantTransfers: Dictionary(uniqueKeysWithValues: device.colorants.availableColorants.map {
+          ($0.name, state.transferFunction(for: $0.name).samples)
+        })
       )
       cachedState = state
       cachedDescriptor = device
@@ -85,6 +90,16 @@ public final class NativeGraphicsDeviceRenderingSession: GraphicsDeviceRendering
 private extension GraphicsDeviceQuantization {
   var levels: [Int]? {
     if case .discrete(let levels) = self { return levels }
+    return nil
+  }
+
+  var colorantLevels: [String: Int] {
+    if case .namedColorants(let levels, _) = self { return levels }
+    return [:]
+  }
+
+  var defaultColorantLevels: Int? {
+    if case .namedColorants(_, let levels) = self { return levels }
     return nil
   }
 }

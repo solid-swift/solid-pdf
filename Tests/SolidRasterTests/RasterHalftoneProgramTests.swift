@@ -24,6 +24,32 @@ import Testing
     #expect(throws: RasterError.invalidGeometry) {
       try RasterHalftoneProgram(componentLevels: [1])
     }
+    #expect(throws: RasterError.invalidGeometry) {
+      try RasterHalftoneProgram(colorantLevels: ["Varnish": 1])
+    }
+    #expect(throws: RasterError.invalidGeometry) {
+      try RasterHalftoneProgram(colorantTransfers: ["Varnish": [0]])
+    }
     #expect(RasterHalftoneProgram.continuousTone.defaultScreen == nil)
+  }
+
+  @Test func namedColorantsUseIndependentTransfersLevelsAndScreens() throws {
+    let screen = try RasterThresholdScreen(
+      width: 2,
+      height: 1,
+      maximumThreshold: 4,
+      thresholds: [1, 3]
+    )
+    let program = try RasterHalftoneProgram(
+      colorantLevels: ["Varnish": 2],
+      defaultColorantLevels: 4,
+      colorantScreens: ["Varnish": screen],
+      colorantTransfers: ["Varnish": [1, 0]]
+    )
+
+    #expect(program.quantizeTint(1, colorant: "Varnish", x: 0, y: 0) == 0)
+    #expect(program.quantizeTint(0, colorant: "Varnish", x: 0, y: 0) == 1)
+    #expect(program.quantizeTint(1, colorant: "Cyan", x: 0, y: 0) == 1)
+    #expect(program.quantizeTint(0, colorant: "Cyan", x: 0, y: 0) == 0)
   }
 }

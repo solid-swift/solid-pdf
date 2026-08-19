@@ -15,11 +15,13 @@ public struct RasterSeparationPageDeviceProvider: GraphicsPageDeviceProvider, Se
   public func makeSession(
     for descriptor: GraphicsDeviceDescriptor
   ) throws -> sending StandardGraphicsPageDeviceSession {
+    var processModels = Set(GraphicsProcessColorModel.allCases.filter { $0 != .deviceN })
+    if descriptor.colorants.hasUsableDeviceNLookup { processModels.insert(.deviceN) }
     return try StandardGraphicsPageDeviceProvider(
       mode: mode,
       name: "SolidRasterSeparationDevice",
       colorantCapabilities: GraphicsColorantCapabilities(
-        supportedProcessModels: Set(GraphicsProcessColorModel.allCases.filter { $0 != .deviceN }),
+        supportedProcessModels: processModels,
         supportsCompositeOutput: true,
         supportsSeparationOutput: true,
         supportsOverprint: true,

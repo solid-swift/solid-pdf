@@ -8,9 +8,17 @@ enum GraphicsColorantResolver {
   ) throws -> GraphicsColorantPaint {
     switch paint {
     case .deviceGray(let gray):
-      return process(rgb: ColorRGB(red: gray, green: gray, blue: gray), configuration: configuration, preview: paint)
+      return try process(
+        rgb: ColorRGB(red: gray, green: gray, blue: gray),
+        configuration: configuration,
+        preview: paint
+      )
     case .deviceRGB(let red, let green, let blue):
-      return process(rgb: ColorRGB(red: red, green: green, blue: blue), configuration: configuration, preview: paint)
+      return try process(
+        rgb: ColorRGB(red: red, green: green, blue: blue),
+        configuration: configuration,
+        preview: paint
+      )
     case .deviceCMYK(let cyan, let magenta, let yellow, let black):
       if configuration.processModel == .deviceCMYK {
         return result(
@@ -18,7 +26,7 @@ enum GraphicsColorantResolver {
           preview: paint
         )
       }
-      return process(
+      return try process(
         rgb: ColorCMYK(cyan: cyan, magenta: magenta, yellow: yellow, black: black).rgb,
         configuration: configuration,
         preview: paint
@@ -36,13 +44,13 @@ enum GraphicsColorantResolver {
   ) throws -> GraphicsColorantPaint {
     switch value {
     case .deviceGray(let gray):
-      return process(
+      return try process(
         rgb: ColorRGB(red: gray, green: gray, blue: gray),
         configuration: configuration,
         preview: .color(value)
       )
     case .deviceRGB(let rgb):
-      return process(rgb: rgb, configuration: configuration, preview: .color(value))
+      return try process(rgb: rgb, configuration: configuration, preview: .color(value))
     case .deviceCMYK(let cmyk):
       return try resolve(
         .deviceCMYK(cyan: cmyk.cyan, magenta: cmyk.magenta, yellow: cmyk.yellow, black: cmyk.black),
@@ -75,7 +83,7 @@ enum GraphicsColorantResolver {
     rgb: ColorRGB,
     configuration: GraphicsColorantConfiguration,
     preview: GraphicsPaint
-  ) -> GraphicsColorantPaint {
+  ) throws -> GraphicsColorantPaint {
     let rgb = rgb.clamped
     switch configuration.processModel {
     case .deviceGray:
@@ -103,7 +111,17 @@ enum GraphicsColorantResolver {
         ("Red", 1 - rgb.red), ("Green", 1 - rgb.green), ("Blue", 1 - rgb.blue), ("Gray", 0),
       ], preview: preview)
     case .deviceN:
-      return GraphicsColorantPaint(components: [], paintsNothing: true, preview: preview)
+      guard configuration.hasUsableDeviceNLookup, let lookup = configuration.rgbToDeviceN else {
+        throw Error.configurationError
+      }
+      let values: [Double]
+      do {
+        values = try lookup.interpolate([rgb.red, rgb.green, rgb.blue])
+      } catch {
+        throw Error.configurationError
+      }
+      let names = configuration.additionalColorants.filter(\.isProcessColorant).map(\.name)
+      return result(Array(zip(names, values)), preview: preview)
     }
   }
 

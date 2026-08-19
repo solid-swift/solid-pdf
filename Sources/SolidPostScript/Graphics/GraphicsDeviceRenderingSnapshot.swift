@@ -32,9 +32,21 @@ public struct GraphicsDeviceRenderingSnapshot: Sendable, Hashable {
       gray: halftone.transferFunction(for: "Gray") ?? transferFunctions.gray
     )
   }
+
+  /// Returns the effective transfer function for a process or named colorant.
+  public func transferFunction(for colorant: String) -> GraphicsComponentFunction {
+    if let function = halftone.transferFunction(for: colorant) { return function }
+    return switch colorant {
+    case "Red", "Cyan": transferFunctions.red
+    case "Green", "Magenta": transferFunctions.green
+    case "Blue", "Yellow": transferFunctions.blue
+    case "Gray", "Black": transferFunctions.gray
+    default: transferFunctions.gray
+    }
+  }
 }
 
-private extension GraphicsHalftone {
+extension GraphicsHalftone {
   func transferFunction(for colorant: String) -> GraphicsComponentFunction? {
     switch self {
     case .continuous:

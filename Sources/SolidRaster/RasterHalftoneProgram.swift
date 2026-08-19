@@ -67,8 +67,11 @@ public struct RasterHalftoneProgram: Sendable, Hashable {
   public let blueTransfer: [Double]
   public let grayTransfer: [Double]
   public let componentLevels: [Int]?
+  public let colorantLevels: [String: Int]
+  public let defaultColorantLevels: Int?
   public let defaultScreen: RasterThresholdScreen?
   public let colorantScreens: [String: RasterThresholdScreen]
+  public let colorantTransfers: [String: [Double]]
 
   /// Creates a raster device-rendering program.
   public init(
@@ -77,20 +80,29 @@ public struct RasterHalftoneProgram: Sendable, Hashable {
     blueTransfer: [Double] = [0, 1],
     grayTransfer: [Double] = [0, 1],
     componentLevels: [Int]? = nil,
+    colorantLevels: [String: Int] = [:],
+    defaultColorantLevels: Int? = nil,
     defaultScreen: RasterThresholdScreen? = nil,
-    colorantScreens: [String: RasterThresholdScreen] = [:]
+    colorantScreens: [String: RasterThresholdScreen] = [:],
+    colorantTransfers: [String: [Double]] = [:]
   ) throws(RasterError) {
     let tables = [redTransfer, greenTransfer, blueTransfer, grayTransfer]
+      + Array(colorantTransfers.values)
     guard tables.allSatisfy({ $0.count >= 2 && $0.allSatisfy(\.isFinite) }),
-      componentLevels?.allSatisfy({ $0 >= 2 }) != false
+      componentLevels?.allSatisfy({ $0 >= 2 }) != false,
+      colorantLevels.values.allSatisfy({ $0 >= 2 }),
+      defaultColorantLevels.map({ $0 >= 2 }) != false
     else { throw .invalidGeometry }
     self.redTransfer = redTransfer
     self.greenTransfer = greenTransfer
     self.blueTransfer = blueTransfer
     self.grayTransfer = grayTransfer
     self.componentLevels = componentLevels
+    self.colorantLevels = colorantLevels
+    self.defaultColorantLevels = defaultColorantLevels
     self.defaultScreen = defaultScreen
     self.colorantScreens = colorantScreens
+    self.colorantTransfers = colorantTransfers
   }
 
   /// Identity continuous-tone rendering.
@@ -119,5 +131,31 @@ public struct RasterHalftoneProgram: Sendable, Hashable {
       )
     }
     return result
+  }
+
+  /// Applies a named colorant's additive transfer and spatial quantization to a subtractive tint.
+  public func quantizeTint(_ tint: Double, colorant: String, x: Int, y: Int) -> Double {
+    let additive = evaluate(
+      colorantTransfers[colorant] ?? colorantTransfers["Default"] ?? grayTransfer,
+      at: 1 - min(1, max(0, tint))
+    )
+    guard let levels = colorantLevels[colorant] ?? defaultColorantLevels else {
+      return 1 - additive
+    }
+    let scaled = additive * Double(levels - 1)
+    let lower = Int(scaled.rounded(.down))
+    let fraction = scaled - Double(lower)
+    let screen = colorantScreens[colorant] ?? colorantScreens["Default"] ?? defaultScreen
+    let raised = screen.map { fraction >= $0.threshold(x: x, y: y) } ?? (fraction >= 0.5)
+    let quantized = min(levels - 1, lower + (raised ? 1 : 0))
+    return 1 - Double(quantized) / Double(levels - 1)
+  }
+
+  private func evaluate(_ table: [Double], at value: Double) -> Double {
+    let position = min(1, max(0, value)) * Double(table.count - 1)
+    let lower = Int(position.rounded(.down))
+    let upper = min(table.count - 1, lower + 1)
+    let fraction = position - Double(lower)
+    return min(1, max(0, table[lower] + fraction * (table[upper] - table[lower])))
   }
 }

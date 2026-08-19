@@ -4,6 +4,25 @@ import Testing
 
 @Suite
 struct HalftoneTests {
+  @Test func subtractiveProcessColorantsUseTheirComplementaryPrimaryTransfers() throws {
+    let red = try GraphicsComponentFunction(samples: [0.1, 0.1])
+    let green = try GraphicsComponentFunction(samples: [0.2, 0.2])
+    let blue = try GraphicsComponentFunction(samples: [0.3, 0.3])
+    let gray = try GraphicsComponentFunction(samples: [0.4, 0.4])
+    let state = GraphicsDeviceRenderingSnapshot(transferFunctions: GraphicsTransferFunctions(
+      red: red,
+      green: green,
+      blue: blue,
+      gray: gray
+    ))
+
+    #expect(state.transferFunction(for: "Cyan") == red)
+    #expect(state.transferFunction(for: "Magenta") == green)
+    #expect(state.transferFunction(for: "Yellow") == blue)
+    #expect(state.transferFunction(for: "Black") == gray)
+    #expect(state.transferFunction(for: "Varnish") == gray)
+  }
+
   @Test func screenCompatibilityOperatorsPreserveTheInstalledProcedures() async throws {
     let values = try await Interpreter.results(content: """
       /spot {add 2 div} bind def

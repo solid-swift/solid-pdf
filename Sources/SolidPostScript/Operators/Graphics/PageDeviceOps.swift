@@ -291,7 +291,8 @@ extension Operators {
           additionalColorants: additionalColorants,
           separationOrder: separationOrder,
           maximumSeparations: currentConfiguration.colorants.maximumSeparations,
-          supportsOverprint: currentConfiguration.colorants.supportsOverprint
+          supportsOverprint: currentConfiguration.colorants.supportsOverprint,
+          rgbToDeviceN: currentConfiguration.colorants.rgbToDeviceN
         )
       ),
       parameters: PostScriptPageDeviceParameters(

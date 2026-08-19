@@ -26,6 +26,7 @@ let benchmarks: @Sendable () -> Void = {
         deviceDescriptor: workload.deviceDescriptor
       )
     }
+    registerSeparations([workloads[0], workloads[4], workloads[6]])
   case .plutovg:
     register(workloads) { workload in
       PlutoVGImageTarget(
@@ -33,6 +34,28 @@ let benchmarks: @Sendable () -> Void = {
         pixelHeight: workload.pixelHeight,
         deviceDescriptor: workload.deviceDescriptor
       )
+    }
+  }
+}
+
+private func registerSeparations(_ workloads: [RasterRendererBenchmarkWorkload]) {
+  let configuration = Benchmark.Configuration(
+    metrics: [.wallClock, .mallocCountTotal, .peakMemoryResidentDelta],
+    warmupIterations: 3,
+    scalingFactor: .one,
+    maxDuration: .seconds(10),
+    maxIterations: 100
+  )
+  for workload in workloads {
+    Benchmark("CMYK Separation \(workload.name)", configuration: configuration) { benchmark in
+      benchmark.startMeasurement()
+      for _ in benchmark.scaledIterations {
+        let output = try! RasterBenchmarkReplay.render(
+          workload,
+          to: RasterSeparationTarget(deviceDescriptor: workload.deviceDescriptor)
+        )
+        blackHole(output)
+      }
     }
   }
 }
