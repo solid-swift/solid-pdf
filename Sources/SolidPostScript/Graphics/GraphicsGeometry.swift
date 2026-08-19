@@ -14,6 +14,20 @@ public struct GraphicsPoint: Sendable, Hashable {
   }
 }
 
+/// A size in the portable PostScript graphics coordinate space.
+public struct GraphicsSize: Sendable, Hashable {
+  /// The horizontal extent.
+  public var width: Double
+  /// The vertical extent.
+  public var height: Double
+
+  /// Creates a size.
+  public init(width: Double, height: Double) {
+    self.width = width
+    self.height = height
+  }
+}
+
 /// A rectangle in the portable PostScript graphics coordinate space.
 public struct GraphicsRect: Sendable, Hashable {
   /// The minimum horizontal coordinate.

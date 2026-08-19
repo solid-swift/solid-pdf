@@ -72,6 +72,46 @@ struct GraphicsTargetTests {
     #expect(output.pages.isEmpty)
   }
 
+  @Test func standardPageDeviceProviderNegotiatesAdaptiveGeometry() throws {
+    let provider = StandardGraphicsPageDeviceProvider(mode: .adaptive)
+    let session = try provider.makeSession(for: .letter)
+    let result = try session.negotiate(GraphicsPageDeviceRequest(
+      pageSize: GraphicsSize(width: 360, height: 720),
+      resolution: GraphicsSize(width: 144, height: 144),
+      imagingBoundingBox: GraphicsRect(x: 10, y: 20, width: 300, height: 600),
+      numberOfCopies: 2
+    ))
+
+    #expect(result.unsatisfiedParameters.isEmpty)
+    #expect(result.configuration.descriptor.mediaBounds.width == 720)
+    #expect(result.configuration.descriptor.mediaBounds.height == 1_440)
+    #expect(result.configuration.numberOfCopies == 2)
+    #expect(result.configuration.identifier != session.initialConfiguration.identifier)
+  }
+
+  @Test func standardPageDeviceProviderReportsFixedGeometryChanges() throws {
+    let provider = StandardGraphicsPageDeviceProvider(mode: .fixed)
+    let session = try provider.makeSession(for: .letter)
+    let result = try session.negotiate(GraphicsPageDeviceRequest(
+      pageSize: GraphicsSize(width: 300, height: 400),
+      resolution: GraphicsSize(width: 96, height: 96),
+      imagingBoundingBox: nil,
+      numberOfCopies: nil
+    ))
+
+    #expect(result.configuration.descriptor == .letter)
+    #expect(result.unsatisfiedParameters == ["PageSize", "HWResolution"])
+  }
+
+  @Test func existingTargetsDefaultToFixedPageDeviceBehavior() throws {
+    let target = ImageTransferTarget()
+    let session = try target.pageDeviceProvider.makeSession(for: target.deviceDescriptor)
+
+    #expect(session.capabilities.mode == .fixed)
+    #expect(RecordingGraphicsTarget().pageDeviceProvider.mode == .adaptive)
+    #expect(NullGraphicsTarget().pageDeviceProvider.mode == .adaptive)
+  }
+
   @Test func sampledImageRowsAreTransferredInBoundedCompleteBatches() async throws {
     let row = String(repeating: "00", count: 64)
     let result = try await Interpreter.render(

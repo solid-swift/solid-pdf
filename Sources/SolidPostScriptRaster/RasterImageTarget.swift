@@ -796,18 +796,22 @@ where
   public let pixelHeight: Int
   /// The color engine used by this target.
   public let colorEngine: ColorEngine
+  /// The virtual page-device provider used by this target.
+  public let pageDeviceProvider: StandardGraphicsPageDeviceProvider
 
   /// Creates a bitmap target using an explicit PostScript device descriptor.
   public init(
     pixelWidth: Int,
     pixelHeight: Int,
     deviceDescriptor: GraphicsDeviceDescriptor,
-    colorEngine: ColorEngine
+    colorEngine: ColorEngine,
+    pageDeviceMode: GraphicsPageDeviceMode = .adaptive
   ) {
     self.pixelWidth = pixelWidth
     self.pixelHeight = pixelHeight
     self.deviceDescriptor = deviceDescriptor
     self.colorEngine = colorEngine
+    self.pageDeviceProvider = StandardGraphicsPageDeviceProvider(mode: pageDeviceMode)
   }
 
   /// Creates a renderer dedicated to one render.
@@ -842,7 +846,8 @@ extension ColorManagedRasterImageTarget where ColorEngine == NativeGraphicsColor
     pixelWidth: Int,
     pixelHeight: Int,
     resolution: Double = 72,
-    imageableBounds: GraphicsRect? = nil
+    imageableBounds: GraphicsRect? = nil,
+    pageDeviceMode: GraphicsPageDeviceMode = .adaptive
   ) {
     let media = GraphicsRect(x: 0, y: 0, width: Double(pixelWidth), height: Double(pixelHeight))
     let descriptor = GraphicsDeviceDescriptor(
@@ -863,19 +868,26 @@ extension ColorManagedRasterImageTarget where ColorEngine == NativeGraphicsColor
       pixelWidth: pixelWidth,
       pixelHeight: pixelHeight,
       deviceDescriptor: descriptor,
-      colorEngine: NativeGraphicsColorEngine()
+      colorEngine: NativeGraphicsColorEngine(),
+      pageDeviceMode: pageDeviceMode
     )
   }
 
   /// Creates a bitmap target using an explicit PostScript device descriptor.
-  public init(pixelWidth: Int, pixelHeight: Int, deviceDescriptor: GraphicsDeviceDescriptor) {
+  public init(
+    pixelWidth: Int,
+    pixelHeight: Int,
+    deviceDescriptor: GraphicsDeviceDescriptor,
+    pageDeviceMode: GraphicsPageDeviceMode = .adaptive
+  ) {
     self.init(
       pixelWidth: pixelWidth,
       pixelHeight: pixelHeight,
       deviceDescriptor: deviceDescriptor,
       colorEngine: NativeGraphicsColorEngine(
         destinationProfile: deviceDescriptor.colorDevice.destinationProfile
-      )
+      ),
+      pageDeviceMode: pageDeviceMode
     )
   }
 }

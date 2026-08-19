@@ -1105,17 +1105,21 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
   public let pixelHeight: Int
   /// The native Swift color engine used as PlutoVG's conversion frontend.
   public let colorEngine: NativeGraphicsColorEngine
+  /// The virtual page-device provider used by this target.
+  public let pageDeviceProvider: StandardGraphicsPageDeviceProvider
 
   /// Creates an RGBA bitmap target with explicit pixel geometry and resolution.
   public init(
     pixelWidth: Int,
     pixelHeight: Int,
     resolution: Double = 72,
-    imageableBounds: GraphicsRect? = nil
+    imageableBounds: GraphicsRect? = nil,
+    pageDeviceMode: GraphicsPageDeviceMode = .adaptive
   ) {
     self.pixelWidth = pixelWidth
     self.pixelHeight = pixelHeight
     self.colorEngine = NativeGraphicsColorEngine()
+    self.pageDeviceProvider = StandardGraphicsPageDeviceProvider(mode: pageDeviceMode)
     let mediaBounds = GraphicsRect(x: 0, y: 0, width: Double(pixelWidth), height: Double(pixelHeight))
     self.deviceDescriptor = GraphicsDeviceDescriptor(
       mediaBounds: mediaBounds,
@@ -1137,12 +1141,14 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
   public init(
     pixelWidth: Int,
     pixelHeight: Int,
-    deviceDescriptor: GraphicsDeviceDescriptor
+    deviceDescriptor: GraphicsDeviceDescriptor,
+    pageDeviceMode: GraphicsPageDeviceMode = .adaptive
   ) {
     self.pixelWidth = pixelWidth
     self.pixelHeight = pixelHeight
     self.deviceDescriptor = deviceDescriptor
     self.colorEngine = NativeGraphicsColorEngine(destinationProfile: deviceDescriptor.colorDevice.destinationProfile)
+    self.pageDeviceProvider = StandardGraphicsPageDeviceProvider(mode: pageDeviceMode)
   }
 
   /// Creates a renderer dedicated to one render operation.

@@ -917,6 +917,8 @@ where
   public let pixelHeight: Int
   /// The color engine used by this target.
   public let colorEngine: ColorEngine
+  /// The virtual page-device provider used by this target.
+  public let pageDeviceProvider: StandardGraphicsPageDeviceProvider
 
   /// Creates an RGBA bitmap target with explicit pixel geometry and resolution.
   public init(
@@ -924,11 +926,13 @@ where
     pixelHeight: Int,
     resolution: Double = 72,
     imageableBounds: GraphicsRect? = nil,
-    colorEngine: ColorEngine
+    colorEngine: ColorEngine,
+    pageDeviceMode: GraphicsPageDeviceMode = .adaptive
   ) {
     self.pixelWidth = pixelWidth
     self.pixelHeight = pixelHeight
     self.colorEngine = colorEngine
+    self.pageDeviceProvider = StandardGraphicsPageDeviceProvider(mode: pageDeviceMode)
     let mediaBounds = GraphicsRect(x: 0, y: 0, width: Double(pixelWidth), height: Double(pixelHeight))
     self.deviceDescriptor = GraphicsDeviceDescriptor(
       mediaBounds: mediaBounds,
@@ -974,14 +978,16 @@ extension ColorManagedCoreGraphicsImageTarget where ColorEngine == CoreGraphicsC
     pixelHeight: Int,
     resolution: Double = 72,
     imageableBounds: GraphicsRect? = nil,
-    destinationColorSpace: CGColorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+    destinationColorSpace: CGColorSpace = CGColorSpace(name: CGColorSpace.sRGB)!,
+    pageDeviceMode: GraphicsPageDeviceMode = .adaptive
   ) {
     self.init(
       pixelWidth: pixelWidth,
       pixelHeight: pixelHeight,
       resolution: resolution,
       imageableBounds: imageableBounds,
-      colorEngine: CoreGraphicsColorEngine(destinationColorSpace: destinationColorSpace)
+      colorEngine: CoreGraphicsColorEngine(destinationColorSpace: destinationColorSpace),
+      pageDeviceMode: pageDeviceMode
     )
   }
 }

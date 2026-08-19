@@ -34,6 +34,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
   public let smoothness: Double
   /// The explicit device-space path bounds established by `setbbox`, if any.
   public let pathBoundingBox: GraphicsRect?
+  /// The current output device and page-lifecycle state.
+  public let device: GraphicsDeviceSnapshot
 
   /// Creates a graphics-state snapshot.
   public init(
@@ -52,7 +54,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     flatness: Double = 1,
     strokeAdjustment: Bool = false,
     smoothness: Double = 0.02,
-    pathBoundingBox: GraphicsRect? = nil
+    pathBoundingBox: GraphicsRect? = nil,
+    device: GraphicsDeviceSnapshot = .letter
   ) {
     self.matrix = matrix
     self.path = path
@@ -70,5 +73,6 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     self.strokeAdjustment = strokeAdjustment
     self.smoothness = smoothness
     self.pathBoundingBox = pathBoundingBox
+    self.device = device
   }
 }

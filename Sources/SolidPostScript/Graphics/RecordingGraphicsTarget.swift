@@ -144,10 +144,16 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
 
   /// The device descriptor used by this target.
   public let deviceDescriptor: GraphicsDeviceDescriptor
+  /// The virtual page-device provider used by this target.
+  public let pageDeviceProvider: StandardGraphicsPageDeviceProvider
 
   /// Creates a recording target.
-  public init(deviceDescriptor: GraphicsDeviceDescriptor = .letter) {
+  public init(
+    deviceDescriptor: GraphicsDeviceDescriptor = .letter,
+    pageDeviceMode: GraphicsPageDeviceMode = .adaptive
+  ) {
     self.deviceDescriptor = deviceDescriptor
+    self.pageDeviceProvider = StandardGraphicsPageDeviceProvider(mode: pageDeviceMode)
   }
 
   /// Creates a renderer dedicated to one render operation.

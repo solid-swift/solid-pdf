@@ -5,6 +5,7 @@ public protocol GraphicsTarget<PageOutput, Output, Renderer>: Sendable {
   associatedtype PageOutput
   associatedtype Output
   associatedtype ColorEngine: GraphicsColorEngine = SemanticGraphicsColorEngine
+  associatedtype PageDeviceProvider: GraphicsPageDeviceProvider = StandardGraphicsPageDeviceProvider
   associatedtype Renderer: GraphicsRenderer<PageOutput, Output> where Renderer.ColorSession == ColorEngine.Session
 
   /// The device geometry and default transformation used for the render.
@@ -13,11 +14,21 @@ public protocol GraphicsTarget<PageOutput, Output, Renderer>: Sendable {
   /// The color engine used to create render-scoped conversion state.
   var colorEngine: ColorEngine { get }
 
+  /// The provider used to negotiate page geometry during this render.
+  var pageDeviceProvider: PageDeviceProvider { get }
+
   /// Creates a renderer dedicated to one render operation.
   func makeRenderer() throws -> sending Renderer
 
   /// Creates a renderer using color state prepared by the interpreter.
   func makeRenderer(colorSession: sending ColorEngine.Session) throws -> sending Renderer
+}
+
+extension GraphicsTarget where PageDeviceProvider == StandardGraphicsPageDeviceProvider {
+  /// A fixed provider preserving source compatibility for targets that do not select one.
+  public var pageDeviceProvider: StandardGraphicsPageDeviceProvider {
+    StandardGraphicsPageDeviceProvider(mode: .fixed)
+  }
 }
 
 extension GraphicsTarget where ColorEngine == SemanticGraphicsColorEngine {
@@ -46,6 +57,12 @@ public protocol GraphicsEventConsumer: AnyObject {
   func endImage() throws
   /// Abandons the active sampled-image transfer after a language or renderer error.
   func abortImage()
+  /// Activates a page or null device for subsequent graphics events.
+  func activateDevice(_ device: GraphicsDeviceSnapshot) throws
+  /// Deactivates a page device and discards its retained page raster.
+  func deactivateDevice(_ device: GraphicsDeviceSnapshot) throws
+  /// Transmits the current page one or more times before clearing its raster.
+  func transmitPage(_ event: GraphicsEvent, copies: Int) throws
   /// Abandons the current render without producing output.
   func abort()
 }
@@ -63,6 +80,15 @@ extension GraphicsEventConsumer {
   public func endImage() throws {}
   /// Completes a no-op image abandonment.
   public func abortImage() {}
+  /// Accepts device activation when the target does not retain device-specific state.
+  public func activateDevice(_ device: GraphicsDeviceSnapshot) throws {}
+  /// Accepts device deactivation when the target does not retain device-specific state.
+  public func deactivateDevice(_ device: GraphicsDeviceSnapshot) throws {}
+  /// Preserves existing single-copy behavior and rejects unsupported multiple copies.
+  public func transmitPage(_ event: GraphicsEvent, copies: Int) throws {
+    guard copies == 1 else { throw Error.ioError }
+    try process(event)
+  }
 }
 
 /// Consumes graphics events and completes a typed sequence of pages and job output.

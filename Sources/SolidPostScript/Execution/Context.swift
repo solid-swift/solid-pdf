@@ -88,6 +88,7 @@ public actor Context {
   var fileReadAhead: [ObjectIdentifier: FileReadAhead] = [:]
   var filePendingEndOfFile: [ObjectIdentifier: any File] = [:]
   var graphicsDeviceDescriptor: GraphicsDeviceDescriptor = .letter
+  var graphicsPageDeviceSession: (any GraphicsPageDeviceSession)?
   var graphicsEventConsumer: (any GraphicsEventConsumer)?
   var graphicsState: GraphicsCanonicalState = .initial(for: .letter)
   var activeEncapsulatedPaintAllocations: Set<ObjectIdentifier> = []
@@ -319,13 +320,14 @@ public actor Context {
     }
   }
 
-  func render<Renderer: GraphicsRenderer>(
+  func render<Renderer: GraphicsRenderer, PageDeviceSession: GraphicsPageDeviceSession>(
     source: Object,
-    deviceDescriptor: GraphicsDeviceDescriptor,
+    pageDeviceSession: sending PageDeviceSession,
     renderer: sending Renderer
   ) async throws -> sending Renderer.Output {
     precondition(graphicsEventConsumer == nil, "A PostScript context cannot run overlapping renders")
-    try resetGraphics(for: deviceDescriptor)
+    try resetGraphics(for: pageDeviceSession.initialConfiguration)
+    graphicsPageDeviceSession = pageDeviceSession
     graphicsEventConsumer = renderer
     do {
       try await executeStart()
@@ -333,10 +335,12 @@ public actor Context {
       try await pushAndRun(source: source)
       let output = try renderer.finish()
       graphicsEventConsumer = nil
+      graphicsPageDeviceSession = nil
       return output
     } catch {
       renderer.abort()
       graphicsEventConsumer = nil
+      graphicsPageDeviceSession = nil
       throw error
     }
   }

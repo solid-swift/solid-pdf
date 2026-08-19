@@ -3,6 +3,22 @@ import Foundation
 extension Context {
 
   func resetGraphics(for descriptor: GraphicsDeviceDescriptor) throws {
+    let configuration = GraphicsPageDeviceConfiguration(
+      identifier: GraphicsDeviceIdentifier(),
+      pageSize: GraphicsSize(
+        width: descriptor.mediaBounds.width * 72 / descriptor.horizontalResolution,
+        height: descriptor.mediaBounds.height * 72 / descriptor.verticalResolution
+      ),
+      imagingBoundingBox: nil,
+      numberOfCopies: 1,
+      name: "SolidVirtualPageDevice",
+      descriptor: descriptor
+    )
+    try resetGraphics(for: configuration)
+  }
+
+  func resetGraphics(for configuration: GraphicsPageDeviceConfiguration) throws {
+    let descriptor = configuration.descriptor
     let matrix = descriptor.defaultMatrix
     guard descriptor.mediaBounds.x.isFinite,
       descriptor.mediaBounds.y.isFinite,
@@ -45,7 +61,8 @@ extension Context {
       throw Error.configurationError
     }
     graphicsDeviceDescriptor = descriptor
-    graphicsState = .initial(for: descriptor)
+    let device = PostScriptDeviceRecord(configuration: configuration)
+    graphicsState = .initial(for: descriptor, device: device)
     graphicsStack.removeAll()
   }
 

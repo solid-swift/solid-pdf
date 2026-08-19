@@ -7,6 +7,7 @@ struct GraphicsClipStackEntry: Sendable {
 }
 
 struct GraphicsCanonicalState: Sendable {
+  var device: PostScriptDeviceRecord
   var matrix: GraphicsMatrix
   var path: GraphicsPath
   var clip: GraphicsClip
@@ -29,8 +30,12 @@ struct GraphicsCanonicalState: Sendable {
   var resolvedClip: RasterRegion
   var clipStack: [GraphicsClipStackEntry]
 
-  static func initial(for descriptor: GraphicsDeviceDescriptor) -> Self {
+  static func initial(
+    for descriptor: GraphicsDeviceDescriptor,
+    device: PostScriptDeviceRecord? = nil
+  ) -> Self {
     Self(
+      device: device ?? .page(descriptor: descriptor),
       matrix: descriptor.defaultMatrix,
       path: GraphicsPath(),
       clip: GraphicsClip(imageableBounds: descriptor.imageableBounds),
@@ -72,7 +77,8 @@ struct GraphicsCanonicalState: Sendable {
       flatness: flatness,
       strokeAdjustment: strokeAdjustment,
       smoothness: smoothness,
-      pathBoundingBox: pathBoundingBox
+      pathBoundingBox: pathBoundingBox,
+      device: device.snapshot
     )
   }
 
@@ -98,11 +104,16 @@ struct GraphicsCanonicalState: Sendable {
   }
 
   mutating func initializeGraphics(for descriptor: GraphicsDeviceDescriptor) {
+    let preservedDevice = device
+    let preservedColorRenderingSource = colorRenderingSource
+    let preservedOverprint = overprint
     let preservedFlatness = flatness
     let preservedStrokeAdjustment = strokeAdjustment
     let preservedSmoothness = smoothness
     let preservedClipStack = clipStack
-    self = .initial(for: descriptor)
+    self = .initial(for: descriptor, device: preservedDevice)
+    colorRenderingSource = preservedColorRenderingSource
+    overprint = preservedOverprint
     flatness = preservedFlatness
     strokeAdjustment = preservedStrokeAdjustment
     smoothness = preservedSmoothness

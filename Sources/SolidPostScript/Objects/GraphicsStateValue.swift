@@ -10,6 +10,7 @@ extension Object {
 /// A managed PostScript graphics-state object.
 public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
   private struct Storage: Sendable {
+    var device: PostScriptDeviceRecord
     var snapshot: GraphicsStateSnapshot
     var resolvedClip: RasterRegion
     var clipStack: [GraphicsClipStackEntry]
@@ -21,6 +22,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     var overprint: Bool
 
     init(_ state: GraphicsCanonicalState) {
+      self.device = state.device
       self.snapshot = state.snapshot
       self.resolvedClip = state.resolvedClip
       self.clipStack = state.clipStack
@@ -34,6 +36,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
 
     var canonical: GraphicsCanonicalState {
       GraphicsCanonicalState(
+        device: device,
         matrix: snapshot.matrix,
         path: snapshot.path,
         clip: snapshot.clip,
@@ -94,7 +97,9 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         storage.patternSource?.identifyEdgeSource(allocation)
       },
       clear: {
-        $0.snapshot = GraphicsCanonicalState.initial(for: .letter).snapshot
+        let state = GraphicsCanonicalState.initial(for: .letter)
+        $0.device = state.device
+        $0.snapshot = state.snapshot
         $0.resolvedClip = RasterRegion()
         $0.clipStack.removeAll()
         $0.dashSource = nil
