@@ -97,6 +97,8 @@ public actor Context {
   var imageDataSourceCallbackDepth = 0
   var activeImageDictionaries: [(dictionary: DictionaryValue, revision: UInt64)] = []
   var graphicsStack: [GraphicsStackFrame] = []
+  var pageDeviceCallbackStack: [PageDeviceCallback] = []
+  var suspendedPageStates: [GraphicsCanonicalState] = []
   private var executionBoundarySequence: UInt64 = 0
   private var executionTimingDepth = 0
   private var hostSuspensionDepth = 0
@@ -1586,7 +1588,8 @@ public actor Context {
   }
 
   nonisolated static func defaultUserDictionary(jobServerEnabled: Bool) -> Object {
-    let dict: [Object: Object] = jobServerEnabled ? ["quit": Operators.quitMaskProcedure] : [:]
+    var dict: [Object: Object] = ["#copies": 1]
+    if jobServerEnabled { dict["quit"] = Operators.quitMaskProcedure }
     return neverThrow(try .dictionary(dict, access: .unlimited, vm: .local, kind: .literal))
   }
 

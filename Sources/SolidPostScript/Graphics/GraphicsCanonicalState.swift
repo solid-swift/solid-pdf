@@ -8,6 +8,7 @@ struct GraphicsClipStackEntry: Sendable {
 
 struct GraphicsCanonicalState: Sendable {
   var device: PostScriptDeviceRecord
+  var pageDeviceParameters: PostScriptPageDeviceParameters?
   var matrix: GraphicsMatrix
   var path: GraphicsPath
   var clip: GraphicsClip
@@ -36,6 +37,7 @@ struct GraphicsCanonicalState: Sendable {
   ) -> Self {
     Self(
       device: device ?? .page(descriptor: descriptor),
+      pageDeviceParameters: nil,
       matrix: descriptor.defaultMatrix,
       path: GraphicsPath(),
       clip: GraphicsClip(imageableBounds: descriptor.imageableBounds),
@@ -125,6 +127,7 @@ struct GraphicsCanonicalState: Sendable {
     for object in colorSpace.retainedObjects { try object.checkStorage(in: vm) }
     try colorRenderingSource?.checkStorage(in: vm)
     try patternSource?.checkStorage(in: vm)
+    try pageDeviceParameters?.checkStorage(in: vm)
   }
 }
 

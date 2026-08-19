@@ -10,7 +10,33 @@ extension Object {
 /// A managed PostScript graphics-state object.
 public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
   private struct Storage: Sendable {
+    struct PageDeviceParameters: Sendable {
+      let install: VMStoredObject
+      let beginPage: VMStoredObject
+      let endPage: VMStoredObject
+      let policies: VMStoredObject
+
+      init(_ parameters: PostScriptPageDeviceParameters) {
+        install = VMStoredObject(parameters.install)
+        beginPage = VMStoredObject(parameters.beginPage)
+        endPage = VMStoredObject(parameters.endPage)
+        policies = VMStoredObject(parameters.policies)
+      }
+
+      var parameters: PostScriptPageDeviceParameters {
+        return PostScriptPageDeviceParameters(
+          install: install.object,
+          beginPage: beginPage.object,
+          endPage: endPage.object,
+          policies: policies.object
+        )
+      }
+
+      var storedObjects: [VMStoredObject] { [install, beginPage, endPage, policies] }
+    }
+
     var device: PostScriptDeviceRecord
+    var pageDeviceParameters: PageDeviceParameters?
     var snapshot: GraphicsStateSnapshot
     var resolvedClip: RasterRegion
     var clipStack: [GraphicsClipStackEntry]
@@ -23,6 +49,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
 
     init(_ state: GraphicsCanonicalState) {
       self.device = state.device
+      self.pageDeviceParameters = state.pageDeviceParameters.map(PageDeviceParameters.init)
       self.snapshot = state.snapshot
       self.resolvedClip = state.resolvedClip
       self.clipStack = state.clipStack
@@ -37,6 +64,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     var canonical: GraphicsCanonicalState {
       GraphicsCanonicalState(
         device: device,
+        pageDeviceParameters: pageDeviceParameters?.parameters,
         matrix: snapshot.matrix,
         path: snapshot.path,
         clip: snapshot.clip,
@@ -84,17 +112,20 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       children: {
         [$0.dashSource, $0.colorRenderingSource, $0.patternSource].compactMap { $0?.allocation }
           + $0.colorSpace.storedObjects.compactMap(\.allocation)
+          + ($0.pageDeviceParameters?.storedObjects.compactMap(\.allocation) ?? [])
       },
       snapshotCopy: { Storage($0.canonical) },
       storedObjects: {
         [$0.dashSource, $0.colorRenderingSource, $0.patternSource].compactMap { $0 }
           + $0.colorSpace.storedObjects
+          + ($0.pageDeviceParameters?.storedObjects ?? [])
       },
       identifyEdges: { storage, allocation in
         storage.dashSource?.identifyEdgeSource(allocation)
         storage.colorSpace.identifyEdges(from: allocation)
         storage.colorRenderingSource?.identifyEdgeSource(allocation)
         storage.patternSource?.identifyEdgeSource(allocation)
+        storage.pageDeviceParameters?.storedObjects.forEach { $0.identifyEdgeSource(allocation) }
       },
       clear: {
         let state = GraphicsCanonicalState.initial(for: .letter)
@@ -107,6 +138,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         $0.colorComponents = [0]
         $0.colorRenderingSource = nil
         $0.patternSource = nil
+        $0.pageDeviceParameters = nil
         $0.overprint = false
       }
     )
@@ -114,6 +146,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     storage.colorSpace.identifyEdges(from: ref.allocation)
     storage.colorRenderingSource?.identifyEdgeSource(ref.allocation)
     storage.patternSource?.identifyEdgeSource(ref.allocation)
+    storage.pageDeviceParameters?.storedObjects.forEach { $0.identifyEdgeSource(ref.allocation) }
     self.ref = ref
     self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
   }
@@ -153,6 +186,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       storage.colorSpace.identifyEdges(from: ref.allocation)
       storage.colorRenderingSource?.identifyEdgeSource(ref.allocation)
       storage.patternSource?.identifyEdgeSource(ref.allocation)
+      storage.pageDeviceParameters?.storedObjects.forEach { $0.identifyEdgeSource(ref.allocation) }
       $0.value = storage
     }
     allocation.updateFootprint(to: newFootprint)
@@ -164,6 +198,12 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     state().colorSpace.retainedObjects.forEach { $0.save(to: snapshot) }
     state().colorRenderingSource?.save(to: snapshot)
     state().patternSource?.save(to: snapshot)
+    if let parameters = state().pageDeviceParameters {
+      parameters.install.save(to: snapshot)
+      parameters.beginPage.save(to: snapshot)
+      parameters.endPage.save(to: snapshot)
+      parameters.policies.save(to: snapshot)
+    }
     ref.save(to: snapshot)
   }
 
@@ -199,6 +239,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     ref.uncheckedRead { $0.value.dashSource?.refreshEdge() }
     ref.uncheckedRead { $0.value.colorSpace.refreshEdges() }
     ref.uncheckedRead { $0.value.colorRenderingSource?.refreshEdge() }
+    ref.uncheckedRead { $0.value.pageDeviceParameters?.storedObjects.forEach { $0.refreshEdge() } }
   }
 
   private static func footprint(_ storage: Storage) -> Int {

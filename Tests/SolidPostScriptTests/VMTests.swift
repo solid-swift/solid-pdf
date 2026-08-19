@@ -73,7 +73,7 @@ struct VMTests {
         userdict
         """
     )
-    expectEqual(dict.count, 2)
+    expectEqual(dict.count, 3)
     expectEqual(try dict.object(forKeyIfExists: "a")?.value(as: IntegerValue.self).value, 10)
     expectEqual(try dict.object(forKeyIfExists: "b")?.value(as: IntegerValue.self).value, 20)
 
@@ -92,7 +92,7 @@ struct VMTests {
         userdict
         """
     )
-    expectEqual(dict2.count, 2)
+    expectEqual(dict2.count, 3)
     expectEqual(try dict2.object(forKeyIfExists: "a")?.value(as: IntegerValue.self).value, 10)
     expectEqual(try dict2.object(forKeyIfExists: "b")?.value(as: IntegerValue.self).value, 20)
   }
