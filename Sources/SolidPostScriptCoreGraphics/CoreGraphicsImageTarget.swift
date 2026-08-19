@@ -2,6 +2,7 @@
 import CoreGraphics
 import Foundation
 import SolidPostScript
+import SolidRaster
 
 /// A Core Graphics image target parameterized by a compatible color engine.
 public struct ColorManagedCoreGraphicsImageTarget<ColorEngine: GraphicsColorEngine>: GraphicsTarget, Sendable
@@ -76,6 +77,8 @@ where
         )
       case .paint(.strokeRectangles(let paths, let matrix)):
         try strokeRectangles(paths, matrix: matrix, state: event.before, in: context)
+      case .paint(.shading(let shading)):
+        try paintShading(shading, clip: event.before.clip, in: context)
       case .page(.show), .page(.copy):
         guard let image = context.makeImage() else { throw SolidPostScript.Error.ioError }
         let next = try Self.makePage(
@@ -254,8 +257,8 @@ where
       switch paint {
       case .empty:
         return
-      case .shading:
-        throw SolidPostScript.Error.ioError
+      case .shading(let shading):
+        try paintShading(shading, clip: nil, in: context)
       case .tiling(let pattern, let underlying):
         context.saveGState()
         defer { context.restoreGState() }
@@ -374,8 +377,16 @@ where
         state = valueState
       case .image:
         preconditionFailure("Image effects are handled before vector effects")
-      case .shading:
-        throw SolidPostScript.Error.ioError
+      case .shading(let shading, let shadingState):
+        let translated = translatedShading(shading, by: translation)
+        let translatedClip = GraphicsClip(
+          imageableBounds: shadingState.clip.imageableBounds,
+          constraints: shadingState.clip.constraints.map {
+            .init(path: $0.path.transformed(by: translation), rule: $0.rule)
+          }
+        )
+        try paintShading(translated, clip: translatedClip, in: context)
+        return
       }
       let selectedPaint = underlying ?? state.paint
       if case .pattern(let nested) = selectedPaint {
@@ -454,6 +465,91 @@ where
       try setPaint(state.paint, in: context)
       context.fillPath()
       context.restoreGState()
+    }
+
+    private func paintShading(
+      _ shading: GraphicsShading,
+      clip: GraphicsClip?,
+      in context: CGContext
+    ) throws {
+      let paints = shading.mesh.triangles.flatMap {
+        [$0.first.paint, $0.second.paint, $0.third.paint]
+      }
+      let colors = try colorSession.resolve(paints)
+      var offset = 0
+      let rasterMatrix = GraphicsMatrix(
+        a: 1, b: 0, c: 0, d: -1,
+        tx: -descriptor.mediaBounds.x,
+        ty: descriptor.mediaBounds.maxY
+      )
+      let triangles = try shading.mesh.triangles.map { triangle -> RasterGradientTriangle in
+        defer { offset += 3 }
+        return RasterGradientTriangle(
+          first: .init(
+            position: rasterMatrix.transform(triangle.first.position).raster,
+            color: try rasterColor(colors[offset])
+          ),
+          second: .init(
+            position: rasterMatrix.transform(triangle.second.position).raster,
+            color: try rasterColor(colors[offset + 1])
+          ),
+          third: .init(
+            position: rasterMatrix.transform(triangle.third.position).raster,
+            color: try rasterColor(colors[offset + 2])
+          )
+        )
+      }
+      var canvas = try RasterCanvas(
+        width: pixelWidth,
+        height: pixelHeight,
+        background: RasterColor(red: 0, green: 0, blue: 0, alpha: 0)
+      )
+      try canvas.paint(RasterGradientMesh(triangles: triangles))
+      let image = try canvas.finish().cgImage(colorSpace: colorSession.destinationColorSpace)
+      context.saveGState()
+      defer { context.restoreGState() }
+      if let clip { replay(clip, in: context) }
+      if let clipPath = shading.clipPath {
+        context.addPath(clipPath.cgPath)
+        context.clip()
+        context.beginPath()
+      }
+      if let background = shading.background {
+        try setPaint(background, in: context)
+        context.fill(descriptor.mediaBounds.cgRect)
+      }
+      context.draw(image, in: descriptor.mediaBounds.cgRect)
+    }
+
+    private func rasterColor(_ color: CGColor) throws -> RasterColor {
+      guard let components = color.components, components.count >= 3 else {
+        throw SolidPostScript.Error.ioError
+      }
+      return RasterColor(
+        red: Double(components[0]),
+        green: Double(components[1]),
+        blue: Double(components[2]),
+        alpha: Double(color.alpha)
+      )
+    }
+
+    private func translatedShading(_ shading: GraphicsShading, by matrix: GraphicsMatrix) -> GraphicsShading {
+      GraphicsShading(
+        type: shading.type,
+        colorSpace: shading.colorSpace,
+        background: shading.background,
+        bounds: shading.bounds,
+        clipPath: shading.clipPath?.transformed(by: matrix),
+        antialias: shading.antialias,
+        geometry: shading.geometry,
+        mesh: .init(triangles: shading.mesh.triangles.map { triangle in
+          .init(
+            first: .init(position: matrix.transform(triangle.first.position), paint: triangle.first.paint),
+            second: .init(position: matrix.transform(triangle.second.position), paint: triangle.second.paint),
+            third: .init(position: matrix.transform(triangle.third.position), paint: triangle.third.paint)
+          )
+        })
+      )
     }
 
     private func strokeRectangles(
@@ -647,6 +743,28 @@ private extension GraphicsPath {
 
 private extension GraphicsPoint {
   var cgPoint: CGPoint { CGPoint(x: x, y: y) }
+  var raster: RasterPoint { RasterPoint(x: x, y: y) }
+}
+
+private extension RasterImage {
+  func cgImage(colorSpace: CGColorSpace) throws -> CGImage {
+    guard let provider = CGDataProvider(data: data as CFData),
+      let image = CGImage(
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bitsPerPixel: 32,
+        bytesPerRow: bytesPerRow,
+        space: colorSpace,
+        bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+        provider: provider,
+        decode: nil,
+        shouldInterpolate: true,
+        intent: .defaultIntent
+      )
+    else { throw SolidPostScript.Error.ioError }
+    return image
+  }
 }
 
 private extension GraphicsLineCap {

@@ -29,6 +29,18 @@ import Testing
     #expect(value > 0.4 && value < 0.6)
   }
 
+  @Test func sampledFunctionStoresItsFirstInputDimensionFastest() throws {
+    let function = try ColorSampledFunction(
+      domain: [ColorComponentRange(0, 1), ColorComponentRange(0, 1)],
+      range: [ColorComponentRange(0, 1)],
+      size: [2, 2],
+      bitsPerSample: 8,
+      sampleData: Data([0, 64, 128, 255])
+    )
+    #expect(try function.evaluate([1, 0]) == [64.0 / 255.0])
+    #expect(try function.evaluate([0, 1]) == [128.0 / 255.0])
+  }
+
   @Test func exponentialAndStitchingFunctionsEvaluateTheirDomains() throws {
     let first = ColorFunction.exponential(try ColorExponentialFunction(
       domain: ColorComponentRange(0, 1),

@@ -68,7 +68,7 @@ let package = Package(
     ),
     .target(
       name: "SolidPostScriptCoreGraphics",
-      dependencies: ["SolidPostScript"],
+      dependencies: ["SolidPostScript", "SolidRaster"],
       plugins: lintPlugins
     ),
     .target(

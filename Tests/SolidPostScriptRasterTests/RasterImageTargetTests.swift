@@ -41,6 +41,52 @@ import Testing
     #expect(color.blue < 0.1)
   }
 
+  @Test func axialShadingsAndShadingPatternsRenderPortableMeshes() async throws {
+    let shading = """
+    << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 20 0]
+       /Function << /FunctionType 2 /Domain [0 1]
+                    /C0 [1 0 0] /C1 [0 0 1] /N 1 >>
+       /Extend [true true] >>
+    """
+    let direct = try await Interpreter.render(
+      content: "\(shading) shfill showpage",
+      to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+    let directImage = try #require(direct.output.first)
+    #expect(try rgb(x: 2, y: 10, image: directImage).red > 0.75)
+    #expect(try rgb(x: 18, y: 10, image: directImage).blue > 0.75)
+
+    let pattern = try await Interpreter.render(
+      content: """
+      /p << /PatternType 2 /Shading \(shading) >> matrix makepattern def
+      /Pattern setcolorspace p setcolor 0 0 20 20 rectfill showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+    let patternImage = try #require(pattern.output.first)
+    #expect(try rgb(x: 2, y: 10, image: patternImage).red > 0.75)
+    #expect(try rgb(x: 18, y: 10, image: patternImage).blue > 0.75)
+  }
+
+  @Test func shadingPatternBackgroundIsRestrictedToItsBoundingBox() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      /p << /PatternType 2 /Shading
+        << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 10 0]
+           /BBox [0 0 20 20] /Background [0 1 0]
+           /Function << /FunctionType 2 /Domain [0 1]
+                        /C0 [1 0 0] /C1 [0 0 1] /N 1 >>
+        >>
+      >> matrix makepattern def
+      /Pattern setcolorspace p setcolor 0 0 30 20 rectfill showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 30, pixelHeight: 20)
+    )
+    let image = try #require(result.output.first)
+    #expect(try rgb(x: 15, y: 10, image: image).green > 0.9)
+    #expect(try gray(x: 25, y: 10, image: image) > 0.9)
+  }
+
   @Test func rendererWithoutTransmittedPageProducesNoSurface() throws {
     let renderer = try RasterImageTarget(pixelWidth: 20, pixelHeight: 20).makeRenderer()
 
@@ -177,6 +223,34 @@ import Testing
     #expect(try self.gray(x: 10, y: 10, image: #require(blackResult.output.first)) < 0.1)
     let grayValue = try self.gray(x: 10, y: 10, image: #require(grayResult.output.first))
     #expect(abs(grayValue - 0.5) < 0.03)
+  }
+
+  @Test func concurrentShadingPatternsShareTheEnvironmentCacheSafely() async throws {
+    let environment = InterpreterEnvironment()
+    let program = """
+    /p << /PatternType 2 /XUID [1042] /Shading
+      << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 20 0]
+         /Function << /FunctionType 2 /Domain [0 1]
+                      /C0 [1 0 0] /C1 [0 0 1] /N 1 >>
+         /Extend [true true]
+      >>
+    >> matrix makepattern def
+    /Pattern setcolorspace p setcolor 0 0 20 20 rectfill showpage
+    """
+    async let first = Interpreter.render(
+      content: program,
+      to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20),
+      environment: environment
+    )
+    async let second = Interpreter.render(
+      content: program,
+      to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20),
+      environment: environment
+    )
+    let (firstResult, secondResult) = try await (first, second)
+    let firstImage = try #require(firstResult.output.first)
+    let secondImage = try #require(secondResult.output.first)
+    #expect(firstImage.data == secondImage.data)
   }
 
   @Test func invalidConfigurationAndGeometryUsePostScriptErrors() throws {

@@ -29,6 +29,21 @@ struct PlutoVGImageTargetTests {
     #expect(try gray(atX: 12, y: 10, in: image) < 0.1)
   }
 
+  @Test func axialShadingsRenderThroughThePortableFallbackMesh() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 20 0]
+         /Function << /FunctionType 2 /Domain [0 1]
+                      /C0 [1 0 0] /C1 [0 0 1] /N 1 >>
+         /Extend [true true] >> shfill showpage
+      """,
+      to: PlutoVGImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+    let image = try #require(result.output.first)
+    #expect(try red(atX: 2, y: 10, in: image) > 0.7)
+    #expect(try blue(atX: 18, y: 10, in: image) > 0.7)
+  }
+
   @Test func producesOwnedTopLeftRGBAImagesAndDiscardsTheFinalPage() async throws {
     let result = try await Interpreter.render(
       content: "0 0 moveto 30 0 lineto 30 10 lineto 0 10 lineto closepath fill showpage "
@@ -260,6 +275,14 @@ struct PlutoVGImageTargetTests {
       throw SolidPostScript.Error.rangeCheck
     }
     return Double(image.data[offset]) / 255
+  }
+
+  private func red(atX x: Int, y: Int, in image: RasterImage) throws -> Double {
+    Double(image.data[y * image.bytesPerRow + x * 4]) / 255
+  }
+
+  private func blue(atX x: Int, y: Int, in image: RasterImage) throws -> Double {
+    Double(image.data[y * image.bytesPerRow + x * 4 + 2]) / 255
   }
 
   private func alpha(atX x: Int, y: Int, in image: RasterImage) throws -> Double {

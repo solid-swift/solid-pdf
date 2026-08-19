@@ -86,6 +86,8 @@ where
           matrix: effectiveMatrix,
           state: event.before
         )
+      case .paint(.shading(let shading)):
+        try paintShading(shading, clip: event.before.clip)
       case .page(.show), .page(.copy):
         try transmitPage()
       default:
@@ -268,8 +270,12 @@ where
       switch paint {
       case .empty:
         return
-      case .shading:
-        throw SolidPostScript.Error.ioError
+      case .shading(let shading):
+        let combinedClip = GraphicsClip(
+          imageableBounds: clip.imageableBounds,
+          constraints: clip.constraints + [GraphicsClipConstraint(path: path, rule: rule)]
+        )
+        try paintShading(shading, clip: combinedClip)
       case .tiling(let pattern, let underlying):
         let translations = try tileTranslations(for: pattern)
         guard translations.count <= 1_000_000 else { throw SolidPostScript.Error.ioError }
@@ -393,8 +399,36 @@ where
         effectState = state
       case .image:
         preconditionFailure("Image effects are handled before vector effects")
-      case .shading:
-        throw SolidPostScript.Error.ioError
+      case .shading(let shading, let shadingState):
+        let translatedConstraints = shadingState.clip.constraints.map {
+          GraphicsClipConstraint(path: $0.path.transformed(by: translation), rule: $0.rule)
+        }
+        let translatedMesh = GraphicsShading(
+          type: shading.type,
+          colorSpace: shading.colorSpace,
+          background: shading.background,
+          bounds: shading.bounds,
+          clipPath: shading.clipPath?.transformed(by: translation),
+          antialias: shading.antialias,
+          geometry: shading.geometry,
+          mesh: GraphicsShadingMesh(triangles: shading.mesh.triangles.map { triangle in
+            GraphicsShadingTriangle(
+              first: .init(position: translation.transform(triangle.first.position), paint: triangle.first.paint),
+              second: .init(position: translation.transform(triangle.second.position), paint: triangle.second.paint),
+              third: .init(position: translation.transform(triangle.third.position), paint: triangle.third.paint)
+            )
+          })
+        )
+        try paintShading(
+          translatedMesh,
+          clip: GraphicsClip(
+            imageableBounds: clip.imageableBounds,
+            constraints: clip.constraints
+              + [GraphicsClipConstraint(path: paintedPath, rule: paintedRule)]
+              + translatedConstraints
+          )
+        )
+        return
       }
 
       let translatedConstraints = effectState.clip.constraints.map {
@@ -415,6 +449,52 @@ where
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(combinedClip))
         try canvas.fill(transformed, rule: effectRule.raster, paint: try colorSession.resolve(effectPaint))
+      }
+    }
+
+    private func paintShading(_ shading: GraphicsShading, clip: GraphicsClip) throws {
+      let effectiveClip = GraphicsClip(
+        imageableBounds: clip.imageableBounds,
+        constraints: clip.constraints + (shading.clipPath.map {
+          [GraphicsClipConstraint(path: $0, rule: .winding)]
+        } ?? [])
+      )
+      let paints = shading.mesh.triangles.flatMap {
+        [$0.first.paint, $0.second.paint, $0.third.paint]
+      }
+      let resolved = try colorSession.resolve(paints)
+      var offset = 0
+      let triangles = try shading.mesh.triangles.map { triangle -> RasterGradientTriangle in
+        defer { offset += 3 }
+        guard case .solid(let firstColor) = resolved[offset],
+          case .solid(let secondColor) = resolved[offset + 1],
+          case .solid(let thirdColor) = resolved[offset + 2]
+        else { throw SolidPostScript.Error.ioError }
+        return RasterGradientTriangle(
+          first: .init(
+            position: rasterMatrix.transform(triangle.first.position).raster,
+            color: firstColor
+          ),
+          second: .init(
+            position: rasterMatrix.transform(triangle.second.position).raster,
+            color: secondColor
+          ),
+          third: .init(
+            position: rasterMatrix.transform(triangle.third.position).raster,
+            color: thirdColor
+          )
+        )
+      }
+      try withCanvas { canvas in
+        try canvas.setClip(try rasterClip(effectiveClip))
+        if let background = shading.background {
+          try canvas.fill(
+            GraphicsPath.rectangle(descriptor.mediaBounds).transformed(by: rasterMatrix).rasterPath,
+            rule: .winding,
+            paint: try colorSession.resolve(background)
+          )
+        }
+        try canvas.paint(RasterGradientMesh(triangles: triangles))
       }
     }
 
@@ -656,6 +736,10 @@ extension ColorManagedRasterImageTarget where ColorEngine == NativeGraphicsColor
 
 private extension GraphicsMatrix {
   var raster: RasterAffineTransform { .init(a: a, b: b, c: c, d: d, tx: tx, ty: ty) }
+}
+
+private extension GraphicsPoint {
+  var raster: RasterPoint { RasterPoint(x: x, y: y) }
 }
 
 private extension GraphicsRect {

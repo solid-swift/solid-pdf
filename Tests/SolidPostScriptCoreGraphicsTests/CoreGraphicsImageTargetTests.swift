@@ -25,6 +25,21 @@ struct CoreGraphicsImageTargetTests {
     #expect(try gray(atX: 12, y: 10, in: image) < 0.1)
   }
 
+  @Test func axialShadingsRenderThroughThePortableFallbackMesh() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 20 0]
+         /Function << /FunctionType 2 /Domain [0 1]
+                      /C0 [1 0 0] /C1 [0 0 1] /N 1 >>
+         /Extend [true true] >> shfill showpage
+      """,
+      to: CoreGraphicsImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+    let image = try #require(result.output.first)
+    #expect(try rgb(atX: 2, y: 10, in: image).red > 0.7)
+    #expect(try rgb(atX: 18, y: 10, in: image).blue > 0.7)
+  }
+
   @Test func showPageProducesIndependentImagesAndDiscardsTheFinalPage() async throws {
     let result = try await Interpreter.render(
       content: "showpage showpage 0 setgray 0 0 moveto 10 10 lineto stroke",

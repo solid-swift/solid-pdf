@@ -123,7 +123,7 @@ extension Operators {
     try context.setLogicalOffset(0, in: file.file)
     var data = Data(capacity: byteCount)
     while data.count < byteCount {
-      guard let chunk = try await file.file.read(max: byteCount - data.count, context: context),
+      guard let chunk = try await context.read(max: byteCount - data.count, from: file.file),
         !chunk.isEmpty
       else { throw Error.rangeCheck }
       data.append(chunk)

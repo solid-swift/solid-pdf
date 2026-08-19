@@ -91,6 +91,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         )
       case .paint(.strokeRectangles(let paths, let matrix)):
         try strokeRectangles(paths, matrix: matrix, state: event.before, in: canvas)
+      case .paint(.shading(let shading)):
+        try paintShading(shading, clip: event.before.clip, in: canvas)
       case .page(.show), .page(.copy):
         try showPage()
       default:
@@ -363,8 +365,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       switch paint {
       case .empty:
         return
-      case .shading:
-        throw SolidPostScript.Error.ioError
+      case .shading(let shading):
+        try paintShading(shading, clip: nil, in: canvas)
       case .tiling(let pattern, let underlying):
         plutovg_canvas_save(canvas)
         defer { plutovg_canvas_restore(canvas) }
@@ -483,8 +485,18 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         state = valueState
       case .image:
         preconditionFailure("Image effects are handled before vector effects")
-      case .shading:
-        throw SolidPostScript.Error.ioError
+      case .shading(let shading, let shadingState):
+        try paintShading(
+          translatedShading(shading, by: translation),
+          clip: GraphicsClip(
+            imageableBounds: shadingState.clip.imageableBounds,
+            constraints: shadingState.clip.constraints.map {
+              .init(path: $0.path.transformed(by: translation), rule: $0.rule)
+            }
+          ),
+          in: canvas
+        )
+        return
       }
 
       let selectedPaint = underlying ?? state.paint
@@ -570,6 +582,95 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       try add(GraphicsPath(elements: paths.flatMap(\.elements)), to: canvas)
       try setPaint(state.paint, in: canvas)
       plutovg_canvas_fill(canvas)
+    }
+
+    private func paintShading(
+      _ shading: GraphicsShading,
+      clip: GraphicsClip?,
+      in canvas: OpaquePointer
+    ) throws {
+      let paints = shading.mesh.triangles.flatMap {
+        [$0.first.paint, $0.second.paint, $0.third.paint]
+      }
+      let resolved = try colorSession.resolve(paints)
+      var offset = 0
+      let triangles = try shading.mesh.triangles.map { triangle -> RasterGradientTriangle in
+        defer { offset += 3 }
+        guard case .solid(let first) = resolved[offset],
+          case .solid(let second) = resolved[offset + 1],
+          case .solid(let third) = resolved[offset + 2]
+        else { throw SolidPostScript.Error.ioError }
+        return .init(
+          first: .init(position: rasterMatrix.transform(triangle.first.position).raster, color: first),
+          second: .init(position: rasterMatrix.transform(triangle.second.position).raster, color: second),
+          third: .init(position: rasterMatrix.transform(triangle.third.position).raster, color: third)
+        )
+      }
+      var fallback = try RasterCanvas(
+        width: pixelWidth,
+        height: pixelHeight,
+        background: RasterColor(red: 0, green: 0, blue: 0, alpha: 0)
+      )
+      try fallback.paint(RasterGradientMesh(triangles: triangles))
+      let image = try fallback.finish()
+      let imageDescriptor = GraphicsImageDescriptor(
+        width: pixelWidth,
+        height: pixelHeight,
+        kind: .color(.deviceRGB),
+        imageToDevice: GraphicsMatrix(
+          a: 1, b: 0, c: 0, d: -1,
+          tx: descriptor.mediaBounds.x,
+          ty: descriptor.mediaBounds.maxY
+        ),
+        interpolate: true
+      )
+      let shadingConstraints = shading.clipPath.map {
+        [GraphicsClipConstraint(path: $0, rule: .winding)]
+      } ?? []
+      let baseClip = clip ?? GraphicsClip(imageableBounds: descriptor.imageableBounds)
+      let state = GraphicsStateSnapshot(
+        matrix: .identity,
+        path: .init(),
+        clip: GraphicsClip(
+          imageableBounds: baseClip.imageableBounds,
+          constraints: baseClip.constraints + shadingConstraints
+        ),
+        paint: .deviceGray(0),
+        lineWidth: 1,
+        lineCap: .butt,
+        lineJoin: .miter,
+        miterLimit: 10,
+        dash: .init()
+      )
+      if let background = shading.background {
+        plutovg_canvas_save(canvas)
+        defer { plutovg_canvas_restore(canvas) }
+        try replay(state.clip, in: canvas)
+        try setMatrix(rasterMatrix, in: canvas)
+        try setPaint(background, in: canvas)
+        try addRect(descriptor.mediaBounds, to: canvas)
+        plutovg_canvas_fill(canvas)
+      }
+      try draw(image, descriptor: imageDescriptor, state: state, in: canvas)
+    }
+
+    private func translatedShading(_ shading: GraphicsShading, by matrix: GraphicsMatrix) -> GraphicsShading {
+      GraphicsShading(
+        type: shading.type,
+        colorSpace: shading.colorSpace,
+        background: shading.background,
+        bounds: shading.bounds,
+        clipPath: shading.clipPath?.transformed(by: matrix),
+        antialias: shading.antialias,
+        geometry: shading.geometry,
+        mesh: .init(triangles: shading.mesh.triangles.map { triangle in
+          .init(
+            first: .init(position: matrix.transform(triangle.first.position), paint: triangle.first.paint),
+            second: .init(position: matrix.transform(triangle.second.position), paint: triangle.second.paint),
+            third: .init(position: matrix.transform(triangle.third.position), paint: triangle.third.paint)
+          )
+        })
+      )
     }
 
     private func strokeRectangles(
@@ -870,4 +971,8 @@ private extension GraphicsPath {
       }
     })
   }
+}
+
+private extension GraphicsPoint {
+  var raster: RasterPoint { RasterPoint(x: x, y: y) }
 }

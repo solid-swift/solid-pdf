@@ -25,6 +25,15 @@ public indirect enum ColorFunction: Sendable, Hashable {
     }
   }
 
+  /// Inclusive input domains in function-input order.
+  public var domain: [ColorComponentRange] {
+    switch self {
+    case .sampled(let function): function.domain
+    case .exponential(let function): [function.domain]
+    case .stitching(let function): [function.domain]
+    }
+  }
+
   /// Evaluates the function after clipping inputs to its domain and outputs to its range.
   public func evaluate(_ input: [Double]) throws(ColorError) -> [Double] {
     switch self {

@@ -21,7 +21,9 @@ enum PatternResourceValidation: Operators.ResourceCategoryExtension {
     case 1:
       try Operators.validateTilingPattern(dictionary)
     case 2:
-      _ = try dictionary.objectValue(forKey: "Shading", as: DictionaryValue.self)
+      try Operators.validateShadingDictionaryStructure(
+        dictionary.objectValue(forKey: "Shading", as: DictionaryValue.self)
+      )
     default:
       throw Error.rangeCheck
     }

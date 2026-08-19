@@ -145,8 +145,10 @@ public struct ColorSampledFunction: Sendable, Hashable {
 
   private func accumulate(coordinate: [Int], weight: Double, into result: inout [Double]) {
     var index = 0
+    var stride = 1
     for axis in coordinate.indices {
-      index = index * size[axis] + coordinate[axis]
+      index += coordinate[axis] * stride
+      stride *= size[axis]
     }
     let offset = index * outputCount
     for component in result.indices {

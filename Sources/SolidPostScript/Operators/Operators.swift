@@ -19,6 +19,6 @@ public enum Operators {
     + relationalOps + logicalBitwiseOps + fileOps + binaryObjectOps + filterOps + parameterOps + resourceOperators
     + timeOps + vmOps + userObjectsOps + hostLifecycleOps
     + graphicsStateOps + colorOps + matrixOps + pathOps + pathInsidenessOps + userPathOps + arcOps + rectangleOps + paintOps
-    + imageOps + patternOps
+    + imageOps + patternOps + shadingOps
 
 }

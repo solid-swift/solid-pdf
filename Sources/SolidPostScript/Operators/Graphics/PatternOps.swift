@@ -19,7 +19,11 @@ extension Operators {
       let type = Int(try prototype.objectValue(forKey: "PatternType", as: IntegerValue.self).value)
       guard type == 1 || type == 2 else { throw Error.rangeCheck }
       if type == 1 { try validateTilingPattern(prototype) }
-      if type == 2 { _ = try prototype.objectValue(forKey: "Shading", as: DictionaryValue.self) }
+      if type == 2 {
+        try validateShadingDictionaryStructure(
+          prototype.objectValue(forKey: "Shading", as: DictionaryValue.self)
+        )
+      }
 
       let adjustedMatrix = matrix.concatenated(with: context.graphicsState.matrix)
       let savedState = context.graphicsState
@@ -54,6 +58,12 @@ extension Operators {
         kind: .literal
       )
       try context.adopt([gstate, matrixObject, implementation, pattern])
+      if type == 2 {
+        _ = try await compileShadingPattern(
+          dictionary: try pattern.value(as: DictionaryValue.self),
+          context: context
+        )
+      }
       context.operands.push(pattern)
     }
   }
@@ -124,7 +134,10 @@ extension Operators {
     context: isolated Context
   ) async throws -> GraphicsPatternPaint {
     let type = Int(try dictionary.objectValue(forKey: "PatternType", as: IntegerValue.self).value)
-    if type == 2 { throw Error.undefined }
+    if type == 2 {
+      guard underlying == nil, components.isEmpty else { throw Error.typeCheck }
+      return .shading(try await compileShadingPattern(dictionary: dictionary, context: context))
+    }
     let paintType = Int(try dictionary.objectValue(forKey: "PaintType", as: IntegerValue.self).value)
     guard (paintType == 1 && underlying == nil) || (paintType == 2 && underlying != nil) else {
       throw Error.typeCheck
@@ -152,13 +165,12 @@ extension Operators {
     let xuid = try dictionary.object(forKeyIfExists: "XUID").map {
       try arrayObjects($0).map { try $0.value(as: IntegerValue.self).value }
     }
-    let key = PatternCacheKey(
-      identity: xuid == nil ? dictionary.allocation.identity : nil,
-      revision: dictionary.revision,
+    let key = patternCacheKey(
+      dictionary: dictionary,
       xuid: xuid,
       matrix: matrix,
-      device: context.graphicsDeviceDescriptor,
-      savedState: savedState.snapshot
+      savedState: savedState,
+      context: context
     )
     if let cached = context.environment.patternCache.pattern(for: key) { return cached }
 
@@ -232,6 +244,58 @@ extension Operators {
       maximumItemBytes: Int(context.userParameters.integer("MaxPatternItem"))
     )
     return result
+  }
+
+  static func compileShadingPattern(
+    dictionary: DictionaryValue,
+    context: isolated Context
+  ) async throws -> GraphicsShading {
+    let implementation = try dictionary.objectValue(forKey: "Implementation", as: DictionaryValue.self)
+    let gstateObject = try implementation.objectUnchecked(forKey: "GState") ?? { throw Error.undefined }()
+    let matrixObject = try implementation.objectUnchecked(forKey: "Matrix") ?? { throw Error.undefined }()
+    let savedState = try gstateObject.value(as: GraphicsStateValue.self).state()
+    let matrix = try readMatrix(matrixObject)
+    let xuid = try dictionary.object(forKeyIfExists: "XUID").map {
+      try arrayObjects($0).map { try $0.value(as: IntegerValue.self).value }
+    }
+    let key = patternCacheKey(
+      dictionary: dictionary,
+      xuid: xuid,
+      matrix: matrix,
+      savedState: savedState,
+      context: context
+    )
+    if let cached = context.environment.patternCache.shading(for: key) { return cached }
+    let shading = try await compileShading(
+      dictionary.object(forKey: "Shading"),
+      matrix: matrix,
+      includeBackground: true,
+      reusableDataRequired: true,
+      context: context
+    )
+    context.environment.patternCache.insert(
+      shading,
+      for: key,
+      maximumItemBytes: Int(context.userParameters.integer("MaxPatternItem"))
+    )
+    return shading
+  }
+
+  private static func patternCacheKey(
+    dictionary: DictionaryValue,
+    xuid: [Int32]?,
+    matrix: GraphicsMatrix,
+    savedState: GraphicsCanonicalState,
+    context: isolated Context
+  ) -> PatternCacheKey {
+    PatternCacheKey(
+      identity: xuid == nil ? dictionary.allocation.identity : nil,
+      revision: dictionary.revision,
+      xuid: xuid,
+      matrix: matrix,
+      device: context.graphicsDeviceDescriptor,
+      savedState: savedState.snapshot
+    )
   }
 
   static func makePatternColorSpaceObject(

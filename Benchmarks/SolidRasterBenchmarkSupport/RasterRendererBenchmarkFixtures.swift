@@ -11,6 +11,12 @@ public enum RasterRendererBenchmarkFixtures {
     "8 MP Nearest Image",
     "8 MP Bilinear Image",
     "Combined Path-Heavy Page",
+    "Dense Tiling Pattern",
+    "Nested Pattern Display Lists",
+    "Axial Gradient",
+    "Radial Gradient",
+    "Million-Vertex Mesh",
+    "Patch Fallback Mesh",
   ]
 
   /// Creates every comparison workload without including fixture construction in measurements.
@@ -57,7 +63,195 @@ public enum RasterRendererBenchmarkFixtures {
       ],
       enforcesPerformanceGate: true
     )
-    return pathWorkloads + [nearest, bilinear, combined]
+    let graphicsWorkloads = try patternAndShadingWorkloads(
+      descriptor: descriptor,
+      state: emptyState,
+      page: page
+    )
+    return pathWorkloads + [nearest, bilinear, combined] + graphicsWorkloads
+  }
+
+  private static func patternAndShadingWorkloads(
+    descriptor: GraphicsDeviceDescriptor,
+    state: GraphicsStateSnapshot,
+    page: GraphicsEvent
+  ) throws -> [RasterRendererBenchmarkWorkload] {
+    let surface = graphicsSurfacePath(
+      width: Int(descriptor.mediaBounds.width),
+      height: Int(descriptor.mediaBounds.height)
+    )
+    let cell = rectangle(GraphicsRect(x: 0, y: 0, width: 4, height: 4))
+    let cellState = replacing(state, path: cell, paint: .deviceRGB(red: 0.1, green: 0.4, blue: 0.8))
+    let inner = GraphicsTilingPattern(
+      paintType: 1,
+      tilingType: 1,
+      bounds: GraphicsRect(x: 0, y: 0, width: 8, height: 8),
+      xStep: 8,
+      yStep: 8,
+      matrix: .identity,
+      displayList: GraphicsDisplayList(effects: [.fill(path: cell, rule: .winding, state: cellState)])
+    )
+    let outerCell = rectangle(GraphicsRect(x: 0, y: 0, width: 16, height: 16))
+    let outerCellState = replacing(state, path: outerCell, paint: .pattern(.tiling(inner, underlying: nil)))
+    let outer = GraphicsTilingPattern(
+      paintType: 1,
+      tilingType: 1,
+      bounds: GraphicsRect(x: 0, y: 0, width: 24, height: 24),
+      xStep: 24,
+      yStep: 24,
+      matrix: .identity,
+      displayList: GraphicsDisplayList(
+        effects: [.fill(path: outerCell, rule: .winding, state: outerCellState)]
+      )
+    )
+    let denseState = replacing(state, path: surface, paint: .pattern(.tiling(inner, underlying: nil)))
+    let nestedState = replacing(state, path: surface, paint: .pattern(.tiling(outer, underlying: nil)))
+    let axial = gradientShading(type: 2, radial: false)
+    let radial = gradientShading(type: 3, radial: true)
+    let millionVertex = meshShading(
+      type: 4,
+      triangleCount: 333_334,
+      geometry: .triangles(type: 4, vertexCount: 1_000_002)
+    )
+    let patchFallback = meshShading(
+      type: 7,
+      triangleCount: 32_768,
+      geometry: .patches(type: 7, patchCount: 32)
+    )
+
+    return try [
+      workload(
+        name: names[7],
+        descriptor: descriptor,
+        state: denseState,
+        operation: .paint(.fill(.winding)),
+        page: page
+      ),
+      workload(
+        name: names[8],
+        descriptor: descriptor,
+        state: nestedState,
+        operation: .paint(.fill(.winding)),
+        page: page
+      ),
+      shadingWorkload(name: names[9], descriptor: descriptor, state: state, shading: axial, page: page),
+      shadingWorkload(name: names[10], descriptor: descriptor, state: state, shading: radial, page: page),
+      shadingWorkload(
+        name: names[11],
+        descriptor: descriptor,
+        state: state,
+        shading: millionVertex,
+        page: page
+      ),
+      shadingWorkload(
+        name: names[12],
+        descriptor: descriptor,
+        state: state,
+        shading: patchFallback,
+        page: page
+      ),
+    ]
+  }
+
+  private static func shadingWorkload(
+    name: String,
+    descriptor: GraphicsDeviceDescriptor,
+    state: GraphicsStateSnapshot,
+    shading: GraphicsShading,
+    page: GraphicsEvent
+  ) throws -> RasterRendererBenchmarkWorkload {
+    try workload(
+      name: name,
+      descriptor: descriptor,
+      state: state,
+      operation: .paint(.shading(shading)),
+      page: page
+    )
+  }
+
+  private static func gradientShading(type: Int, radial: Bool) -> GraphicsShading {
+    let width = Double(RasterBenchmarkFixtures.pathSurfaceWidth)
+    let height = Double(RasterBenchmarkFixtures.pathSurfaceHeight)
+    let triangles = gradientTriangles(width: width, height: height, columns: 256)
+    let geometry: GraphicsShadingGeometry = radial
+      ? .radial(
+        startCenter: GraphicsPoint(x: width / 2, y: height / 2),
+        startRadius: 0,
+        endCenter: GraphicsPoint(x: width / 2, y: height / 2),
+        endRadius: max(width, height) / 2,
+        domainStart: 0,
+        domainEnd: 1,
+        extendStart: true,
+        extendEnd: true,
+        functions: []
+      )
+      : .axial(
+        start: GraphicsPoint(x: 0, y: 0),
+        end: GraphicsPoint(x: width, y: 0),
+        domainStart: 0,
+        domainEnd: 1,
+        extendStart: true,
+        extendEnd: true,
+        functions: []
+      )
+    return GraphicsShading(
+      type: type,
+      colorSpace: .deviceRGB,
+      geometry: geometry,
+      mesh: GraphicsShadingMesh(triangles: triangles)
+    )
+  }
+
+  private static func gradientTriangles(
+    width: Double,
+    height: Double,
+    columns: Int
+  ) -> [GraphicsShadingTriangle] {
+    var triangles: [GraphicsShadingTriangle] = []
+    triangles.reserveCapacity(columns * 2)
+    for column in 0..<columns {
+      let x0 = width * Double(column) / Double(columns)
+      let x1 = width * Double(column + 1) / Double(columns)
+      let firstPaint = gradientPaint(Double(column) / Double(columns))
+      let secondPaint = gradientPaint(Double(column + 1) / Double(columns))
+      let lowerLeft = GraphicsShadingVertex(position: .init(x: x0, y: 0), paint: firstPaint)
+      let upperLeft = GraphicsShadingVertex(position: .init(x: x0, y: height), paint: firstPaint)
+      let lowerRight = GraphicsShadingVertex(position: .init(x: x1, y: 0), paint: secondPaint)
+      let upperRight = GraphicsShadingVertex(position: .init(x: x1, y: height), paint: secondPaint)
+      triangles.append(.init(first: lowerLeft, second: lowerRight, third: upperRight))
+      triangles.append(.init(first: lowerLeft, second: upperRight, third: upperLeft))
+    }
+    return triangles
+  }
+
+  private static func meshShading(
+    type: Int,
+    triangleCount: Int,
+    geometry: GraphicsShadingGeometry
+  ) -> GraphicsShading {
+    let width = RasterBenchmarkFixtures.pathSurfaceWidth
+    var triangles: [GraphicsShadingTriangle] = []
+    triangles.reserveCapacity(triangleCount)
+    for index in 0..<triangleCount {
+      let x = Double(index % width)
+      let y = Double((index / width) % RasterBenchmarkFixtures.pathSurfaceHeight)
+      let paint = gradientPaint(Double(index % 256) / 255)
+      triangles.append(.init(
+        first: .init(position: .init(x: x, y: y), paint: paint),
+        second: .init(position: .init(x: x + 1, y: y), paint: paint),
+        third: .init(position: .init(x: x, y: y + 1), paint: paint)
+      ))
+    }
+    return GraphicsShading(
+      type: type,
+      colorSpace: .deviceRGB,
+      geometry: geometry,
+      mesh: GraphicsShadingMesh(triangles: triangles)
+    )
+  }
+
+  private static func gradientPaint(_ value: Double) -> GraphicsPaint {
+    .deviceRGB(red: 1 - value, green: 0.2, blue: value)
   }
 
   private static func workload(

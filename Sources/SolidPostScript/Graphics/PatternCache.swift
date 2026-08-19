@@ -28,9 +28,16 @@ final class PatternCache: Sendable {
 
   private struct State {
     var entries: [PatternCacheKey: Entry] = [:]
+    var shadings: [PatternCacheKey: ShadingEntry] = [:]
     var bytes = 0
     var maximumBytes = PatternCache.maximumBytes
     var recency: UInt64 = 0
+  }
+
+  private struct ShadingEntry {
+    let shading: GraphicsShading
+    let bytes: Int
+    var recency: UInt64
   }
 
   private let state = Mutex(State())
@@ -55,16 +62,44 @@ final class PatternCache: Sendable {
     guard bytes <= itemLimit else { return }
     state.withLock { state in
       guard bytes <= state.maximumBytes, state.entries[key] == nil else { return }
-      while !state.entries.isEmpty,
-        state.entries.count >= Self.maximumEntries || state.bytes > state.maximumBytes - bytes
-      {
-        guard let oldest = state.entries.min(by: { $0.value.recency < $1.value.recency }) else { break }
-        state.bytes -= oldest.value.bytes
-        state.entries.removeValue(forKey: oldest.key)
-      }
-      guard state.entries.count < Self.maximumEntries, state.bytes <= state.maximumBytes - bytes else { return }
+      evict(bytes: bytes, state: &state)
+      guard state.entries.count + state.shadings.count < Self.maximumEntries,
+        state.bytes <= state.maximumBytes - bytes
+      else { return }
       state.recency &+= 1
       state.entries[key] = Entry(pattern: pattern, bytes: bytes, recency: state.recency)
+      state.bytes += bytes
+    }
+  }
+
+  func shading(for key: PatternCacheKey) -> GraphicsShading? {
+    state.withLock { state -> GraphicsShading? in
+      guard var entry = state.shadings[key] else { return nil }
+      state.recency &+= 1
+      entry.recency = state.recency
+      state.shadings[key] = entry
+      return entry.shading
+    }
+  }
+
+  func insert(_ shading: GraphicsShading, for key: PatternCacheKey, maximumItemBytes: Int) {
+    let multiplication = shading.mesh.triangles.count.multipliedReportingOverflow(
+      by: MemoryLayout<GraphicsShadingTriangle>.stride
+    )
+    guard !multiplication.overflow else { return }
+    let addition = multiplication.partialValue.addingReportingOverflow(512)
+    guard !addition.overflow else { return }
+    let bytes = addition.partialValue
+    let itemLimit = min(max(0, maximumItemBytes), Self.maximumItemBytes)
+    guard bytes <= itemLimit else { return }
+    state.withLock { state in
+      guard bytes <= state.maximumBytes, state.shadings[key] == nil else { return }
+      evict(bytes: bytes, state: &state)
+      guard state.entries.count + state.shadings.count < Self.maximumEntries,
+        state.bytes <= state.maximumBytes - bytes
+      else { return }
+      state.recency &+= 1
+      state.shadings[key] = ShadingEntry(shading: shading, bytes: bytes, recency: state.recency)
       state.bytes += bytes
     }
   }
@@ -73,10 +108,9 @@ final class PatternCache: Sendable {
     state.withLock { state in
       state.maximumBytes = min(max(0, requested), Self.maximumBytes)
       while state.bytes > state.maximumBytes,
-        let oldest = state.entries.min(by: { $0.value.recency < $1.value.recency })
+        !state.entries.isEmpty || !state.shadings.isEmpty
       {
-        state.bytes -= oldest.value.bytes
-        state.entries.removeValue(forKey: oldest.key)
+        evictOldest(state: &state)
       }
     }
   }
@@ -93,6 +127,33 @@ final class PatternCache: Sendable {
       bytes = addition.partialValue
     }
     return bytes
+  }
+
+  private func evict(bytes: Int, state: inout State) {
+    while !state.entries.isEmpty || !state.shadings.isEmpty {
+      guard state.entries.count + state.shadings.count >= Self.maximumEntries
+        || state.bytes > state.maximumBytes - bytes
+      else { return }
+      evictOldest(state: &state)
+    }
+  }
+
+  private func evictOldest(state: inout State) {
+    let pattern = state.entries.min(by: { $0.value.recency < $1.value.recency })
+    let shading = state.shadings.min(by: { $0.value.recency < $1.value.recency })
+    switch (pattern, shading) {
+    case (.some(let pattern), .some(let shading)) where pattern.value.recency <= shading.value.recency:
+      state.bytes -= pattern.value.bytes
+      state.entries.removeValue(forKey: pattern.key)
+    case (.some, .some(let shading)), (nil, .some(let shading)):
+      state.bytes -= shading.value.bytes
+      state.shadings.removeValue(forKey: shading.key)
+    case (.some(let pattern), nil):
+      state.bytes -= pattern.value.bytes
+      state.entries.removeValue(forKey: pattern.key)
+    case (nil, nil):
+      break
+    }
   }
 
   private static func footprint(_ effect: GraphicsEffect) -> Int {
