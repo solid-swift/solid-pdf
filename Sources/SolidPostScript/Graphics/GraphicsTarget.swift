@@ -40,6 +40,8 @@ public protocol GraphicsEventConsumer: AnyObject {
   func beginImage(_ event: GraphicsEvent) throws
   /// Consumes a bounded group of complete sampled-image rows.
   func writeImageRows(_ rows: GraphicsImageRows) throws
+  /// Consumes a bounded group of complete sampled-image mask rows.
+  func writeImageMaskRows(_ rows: GraphicsImageMaskRows) throws
   /// Commits the active sampled-image transfer.
   func endImage() throws
   /// Abandons the active sampled-image transfer after a language or renderer error.
@@ -53,6 +55,10 @@ extension GraphicsEventConsumer {
   public func beginImage(_ event: GraphicsEvent) throws { try process(event) }
   /// Ignores image rows for consumers that do not render sampled images.
   public func writeImageRows(_ rows: GraphicsImageRows) throws {}
+  /// Rejects nonempty mask data unless a consumer implements mask realization.
+  public func writeImageMaskRows(_ rows: GraphicsImageMaskRows) throws {
+    guard rows.rowCount == 0, rows.opacities.isEmpty else { throw Error.ioError }
+  }
   /// Completes a no-op image transfer.
   public func endImage() throws {}
   /// Completes a no-op image abandonment.

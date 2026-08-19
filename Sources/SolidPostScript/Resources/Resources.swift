@@ -41,7 +41,7 @@ public enum Resources {
     "FontType": ImplicitResourceCategory(category: "FontType", instanceType: .integer),
     "FormType": IntegerImplicitResources(category: "FormType", values: [1]),
     "HalftoneType": ImplicitResourceCategory(category: "HalftoneType", instanceType: .integer),
-    "ImageType": ImplicitResourceCategory(category: "ImageType", instanceType: .integer),
+    "ImageType": IntegerImplicitResources(category: "ImageType", values: [1, 3, 4]),
     "PatternType": IntegerImplicitResources(category: "PatternType", values: [1, 2]),
     "FunctionType": IntegerImplicitResources(category: "FunctionType", values: [0, 2, 3]),
     "ShadingType": IntegerImplicitResources(category: "ShadingType", values: Set(1...7)),

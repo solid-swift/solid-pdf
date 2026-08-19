@@ -108,6 +108,7 @@ extension Operators {
     var sources: [ImageDataSource]
     let multipleDataSources: Bool
     let dictionaries: [DictionaryValue]
+    var mask: ImageMaskSpecification?
 
     init(
       width: Int,
@@ -120,7 +121,8 @@ extension Operators {
       interpolate: Bool,
       sources: [ImageDataSource],
       multipleDataSources: Bool,
-      dictionaries: [DictionaryValue] = []
+      dictionaries: [DictionaryValue] = [],
+      mask: ImageMaskSpecification? = nil
     ) throws {
       guard width >= 0, height >= 0 else { throw Error.rangeCheck }
       guard [1, 2, 4, 8, 12].contains(bitsPerComponent) else { throw Error.rangeCheck }
@@ -144,9 +146,63 @@ extension Operators {
       self.sources = sources
       self.multipleDataSources = multipleDataSources
       self.dictionaries = dictionaries
+      self.mask = mask
     }
 
     var sourceComponentCount: Int { sourceColorSpace?.componentCount ?? kind.componentCount }
+  }
+
+  enum ImageMaskSpecification {
+    case explicit(ExplicitImageMaskSpecification)
+    case colorKey([GraphicsImageSampleRange])
+
+    func descriptor(imageToDevice _: GraphicsMatrix) -> GraphicsImageMaskDescriptor {
+      switch self {
+      case .explicit(let mask):
+        return .explicit(
+          width: mask.width,
+          height: mask.height,
+          maskToDevice: mask.maskToDevice,
+          interpolate: mask.interpolate
+        )
+      case .colorKey(let ranges):
+        return .colorKey(ranges: ranges)
+      }
+    }
+  }
+
+  final class ExplicitImageMaskSpecification {
+    let width: Int
+    let height: Int
+    let bitsPerComponent: Int
+    let imageMatrix: GraphicsMatrix
+    let maskToDevice: GraphicsMatrix
+    let decode: [Double]
+    let interpolate: Bool
+    var sources: [ImageDataSource]
+    let interleaveType: Int
+
+    init(
+      width: Int,
+      height: Int,
+      bitsPerComponent: Int,
+      imageMatrix: GraphicsMatrix,
+      maskToDevice: GraphicsMatrix,
+      decode: [Double],
+      interpolate: Bool,
+      sources: [ImageDataSource],
+      interleaveType: Int
+    ) {
+      self.width = width
+      self.height = height
+      self.bitsPerComponent = bitsPerComponent
+      self.imageMatrix = imageMatrix
+      self.maskToDevice = maskToDevice
+      self.decode = decode
+      self.interpolate = interpolate
+      self.sources = sources
+      self.interleaveType = interleaveType
+    }
   }
 
   struct ImageDataSource {
@@ -240,7 +296,29 @@ extension Operators {
     context: isolated Context
   ) throws -> ImageSpecification {
     let type = try dictionary.objectValue(forKey: "ImageType", as: IntegerValue.self).value
-    guard type == 1 else { throw Error.rangeCheck }
+    switch type {
+    case 1:
+      return try imageTypeOneDictionary(dictionary, mask: mask, context: context)
+    case 3:
+      guard !mask else { throw Error.rangeCheck }
+      return try imageTypeThreeDictionary(dictionary, context: context)
+    case 4:
+      guard !mask else { throw Error.rangeCheck }
+      return try imageTypeFourDictionary(dictionary, context: context)
+    default:
+      throw Error.rangeCheck
+    }
+  }
+
+  static func imageTypeOneDictionary(
+    _ dictionary: DictionaryValue,
+    mask: Bool,
+    declaredType: Int32 = 1,
+    dictionaries: [DictionaryValue]? = nil,
+    context: isolated Context
+  ) throws -> ImageSpecification {
+    let type = try dictionary.objectValue(forKey: "ImageType", as: IntegerValue.self).value
+    guard type == declaredType else { throw Error.rangeCheck }
     let width = Int(try dictionary.objectValue(forKey: "Width", as: IntegerValue.self).value)
     let height = Int(try dictionary.objectValue(forKey: "Height", as: IntegerValue.self).value)
     let bits = Int(try dictionary.objectValue(forKey: "BitsPerComponent", as: IntegerValue.self).value)
@@ -296,8 +374,161 @@ extension Operators {
       interpolate: interpolate,
       sources: sources,
       multipleDataSources: multiple,
-      dictionaries: [dictionary]
+      dictionaries: dictionaries ?? [dictionary]
     )
+  }
+
+  static func imageTypeFourDictionary(
+    _ dictionary: DictionaryValue,
+    context: isolated Context
+  ) throws -> ImageSpecification {
+    var specification = try imageTypeOneDictionary(
+      dictionary,
+      mask: false,
+      declaredType: 4,
+      context: context
+    )
+    let array = try dictionary.object(forKey: "MaskColor").value(as: ArrayValue.self)
+    let values = try array.objects(in: array.range).map { object -> Int in
+      Int(try object.value(as: IntegerValue.self).value)
+    }
+    let componentCount = specification.sourceComponentCount
+    guard values.count == componentCount || values.count == componentCount * 2 else {
+      throw Error.rangeCheck
+    }
+    let maximum = (1 << specification.bitsPerComponent) - 1
+    var ranges: [GraphicsImageSampleRange] = []
+    ranges.reserveCapacity(componentCount)
+    if values.count == componentCount {
+      for value in values {
+        guard value >= 0, value <= maximum else { throw Error.rangeCheck }
+        ranges.append(.init(lowerBound: UInt16(value), upperBound: UInt16(value)))
+      }
+    } else {
+      for component in 0..<componentCount {
+        let lower = values[component * 2]
+        let upper = values[component * 2 + 1]
+        guard lower >= 0, lower <= upper, upper <= maximum else { throw Error.rangeCheck }
+        ranges.append(.init(lowerBound: UInt16(lower), upperBound: UInt16(upper)))
+      }
+    }
+    specification.mask = .colorKey(ranges)
+    return specification
+  }
+
+  static func imageTypeThreeDictionary(
+    _ dictionary: DictionaryValue,
+    context: isolated Context
+  ) throws -> ImageSpecification {
+    let dataDictionary = try dictionary.object(forKey: "DataDict").value(as: DictionaryValue.self)
+    let maskDictionary = try dictionary.object(forKey: "MaskDict").value(as: DictionaryValue.self)
+    let interleaveType = Int(try dictionary.objectValue(forKey: "InterleaveType", as: IntegerValue.self).value)
+    guard (1...3).contains(interleaveType) else { throw Error.rangeCheck }
+    var specification = try imageTypeOneDictionary(
+      dataDictionary,
+      mask: false,
+      dictionaries: [dictionary, dataDictionary, maskDictionary],
+      context: context
+    )
+    guard interleaveType == 3 || !specification.multipleDataSources else { throw Error.typeCheck }
+
+    let width = Int(try maskDictionary.objectValue(forKey: "Width", as: IntegerValue.self).value)
+    let height = Int(try maskDictionary.objectValue(forKey: "Height", as: IntegerValue.self).value)
+    let bits = Int(try maskDictionary.objectValue(forKey: "BitsPerComponent", as: IntegerValue.self).value)
+    let matrix = try readMatrix(maskDictionary.object(forKey: "ImageMatrix"))
+    let multiple = try maskDictionary.objectValue(
+      forKeyIfExists: "MultipleDataSources",
+      as: BooleanValue.self
+    )?.value ?? false
+    guard !multiple, width >= 0, height >= 0, [1, 2, 4, 8, 12].contains(bits), matrix.inverted != nil else {
+      throw Error.typeCheck
+    }
+    let decodeArray = try maskDictionary.object(forKey: "Decode").value(as: ArrayValue.self)
+    let decode = try decodeArray.objects(in: decodeArray.range).map(numeric)
+    guard decode.count == 2 else { throw Error.rangeCheck }
+    let interpolate = try maskDictionary.objectValue(
+      forKeyIfExists: "Interpolate",
+      as: BooleanValue.self
+    )?.value ?? false
+
+    let sources: [ImageDataSource]
+    if interleaveType == 3 {
+      sources = [try ImageDataSource(maskDictionary.object(forKey: "DataSource"))]
+    } else {
+      guard try maskDictionary.object(forKeyIfExists: "DataSource") == nil else { throw Error.typeCheck }
+      sources = []
+    }
+    guard try maskDictionary.objectValue(forKey: "ImageType", as: IntegerValue.self).value == 1 else {
+      throw Error.typeCheck
+    }
+    switch interleaveType {
+    case 1:
+      guard width == specification.width,
+        height == specification.height,
+        bits == specification.bitsPerComponent
+      else { throw Error.typeCheck }
+    case 2:
+      guard bits == 1,
+        width > 0,
+        height > 0,
+        specification.height > 0,
+        height.isMultiple(of: specification.height) || specification.height.isMultiple(of: height)
+      else { throw Error.typeCheck }
+    case 3:
+      guard bits == 1 else { throw Error.typeCheck }
+    default:
+      throw Error.rangeCheck
+    }
+    try validateAlignedImageCorners(
+      imageWidth: specification.width,
+      imageHeight: specification.height,
+      imageMatrix: specification.imageMatrix,
+      maskWidth: width,
+      maskHeight: height,
+      maskMatrix: matrix
+    )
+    guard let maskToUser = matrix.inverted else { throw Error.undefinedResult }
+    specification.mask = .explicit(ExplicitImageMaskSpecification(
+      width: width,
+      height: height,
+      bitsPerComponent: bits,
+      imageMatrix: matrix,
+      maskToDevice: maskToUser.concatenated(with: context.graphicsState.matrix),
+      decode: decode,
+      interpolate: interpolate,
+      sources: sources,
+      interleaveType: interleaveType
+    ))
+    return specification
+  }
+
+  static func validateAlignedImageCorners(
+    imageWidth: Int,
+    imageHeight: Int,
+    imageMatrix: GraphicsMatrix,
+    maskWidth: Int,
+    maskHeight: Int,
+    maskMatrix: GraphicsMatrix
+  ) throws {
+    guard let imageToUser = imageMatrix.inverted, let maskToUser = maskMatrix.inverted else {
+      throw Error.undefinedResult
+    }
+    let imageCorners = [
+      GraphicsPoint(x: 0, y: 0),
+      GraphicsPoint(x: Double(imageWidth), y: 0),
+      GraphicsPoint(x: Double(imageWidth), y: Double(imageHeight)),
+      GraphicsPoint(x: 0, y: Double(imageHeight)),
+    ].map(imageToUser.transform)
+    let maskCorners = [
+      GraphicsPoint(x: 0, y: 0),
+      GraphicsPoint(x: Double(maskWidth), y: 0),
+      GraphicsPoint(x: Double(maskWidth), y: Double(maskHeight)),
+      GraphicsPoint(x: 0, y: Double(maskHeight)),
+    ].map(maskToUser.transform)
+    guard zip(imageCorners, maskCorners).allSatisfy({ image, mask in
+      let scale = max(1, abs(image.x), abs(image.y), abs(mask.x), abs(mask.y))
+      return abs(image.x - mask.x) <= scale * 1e-9 && abs(image.y - mask.y) <= scale * 1e-9
+    }) else { throw Error.typeCheck }
   }
 
   static func validateSameSourceTypes(_ sources: [ImageDataSource]) throws {
@@ -333,7 +564,10 @@ extension Operators {
       kind: specification.kind,
       sourceColorSpace: specification.sourceColorSpace?.description,
       imageToDevice: imageToUser.concatenated(with: context.graphicsState.matrix),
-      interpolate: specification.interpolate
+      interpolate: specification.interpolate,
+      mask: specification.mask?.descriptor(
+        imageToDevice: imageToUser.concatenated(with: context.graphicsState.matrix)
+      )
     )
     do {
       try context.beginGraphicsImage(descriptor)
@@ -342,7 +576,13 @@ extension Operators {
         return
       }
 
-        let componentCount = specification.kind.componentCount
+      if case .explicit(let mask) = specification.mask {
+        try await paintExplicitImage(&specification, mask: mask, context: context)
+        try context.endGraphicsImage()
+        return
+      }
+
+      let componentCount = specification.kind.componentCount
       let rowsPerTransfer = max(1, min(32, 65_536 / max(1, specification.width * componentCount)))
       var startRow = 0
       while startRow < specification.height {
@@ -354,10 +594,18 @@ extension Operators {
           rowCount * specification.width * specification.sourceComponentCount
         )
         var completedRows = 0
+        var maskOpacities: [Float] = []
         for _ in 0..<rowCount {
           guard let row = try await readImageRow(&specification, context: context) else { break }
           components.append(contentsOf: row.components)
           sourceComponents.append(contentsOf: row.sourceComponents ?? [])
+          if case .colorKey(let ranges) = specification.mask {
+            maskOpacities.append(contentsOf: colorKeyOpacities(
+              rawComponents: row.rawComponents,
+              componentCount: specification.sourceComponentCount,
+              ranges: ranges
+            ))
+          }
           completedRows += 1
         }
         guard completedRows > 0 else { break }
@@ -367,6 +615,13 @@ extension Operators {
           components: components,
           sourceComponents: sourceComponents.isEmpty ? nil : sourceComponents
         ))
+        if !maskOpacities.isEmpty {
+          try context.writeGraphicsImageMaskRows(GraphicsImageMaskRows(
+            startRow: startRow,
+            rowCount: completedRows,
+            opacities: maskOpacities
+          ))
+        }
         startRow += completedRows
         if completedRows < rowCount { break }
       }
@@ -374,6 +629,186 @@ extension Operators {
     } catch {
       context.abortGraphicsImage()
       throw error
+    }
+  }
+
+  static func colorKeyOpacities(
+    rawComponents: [UInt16],
+    componentCount: Int,
+    ranges: [GraphicsImageSampleRange]
+  ) -> [Float] {
+    stride(from: 0, to: rawComponents.count, by: componentCount).map { offset in
+      let matches = (0..<componentCount).allSatisfy { component in
+        ranges[component].contains(rawComponents[offset + component])
+      }
+      return matches ? 0 : 1
+    }
+  }
+
+  static func paintExplicitImage(
+    _ specification: inout ImageSpecification,
+    mask: ExplicitImageMaskSpecification,
+    context: isolated Context
+  ) async throws {
+    switch mask.interleaveType {
+    case 1:
+      try await paintSampleInterleavedImage(&specification, mask: mask, context: context)
+    case 2:
+      try await paintRowInterleavedImage(&specification, mask: mask, context: context)
+    case 3:
+      try await paintSeparateMaskedImage(&specification, mask: mask, context: context)
+    default:
+      throw Error.rangeCheck
+    }
+  }
+
+  static func paintSampleInterleavedImage(
+    _ specification: inout ImageSpecification,
+    mask: ExplicitImageMaskSpecification,
+    context: isolated Context
+  ) async throws {
+    let sourceComponentCount = specification.sourceComponentCount
+    let samplesPerRow = specification.width * (sourceComponentCount + 1)
+    let bytesPerRow = (samplesPerRow * specification.bitsPerComponent + 7) / 8
+    let maximum = UInt16((1 << specification.bitsPerComponent) - 1)
+    for rowIndex in 0..<specification.height {
+      guard let data = try await specification.sources[0].read(count: bytesPerRow, context: context) else {
+        return
+      }
+      let samples = rawSamples(data, count: samplesPerRow, bits: specification.bitsPerComponent)
+      var imageRaw: [UInt16] = []
+      var opacities: [Float] = []
+      imageRaw.reserveCapacity(specification.width * sourceComponentCount)
+      opacities.reserveCapacity(specification.width)
+      for pixel in 0..<specification.width {
+        let offset = pixel * (sourceComponentCount + 1)
+        let maskRaw = samples[offset]
+        let effectiveMask = maskRaw == 0 ? UInt16(0) : maximum
+        opacities.append(maskOpacity(raw: effectiveMask, maximum: maximum, decode: mask.decode))
+        imageRaw.append(contentsOf: samples[(offset + 1)..<(offset + 1 + sourceComponentCount)])
+      }
+      let decoded = decodeRawSamples(
+        imageRaw,
+        maximum: Double(maximum),
+        decode: specification.decode
+      )
+      let image = try await resolveImageRow(
+        decoded,
+        rawComponents: imageRaw,
+        specification: specification,
+        context: context
+      )
+      try writeImageRow(image, row: rowIndex, maskOpacities: opacities, context: context)
+    }
+  }
+
+  static func paintRowInterleavedImage(
+    _ specification: inout ImageSpecification,
+    mask: ExplicitImageMaskSpecification,
+    context: isolated Context
+  ) async throws {
+    let imageRowsPerBlock = max(1, specification.height / mask.height)
+    let maskRowsPerBlock = max(1, mask.height / specification.height)
+    var imageRow = 0
+    var maskRow = 0
+    while imageRow < specification.height, maskRow < mask.height {
+      for _ in 0..<maskRowsPerBlock where maskRow < mask.height {
+        guard let opacities = try await readSharedMaskRow(
+          source: &specification.sources[0],
+          mask: mask,
+          context: context
+        ) else { return }
+        try context.writeGraphicsImageMaskRows(.init(
+          startRow: maskRow,
+          rowCount: 1,
+          opacities: opacities
+        ))
+        maskRow += 1
+      }
+      for _ in 0..<imageRowsPerBlock where imageRow < specification.height {
+        guard let row = try await readImageRow(&specification, context: context) else { return }
+        try writeImageRow(row, row: imageRow, maskOpacities: nil, context: context)
+        imageRow += 1
+      }
+    }
+  }
+
+  static func paintSeparateMaskedImage(
+    _ specification: inout ImageSpecification,
+    mask: ExplicitImageMaskSpecification,
+    context: isolated Context
+  ) async throws {
+    var imageRow = 0
+    var maskRow = 0
+    while imageRow < specification.height || maskRow < mask.height {
+      let maskBoundary = (imageRow + 1) * mask.height
+      while maskRow < mask.height,
+        (imageRow >= specification.height || maskRow * specification.height < maskBoundary)
+      {
+        guard let opacities = try await readSeparateMaskRow(mask, context: context) else { return }
+        try context.writeGraphicsImageMaskRows(.init(
+          startRow: maskRow,
+          rowCount: 1,
+          opacities: opacities
+        ))
+        maskRow += 1
+      }
+      guard imageRow < specification.height else { continue }
+      guard let row = try await readImageRow(&specification, context: context) else { return }
+      try writeImageRow(row, row: imageRow, maskOpacities: nil, context: context)
+      imageRow += 1
+    }
+  }
+
+  static func readSharedMaskRow(
+    source: inout ImageDataSource,
+    mask: ExplicitImageMaskSpecification,
+    context: isolated Context
+  ) async throws -> [Float]? {
+    let bytesPerRow = (mask.width + 7) / 8
+    guard let data = try await source.read(count: bytesPerRow, context: context) else { return nil }
+    return maskOpacities(data, mask: mask)
+  }
+
+  static func readSeparateMaskRow(
+    _ mask: ExplicitImageMaskSpecification,
+    context: isolated Context
+  ) async throws -> [Float]? {
+    let bytesPerRow = (mask.width * mask.bitsPerComponent + 7) / 8
+    guard let data = try await mask.sources[0].read(count: bytesPerRow, context: context) else { return nil }
+    return maskOpacities(data, mask: mask)
+  }
+
+  static func maskOpacities(_ data: Data, mask: ExplicitImageMaskSpecification) -> [Float] {
+    let maximum = UInt16((1 << mask.bitsPerComponent) - 1)
+    return rawSamples(data, count: mask.width, bits: mask.bitsPerComponent).map {
+      maskOpacity(raw: $0, maximum: maximum, decode: mask.decode)
+    }
+  }
+
+  static func maskOpacity(raw: UInt16, maximum: UInt16, decode: [Double]) -> Float {
+    let decoded = decode[0] + Double(raw) / Double(maximum) * (decode[1] - decode[0])
+    return Float(1 - min(1, max(0, decoded)))
+  }
+
+  static func writeImageRow(
+    _ row: ImageRow,
+    row rowIndex: Int,
+    maskOpacities: [Float]?,
+    context: isolated Context
+  ) throws {
+    try context.writeGraphicsImageRows(.init(
+      startRow: rowIndex,
+      rowCount: 1,
+      components: row.components,
+      sourceComponents: row.sourceComponents
+    ))
+    if let maskOpacities {
+      try context.writeGraphicsImageMaskRows(.init(
+        startRow: rowIndex,
+        rowCount: 1,
+        opacities: maskOpacities
+      ))
     }
   }
 
@@ -490,27 +925,41 @@ extension Operators {
     bits: Int,
     decode: [Double]
   ) -> DecodedSamples {
-    let maximum = Double((1 << bits) - 1)
-    let componentCount = decode.count / 2
-    var decoded: [Float] = []
-    decoded.reserveCapacity(count)
-    var rawSamples: [UInt16] = []
-    rawSamples.reserveCapacity(count)
+    let raw = rawSamples(data, count: count, bits: bits)
+    return DecodedSamples(
+      decoded: decodeRawSamples(raw, maximum: Double((1 << bits) - 1), decode: decode),
+      raw: raw
+    )
+  }
+
+  static func rawSamples(_ data: Data, count: Int, bits: Int) -> [UInt16] {
+    var samples: [UInt16] = []
+    samples.reserveCapacity(count)
     var bitOffset = 0
-    for sampleIndex in 0..<count {
+    for _ in 0..<count {
       var raw = 0
       for _ in 0..<bits {
         let byte = data[bitOffset / 8]
         raw = raw << 1 | Int((byte >> UInt8(7 - bitOffset % 8)) & 1)
         bitOffset += 1
       }
+      samples.append(UInt16(raw))
+    }
+    return samples
+  }
+
+  static func decodeRawSamples(
+    _ rawSamples: [UInt16],
+    maximum: Double,
+    decode: [Double]
+  ) -> [Float] {
+    let componentCount = decode.count / 2
+    return rawSamples.enumerated().map { sampleIndex, raw in
       let component = sampleIndex % componentCount
       let lower = decode[component * 2]
       let upper = decode[component * 2 + 1]
-      let decodedValue = lower + Double(raw) / maximum * (upper - lower)
-      rawSamples.append(UInt16(raw))
-      decoded.append(Float(min(1, max(0, decodedValue))))
+      let decoded = lower + Double(raw) / maximum * (upper - lower)
+      return Float(min(1, max(0, decoded)))
     }
-    return DecodedSamples(decoded: decoded, raw: rawSamples)
   }
 }

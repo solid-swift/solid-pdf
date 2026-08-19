@@ -43,6 +43,8 @@ public struct GraphicsImageDescriptor: Sendable, Hashable {
   public let imageToDevice: GraphicsMatrix
   /// Whether the target should interpolate between samples.
   public let interpolate: Bool
+  /// Optional explicit or color-key masking applied by the renderer.
+  public let mask: GraphicsImageMaskDescriptor?
 
   /// Creates an image descriptor.
   public init(
@@ -51,7 +53,8 @@ public struct GraphicsImageDescriptor: Sendable, Hashable {
     kind: GraphicsImageKind,
     sourceColorSpace: GraphicsColorSpaceDescription? = nil,
     imageToDevice: GraphicsMatrix,
-    interpolate: Bool = false
+    interpolate: Bool = false,
+    mask: GraphicsImageMaskDescriptor? = nil
   ) {
     self.width = width
     self.height = height
@@ -59,6 +62,7 @@ public struct GraphicsImageDescriptor: Sendable, Hashable {
     self.sourceColorSpace = sourceColorSpace
     self.imageToDevice = imageToDevice
     self.interpolate = interpolate
+    self.mask = mask
   }
 }
 
@@ -95,16 +99,20 @@ public struct GraphicsImage: Sendable, Hashable {
   public let components: [Float]
   /// Original semantic components retained by recording targets, when available.
   public let sourceComponents: [Float]?
+  /// The realized opacity plane retained by recording targets, when present.
+  public let mask: GraphicsImageMask?
 
   /// Creates a complete sampled image.
   public init(
     descriptor: GraphicsImageDescriptor,
     components: [Float],
-    sourceComponents: [Float]? = nil
+    sourceComponents: [Float]? = nil,
+    mask: GraphicsImageMask? = nil
   ) {
     self.descriptor = descriptor
     self.components = components
     self.sourceComponents = sourceComponents
+    self.mask = mask
   }
 
   /// The number of complete source rows retained in this image.

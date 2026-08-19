@@ -99,6 +99,14 @@ extension Context {
     }
   }
 
+  func writeGraphicsImageMaskRows(_ rows: GraphicsImageMaskRows) throws {
+    do {
+      try graphicsEventConsumer?.writeImageMaskRows(rows)
+    } catch {
+      throw Error.ioError
+    }
+  }
+
   func endGraphicsImage() throws {
     do {
       try graphicsEventConsumer?.endImage()

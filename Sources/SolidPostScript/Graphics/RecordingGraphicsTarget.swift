@@ -19,7 +19,8 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       descriptor: GraphicsImageDescriptor,
       state: GraphicsStateSnapshot,
       components: [Float],
-      sourceComponents: [Float]
+      sourceComponents: [Float],
+      maskOpacities: [Float]
     )?
     private var aborted = false
 
@@ -62,7 +63,7 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       guard !aborted, activeImage == nil, case .paint(.image(let descriptor)) = event.operation else {
         throw Error.ioError
       }
-      activeImage = (descriptor, event.before, [], [])
+      activeImage = (descriptor, event.before, [], [], [])
     }
 
     /// Records one bounded group of sampled-image rows.
@@ -75,6 +76,13 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       activeImage = image
     }
 
+    /// Records one bounded group of explicit mask rows.
+    public func writeImageMaskRows(_ rows: GraphicsImageMaskRows) throws {
+      guard var image = activeImage else { throw Error.ioError }
+      image.maskOpacities.append(contentsOf: rows.opacities)
+      activeImage = image
+    }
+
     /// Commits the recorded sampled image.
     public func endImage() throws {
       guard let image = activeImage else { throw Error.ioError }
@@ -84,7 +92,10 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
             GraphicsImage(
               descriptor: image.descriptor,
               components: image.components,
-              sourceComponents: image.sourceComponents.isEmpty ? nil : image.sourceComponents
+              sourceComponents: image.sourceComponents.isEmpty ? nil : image.sourceComponents,
+              mask: image.descriptor.mask.map {
+                GraphicsImageMask(descriptor: $0, opacities: image.maskOpacities)
+              }
             ),
             state: image.state
           )
