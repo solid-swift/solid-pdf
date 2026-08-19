@@ -1011,11 +1011,19 @@ public actor Context {
     graphicsState.dashSource?.save(to: builder)
     graphicsState.colorSpace.retainedObjects.forEach { $0.save(to: builder) }
     graphicsState.colorRenderingSource?.save(to: builder)
+    graphicsState.transferFunctionSources.forEach { $0?.save(to: builder) }
+    graphicsState.blackGenerationSource?.save(to: builder)
+    graphicsState.undercolorRemovalSource?.save(to: builder)
+    graphicsState.halftoneSource?.save(to: builder)
     graphicsState.patternSource?.save(to: builder)
     for frame in graphicsStack {
       frame.state.dashSource?.save(to: builder)
       frame.state.colorSpace.retainedObjects.forEach { $0.save(to: builder) }
       frame.state.colorRenderingSource?.save(to: builder)
+      frame.state.transferFunctionSources.forEach { $0?.save(to: builder) }
+      frame.state.blackGenerationSource?.save(to: builder)
+      frame.state.undercolorRemovalSource?.save(to: builder)
+      frame.state.halftoneSource?.save(to: builder)
     }
 
     if scope == .job {

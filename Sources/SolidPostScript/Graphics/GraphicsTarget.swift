@@ -5,14 +5,20 @@ public protocol GraphicsTarget<PageOutput, Output, Renderer>: Sendable {
   associatedtype PageOutput
   associatedtype Output
   associatedtype ColorEngine: GraphicsColorEngine = SemanticGraphicsColorEngine
+  associatedtype DeviceRenderingEngine: GraphicsDeviceRenderingEngine = SemanticGraphicsDeviceRenderingEngine
   associatedtype PageDeviceProvider: GraphicsPageDeviceProvider = StandardGraphicsPageDeviceProvider
-  associatedtype Renderer: GraphicsRenderer<PageOutput, Output> where Renderer.ColorSession == ColorEngine.Session
+  associatedtype Renderer: GraphicsRenderer<PageOutput, Output>
+    where Renderer.ColorSession == ColorEngine.Session,
+      Renderer.DeviceRenderingSession == DeviceRenderingEngine.Session
 
   /// The device geometry and default transformation used for the render.
   var deviceDescriptor: GraphicsDeviceDescriptor { get }
 
   /// The color engine used to create render-scoped conversion state.
   var colorEngine: ColorEngine { get }
+
+  /// The device-rendering engine used to create render-scoped transfer and halftone state.
+  var deviceRenderingEngine: DeviceRenderingEngine { get }
 
   /// The provider used to negotiate page geometry during this render.
   var pageDeviceProvider: PageDeviceProvider { get }
@@ -22,6 +28,12 @@ public protocol GraphicsTarget<PageOutput, Output, Renderer>: Sendable {
 
   /// Creates a renderer using color state prepared by the interpreter.
   func makeRenderer(colorSession: sending ColorEngine.Session) throws -> sending Renderer
+
+  /// Creates a renderer using color and device-rendering state prepared by the interpreter.
+  func makeRenderer(
+    colorSession: sending ColorEngine.Session,
+    deviceRenderingSession: sending DeviceRenderingEngine.Session
+  ) throws -> sending Renderer
 }
 
 extension GraphicsTarget where PageDeviceProvider == StandardGraphicsPageDeviceProvider {
@@ -40,6 +52,21 @@ extension GraphicsTarget where ColorEngine == SemanticGraphicsColorEngine {
     colorSession: sending SemanticGraphicsColorSession
   ) throws -> sending Renderer {
     try makeRenderer()
+  }
+}
+
+extension GraphicsTarget where DeviceRenderingEngine == SemanticGraphicsDeviceRenderingEngine {
+  /// The source-compatible semantic rendering engine used by targets that do not select one.
+  public var deviceRenderingEngine: SemanticGraphicsDeviceRenderingEngine {
+    SemanticGraphicsDeviceRenderingEngine()
+  }
+
+  /// Creates the existing renderer while preserving source compatibility for custom targets.
+  public func makeRenderer(
+    colorSession: sending ColorEngine.Session,
+    deviceRenderingSession: sending SemanticGraphicsDeviceRenderingSession
+  ) throws -> sending Renderer {
+    try makeRenderer(colorSession: colorSession)
   }
 }
 
@@ -96,6 +123,7 @@ public protocol GraphicsRenderer<PageOutput, Output>: GraphicsEventConsumer {
   associatedtype PageOutput
   associatedtype Output
   associatedtype ColorSession: GraphicsColorSession = SemanticGraphicsColorSession
+  associatedtype DeviceRenderingSession: GraphicsDeviceRenderingSession = SemanticGraphicsDeviceRenderingSession
 
   /// Pages transmitted so far.
   var pages: [PageOutput] { get }

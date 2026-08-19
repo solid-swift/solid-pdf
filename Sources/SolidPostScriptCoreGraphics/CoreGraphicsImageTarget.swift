@@ -11,12 +11,14 @@ where
 {
   public typealias PageOutput = CGImage
   public typealias Output = [CGImage]
+  public typealias DeviceRenderingEngine = CoreGraphicsDeviceRenderingEngine
 
   /// The renderer dedicated to one Core Graphics image render.
   public final class Renderer: GraphicsRenderer {
     public typealias PageOutput = CGImage
     public typealias Output = [CGImage]
     public typealias ColorSession = ColorEngine.Session
+    public typealias DeviceRenderingSession = CoreGraphicsDeviceRenderingSession
 
     /// Images transmitted by `showpage` so far.
     public private(set) var pages: [CGImage] = []
@@ -25,6 +27,7 @@ where
     private var pixelHeight: Int
     private var descriptor: GraphicsDeviceDescriptor
     private let colorSession: ColorEngine.Session
+    private let deviceRenderingSession: CoreGraphicsDeviceRenderingSession
     private var rasterMatrix: GraphicsMatrix
     private var activeDeviceIdentifier: GraphicsDeviceIdentifier?
     private var renderingEnabled = true
@@ -42,7 +45,8 @@ where
       pixelWidth: Int,
       pixelHeight: Int,
       descriptor: GraphicsDeviceDescriptor,
-      colorSession: ColorEngine.Session
+      colorSession: ColorEngine.Session,
+      deviceRenderingSession: CoreGraphicsDeviceRenderingSession
     ) throws {
       guard colorSession.destinationColorSpace.model == .rgb else {
         throw SolidPostScript.Error.configurationError
@@ -51,6 +55,7 @@ where
       self.pixelHeight = pixelHeight
       self.descriptor = descriptor
       self.colorSession = colorSession
+      self.deviceRenderingSession = deviceRenderingSession
       rasterMatrix = GraphicsMatrix(
         a: 1,
         b: 0,
@@ -974,6 +979,8 @@ where
   public let pixelHeight: Int
   /// The color engine used by this target.
   public let colorEngine: ColorEngine
+  /// The device-rendering engine used for direct-path and fallback selection.
+  public let deviceRenderingEngine = CoreGraphicsDeviceRenderingEngine()
   /// The virtual page-device provider used by this target.
   public let pageDeviceProvider: StandardGraphicsPageDeviceProvider
 
@@ -1009,18 +1016,33 @@ where
 
   /// Creates a renderer dedicated to one render operation.
   public func makeRenderer() throws -> sending Renderer {
-    try makeRenderer(colorSession: colorEngine.makeSession(for: deviceDescriptor))
+    try makeRenderer(
+      colorSession: colorEngine.makeSession(for: deviceDescriptor),
+      deviceRenderingSession: deviceRenderingEngine.makeSession(for: deviceDescriptor)
+    )
   }
 
   /// Creates a renderer with color conversion state prepared for this render.
   public func makeRenderer(
     colorSession: sending ColorEngine.Session
   ) throws -> sending Renderer {
+    try makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingEngine.makeSession(for: deviceDescriptor)
+    )
+  }
+
+  /// Creates a renderer with prepared color and device-rendering state.
+  public func makeRenderer(
+    colorSession: sending ColorEngine.Session,
+    deviceRenderingSession: sending CoreGraphicsDeviceRenderingSession
+  ) throws -> sending Renderer {
     try Renderer(
       pixelWidth: pixelWidth,
       pixelHeight: pixelHeight,
       descriptor: deviceDescriptor,
-      colorSession: colorSession
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession
     )
   }
 }

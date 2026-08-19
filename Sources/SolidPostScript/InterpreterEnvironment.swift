@@ -19,6 +19,7 @@ public final class InterpreterEnvironment: Sendable {
   let userPathCache = UserPathCache()
   let patternCache = PatternCache()
   let formCache = FormCache()
+  let screenManager = ScreenManager()
   let formInitializationRegistry = FormInitializationRegistry()
 
   /// The application integration used by this environment.
@@ -254,6 +255,11 @@ public final class InterpreterEnvironment: Sendable {
     let formStatus = formCache.status()
     values["CurFormCache"] = .integer(Int32(clamping: formStatus.bytes))
     values["MaxFormCache"] = .integer(Int32(clamping: formStatus.maximumBytes))
+    let screenStatus = screenManager.status()
+    values["CurScreenStorage"] = .integer(Int32(clamping: screenStatus.activeBytes))
+    values["CurStoredScreenCache"] = .integer(Int32(clamping: screenStatus.cachedBytes))
+    values["MaxScreenStorage"] = .integer(Int32(clamping: screenStatus.maximumActiveBytes))
+    values["MaxStoredScreenCache"] = .integer(Int32(clamping: screenStatus.maximumCachedBytes))
     return values
   }
 
@@ -358,6 +364,16 @@ public final class InterpreterEnvironment: Sendable {
       return value
     }
     formCache.setMaximumBytes(Int(formMaximum))
+    let screenMaximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxScreenStorage"] else { return 0 }
+      return value
+    }
+    screenManager.setMaximumActiveBytes(Int(screenMaximum))
+    let storedScreenMaximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxStoredScreenCache"] else { return 0 }
+      return value
+    }
+    screenManager.setMaximumCachedBytes(Int(storedScreenMaximum))
   }
 
 

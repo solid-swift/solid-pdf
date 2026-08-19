@@ -9,12 +9,14 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
   public typealias PageOutput = RasterImage
   public typealias Output = [RasterImage]
   public typealias ColorEngine = NativeGraphicsColorEngine
+  public typealias DeviceRenderingEngine = NativeGraphicsDeviceRenderingEngine
 
   /// The renderer dedicated to one PlutoVG image render.
   public final class Renderer: GraphicsRenderer {
     public typealias PageOutput = RasterImage
     public typealias Output = [RasterImage]
     public typealias ColorSession = NativeGraphicsColorSession
+    public typealias DeviceRenderingSession = NativeGraphicsDeviceRenderingSession
 
     /// Images transmitted by `showpage` so far.
     public private(set) var pages: [RasterImage] = []
@@ -32,6 +34,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     private var pixelHeight: Int
     private var descriptor: GraphicsDeviceDescriptor
     private let colorSession: NativeGraphicsColorSession
+    private let deviceRenderingSession: NativeGraphicsDeviceRenderingSession
     private var rasterMatrix: GraphicsMatrix
     private var activeDeviceIdentifier: GraphicsDeviceIdentifier?
     private var renderingEnabled = true
@@ -50,13 +53,15 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       pixelWidth: Int,
       pixelHeight: Int,
       descriptor: GraphicsDeviceDescriptor,
-      colorSession: NativeGraphicsColorSession
+      colorSession: NativeGraphicsColorSession,
+      deviceRenderingSession: NativeGraphicsDeviceRenderingSession
     ) throws {
       try Self.validate(pixelWidth: pixelWidth, pixelHeight: pixelHeight, descriptor: descriptor)
       self.pixelWidth = pixelWidth
       self.pixelHeight = pixelHeight
       self.descriptor = descriptor
       self.colorSession = colorSession
+      self.deviceRenderingSession = deviceRenderingSession
       self.rasterMatrix = GraphicsMatrix(
         a: 1,
         b: 0,
@@ -1159,6 +1164,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
   public let pixelHeight: Int
   /// The native Swift color engine used as PlutoVG's conversion frontend.
   public let colorEngine: NativeGraphicsColorEngine
+  /// The native rendering engine used when PlutoVG cannot reproduce device controls.
+  public let deviceRenderingEngine = NativeGraphicsDeviceRenderingEngine()
   /// The virtual page-device provider used by this target.
   public let pageDeviceProvider: StandardGraphicsPageDeviceProvider
 
@@ -1207,18 +1214,33 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
 
   /// Creates a renderer dedicated to one render operation.
   public func makeRenderer() throws -> sending Renderer {
-    try makeRenderer(colorSession: colorEngine.makeSession(for: deviceDescriptor))
+    try makeRenderer(
+      colorSession: colorEngine.makeSession(for: deviceDescriptor),
+      deviceRenderingSession: deviceRenderingEngine.makeSession(for: deviceDescriptor)
+    )
   }
 
   /// Creates a renderer with color conversion state prepared for this render.
   public func makeRenderer(
     colorSession: sending NativeGraphicsColorSession
   ) throws -> sending Renderer {
+    try makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingEngine.makeSession(for: deviceDescriptor)
+    )
+  }
+
+  /// Creates a renderer with prepared color and device-rendering state.
+  public func makeRenderer(
+    colorSession: sending NativeGraphicsColorSession,
+    deviceRenderingSession: sending NativeGraphicsDeviceRenderingSession
+  ) throws -> sending Renderer {
     try Renderer(
       pixelWidth: pixelWidth,
       pixelHeight: pixelHeight,
       descriptor: deviceDescriptor,
-      colorSession: colorSession
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession
     )
   }
 }

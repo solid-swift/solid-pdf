@@ -72,6 +72,12 @@ struct GraphicsTargetTests {
     #expect(output.pages.isEmpty)
   }
 
+  @Test func renderCreatesIndependentDeviceRenderingSession() async throws {
+    let result = try await Interpreter.render(content: "", to: DeviceRenderingTarget())
+
+    #expect(result.output == 37)
+  }
+
   @Test func standardPageDeviceProviderNegotiatesAdaptiveGeometry() throws {
     let provider = StandardGraphicsPageDeviceProvider(mode: .adaptive)
     let session = try provider.makeSession(for: .letter)
@@ -122,6 +128,64 @@ struct GraphicsTargetTests {
     #expect(result.output.totalRows == 40)
     #expect(result.output.maximumRowsPerTransfer <= 32)
     #expect(result.output.maximumComponentsPerTransfer <= 64 * 32)
+  }
+}
+
+private struct DeviceRenderingTarget: GraphicsTarget {
+  typealias PageOutput = Void
+  typealias Output = Int
+  typealias DeviceRenderingEngine = Engine
+
+  struct Engine: GraphicsDeviceRenderingEngine {
+    func makeSession(for device: GraphicsDeviceDescriptor) -> sending Session {
+      Session(value: 37)
+    }
+  }
+
+  final class Session: GraphicsDeviceRenderingSession {
+    let value: Int
+
+    init(value: Int) { self.value = value }
+
+    func resolve(
+      _ state: GraphicsDeviceRenderingSnapshot,
+      for device: GraphicsDeviceDescriptor
+    ) -> Int {
+      value
+    }
+  }
+
+  final class Renderer: GraphicsRenderer {
+    typealias PageOutput = Void
+    typealias Output = Int
+    typealias DeviceRenderingSession = Session
+
+    let session: Session
+    var pages: [Void] = []
+
+    init(session: Session) { self.session = session }
+
+    func process(_ event: GraphicsEvent) {}
+    func finish() -> sending Int { session.value }
+    func abort() {}
+  }
+
+  let deviceDescriptor = GraphicsDeviceDescriptor.letter
+  let deviceRenderingEngine = Engine()
+
+  func makeRenderer() -> sending Renderer { Renderer(session: Session(value: -1)) }
+
+  func makeRenderer(
+    colorSession: sending SemanticGraphicsColorSession
+  ) -> sending Renderer {
+    Renderer(session: Session(value: -1))
+  }
+
+  func makeRenderer(
+    colorSession: sending SemanticGraphicsColorSession,
+    deviceRenderingSession: sending Session
+  ) -> sending Renderer {
+    Renderer(session: deviceRenderingSession)
   }
 }
 

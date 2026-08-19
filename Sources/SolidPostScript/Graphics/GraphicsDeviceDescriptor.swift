@@ -24,6 +24,8 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
   public let defaultSmoothness: Double
   /// The target's process-color and destination-profile capabilities.
   public let colorDevice: GraphicsColorDeviceDescriptor
+  /// The target's transfer, quantization, and halftone capabilities.
+  public let deviceRendering: GraphicsDeviceRenderingDescriptor
 
   /// Creates a graphics device descriptor.
   public init(
@@ -37,7 +39,8 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
     minimumSmoothness: Double = 1 / 255,
     maximumSmoothness: Double = 1,
     defaultSmoothness: Double = 0.02,
-    colorDevice: GraphicsColorDeviceDescriptor = .sRGB
+    colorDevice: GraphicsColorDeviceDescriptor = .sRGB,
+    deviceRendering: GraphicsDeviceRenderingDescriptor = .continuousTone
   ) {
     self.mediaBounds = mediaBounds
     self.imageableBounds = imageableBounds
@@ -50,6 +53,7 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
     self.maximumSmoothness = maximumSmoothness
     self.defaultSmoothness = defaultSmoothness
     self.colorDevice = colorDevice
+    self.deviceRendering = deviceRendering
   }
 
   /// The installation-default Letter page at 72 dots per inch.

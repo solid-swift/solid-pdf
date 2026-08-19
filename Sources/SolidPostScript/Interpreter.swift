@@ -72,8 +72,12 @@ public enum Interpreter {
   ) async throws -> GraphicsRenderResult<Target.Output> {
     let source: Object = .file(file, access: .readOnly, vm: .local, kind: .executable)
     let colorSession = try target.colorEngine.makeSession(for: target.deviceDescriptor)
+    let deviceRenderingSession = try target.deviceRenderingEngine.makeSession(for: target.deviceDescriptor)
     let pageDeviceSession = try target.pageDeviceProvider.makeSession(for: target.deviceDescriptor)
-    let renderer = try target.makeRenderer(colorSession: colorSession)
+    let renderer = try target.makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession
+    )
     let context = Context(environment: environment)
     do {
       let output = try await context.render(

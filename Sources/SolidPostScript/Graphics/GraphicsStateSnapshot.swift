@@ -36,6 +36,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
   public let pathBoundingBox: GraphicsRect?
   /// The current output device and page-lifecycle state.
   public let device: GraphicsDeviceSnapshot
+  /// The current transfer, color-adjustment, and halftone controls.
+  public let deviceRendering: GraphicsDeviceRenderingSnapshot
 
   /// Creates a graphics-state snapshot.
   public init(
@@ -55,7 +57,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     strokeAdjustment: Bool = false,
     smoothness: Double = 0.02,
     pathBoundingBox: GraphicsRect? = nil,
-    device: GraphicsDeviceSnapshot = .letter
+    device: GraphicsDeviceSnapshot = .letter,
+    deviceRendering: GraphicsDeviceRenderingSnapshot = .continuousTone
   ) {
     self.matrix = matrix
     self.path = path
@@ -74,6 +77,7 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     self.smoothness = smoothness
     self.pathBoundingBox = pathBoundingBox
     self.device = device
+    self.deviceRendering = deviceRendering
   }
 
   func replacingDevice(_ device: GraphicsDeviceSnapshot) -> Self {
@@ -94,7 +98,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
       strokeAdjustment: strokeAdjustment,
       smoothness: smoothness,
       pathBoundingBox: pathBoundingBox,
-      device: device
+      device: device,
+      deviceRendering: deviceRendering
     )
   }
 }

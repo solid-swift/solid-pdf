@@ -26,6 +26,10 @@ public enum GraphicsOperation: Sendable, Hashable {
     case setColor(GraphicsColorValue)
     case setColorRendering
     case setOverprint(Bool)
+    case setTransferFunctions
+    case setBlackGeneration
+    case setUndercolorRemoval
+    case setHalftone
   }
 
   /// A current-transformation operation.

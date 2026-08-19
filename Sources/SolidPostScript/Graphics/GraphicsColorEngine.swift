@@ -17,14 +17,53 @@ public protocol GraphicsColorSession<ResolvedPaint, ImageConverter>: AnyObject {
   func resolve(_ paint: GraphicsPaint) throws -> ResolvedPaint
   /// Resolves a bounded batch of portable paints in order.
   func resolve(_ paints: [GraphicsPaint]) throws -> [ResolvedPaint]
+  /// Resolves a portable paint after applying device-rendering controls.
+  func resolve(
+    _ paint: GraphicsPaint,
+    deviceRendering: GraphicsDeviceRenderingSnapshot
+  ) throws -> ResolvedPaint
+  /// Resolves a bounded batch after applying device-rendering controls.
+  func resolve(
+    _ paints: [GraphicsPaint],
+    deviceRendering: GraphicsDeviceRenderingSnapshot
+  ) throws -> [ResolvedPaint]
   /// Creates an ordered converter for one sampled-image transfer.
   func makeImageConverter(for descriptor: GraphicsImageDescriptor) throws -> sending ImageConverter
+  /// Creates an image converter that applies the captured device-rendering controls.
+  func makeImageConverter(
+    for descriptor: GraphicsImageDescriptor,
+    deviceRendering: GraphicsDeviceRenderingSnapshot
+  ) throws -> sending ImageConverter
 }
 
 extension GraphicsColorSession {
   /// Resolves a batch by applying the scalar resolver in order.
   public func resolve(_ paints: [GraphicsPaint]) throws -> [ResolvedPaint] {
     try paints.map(resolve)
+  }
+
+  /// Preserves source compatibility for engines that do not implement device rendering.
+  public func resolve(
+    _ paint: GraphicsPaint,
+    deviceRendering: GraphicsDeviceRenderingSnapshot
+  ) throws -> ResolvedPaint {
+    try resolve(paint)
+  }
+
+  /// Preserves source compatibility for engines that do not implement device rendering.
+  public func resolve(
+    _ paints: [GraphicsPaint],
+    deviceRendering: GraphicsDeviceRenderingSnapshot
+  ) throws -> [ResolvedPaint] {
+    try resolve(paints)
+  }
+
+  /// Preserves source compatibility for engines that do not implement device rendering.
+  public func makeImageConverter(
+    for descriptor: GraphicsImageDescriptor,
+    deviceRendering: GraphicsDeviceRenderingSnapshot
+  ) throws -> sending ImageConverter {
+    try makeImageConverter(for: descriptor)
   }
 }
 

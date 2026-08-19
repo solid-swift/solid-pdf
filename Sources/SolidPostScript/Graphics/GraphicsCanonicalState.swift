@@ -17,6 +17,12 @@ struct GraphicsCanonicalState: Sendable {
   var colorComponents: [Double]
   var patternSource: Object?
   var colorRenderingSource: Object?
+  var transferFunctionSources: [Object?]
+  var blackGenerationSource: Object?
+  var undercolorRemovalSource: Object?
+  var halftoneSource: Object?
+  var deviceRendering: GraphicsDeviceRenderingSnapshot
+  var screenLease: ScreenLease?
   var overprint: Bool
   var lineWidth: Double
   var lineCap: GraphicsLineCap
@@ -46,6 +52,12 @@ struct GraphicsCanonicalState: Sendable {
       colorComponents: [0],
       patternSource: nil,
       colorRenderingSource: nil,
+      transferFunctionSources: [nil, nil, nil, nil],
+      blackGenerationSource: nil,
+      undercolorRemovalSource: nil,
+      halftoneSource: nil,
+      deviceRendering: descriptor.deviceRendering.defaultState,
+      screenLease: nil,
       overprint: false,
       lineWidth: 1,
       lineCap: .butt,
@@ -80,7 +92,8 @@ struct GraphicsCanonicalState: Sendable {
       strokeAdjustment: strokeAdjustment,
       smoothness: smoothness,
       pathBoundingBox: pathBoundingBox,
-      device: device.snapshot
+      device: device.snapshot,
+      deviceRendering: deviceRendering
     )
   }
 
@@ -109,6 +122,12 @@ struct GraphicsCanonicalState: Sendable {
     let preservedDevice = device
     let preservedPageDeviceParameters = pageDeviceParameters
     let preservedColorRenderingSource = colorRenderingSource
+    let preservedTransferFunctionSources = transferFunctionSources
+    let preservedBlackGenerationSource = blackGenerationSource
+    let preservedUndercolorRemovalSource = undercolorRemovalSource
+    let preservedHalftoneSource = halftoneSource
+    let preservedDeviceRendering = deviceRendering
+    let preservedScreenLease = screenLease
     let preservedOverprint = overprint
     let preservedFlatness = flatness
     let preservedStrokeAdjustment = strokeAdjustment
@@ -117,6 +136,12 @@ struct GraphicsCanonicalState: Sendable {
     self = .initial(for: descriptor, device: preservedDevice)
     pageDeviceParameters = preservedPageDeviceParameters
     colorRenderingSource = preservedColorRenderingSource
+    transferFunctionSources = preservedTransferFunctionSources
+    blackGenerationSource = preservedBlackGenerationSource
+    undercolorRemovalSource = preservedUndercolorRemovalSource
+    halftoneSource = preservedHalftoneSource
+    deviceRendering = preservedDeviceRendering
+    screenLease = preservedScreenLease
     overprint = preservedOverprint
     flatness = preservedFlatness
     strokeAdjustment = preservedStrokeAdjustment
@@ -128,6 +153,10 @@ struct GraphicsCanonicalState: Sendable {
     try dashSource?.checkStorage(in: vm)
     for object in colorSpace.retainedObjects { try object.checkStorage(in: vm) }
     try colorRenderingSource?.checkStorage(in: vm)
+    for source in transferFunctionSources { try source?.checkStorage(in: vm) }
+    try blackGenerationSource?.checkStorage(in: vm)
+    try undercolorRemovalSource?.checkStorage(in: vm)
+    try halftoneSource?.checkStorage(in: vm)
     try patternSource?.checkStorage(in: vm)
     try pageDeviceParameters?.checkStorage(in: vm)
   }

@@ -31,9 +31,13 @@ struct SystemParameterState: Sendable {
     "MaxImageBuffer": .readWrite(.nonnegativeInteger),
     "MaxOutlineCache": .readWrite(.nonnegativeInteger),
     "MaxPatternCache": .readWrite(.integer { min(max($0, 0), Int32(PatternCache.maximumBytes)) }),
-    "MaxScreenStorage": .readWrite(.nonnegativeInteger),
+    "MaxScreenStorage": .readWrite(.integer {
+      min(max($0, 0), Int32(ScreenManager.maximumActiveBytes))
+    }),
     "MaxSourceList": .readWrite(.nonnegativeInteger),
-    "MaxStoredScreenCache": .readWrite(.integer { $0 < 0 ? .max : $0 }),
+    "MaxStoredScreenCache": .readWrite(.integer {
+      min(max($0, 0), Int32(ScreenManager.maximumCachedBytes))
+    }),
     "MaxUPathCache": .readWrite(.integer { min(max($0, 0), Int32(UserPathCache.maximumBytes)) }),
     "PageCount": .readOnly,
     "PrinterName": .readWrite(.string(maximumLength: nil)),
@@ -76,9 +80,9 @@ struct SystemParameterState: Sendable {
       "MaxImageBuffer": .integer(.max),
       "MaxOutlineCache": .integer(.max),
       "MaxPatternCache": .integer(Int32(PatternCache.maximumBytes)),
-      "MaxScreenStorage": .integer(.max),
+      "MaxScreenStorage": .integer(Int32(ScreenManager.maximumActiveBytes)),
       "MaxSourceList": .integer(.max),
-      "MaxStoredScreenCache": .integer(.max),
+      "MaxStoredScreenCache": .integer(Int32(ScreenManager.maximumCachedBytes)),
       "MaxUPathCache": .integer(Int32(UserPathCache.maximumBytes)),
       "PageCount": .integer(0),
       "PrinterName": .string(Data("SolidPostScript".utf8)),
