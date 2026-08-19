@@ -5,6 +5,7 @@ enum RasterCompositor {
     _ triangle: RasterGradientTriangle,
     spans: borrowing Span<CoverageSpan>,
     width: Int,
+    deviceRendering: RasterHalftoneProgram? = nil,
     pixels: inout MutableSpan<UInt8>
   ) {
     let first = triangle.first.position
@@ -31,7 +32,10 @@ enum RasterCompositor {
           blue: colors[0].blue * firstWeight + colors[1].blue * secondWeight + colors[2].blue * thirdWeight,
           alpha: colors[0].alpha * firstWeight + colors[1].alpha * secondWeight + colors[2].alpha * thirdWeight
         )
-        if let source = try? premultiplied(color) {
+        if var source = try? premultiplied(color) {
+          if let deviceRendering {
+            source = deviceRendering.quantize(source, x: xIndex, y: span.y)
+          }
           composite(
             source: source,
             coverage: UInt16(span.coverage),
@@ -62,6 +66,7 @@ enum RasterCompositor {
     _ sourceColor: SIMD4<UInt16>,
     spans: borrowing Span<CoverageSpan>,
     width: Int,
+    deviceRendering: RasterHalftoneProgram? = nil,
     pixels: inout MutableSpan<UInt8>
   ) {
     let base = sourceColor
@@ -71,11 +76,25 @@ enum RasterCompositor {
       var offset = (span.y * width + span.x) * 4
       let end = offset + span.length * 4
       let coverage = UInt16(span.coverage)
-      let sourceAlpha = (base[3] * coverage + 127) / 255
+      var rendered = base
+      if let deviceRendering {
+        for pixel in span.x..<(span.x + span.length) {
+          rendered = deviceRendering.quantize(base, x: pixel, y: span.y)
+          composite(
+            source: rendered,
+            coverage: coverage,
+            destinationOffset: offset,
+            pixels: &pixels
+          )
+          offset += 4
+        }
+        continue
+      }
+      let sourceAlpha = (rendered[3] * coverage + 127) / 255
       let source = SIMD4<UInt16>(
-        (base[0] * coverage + 127) / 255,
-        (base[1] * coverage + 127) / 255,
-        (base[2] * coverage + 127) / 255,
+        (rendered[0] * coverage + 127) / 255,
+        (rendered[1] * coverage + 127) / 255,
+        (rendered[2] * coverage + 127) / 255,
         sourceAlpha
       )
       if sourceAlpha == 255 {
@@ -115,9 +134,11 @@ enum RasterCompositor {
     interpolation: RasterInterpolation,
     spans: borrowing Span<CoverageSpan>,
     destinationWidth: Int,
+    deviceRendering: RasterHalftoneProgram? = nil,
     pixels: inout MutableSpan<UInt8>
   ) {
-    if inverseTransform.a == 1,
+    if deviceRendering == nil,
+      inverseTransform.a == 1,
       inverseTransform.b == 0,
       inverseTransform.c == 0,
       inverseTransform.d == 1,
@@ -142,7 +163,7 @@ enum RasterCompositor {
       )
       return
     }
-    if inverseTransform.b == 0, inverseTransform.c == 0 {
+    if deviceRendering == nil, inverseTransform.b == 0, inverseTransform.c == 0 {
       compositeAxisAlignedImage(
         source: source,
         sourceWidth: sourceWidth,
@@ -170,7 +191,7 @@ enum RasterCompositor {
         + inverseTransform.d * destinationY
         + inverseTransform.ty
       for _ in 0..<span.length {
-        let sample = sample(
+        var sample = sample(
           source,
           width: sourceWidth,
           height: sourceHeight,
@@ -180,6 +201,13 @@ enum RasterCompositor {
           y: sourceY,
           interpolation: interpolation
         )
+        if let deviceRendering {
+          sample = deviceRendering.quantize(
+            sample,
+            x: destinationOffset / 4 % destinationWidth,
+            y: span.y
+          )
+        }
         composite(
           source: sample,
           coverage: UInt16(span.coverage),
@@ -209,6 +237,7 @@ enum RasterCompositor {
     maskInterpolation: RasterInterpolation,
     spans: borrowing Span<CoverageSpan>,
     destinationWidth: Int,
+    deviceRendering: RasterHalftoneProgram? = nil,
     pixels: inout MutableSpan<UInt8>
   ) {
     for spanIndex in 0..<spans.count {
@@ -229,7 +258,7 @@ enum RasterCompositor {
         + inverseMaskTransform.d * destinationY
         + inverseMaskTransform.ty
       for _ in 0..<span.length {
-        let color = sample(
+        var color = sample(
           source,
           width: sourceWidth,
           height: sourceHeight,
@@ -239,6 +268,13 @@ enum RasterCompositor {
           y: sourceY,
           interpolation: interpolation
         )
+        if let deviceRendering {
+          color = deviceRendering.quantize(
+            color,
+            x: destinationOffset / 4 % destinationWidth,
+            y: span.y
+          )
+        }
         let opacity = sampleMask(
           mask,
           width: maskWidth,

@@ -12,6 +12,20 @@ let benchmarks: @Sendable () -> Void = {
   let cubicPath = try! RasterBenchmarkFixtures.cubicPath()
   let deepClip = try! RasterBenchmarkFixtures.deepClip()
   let sourceImage = try! RasterBenchmarkFixtures.largeImage()
+  let bilevelProgram = try! RasterHalftoneProgram(
+    componentLevels: [2, 2, 2],
+    defaultScreen: RasterThresholdScreen(
+      width: 4,
+      height: 4,
+      maximumThreshold: 255,
+      thresholds: [
+        1, 129, 33, 161,
+        193, 65, 225, 97,
+        49, 177, 17, 145,
+        241, 113, 209, 81,
+      ]
+    )
+  )
   let colorSamples = (0..<4_096).map { index in
     let component = Double(index) / 4_095
     return ColorXYZ(x: component * ColorXYZ.d65.x, y: component, z: component * ColorXYZ.d65.z)
@@ -58,6 +72,20 @@ let benchmarks: @Sendable () -> Void = {
     for _ in benchmark.scaledIterations {
       var canvas = try! RasterCanvas(width: pathWidth, height: pathHeight)
       try! canvas.fill(surfacePath, rule: .winding, paint: .solid(.black))
+      blackHole(try! canvas.finish(pixelFormat: .rgba8UnormPremultiplied))
+    }
+  }
+
+  Benchmark("Bilevel Halftone Fill", configuration: configuration) { benchmark in
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      var canvas = try! RasterCanvas(width: pathWidth, height: pathHeight)
+      try! canvas.fill(
+        surfacePath,
+        rule: .winding,
+        paint: .solid(RasterColor(red: 0.35, green: 0.6, blue: 0.85)),
+        deviceRendering: bilevelProgram
+      )
       blackHole(try! canvas.finish(pixelFormat: .rgba8UnormPremultiplied))
     }
   }

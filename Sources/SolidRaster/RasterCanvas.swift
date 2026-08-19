@@ -73,7 +73,8 @@ public struct RasterCanvas: ~Copyable {
   public mutating func fill(
     _ path: RasterPath,
     rule: RasterFillRule,
-    paint: RasterPaint
+    paint: RasterPaint,
+    deviceRendering: RasterHalftoneProgram? = nil
   ) throws(RasterError) {
     try requireActive()
     guard path.elements.count <= limits.maximumPathElements else { throw .limitExceeded }
@@ -85,7 +86,13 @@ public struct RasterCanvas: ~Copyable {
     let surfaceWidth = width
     let visible = visibleSpans
     withPixels { span in
-      RasterCompositor.composite(source, spans: visible.span, width: surfaceWidth, pixels: &span)
+      RasterCompositor.composite(
+        source,
+        spans: visible.span,
+        width: surfaceWidth,
+        deviceRendering: deviceRendering,
+        pixels: &span
+      )
     }
   }
 
@@ -94,15 +101,19 @@ public struct RasterCanvas: ~Copyable {
     _ path: RasterPath,
     style: RasterStrokeStyle,
     paint: RasterPaint,
-    transform: RasterAffineTransform = .identity
+    transform: RasterAffineTransform = .identity,
+    deviceRendering: RasterHalftoneProgram? = nil
   ) throws(RasterError) {
     try requireActive()
     let outline = try PathStroker.stroke(path, style: style, transform: transform)
-    try fill(outline, rule: .winding, paint: paint)
+    try fill(outline, rule: .winding, paint: paint, deviceRendering: deviceRendering)
   }
 
   /// Paints an ordered color-interpolated triangle mesh through the current clip.
-  public mutating func paint(_ mesh: RasterGradientMesh) throws(RasterError) {
+  public mutating func paint(
+    _ mesh: RasterGradientMesh,
+    deviceRendering: RasterHalftoneProgram? = nil
+  ) throws(RasterError) {
     try requireActive()
     guard mesh.triangles.count <= 1_000_000,
       mesh.triangles.count <= limits.maximumScratchBytes / MemoryLayout<RasterGradientTriangle>.stride
@@ -130,6 +141,7 @@ public struct RasterCanvas: ~Copyable {
           triangle,
           spans: visible.span,
           width: destinationWidth,
+          deviceRendering: deviceRendering,
           pixels: &pixels
         )
       }
@@ -140,7 +152,8 @@ public struct RasterCanvas: ~Copyable {
   public mutating func draw(
     _ image: RasterImage,
     transform: RasterAffineTransform,
-    interpolation: RasterInterpolation = .nearest
+    interpolation: RasterInterpolation = .nearest,
+    deviceRendering: RasterHalftoneProgram? = nil
   ) throws(RasterError) {
     try requireActive()
     guard let inverse = transform.inverted,
@@ -180,6 +193,7 @@ public struct RasterCanvas: ~Copyable {
           interpolation: interpolation,
           spans: visible.span,
           destinationWidth: destinationWidth,
+          deviceRendering: deviceRendering,
           pixels: &span
         )
       }
@@ -193,7 +207,8 @@ public struct RasterCanvas: ~Copyable {
     interpolation: RasterInterpolation = .nearest,
     mask: RasterMask,
     maskTransform: RasterAffineTransform,
-    maskInterpolation: RasterInterpolation = .nearest
+    maskInterpolation: RasterInterpolation = .nearest,
+    deviceRendering: RasterHalftoneProgram? = nil
   ) throws(RasterError) {
     try requireActive()
     guard let inverse = transform.inverted,
@@ -248,6 +263,7 @@ public struct RasterCanvas: ~Copyable {
             maskInterpolation: maskInterpolation,
             spans: visible.span,
             destinationWidth: destinationWidth,
+            deviceRendering: deviceRendering,
             pixels: &span
           )
         }

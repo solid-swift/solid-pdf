@@ -38,7 +38,22 @@ public final class ProcSetResources: ResourceCategory {
 
     let source = procSet.load()
     let file = DataFile(data: source.data(using: .isoLatin1).neverNil(), mode: .read)
-    try await context.pushAndRun(source: .file(file, access: .readOnly, vm: .local, kind: .executable))
+    let operandDepth = context.operands.depth
+    let allocationMode = context.allocationMode
+    defer { context.allocationMode = allocationMode }
+    let executionDepth = context.execution.depth
+    try context.execution.push(
+      source: .file(file, access: .readOnly, vm: .local, kind: .executable),
+      in: context
+    )
+    try await context.run(untilExecutionDepth: executionDepth)
+
+    if context.operands.depth == operandDepth + 1 {
+      let result = try context.operands.pop()
+      guard result.value is DictionaryValue else { throw Error.typeCheck }
+      return result
+    }
+    guard context.operands.depth == operandDepth else { throw Error.stackUnderflow }
 
     return try context.dictionaries.object(forKey: key)
   }

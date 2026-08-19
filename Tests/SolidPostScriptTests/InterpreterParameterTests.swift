@@ -149,7 +149,7 @@ struct InterpreterParameterTests {
         """,
       environment: environment
     )
-    #expect(try normalized[0].value(as: IntegerValue.self).value == .max)
+    #expect(try normalized[0].value(as: IntegerValue.self).value == 0)
     #expect(try normalized[1].value(as: IntegerValue.self).value == 30)
     #expect(try normalized[2].value(as: StringValue.self).nameString == "SolidPostScript")
   }

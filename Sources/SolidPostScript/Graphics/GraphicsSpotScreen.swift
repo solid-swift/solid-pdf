@@ -10,6 +10,8 @@ public struct GraphicsSpotScreen: Sendable, Hashable {
   public let height: Int
   /// Thresholds in row-major order, where zero has already been normalized to one.
   public let thresholds: [UInt16]
+  /// A component transfer function overriding the graphics-state transfer, if present.
+  public let transferFunction: GraphicsComponentFunction?
 
   /// Creates a compiled spot screen.
   public init(
@@ -19,7 +21,8 @@ public struct GraphicsSpotScreen: Sendable, Hashable {
     actualAngle: Double,
     width: Int,
     height: Int,
-    thresholds: [UInt16]
+    thresholds: [UInt16],
+    transferFunction: GraphicsComponentFunction? = nil
   ) throws {
     let count = width.multipliedReportingOverflow(by: height)
     guard frequency > 0, frequency.isFinite, angle.isFinite,
@@ -33,5 +36,6 @@ public struct GraphicsSpotScreen: Sendable, Hashable {
     self.width = width
     self.height = height
     self.thresholds = thresholds.map { max(1, $0) }
+    self.transferFunction = transferFunction
   }
 }

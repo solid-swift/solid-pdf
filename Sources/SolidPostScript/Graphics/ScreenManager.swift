@@ -4,6 +4,9 @@ import Synchronization
 struct ScreenCacheKey: Sendable, Hashable {
   let sourceIdentity: ObjectIdentifier?
   let sourceRevision: UInt64
+  let frequency: Double
+  let angle: Double
+  let transferFunction: GraphicsComponentFunction?
   let descriptor: GraphicsDeviceDescriptor
   let accurate: Bool
   let maximumSuperScreen: Int32

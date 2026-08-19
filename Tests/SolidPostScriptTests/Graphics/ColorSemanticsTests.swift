@@ -108,6 +108,21 @@ struct ColorSemanticsTests {
     #expect(try values[1].value(as: BooleanValue.self).value)
   }
 
+  @Test func findColorRenderingUsesTheStandardCustomizationProcSet() async throws {
+    let values = try await Interpreter.results(content: """
+      /ColorRendering /ProcSet findresource begin
+      GetPageDeviceName 64 string cvs
+      GetHalftoneName
+      /Perceptual GetSubstituteCRD
+      end
+      /Perceptual findcolorrendering not exch /DefaultColorRendering eq and
+      """)
+    #expect(try values[3].value(as: StringValue.self).string == "SolidVirtualPageDevice")
+    #expect(try values[2].value(as: NameValue.self).value == "none")
+    #expect(try values[1].value(as: NameValue.self).value == "DefaultColorRendering")
+    #expect(try values[0].value(as: BooleanValue.self).value)
+  }
+
   @Test func transferAndColorAdjustmentProceduresAreCompiledAndRestored() async throws {
     let values = try await Interpreter.results(content: """
       /invert {1 exch sub} def

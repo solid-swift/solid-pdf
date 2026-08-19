@@ -32,10 +32,10 @@ public final class NativeGraphicsDeviceRenderingSession: GraphicsDeviceRendering
     if cachedState == state, cachedDescriptor == device, let cachedProgram { return cachedProgram }
     do {
       let program = try RasterHalftoneProgram(
-        redTransfer: state.transferFunctions.red.samples,
-        greenTransfer: state.transferFunctions.green.samples,
-        blueTransfer: state.transferFunctions.blue.samples,
-        grayTransfer: state.transferFunctions.gray.samples,
+        redTransfer: state.effectiveTransferFunctions.red.samples,
+        greenTransfer: state.effectiveTransferFunctions.green.samples,
+        blueTransfer: state.effectiveTransferFunctions.blue.samples,
+        grayTransfer: state.effectiveTransferFunctions.gray.samples,
         componentLevels: device.deviceRendering.quantization.levels,
         defaultScreen: try thresholdScreen(state.halftone),
         colorantScreens: try colorantScreens(state.halftone)
@@ -65,7 +65,9 @@ public final class NativeGraphicsDeviceRenderingSession: GraphicsDeviceRendering
         width: screen.width,
         height: screen.height,
         maximumThreshold: screen.bitsPerSample == 8 ? 255 : UInt16.max,
-        thresholds: screen.thresholds
+        thresholds: screen.thresholds,
+        secondaryWidth: screen.secondaryWidth,
+        secondaryHeight: screen.secondaryHeight
       )
     }
   }

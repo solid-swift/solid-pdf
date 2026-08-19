@@ -6,6 +6,39 @@ import SolidRaster
 import Testing
 
 @Suite struct RasterImageTargetTests {
+  @Test func discreteDevicesApplyHalftonesInAbsolutePixelCoordinates() async throws {
+    let bounds = GraphicsRect(x: 0, y: 0, width: 4, height: 4)
+    let descriptor = GraphicsDeviceDescriptor(
+      mediaBounds: bounds,
+      imageableBounds: bounds,
+      horizontalResolution: 72,
+      verticalResolution: 72,
+      defaultMatrix: .identity,
+      deviceRendering: GraphicsDeviceRenderingDescriptor(
+        quantization: .discrete(levels: [2, 2, 2])
+      )
+    )
+    let result = try await Interpreter.render(
+      content: """
+      << /HalftoneType 3 /Width 2 /Height 2 /Thresholds <40c080ff> >> sethalftone
+      .5 setgray 0 0 4 4 rectfill showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 4, pixelHeight: 4, deviceDescriptor: descriptor)
+    )
+
+    let image = try #require(result.output.first)
+    let first = try gray(x: 0, y: 0, image: image)
+    #expect((0..<4).allSatisfy { y in
+      (0..<4).allSatisfy { x in
+        (try? gray(x: x, y: y, image: image)) == (try? gray(x: x % 2, y: y % 2, image: image))
+      }
+    })
+    #expect(first == 0 || first == 1)
+    #expect((0..<4).contains { y in
+      (0..<4).contains { x in (try? gray(x: x, y: y, image: image)) != first }
+    })
+  }
+
   @Test func transferFunctionsApplyToNativeVectorPaint() async throws {
     let result = try await Interpreter.render(
       content: "{1 exch sub} settransfer .25 setgray 0 0 20 20 rectfill showpage",

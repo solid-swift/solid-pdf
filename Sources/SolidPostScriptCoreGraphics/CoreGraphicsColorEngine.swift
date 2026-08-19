@@ -57,9 +57,9 @@ public final class CoreGraphicsColorSession: CoreGraphicsCompatibleColorSession 
   ) throws -> CGColor {
     let rgb = paint.rgbComponents
     return try destinationColor(
-      red: clipped(deviceRendering.transferFunctions.red.evaluate(rgb.red)),
-      green: clipped(deviceRendering.transferFunctions.green.evaluate(rgb.green)),
-      blue: clipped(deviceRendering.transferFunctions.blue.evaluate(rgb.blue))
+      red: clipped(deviceRendering.effectiveTransferFunctions.red.evaluate(rgb.red)),
+      green: clipped(deviceRendering.effectiveTransferFunctions.green.evaluate(rgb.green)),
+      blue: clipped(deviceRendering.effectiveTransferFunctions.blue.evaluate(rgb.blue))
     )
   }
 
@@ -112,7 +112,7 @@ public final class CoreGraphicsColorSession: CoreGraphicsCompatibleColorSession 
       destinationColorSpace: destinationColorSpace,
       maskComponents: maskComponents,
       byteCapacity: byteCapacity,
-      transferFunctions: deviceRendering.transferFunctions
+      transferFunctions: deviceRendering.effectiveTransferFunctions
     )
   }
 

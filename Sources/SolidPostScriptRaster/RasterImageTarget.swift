@@ -317,12 +317,14 @@ where
         return
       }
       let transformed = path.transformed(by: rasterMatrix).rasterPath
+      let deviceProgram = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(state.clip))
         try canvas.fill(
           transformed,
           rule: rule.raster,
-          paint: try colorSession.resolve(state.paint, deviceRendering: state.deviceRendering)
+          paint: try colorSession.resolve(state.paint, deviceRendering: state.deviceRendering),
+          deviceRendering: deviceProgram
         )
       }
     }
@@ -352,13 +354,15 @@ where
         dash: state.dash.pattern,
         dashPhase: state.dash.phase
       )
+      let deviceProgram = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(state.clip))
         try canvas.stroke(
           path.transformed(by: inverse).rasterPath,
           style: style,
           paint: try colorSession.resolve(state.paint, deviceRendering: state.deviceRendering),
-          transform: strokeTransform
+          transform: strokeTransform,
+          deviceRendering: deviceProgram
         )
       }
     }
@@ -638,12 +642,14 @@ where
         return
       }
       let transformed = effectPath.transformed(by: rasterMatrix).rasterPath
+      let deviceProgram = try deviceRenderingSession.resolve(effectState.deviceRendering, for: descriptor)
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(combinedClip))
         try canvas.fill(
           transformed,
           rule: effectRule.raster,
-          paint: try colorSession.resolve(effectPaint, deviceRendering: effectState.deviceRendering)
+          paint: try colorSession.resolve(effectPaint, deviceRendering: effectState.deviceRendering),
+          deviceRendering: deviceProgram
         )
       }
     }
@@ -663,6 +669,7 @@ where
         [$0.first.paint, $0.second.paint, $0.third.paint]
       }
       let resolved = try colorSession.resolve(paints, deviceRendering: state.deviceRendering)
+      let deviceProgram = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
       var offset = 0
       let triangles = try shading.mesh.triangles.map { triangle -> RasterGradientTriangle in
         defer { offset += 3 }
@@ -691,10 +698,11 @@ where
           try canvas.fill(
             GraphicsPath.rectangle(descriptor.mediaBounds).transformed(by: rasterMatrix).rasterPath,
             rule: .winding,
-            paint: try colorSession.resolve(background, deviceRendering: state.deviceRendering)
+            paint: try colorSession.resolve(background, deviceRendering: state.deviceRendering),
+            deviceRendering: deviceProgram
           )
         }
-        try canvas.paint(RasterGradientMesh(triangles: triangles))
+        try canvas.paint(RasterGradientMesh(triangles: triangles), deviceRendering: deviceProgram)
       }
     }
 
@@ -782,6 +790,7 @@ where
         renderedHeight <= descriptor.height,
         image.width == descriptor.width
       else { return }
+      let deviceProgram = try deviceRenderingSession.resolve(state.deviceRendering, for: self.descriptor)
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(state.clip))
         if let mask, case .explicit(_, _, let maskToDevice, let maskInterpolate) = descriptor.mask {
@@ -791,7 +800,8 @@ where
             interpolation: descriptor.interpolate ? .linear : .nearest,
             mask: mask,
             maskTransform: maskToDevice.concatenated(with: rasterMatrix).raster,
-            maskInterpolation: maskInterpolate ? .linear : .nearest
+            maskInterpolation: maskInterpolate ? .linear : .nearest,
+            deviceRendering: deviceProgram
           )
         } else if let mask {
           try canvas.draw(
@@ -800,13 +810,15 @@ where
             interpolation: descriptor.interpolate ? .linear : .nearest,
             mask: mask,
             maskTransform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
-            maskInterpolation: descriptor.interpolate ? .linear : .nearest
+            maskInterpolation: descriptor.interpolate ? .linear : .nearest,
+            deviceRendering: deviceProgram
           )
         } else {
           try canvas.draw(
             image,
             transform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
-            interpolation: descriptor.interpolate ? .linear : .nearest
+            interpolation: descriptor.interpolate ? .linear : .nearest,
+            deviceRendering: deviceProgram
           )
         }
       }

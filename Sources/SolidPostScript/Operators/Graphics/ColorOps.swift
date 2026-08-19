@@ -244,13 +244,30 @@ extension Operators {
       } else {
         throw Error.typeCheck
       }
-      let device = context.graphicsDeviceDescriptor.colorDevice.deviceName
-      let exact = Object.literalName("\(intentName).\(device).Default")
+      let procSet = try await ResourceRuntime.find(
+        .literalName("ColorRendering"),
+        in: "ProcSet",
+        context: context
+      ).value(as: DictionaryValue.self)
+      let device = try await executeColorRenderingName(
+        procSet.object(forKey: "GetPageDeviceName"),
+        context: context
+      )
+      let halftone = try await executeColorRenderingName(
+        procSet.object(forKey: "GetHalftoneName"),
+        context: context
+      )
+      let exact = Object.literalName("\(intentName).\(device).\(halftone)")
       do {
         _ = try await ResourceRuntime.find(exact, in: "ColorRendering", context: context)
         context.operands.push(.boolean(true), exact)
       } catch Error.undefinedResource {
-        context.operands.push(.boolean(false), .literalName("Default.\(device).Default"))
+        let substitute = try await executeColorRenderingName(
+          procSet.object(forKey: "GetSubstituteCRD"),
+          operands: [intent],
+          context: context
+        )
+        context.operands.push(.boolean(false), .literalName(substitute))
       }
     }
   }
@@ -662,6 +679,22 @@ extension Operators {
 
   static func validateColorRendering(_ dictionary: DictionaryValue) throws {
     _ = try colorRenderingParameters(dictionary)
+  }
+
+  private static func executeColorRenderingName(
+    _ procedure: Object,
+    operands: [Object] = [],
+    context: isolated Context
+  ) async throws -> String {
+    try procedure.checkProcedure()
+    let depth = context.operands.depth
+    try await context.execute(proc: procedure, ops: operands)
+    guard context.operands.depth == depth + 1 else { throw Error.typeCheck }
+    let result = try context.operands.pop()
+    if let name = result.value as? NameValue { return name.value }
+    let string = try result.value(as: StringValue.self)
+    try string.access.check(.read)
+    return String(decoding: try string.characters(in: string.range), as: UTF8.self)
   }
 
   struct ColorRenderingParameters {
