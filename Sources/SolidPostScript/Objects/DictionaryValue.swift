@@ -142,6 +142,7 @@ public struct DictionaryValue: CompositeValue, VMStoredCompositeValue {
   /// The ``vm`` value.
   public var vm: VM { ref.vm }
   var allocation: VMAllocation { ref.allocation }
+  var revision: UInt64 { ref.versionedRead { _ in () }.revision }
   var allocationFootprint: Int { Self.footprint(forCapacity: ref.uncheckedRead { $0.value.capacity }) }
 
   /// The ``count`` value.
@@ -181,6 +182,11 @@ public struct DictionaryValue: CompositeValue, VMStoredCompositeValue {
   public func object(forKeyIfExists key: Object) throws -> Object? {
     let key = try key.dictionaryKey
     return try ref.read { $0.value[VMStoredObject(key)]?.object }
+  }
+
+  func objectUnchecked(forKey key: Object) throws -> Object? {
+    let key = try key.dictionaryKey
+    return ref.uncheckedRead { $0.value[VMStoredObject(key)]?.object }
   }
 
   /// Performs the ``updateObject`` operation.

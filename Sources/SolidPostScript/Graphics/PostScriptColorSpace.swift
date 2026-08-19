@@ -31,12 +31,14 @@ indirect enum PostScriptColorSpace: Sendable {
   case indexed(source: Object, base: Self, maximumIndex: Int, lookup: Object)
   case separation(source: Object, name: String, alternative: Self, transform: Object)
   case deviceN(source: Object, names: [String], alternative: Self, transform: Object)
+  case pattern(source: Object, underlying: Self?)
 
   var source: Object? {
     switch self {
     case .deviceGray(let source), .deviceRGB(let source), .deviceCMYK(let source): source
     case .cieA(let source, _), .cieABC(let source, _), .cieDEF(let source, _), .cieDEFG(let source, _),
-         .indexed(let source, _, _, _), .separation(let source, _, _, _), .deviceN(let source, _, _, _): source
+         .indexed(let source, _, _, _), .separation(let source, _, _, _), .deviceN(let source, _, _, _),
+         .pattern(let source, _): source
     }
   }
 
@@ -52,6 +54,7 @@ indirect enum PostScriptColorSpace: Sendable {
     case .indexed(_, let base, let maximumIndex, _): .indexed(base: base.description, maximumIndex: maximumIndex)
     case .separation(_, let name, let alternative, _): .separation(name: name, alternative: alternative.description)
     case .deviceN(_, let names, let alternative, _): .deviceN(names: names, alternative: alternative.description)
+    case .pattern(_, let underlying): .pattern(underlying: underlying?.description)
     }
   }
 
@@ -66,6 +69,8 @@ indirect enum PostScriptColorSpace: Sendable {
       return zip(components, parameters.range).map { $1.clamp($0) }
     case .indexed(_, _, let maximumIndex, _):
       return [min(Double(maximumIndex), max(0, components[0].rounded()))]
+    case .pattern(_, let underlying):
+      return underlying?.normalized(components) ?? []
     }
   }
 
@@ -80,6 +85,8 @@ indirect enum PostScriptColorSpace: Sendable {
       parameters.range.map { $0.clamp(0) }
     case .separation, .deviceN:
       Array(repeating: 1, count: componentCount)
+    case .pattern(_, let underlying):
+      underlying?.initialComponents ?? []
     }
   }
 
@@ -94,6 +101,8 @@ indirect enum PostScriptColorSpace: Sendable {
     case .separation(_, _, let alternate, let transform), .deviceN(_, _, let alternate, let transform):
       result.append(contentsOf: alternate.retainedObjects)
       result.append(transform)
+    case .pattern(_, let underlying):
+      if let underlying { result.append(contentsOf: underlying.retainedObjects) }
     case .deviceGray, .deviceRGB, .deviceCMYK:
       break
     }
@@ -168,6 +177,7 @@ indirect enum VMStoredColorSpace: Sendable {
     alternative: Self,
     transform: VMStoredObject
   )
+  case pattern(source: VMStoredObject, underlying: Self?)
 
   init(_ value: PostScriptColorSpace) {
     switch value {
@@ -203,6 +213,8 @@ indirect enum VMStoredColorSpace: Sendable {
         alternative: Self(alternative),
         transform: VMStoredObject(transform)
       )
+    case .pattern(let source, let underlying):
+      self = .pattern(source: VMStoredObject(source), underlying: underlying.map(Self.init))
     }
   }
 
@@ -240,6 +252,8 @@ indirect enum VMStoredColorSpace: Sendable {
         alternative: alternative.colorSpace,
         transform: transform.requiredObject
       )
+    case .pattern(let source, let underlying):
+      .pattern(source: source.requiredObject, underlying: underlying?.colorSpace)
     }
   }
 
@@ -255,6 +269,8 @@ indirect enum VMStoredColorSpace: Sendable {
     case .separation(let source, _, let alternative, let transform),
          .deviceN(let source, _, let alternative, let transform):
       [source, transform] + alternative.storedObjects
+    case .pattern(let source, let underlying):
+      [source] + (underlying?.storedObjects ?? [])
     }
   }
 

@@ -16,6 +16,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     var dashSource: VMStoredObject?
     var colorSpace: VMStoredColorSpace
     var colorComponents: [Double]
+    var patternSource: VMStoredObject?
     var colorRenderingSource: VMStoredObject?
     var overprint: Bool
 
@@ -26,6 +27,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       self.dashSource = state.dashSource.map(VMStoredObject.init)
       self.colorSpace = VMStoredColorSpace(state.colorSpace)
       self.colorComponents = state.colorComponents
+      self.patternSource = state.patternSource.map(VMStoredObject.init)
       self.colorRenderingSource = state.colorRenderingSource.map(VMStoredObject.init)
       self.overprint = state.overprint
     }
@@ -38,6 +40,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         paint: snapshot.paint,
         colorSpace: colorSpace.colorSpace,
         colorComponents: colorComponents,
+        patternSource: patternSource?.object,
         colorRenderingSource: colorRenderingSource?.object,
         overprint: overprint,
         lineWidth: snapshot.lineWidth,
@@ -76,18 +79,19 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       chargedBytes: Self.footprint(storage),
       footprint: Self.footprint,
       children: {
-        [$0.dashSource, $0.colorRenderingSource].compactMap { $0?.allocation }
+        [$0.dashSource, $0.colorRenderingSource, $0.patternSource].compactMap { $0?.allocation }
           + $0.colorSpace.storedObjects.compactMap(\.allocation)
       },
       snapshotCopy: { Storage($0.canonical) },
       storedObjects: {
-        [$0.dashSource, $0.colorRenderingSource].compactMap { $0 }
+        [$0.dashSource, $0.colorRenderingSource, $0.patternSource].compactMap { $0 }
           + $0.colorSpace.storedObjects
       },
       identifyEdges: { storage, allocation in
         storage.dashSource?.identifyEdgeSource(allocation)
         storage.colorSpace.identifyEdges(from: allocation)
         storage.colorRenderingSource?.identifyEdgeSource(allocation)
+        storage.patternSource?.identifyEdgeSource(allocation)
       },
       clear: {
         $0.snapshot = GraphicsCanonicalState.initial(for: .letter).snapshot
@@ -97,12 +101,14 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         $0.colorSpace = VMStoredColorSpace(.deviceGray(nil))
         $0.colorComponents = [0]
         $0.colorRenderingSource = nil
+        $0.patternSource = nil
         $0.overprint = false
       }
     )
     storage.dashSource?.identifyEdgeSource(ref.allocation)
     storage.colorSpace.identifyEdges(from: ref.allocation)
     storage.colorRenderingSource?.identifyEdgeSource(ref.allocation)
+    storage.patternSource?.identifyEdgeSource(ref.allocation)
     self.ref = ref
     self.rootLease = VMRootLease(allocation: ref.allocation, owner: ref)
   }
@@ -141,6 +147,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       storage.dashSource?.identifyEdgeSource(ref.allocation)
       storage.colorSpace.identifyEdges(from: ref.allocation)
       storage.colorRenderingSource?.identifyEdgeSource(ref.allocation)
+      storage.patternSource?.identifyEdgeSource(ref.allocation)
       $0.value = storage
     }
     allocation.updateFootprint(to: newFootprint)
@@ -151,6 +158,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     state().dashSource?.save(to: snapshot)
     state().colorSpace.retainedObjects.forEach { $0.save(to: snapshot) }
     state().colorRenderingSource?.save(to: snapshot)
+    state().patternSource?.save(to: snapshot)
     ref.save(to: snapshot)
   }
 

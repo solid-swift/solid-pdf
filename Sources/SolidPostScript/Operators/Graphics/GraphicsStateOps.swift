@@ -356,10 +356,12 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["setgray"]
 
     func execute(context: isolated Context) async throws {
+      try requireColorOperationAllowed(context)
       let gray = min(1, max(0, try numeric(context.operands.pop())))
       try context.applyGraphicsOperation(.state(.setGray(gray))) {
         $0.colorSpace = .deviceGray(nil)
         $0.colorComponents = [gray]
+        $0.patternSource = nil
         $0.paint = .deviceGray(gray)
       }
     }
@@ -382,6 +384,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["setrgbcolor"]
 
     func execute(context: isolated Context) async throws {
+      try requireColorOperationAllowed(context)
       let operands = try context.operands.pop(count: 3)
       let red = clamped(try numeric(operands[2]))
       let green = clamped(try numeric(operands[1]))
@@ -389,6 +392,7 @@ extension Operators {
       try context.applyGraphicsOperation(.state(.setRGB(red: red, green: green, blue: blue))) {
         $0.colorSpace = .deviceRGB(nil)
         $0.colorComponents = [red, green, blue]
+        $0.patternSource = nil
         $0.paint = .deviceRGB(red: red, green: green, blue: blue)
       }
     }
@@ -416,6 +420,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["setcmykcolor"]
 
     func execute(context: isolated Context) async throws {
+      try requireColorOperationAllowed(context)
       let operands = try context.operands.pop(count: 4)
       let cyan = clamped(try numeric(operands[3]))
       let magenta = clamped(try numeric(operands[2]))
@@ -429,6 +434,7 @@ extension Operators {
       ))) {
         $0.colorSpace = .deviceCMYK(nil)
         $0.colorComponents = [cyan, magenta, yellow, black]
+        $0.patternSource = nil
         $0.paint = .deviceCMYK(cyan: cyan, magenta: magenta, yellow: yellow, black: black)
       }
     }

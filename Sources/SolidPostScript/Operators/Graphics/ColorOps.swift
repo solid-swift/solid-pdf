@@ -21,14 +21,20 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["setcolorspace"]
 
     func execute(context: isolated Context) async throws {
+      try requireColorOperationAllowed(context)
       let object = try context.operands.pop()
       let space = try await parseColorSpace(object, context: context)
       let components = space.initialComponents
-      let paint = try await resolveColor(components, in: space, context: context)
+      let paint: GraphicsPaint = if case .pattern = space {
+        .pattern(.empty)
+      } else {
+        .color(try await resolveColor(components, in: space, context: context))
+      }
       try context.applyGraphicsOperation(.state(.setColorSpace(space.description))) {
         $0.colorSpace = space
         $0.colorComponents = components
-        $0.paint = .color(paint)
+        $0.patternSource = nil
+        $0.paint = paint
       }
     }
   }
@@ -67,12 +73,34 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["setcolor"]
 
     func execute(context: isolated Context) async throws {
+      try requireColorOperationAllowed(context)
+      if case .pattern(_, let underlying) = context.graphicsState.colorSpace {
+        let count = (underlying?.componentCount ?? 0) + 1
+        let values = Array(try context.operands.pop(count: count).reversed())
+        let pattern = values[count - 1]
+        let components = try values.dropLast().map(numeric)
+        let dictionary = try pattern.value(as: DictionaryValue.self)
+        let paint = try await resolvePattern(
+          pattern,
+          dictionary: dictionary,
+          underlying: underlying,
+          components: components,
+          context: context
+        )
+        try context.applyGraphicsOperation(.state(.setColorSpace(context.graphicsState.colorSpace.description))) {
+          $0.colorComponents = components
+          $0.patternSource = pattern
+          $0.paint = .pattern(paint)
+        }
+        return
+      }
       let count = context.graphicsState.colorSpace.componentCount
       let rawComponents = try context.operands.pop(count: count).reversed().map(numeric)
       let components = context.graphicsState.colorSpace.normalized(rawComponents)
       let paint = try await resolveColor(components, in: context.graphicsState.colorSpace, context: context)
       try context.applyGraphicsOperation(.state(.setColor(paint))) {
         $0.colorComponents = components
+        $0.patternSource = nil
         $0.paint = .color(paint)
       }
     }
@@ -83,6 +111,13 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["currentcolor"]
 
     func execute(context: isolated Context) async throws {
+      if case .pattern = context.graphicsState.colorSpace {
+        context.operands.push(
+          contentsOf: [context.graphicsState.patternSource ?? .null]
+            + (try context.graphicsState.colorComponents.reversed().map { try Object.real($0) })
+        )
+        return
+      }
       context.operands.push(
         contentsOf: try context.graphicsState.colorComponents.reversed().map { try Object.real($0) }
       )
@@ -94,6 +129,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["sethsbcolor"]
 
     func execute(context: isolated Context) async throws {
+      try requireColorOperationAllowed(context)
       let operands = try context.operands.pop(count: 3)
       let hue = clamped(try numeric(operands[2]))
       let saturation = clamped(try numeric(operands[1]))
@@ -244,11 +280,17 @@ extension Operators {
     blue: Double,
     context: isolated Context
   ) throws {
+    try requireColorOperationAllowed(context)
     try context.applyGraphicsOperation(.state(.setRGB(red: red, green: green, blue: blue))) {
       $0.colorSpace = .deviceRGB(nil)
       $0.colorComponents = [red, green, blue]
+      $0.patternSource = nil
       $0.paint = .deviceRGB(red: red, green: green, blue: blue)
     }
+  }
+
+  static func requireColorOperationAllowed(_ context: isolated Context) throws {
+    guard context.uncoloredPatternExecutionDepth == 0 else { throw Error.undefined }
   }
 
   static func parseColorSpace(_ object: Object, context: isolated Context) async throws -> PostScriptColorSpace {
@@ -257,7 +299,7 @@ extension Operators {
       case "DeviceGray": return .deviceGray(nil)
       case "DeviceRGB": return .deviceRGB(nil)
       case "DeviceCMYK": return .deviceCMYK(nil)
-      case "Pattern": throw Error.undefined
+      case "Pattern": return .pattern(source: object, underlying: nil)
       default:
         let resource = try await ResourceRuntime.find(object, in: "ColorSpace", context: context)
         return try await parseColorSpace(resource, context: context)
@@ -318,7 +360,15 @@ extension Operators {
       if elements.count == 5 { _ = try elements[4].value(as: DictionaryValue.self) }
       return .deviceN(source: object, names: names, alternative: alternative, transform: elements[3])
     case "Pattern":
-      throw Error.undefined
+      guard elements.count == 1 || elements.count == 2 else { throw Error.rangeCheck }
+      let underlying: PostScriptColorSpace?
+      if elements.count == 2 {
+        underlying = try await parseColorSpace(elements[1], context: context)
+        if case .pattern = underlying { throw Error.rangeCheck }
+      } else {
+        underlying = nil
+      }
+      return .pattern(source: object, underlying: underlying)
     default:
       throw Error.rangeCheck
     }
@@ -388,6 +438,8 @@ extension Operators {
       )
       let fallback = try await resolveColor(values, in: alternative, context: context)
       return .named(space: space.description, colorants: names, tints: tints, alternative: fallback)
+    case .pattern:
+      throw Error.typeCheck
     }
   }
 

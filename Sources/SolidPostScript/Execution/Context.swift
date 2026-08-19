@@ -90,6 +90,9 @@ public actor Context {
   var graphicsDeviceDescriptor: GraphicsDeviceDescriptor = .letter
   var graphicsEventConsumer: (any GraphicsEventConsumer)?
   var graphicsState: GraphicsCanonicalState = .initial(for: .letter)
+  var activePatternAllocations: Set<ObjectIdentifier> = []
+  var patternExecutionDepth = 0
+  var uncoloredPatternExecutionDepth = 0
   var graphicsStack: [GraphicsStackFrame] = []
   private var executionBoundarySequence: UInt64 = 0
   private var executionTimingDepth = 0
@@ -997,6 +1000,7 @@ public actor Context {
     graphicsState.dashSource?.save(to: builder)
     graphicsState.colorSpace.retainedObjects.forEach { $0.save(to: builder) }
     graphicsState.colorRenderingSource?.save(to: builder)
+    graphicsState.patternSource?.save(to: builder)
     for frame in graphicsStack {
       frame.state.dashSource?.save(to: builder)
       frame.state.colorSpace.retainedObjects.forEach { $0.save(to: builder) }

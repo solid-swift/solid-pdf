@@ -19,7 +19,7 @@ public enum Resources {
     "FontSet": StandardResourceCategory(category: "FontSet", instanceType: .dictionary),
     "Encoding": StandardResourceCategory(category: "Encoding", instanceType: .array),
     "Form": StandardResourceCategory(category: "Form", instanceType: .dictionary),
-    "Pattern": StandardResourceCategory(category: "Pattern", instanceType: .dictionary),
+    "Pattern": PatternResources(),
     "ProcSet": ProcSetResources(),
     "ColorSpace": StandardResourceCategory(category: "ColorSpace", instanceType: .array),
     "Halftone": StandardResourceCategory(category: "Halftone", instanceType: .dictionary),

@@ -6,6 +6,41 @@ import SolidRaster
 import Testing
 
 @Suite struct RasterImageTargetTests {
+  @Test func tilingPatternsRepeatTheirTransparentKeyCell() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      /p << /PatternType 1 /PaintType 1 /TilingType 1
+        /BBox [0 0 10 10] /XStep 10 /YStep 10
+        /PaintProc { pop 0 setgray 0 0 5 10 rectfill }
+      >> matrix makepattern def
+      /Pattern setcolorspace p setcolor 0 0 20 20 rectfill showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+    let image = try #require(result.output.first)
+    #expect(try gray(x: 2, y: 10, image: image) < 0.1)
+    #expect(try gray(x: 7, y: 10, image: image) > 0.9)
+    #expect(try gray(x: 12, y: 10, image: image) < 0.1)
+  }
+
+  @Test func uncoloredPatternImageMasksUseTheUnderlyingPaint() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      /p << /PatternType 1 /PaintType 2 /TilingType 1
+        /BBox [0 0 4 4] /XStep 4 /YStep 4
+        /PaintProc { pop 4 4 scale 1 1 true [1 0 0 1 0 0] <80> imagemask }
+      >> matrix makepattern def
+      [/Pattern /DeviceRGB] setcolorspace 1 0 0 p setcolor
+      0 0 8 8 rectfill showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 8, pixelHeight: 8)
+    )
+    let color = try rgb(x: 2, y: 2, image: #require(result.output.first))
+    #expect(color.red > 0.9)
+    #expect(color.green < 0.1)
+    #expect(color.blue < 0.1)
+  }
+
   @Test func rendererWithoutTransmittedPageProducesNoSurface() throws {
     let renderer = try RasterImageTarget(pixelWidth: 20, pixelHeight: 20).makeRenderer()
 

@@ -13,6 +13,7 @@ struct GraphicsCanonicalState: Sendable {
   var paint: GraphicsPaint
   var colorSpace: PostScriptColorSpace
   var colorComponents: [Double]
+  var patternSource: Object?
   var colorRenderingSource: Object?
   var overprint: Bool
   var lineWidth: Double
@@ -36,6 +37,7 @@ struct GraphicsCanonicalState: Sendable {
       paint: .deviceGray(0),
       colorSpace: .deviceGray(nil),
       colorComponents: [0],
+      patternSource: nil,
       colorRenderingSource: nil,
       overprint: false,
       lineWidth: 1,
@@ -111,6 +113,7 @@ struct GraphicsCanonicalState: Sendable {
     try dashSource?.checkStorage(in: vm)
     for object in colorSpace.retainedObjects { try object.checkStorage(in: vm) }
     try colorRenderingSource?.checkStorage(in: vm)
+    try patternSource?.checkStorage(in: vm)
   }
 }
 

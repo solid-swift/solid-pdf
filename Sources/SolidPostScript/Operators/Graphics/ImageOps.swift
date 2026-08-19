@@ -13,6 +13,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["image"]
 
     func execute(context: isolated Context) async throws {
+      guard context.uncoloredPatternExecutionDepth == 0 else { throw Error.undefined }
       let specification: ImageSpecification
       if let dictionary = try? context.operands.peek().value(as: DictionaryValue.self) {
         _ = try context.operands.pop()
@@ -61,6 +62,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["colorimage"]
 
     func execute(context: isolated Context) async throws {
+      guard context.uncoloredPatternExecutionDepth == 0 else { throw Error.undefined }
       let componentCount = Int(try context.operands.pop().value(as: IntegerValue.self).value)
       guard let colorSpace = GraphicsImageColorSpace(rawValue: componentCount) else { throw Error.rangeCheck }
       let multiple = try context.operands.pop().value(as: BooleanValue.self).value
@@ -245,6 +247,7 @@ extension Operators {
       kind = .mask(context.graphicsState.paint)
       sourceColorSpace = nil
     } else {
+      if case .pattern = context.graphicsState.colorSpace { throw Error.undefined }
       switch context.graphicsState.colorSpace {
       case .deviceGray:
         kind = .color(.deviceGray)

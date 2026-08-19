@@ -210,6 +210,10 @@ where
     }
 
     private func fill(_ path: GraphicsPath, rule: GraphicsFillRule, state: GraphicsStateSnapshot) throws {
+      if case .pattern(let pattern) = state.paint {
+        try paintPattern(pattern, through: path, rule: rule, clip: state.clip, depth: 0)
+        return
+      }
       let transformed = path.transformed(by: rasterMatrix).rasterPath
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(state.clip))
@@ -222,6 +226,11 @@ where
       matrix: GraphicsMatrix,
       state: GraphicsStateSnapshot
     ) throws {
+      if case .pattern = state.paint {
+        let outline = try GraphicsPathGeometry.strokeOutline(path: path, state: state, matrix: matrix)
+        try fill(outline, rule: .winding, state: state)
+        return
+      }
       if state.strokeAdjustment {
         let outline = try GraphicsPathGeometry.strokeOutline(path: path, state: state, matrix: matrix)
         try fill(outline, rule: .winding, state: state)
@@ -246,6 +255,230 @@ where
           transform: strokeTransform
         )
       }
+    }
+
+    private func paintPattern(
+      _ paint: GraphicsPatternPaint,
+      through path: GraphicsPath,
+      rule: GraphicsFillRule,
+      clip: GraphicsClip,
+      depth: Int
+    ) throws {
+      guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      switch paint {
+      case .empty:
+        return
+      case .shading:
+        throw SolidPostScript.Error.ioError
+      case .tiling(let pattern, let underlying):
+        let translations = try tileTranslations(for: pattern)
+        guard translations.count <= 1_000_000 else { throw SolidPostScript.Error.ioError }
+        for translation in translations {
+          for effect in pattern.displayList.effects {
+            try replay(
+              effect,
+              translatedBy: translation,
+              underlying: underlying,
+              through: path,
+              rule: rule,
+              clip: clip,
+              depth: depth + 1
+            )
+          }
+        }
+      }
+    }
+
+    private func replay(
+      _ effect: GraphicsEffect,
+      translatedBy translation: GraphicsMatrix,
+      underlying: GraphicsPaint?,
+      through paintedPath: GraphicsPath,
+      rule paintedRule: GraphicsFillRule,
+      clip: GraphicsClip,
+      depth: Int
+    ) throws {
+      if case .image(let image, let imageState) = effect {
+        let translatedConstraints = imageState.clip.constraints.map {
+          GraphicsClipConstraint(path: $0.path.transformed(by: translation), rule: $0.rule)
+        }
+        let combinedClip = GraphicsClip(
+          imageableBounds: clip.imageableBounds,
+          constraints: clip.constraints
+            + [GraphicsClipConstraint(path: paintedPath, rule: paintedRule)]
+            + translatedConstraints
+        )
+        let kind: GraphicsImageKind
+        switch image.descriptor.kind {
+        case .color(let space):
+          kind = .color(space)
+        case .mask(let paint):
+          kind = .mask(underlying ?? paint)
+        }
+        let descriptor = GraphicsImageDescriptor(
+          width: image.descriptor.width,
+          height: image.descriptor.height,
+          kind: kind,
+          sourceColorSpace: image.descriptor.sourceColorSpace,
+          imageToDevice: image.descriptor.imageToDevice.concatenated(with: translation),
+          interpolate: image.descriptor.interpolate
+        )
+        let converter = try colorSession.makeImageConverter(for: descriptor)
+        do {
+          try converter.write(GraphicsImageRows(
+            startRow: 0,
+            rowCount: descriptor.height,
+            components: image.components,
+            sourceComponents: image.sourceComponents
+          ))
+          var state = imageState
+          state = GraphicsStateSnapshot(
+            matrix: state.matrix,
+            path: state.path,
+            clip: combinedClip,
+            paint: state.paint,
+            colorSpace: state.colorSpace,
+            colorComponents: state.colorComponents,
+            overprint: state.overprint,
+            lineWidth: state.lineWidth,
+            lineCap: state.lineCap,
+            lineJoin: state.lineJoin,
+            miterLimit: state.miterLimit,
+            dash: state.dash,
+            flatness: state.flatness,
+            strokeAdjustment: state.strokeAdjustment,
+            smoothness: state.smoothness,
+            pathBoundingBox: state.pathBoundingBox
+          )
+          try draw(converter.finish(), descriptor: descriptor, state: state)
+        } catch {
+          converter.abort()
+          throw error
+        }
+        return
+      }
+      let effectPath: GraphicsPath
+      let effectRule: GraphicsFillRule
+      let effectState: GraphicsStateSnapshot
+      switch effect {
+      case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
+        effectPath = path.transformed(by: translation)
+        effectRule = rule
+        effectState = state
+      case .stroke(let path, let state):
+        effectPath = try GraphicsPathGeometry.strokeOutline(path: path, state: state).transformed(by: translation)
+        effectRule = .winding
+        effectState = state
+      case .userPathStroke(let outline, let state):
+        effectPath = outline.transformed(by: translation)
+        effectRule = .winding
+        effectState = state
+      case .fillRectangles(let paths, let state):
+        effectPath = GraphicsPath(elements: paths.flatMap(\.elements)).transformed(by: translation)
+        effectRule = .winding
+        effectState = state
+      case .strokeRectangles(let paths, let matrix, let state):
+        let combined = GraphicsPath(elements: paths.flatMap(\.elements))
+        let effectiveMatrix = matrix?.concatenated(with: state.matrix) ?? state.matrix
+        effectPath = try GraphicsPathGeometry.strokeOutline(
+          path: combined,
+          state: state,
+          matrix: effectiveMatrix
+        ).transformed(by: translation)
+        effectRule = .winding
+        effectState = state
+      case .erase(let state):
+        effectPath = GraphicsPath.rectangle(descriptor.mediaBounds).transformed(by: translation)
+        effectRule = .winding
+        effectState = state
+      case .image:
+        preconditionFailure("Image effects are handled before vector effects")
+      case .shading:
+        throw SolidPostScript.Error.ioError
+      }
+
+      let translatedConstraints = effectState.clip.constraints.map {
+        GraphicsClipConstraint(path: $0.path.transformed(by: translation), rule: $0.rule)
+      }
+      let combinedClip = GraphicsClip(
+        imageableBounds: clip.imageableBounds,
+        constraints: clip.constraints
+          + [GraphicsClipConstraint(path: paintedPath, rule: paintedRule)]
+          + translatedConstraints
+      )
+      let effectPaint = underlying ?? effectState.paint
+      if case .pattern(let nested) = effectPaint {
+        try paintPattern(nested, through: effectPath, rule: effectRule, clip: combinedClip, depth: depth)
+        return
+      }
+      let transformed = effectPath.transformed(by: rasterMatrix).rasterPath
+      try withCanvas { canvas in
+        try canvas.setClip(try rasterClip(combinedClip))
+        try canvas.fill(transformed, rule: effectRule.raster, paint: try colorSession.resolve(effectPaint))
+      }
+    }
+
+    private func tileTranslations(for pattern: GraphicsTilingPattern) throws -> [GraphicsMatrix] {
+      let origin = pattern.matrix.transform(GraphicsPoint(x: 0, y: 0))
+      let requestedXStep = pattern.matrix.transformDistance(GraphicsPoint(x: pattern.xStep, y: 0))
+      let requestedYStep = pattern.matrix.transformDistance(GraphicsPoint(x: 0, y: pattern.yStep))
+      let xStep = pattern.tilingType == 2 ? requestedXStep : adjustedLatticeStep(requestedXStep)
+      let yStep = pattern.tilingType == 2 ? requestedYStep : adjustedLatticeStep(requestedYStep)
+      let lattice = GraphicsMatrix(
+        a: xStep.x,
+        b: xStep.y,
+        c: yStep.x,
+        d: yStep.y,
+        tx: origin.x,
+        ty: origin.y
+      )
+      guard let inverse = lattice.inverted else { throw SolidPostScript.Error.ioError }
+      let media = descriptor.mediaBounds
+      let coordinates = [
+        GraphicsPoint(x: media.x, y: media.y),
+        GraphicsPoint(x: media.maxX, y: media.y),
+        GraphicsPoint(x: media.maxX, y: media.maxY),
+        GraphicsPoint(x: media.x, y: media.maxY),
+      ].map(inverse.transform)
+      let minimumX = Int((coordinates.map(\.x).min()! - 1).rounded(.down))
+      let maximumX = Int((coordinates.map(\.x).max()! + 1).rounded(.up))
+      let minimumY = Int((coordinates.map(\.y).min()! - 1).rounded(.down))
+      let maximumY = Int((coordinates.map(\.y).max()! + 1).rounded(.up))
+      let columns = maximumX - minimumX + 1
+      let rows = maximumY - minimumY + 1
+      guard columns > 0, rows > 0, rows <= 1_000_000 / columns else {
+        throw SolidPostScript.Error.ioError
+      }
+      var result: [GraphicsMatrix] = []
+      result.reserveCapacity(columns * rows)
+      for row in minimumY...maximumY {
+        for column in minimumX...maximumX {
+          let tx = Double(column) * xStep.x + Double(row) * yStep.x
+          let ty = Double(column) * xStep.y + Double(row) * yStep.y
+          result.append(GraphicsMatrix(
+            a: 1,
+            b: 0,
+            c: 0,
+            d: 1,
+            tx: pattern.tilingType == 2 ? tx.rounded() : tx,
+            ty: pattern.tilingType == 2 ? ty.rounded() : ty
+          ))
+        }
+      }
+      return result
+    }
+
+    private func adjustedLatticeStep(_ value: GraphicsPoint) -> GraphicsPoint {
+      var x = value.x.rounded()
+      var y = value.y.rounded()
+      if x == 0, y == 0 {
+        if abs(value.x) >= abs(value.y) {
+          x = value.x.sign == .minus ? -1 : 1
+        } else {
+          y = value.y.sign == .minus ? -1 : 1
+        }
+      }
+      return GraphicsPoint(x: x, y: y)
     }
 
     private func erasePage() throws {

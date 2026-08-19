@@ -8,6 +8,23 @@ import SolidPostScriptCoreGraphics
 @Suite
 struct CoreGraphicsImageTargetTests {
 
+  @Test func tilingPatternsRepeatTheirTransparentKeyCell() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      /p << /PatternType 1 /PaintType 1 /TilingType 1
+        /BBox [0 0 10 10] /XStep 10 /YStep 10
+        /PaintProc { pop 0 setgray 0 0 5 10 rectfill }
+      >> matrix makepattern def
+      /Pattern setcolorspace p setcolor 0 0 20 20 rectfill showpage
+      """,
+      to: CoreGraphicsImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+    let image = try #require(result.output.first)
+    #expect(try gray(atX: 2, y: 10, in: image) < 0.1)
+    #expect(try gray(atX: 7, y: 10, in: image) > 0.9)
+    #expect(try gray(atX: 12, y: 10, in: image) < 0.1)
+  }
+
   @Test func showPageProducesIndependentImagesAndDiscardsTheFinalPage() async throws {
     let result = try await Interpreter.render(
       content: "showpage showpage 0 setgray 0 0 moveto 10 10 lineto stroke",
