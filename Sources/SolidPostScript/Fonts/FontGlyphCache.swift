@@ -1,12 +1,41 @@
 import Foundation
 import Synchronization
 
-struct FontGlyphCacheKey: Sendable, Hashable {
+struct FontGlyphProgramCacheKey: Sendable, Hashable {
   let font: GraphicsFontIdentifier
   let selector: GraphicsGlyphSelector
-  let transform: GraphicsMatrix
   let writingMode: Int
   let revision: UInt64
+}
+
+struct FontGlyphRealizationCacheKey: Sendable, Hashable {
+  let program: FontGlyphProgramCacheKey
+  let transform: FontGlyphTransformKey
+  let device: GraphicsDeviceDescriptor
+  let paint: GraphicsPaint
+}
+
+struct FontGlyphTransformKey: Sendable, Hashable {
+  let a: Double
+  let b: Double
+  let c: Double
+  let d: Double
+  let phaseX: Double
+  let phaseY: Double
+
+  init(_ matrix: GraphicsMatrix) {
+    a = matrix.a
+    b = matrix.b
+    c = matrix.c
+    d = matrix.d
+    phaseX = Self.phase(matrix.tx)
+    phaseY = Self.phase(matrix.ty)
+  }
+
+  private static func phase(_ value: Double) -> Double {
+    let result = value - value.rounded(.down)
+    return result == 1 ? 0 : result
+  }
 }
 
 private struct PinnedFontGlyphCacheKey: Sendable, Hashable {
@@ -32,39 +61,77 @@ final class FontGlyphCache: Sendable {
   }
 
   private struct State {
-    var entries: [FontGlyphCacheKey: Entry] = [:]
+    var programs: [FontGlyphProgramCacheKey: Entry] = [:]
+    var realizations: [FontGlyphRealizationCacheKey: Entry] = [:]
     var pinnedEntries: [PinnedFontGlyphCacheKey: Entry] = [:]
     var bytes = 0
     var maximumBytes = FontGlyphCache.maximumBytes
     var recency: UInt64 = 0
+
+    var entryCount: Int { programs.count + realizations.count }
   }
 
   private let state = Mutex(State())
 
-  func glyph(for key: FontGlyphCacheKey) -> GraphicsGlyphDescription? {
+  func program(for key: FontGlyphProgramCacheKey) -> GraphicsGlyphDescription? {
     state.withLock { state in
-      guard var entry = state.entries[key] else { return nil }
+      guard var entry = state.programs[key] else { return nil }
       state.recency &+= 1
       entry.recency = state.recency
-      state.entries[key] = entry
+      state.programs[key] = entry
       return entry.glyph
     }
   }
 
-  func insert(_ glyph: GraphicsGlyphDescription, for key: FontGlyphCacheKey, maximumItemBytes: Int) {
+  func realization(for key: FontGlyphRealizationCacheKey) -> GraphicsGlyphDescription? {
+    state.withLock { state in
+      guard var entry = state.realizations[key] else { return nil }
+      state.recency &+= 1
+      entry.recency = state.recency
+      state.realizations[key] = entry
+      return entry.glyph
+    }
+  }
+
+  func insertProgram(
+    _ glyph: GraphicsGlyphDescription,
+    for key: FontGlyphProgramCacheKey,
+    maximumItemBytes: Int
+  ) {
+    insert(glyph, key: key, maximumItemBytes: maximumItemBytes) { state, entry in
+      state.programs[key] = entry
+    }
+  }
+
+  func insertRealization(
+    _ glyph: GraphicsGlyphDescription,
+    for key: FontGlyphRealizationCacheKey,
+    maximumItemBytes: Int
+  ) {
+    insert(glyph, key: key, maximumItemBytes: maximumItemBytes) { state, entry in
+      state.realizations[key] = entry
+    }
+  }
+
+  private func insert<Key: Hashable>(
+    _ glyph: GraphicsGlyphDescription,
+    key: Key,
+    maximumItemBytes: Int,
+    store: (inout State, Entry) -> Void
+  ) {
     let bytes = footprint(glyph)
     let itemLimit = min(max(0, maximumItemBytes), Self.maximumItemBytes)
     guard bytes <= itemLimit else { return }
     state.withLock { state in
-      guard bytes <= state.maximumBytes, state.entries[key] == nil else { return }
-      while !state.entries.isEmpty,
-        state.entries.count >= Self.maximumEntries || state.bytes > state.maximumBytes - bytes
+      guard bytes <= state.maximumBytes else { return }
+      while state.entryCount > 0,
+        state.entryCount >= Self.maximumEntries || state.bytes > state.maximumBytes - bytes
       {
         evictOldest(state: &state)
       }
-      guard state.entries.count < Self.maximumEntries, state.bytes <= state.maximumBytes - bytes else { return }
+      guard state.entryCount < Self.maximumEntries, state.bytes <= state.maximumBytes - bytes else { return }
       state.recency &+= 1
-      state.entries[key] = Entry(glyph: glyph, bytes: bytes, recency: state.recency)
+      store(&state, Entry(glyph: glyph, bytes: bytes, recency: state.recency))
       state.bytes += bytes
     }
   }
@@ -95,7 +162,7 @@ final class FontGlyphCache: Sendable {
     return state.withLock { state in
       let key = PinnedFontGlyphCacheKey(font: font, selector: selector)
       let replacedBytes = state.pinnedEntries[key]?.bytes ?? 0
-      while !state.entries.isEmpty, state.bytes - replacedBytes > state.maximumBytes - bytes {
+      while state.entryCount > 0, state.bytes - replacedBytes > state.maximumBytes - bytes {
         evictOldest(state: &state)
       }
       guard state.bytes - replacedBytes <= state.maximumBytes - bytes else { return false }
@@ -126,7 +193,7 @@ final class FontGlyphCache: Sendable {
   func setMaximumBytes(_ requested: Int) {
     state.withLock { state in
       state.maximumBytes = min(max(0, requested), Self.maximumBytes)
-      while state.bytes > state.maximumBytes, !state.entries.isEmpty { evictOldest(state: &state) }
+      while state.bytes > state.maximumBytes, state.entryCount > 0 { evictOldest(state: &state) }
     }
   }
 
@@ -135,7 +202,7 @@ final class FontGlyphCache: Sendable {
       Status(
         bytes: $0.bytes,
         maximumBytes: $0.maximumBytes,
-        entries: $0.entries.count + $0.pinnedEntries.count
+        entries: $0.entryCount + $0.pinnedEntries.count
       )
     }
   }
@@ -156,8 +223,16 @@ final class FontGlyphCache: Sendable {
   }
 
   private func evictOldest(state: inout State) {
-    guard let oldest = state.entries.min(by: { $0.value.recency < $1.value.recency }) else { return }
-    state.bytes -= oldest.value.bytes
-    state.entries.removeValue(forKey: oldest.key)
+    let oldestProgram = state.programs.min(by: { $0.value.recency < $1.value.recency })
+    let oldestRealization = state.realizations.min(by: { $0.value.recency < $1.value.recency })
+    if let oldestProgram,
+      oldestRealization == nil || oldestProgram.value.recency <= oldestRealization!.value.recency
+    {
+      state.bytes -= oldestProgram.value.bytes
+      state.programs.removeValue(forKey: oldestProgram.key)
+    } else if let oldestRealization {
+      state.bytes -= oldestRealization.value.bytes
+      state.realizations.removeValue(forKey: oldestRealization.key)
+    }
   }
 }

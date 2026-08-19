@@ -332,16 +332,7 @@ extension Operators {
     matrix: GraphicsMatrix,
     context: isolated Context
   ) throws -> Object {
-    let source = try fontDefinition(fontObject, context: context)
-    var entries: [(Object, Object)] = []
-    try source.dictionary.forEachUnchecked { key, value in
-      if key != "FID", key != "FontMatrix" { entries.append((key, value)) }
-    }
-    let combined = source.matrix.concatenated(with: matrix)
-    let matrixObject = try makeMatrixObject(combined, context: context)
-    entries.append((.literalName("FontMatrix"), matrixObject))
-    let dictionary = try context.makeDictionary(entries, access: .unlimited, vm: context.allocationMode)
-    return try initializeFont(dictionary, resourceName: source.description.resourceName, context: context)
+    try deriveFont(fontObject, matrix: matrix, vm: context.allocationMode, context: context)
   }
 
   private static func resolveProviderFace(

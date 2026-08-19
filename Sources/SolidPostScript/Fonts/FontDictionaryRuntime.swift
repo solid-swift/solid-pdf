@@ -99,6 +99,7 @@ extension Operators {
     _ object: Object,
     resourceName: String?,
     providerFace: FontProviderFace? = nil,
+    propagateCompositeMatrix: Bool = true,
     context: isolated Context
   ) throws -> Object {
     let dictionary = try object.value(as: DictionaryValue.self)
@@ -112,6 +113,10 @@ extension Operators {
     try validateFontDictionary(dictionary, requiresIdentifier: false, context: context)
 
     if try dictionary.objectValue(forKey: "FontType", as: IntegerValue.self).value == 0 {
+      let matrix = try readMatrix(dictionary.object(forKey: "FontMatrix"))
+      if propagateCompositeMatrix, matrix != .identity {
+        try replaceCompositeDescendants(in: dictionary, applying: matrix, context: context)
+      }
       let mapType = try dictionary.objectValue(forKey: "FMapType", as: IntegerValue.self).value
       if (mapType == 3 || mapType == 7), try dictionary.object(forKeyIfExists: "EscChar") == nil {
         try context.updateDictionary(dictionary, value: .integer(255), forKey: "EscChar")
@@ -136,6 +141,61 @@ extension Operators {
     }
     try dictionary.setAccess(to: .readOnly)
     return object
+  }
+
+  static func deriveFont(
+    _ fontObject: Object,
+    matrix: GraphicsMatrix,
+    vm: VM,
+    context: isolated Context
+  ) throws -> Object {
+    let savedMode = context.allocationMode
+    context.allocationMode = vm
+    defer { context.allocationMode = savedMode }
+    let source = try fontDefinition(fontObject, context: context)
+    var entries: [(Object, Object)] = []
+    try source.dictionary.forEachUnchecked { key, value in
+      if key != "FID", key != "FontMatrix", key != "FDepVector" { entries.append((key, value)) }
+    }
+    entries.append((.literalName("FontMatrix"), try makeMatrixObject(
+      source.matrix.concatenated(with: matrix), context: context
+    )))
+    if source.type == 0 {
+      let vector = try source.dictionary.objectValue(forKey: "FDepVector", as: ArrayValue.self)
+      let descendants = try vector.objects(in: vector.range, for: .read).map { descendant -> Object in
+        let definition = try fontDefinition(descendant, context: context)
+        return definition.type == 0
+          ? try deriveFont(descendant, matrix: matrix, vm: vm, context: context)
+          : descendant
+      }
+      let derivedVector = try Object.array(descendants, access: .readOnly, vm: vm, kind: .literal)
+      try context.adopt(derivedVector)
+      entries.append((.literalName("FDepVector"), derivedVector))
+    }
+    let dictionary = try context.makeDictionary(entries, access: .unlimited, vm: vm)
+    return try initializeFont(
+      dictionary,
+      resourceName: source.description.resourceName,
+      propagateCompositeMatrix: false,
+      context: context
+    )
+  }
+
+  private static func replaceCompositeDescendants(
+    in dictionary: DictionaryValue,
+    applying matrix: GraphicsMatrix,
+    context: isolated Context
+  ) throws {
+    let vector = try dictionary.objectValue(forKey: "FDepVector", as: ArrayValue.self)
+    let descendants = try vector.objects(in: vector.range, for: .read).map { descendant -> Object in
+      let definition = try fontDefinition(descendant, context: context)
+      return definition.type == 0
+        ? try deriveFont(descendant, matrix: matrix, vm: dictionary.vm, context: context)
+        : descendant
+    }
+    let normalized = try Object.array(descendants, access: .readOnly, vm: dictionary.vm, kind: .literal)
+    try context.adopt(normalized)
+    try context.updateDictionary(dictionary, value: normalized, forKey: "FDepVector")
   }
 
   static func makeProviderFont(

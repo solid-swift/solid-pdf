@@ -72,6 +72,7 @@ extension Context {
     mutate: (inout GraphicsCanonicalState) throws -> Void
   ) throws {
     guard imageDataSourceCallbackDepth == 0 else { throw Error.undefined }
+    if let build = activeGlyphBuild, build.metrics == nil { throw Error.undefined }
     let before = graphicsState.snapshot
     var next = graphicsState
     try mutate(&next)

@@ -13,25 +13,23 @@ extension Operators {
     root: FontDefinition,
     context: isolated Context
   ) throws -> [MappedCharacter] {
-    try mapCharacters(bytes, font: root, inheritedMatrix: .identity, depth: 0, context: context)
+    try mapCharacters(bytes, font: root, depth: 0, context: context)
   }
 
   private static func mapCharacters(
     _ bytes: Data,
     font: FontDefinition,
-    inheritedMatrix: GraphicsMatrix,
     depth: Int,
     context: isolated Context
   ) throws -> [MappedCharacter] {
     guard depth <= 5 else { throw Error.invalidFont }
-    let effectiveMatrix = font.matrix.concatenated(with: inheritedMatrix)
     guard font.type == 0 else {
       return try bytes.map { byte in
         MappedCharacter(
           sourceCode: byte,
           selector: try glyphSelector(byte, font: font),
           font: font,
-          effectiveMatrix: effectiveMatrix
+          effectiveMatrix: font.matrix
         )
       }
     }
@@ -52,7 +50,6 @@ extension Operators {
         result.append(contentsOf: try mapCharacters(
           code,
           font: descendant,
-          inheritedMatrix: effectiveMatrix,
           depth: depth + 1,
           context: context
         ))
@@ -71,7 +68,7 @@ extension Operators {
         sourceCode: mapping.sourceCode,
         selector: selector,
         font: descendant,
-        effectiveMatrix: descendant.matrix.concatenated(with: effectiveMatrix)
+        effectiveMatrix: descendant.matrix.concatenated(with: font.matrix)
       ))
     }
     return result

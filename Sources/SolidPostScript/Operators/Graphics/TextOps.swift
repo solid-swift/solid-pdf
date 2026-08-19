@@ -157,6 +157,8 @@ extension Operators {
         )
         if case .outline(let outline) = glyph.program {
           additions.append(contentsOf: outline.transformed(by: transform).elements)
+        } else if case .displayList(let list) = glyph.program {
+          additions.append(contentsOf: try characterPath(list).elements)
         }
         let advance = context.graphicsState.matrix.transformDistance(
           mapping.effectiveMatrix.transformDistance(
@@ -251,7 +253,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["setcharwidth"]
     func execute(context: isolated Context) async throws {
       let (wy, wx) = try context.operands.pop2()
-      guard context.activeGlyphBuild != nil else { throw Error.undefined }
+      guard context.activeGlyphBuild?.metrics == nil else { throw Error.undefined }
       context.activeGlyphBuild?.metrics = GraphicsGlyphMetrics(
         horizontalAdvance: GraphicsPoint(x: try numeric(wx), y: try numeric(wy))
       )
@@ -263,7 +265,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["setcachedevice"]
     func execute(context: isolated Context) async throws {
       let values = try context.operands.pop(count: 6).reversed().map(numeric)
-      guard context.activeGlyphBuild != nil else { throw Error.undefined }
+      guard context.activeGlyphBuild?.metrics == nil else { throw Error.undefined }
       try setGlyphMetrics(values, context: context)
     }
   }
@@ -273,7 +275,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["setcachedevice2"]
     func execute(context: isolated Context) async throws {
       let values = try context.operands.pop(count: 10).reversed().map(numeric)
-      guard context.activeGlyphBuild != nil else { throw Error.undefined }
+      guard context.activeGlyphBuild?.metrics == nil else { throw Error.undefined }
       try setGlyphMetrics(values, context: context)
       context.activeGlyphBuild?.metrics = GraphicsGlyphMetrics(
         horizontalAdvance: GraphicsPoint(x: values[0], y: values[1]),
@@ -401,6 +403,45 @@ extension Operators {
       return try EncodedNumberString.decode(string.characters(in: string.range)).map(numeric)
     }
     return try arrayObjects(object).map(numeric)
+  }
+
+  private static func characterPath(_ list: GraphicsDisplayList, depth: Int = 0) throws -> GraphicsPath {
+    guard depth < 16 else { throw Error.limitCheck }
+    var elements: [GraphicsPath.Element] = []
+    for effect in list.effects {
+      switch effect {
+      case .fill(let path, _, _), .userPathFill(let path, _, _):
+        elements.append(contentsOf: path.elements)
+      case .stroke(let path, let state):
+        elements.append(contentsOf: try GraphicsPathGeometry.strokeOutline(path: path, state: state).elements)
+      case .userPathStroke(let outline, _):
+        elements.append(contentsOf: outline.elements)
+      case .fillRectangles(let paths, _):
+        for path in paths { elements.append(contentsOf: path.elements) }
+      case .strokeRectangles(let paths, let matrix, let state):
+        for path in paths {
+          elements.append(contentsOf: try GraphicsPathGeometry.strokeOutline(
+            path: path, state: state, matrix: matrix
+          ).elements)
+        }
+      case .form(let form, _):
+        elements.append(contentsOf: try characterPath(form.displayList, depth: depth + 1).elements)
+      case .text(let run, _):
+        for placement in run.glyphs {
+          switch placement.glyph.program {
+          case .outline(let path):
+            elements.append(contentsOf: path.transformed(by: placement.transform).elements)
+          case .displayList(let nested):
+            elements.append(contentsOf: try characterPath(nested, depth: depth + 1).elements)
+          case .bitmap, .empty, .missing:
+            break
+          }
+        }
+      case .erase, .image, .shading:
+        break
+      }
+    }
+    return GraphicsPath(elements: elements)
   }
 
   private static func setGlyphMetrics(_ values: [Double], context: isolated Context) throws {

@@ -103,6 +103,118 @@ import Testing
     #expect(values[3].type == .mark)
   }
 
+  @Test func setcharwidthGlyphsAreRebuiltInsteadOfCached() async throws {
+    let context = try await Interpreter.execute(content: """
+      /builds 0 def
+      /F 12 dict dup begin
+        /FontType 3 def /FontMatrix [0.001 0 0 0.001 0 0] def
+        /FontBBox [0 0 600 700] def /Encoding StandardEncoding def
+        /BuildGlyph { pop pop /builds builds 1 add store 600 0 setcharwidth } bind def
+      end definefont pop
+      /F findfont 100 scalefont setfont 0 0 moveto (A) show (A) show builds
+      """)
+    let values = try await context.results()
+    let builds = try values[0].value(as: IntegerValue.self)
+    #expect(builds.value == 2)
+  }
+
+  @Test func setcachedeviceGlyphsUseTheRealizationCache() async throws {
+    let context = try await Interpreter.execute(content: """
+      /builds 0 def
+      /F 12 dict dup begin
+        /FontType 3 def /FontMatrix [0.001 0 0 0.001 0 0] def
+        /FontBBox [0 0 600 700] def /Encoding StandardEncoding def
+        /BuildGlyph {
+          pop pop /builds builds 1 add store
+          600 0 0 0 600 700 setcachedevice
+        } bind def
+      end definefont pop
+      /F findfont 100 scalefont setfont 0 0 moveto (AA) show builds
+      """)
+    let values = try await context.results()
+    let builds = try values[0].value(as: IntegerValue.self)
+    #expect(builds.value == 1)
+  }
+
+  @Test func type3MetricsMustPrecedeGraphicsOperations() async throws {
+    let context = try await Interpreter.execute(content: """
+      /F 12 dict dup begin
+        /FontType 3 def /FontMatrix [0.001 0 0 0.001 0 0] def
+        /FontBBox [0 0 600 700] def /Encoding StandardEncoding def
+        /BuildGlyph { pop pop 0 0 moveto 600 0 setcharwidth } bind def
+      end definefont pop
+      /F findfont 100 scalefont setfont 0 0 moveto { (A) show } stopped
+      $error /errorname get /undefined eq $error /command get /moveto load eq
+      """)
+    let values = try await context.results()
+    #expect(try values[2].value(as: BooleanValue.self).value)
+    #expect(try values[1].value(as: BooleanValue.self).value)
+    #expect(try values[0].value(as: BooleanValue.self).value)
+  }
+
+  @Test func metricsDictionaryOverridesDecodedCharStringWidth() async throws {
+    let context = try await Interpreter.execute(content: """
+      /F 16 dict dup begin
+        /FontType 1 def /FontMatrix [0.001 0 0 0.001 0 0] def
+        /FontBBox [0 0 600 700] def /Encoding StandardEncoding def
+        /Private 2 dict dup begin /lenIV -1 def end def
+        /CharStrings 2 dict dup begin
+          /.notdef <8BF8EC0D0E> def
+          /A <8BF8EC0D8B8B15F8888B8BF950FC888B8BFDB005090E> def
+        end def
+        /Metrics 1 dict dup begin /A [10 700] def end def
+      end definefont pop
+      /F findfont 100 scalefont setfont (A) stringwidth
+      """)
+    let values = try await context.results()
+    #expect(abs(try values[1].value(as: RealValue.self).value - 70) < 1e-9)
+    #expect(abs(try values[0].value(as: RealValue.self).value) < 1e-9)
+  }
+
+  @Test func glyphTransformCacheKeyIgnoresIntegerTranslationButKeepsPhase() {
+    let base = GraphicsMatrix(a: 2, b: 0, c: 0, d: 3, tx: 10.25, ty: -4.75)
+    let translated = GraphicsMatrix(a: 2, b: 0, c: 0, d: 3, tx: 101.25, ty: 27.25)
+    let differentPhase = GraphicsMatrix(a: 2, b: 0, c: 0, d: 3, tx: 10.5, ty: -4.75)
+    #expect(FontGlyphTransformKey(base) == FontGlyphTransformKey(translated))
+    #expect(FontGlyphTransformKey(base) != FontGlyphTransformKey(differentPhase))
+  }
+
+  @Test func makefontTransformsNestedCompositeFontsButNotBaseFonts() async throws {
+    let context = try await Interpreter.execute(content: """
+      /B /B 12 dict dup begin
+        /FontType 3 def /FontMatrix [0.001 0 0 0.001 0 0] def
+        /FontBBox [0 0 1 1] def /Encoding StandardEncoding def
+        /BuildGlyph { pop pop 0 0 setcharwidth } bind def
+      end definefont def
+      /C /C 12 dict dup begin
+        /FontType 0 def /FontMatrix [2 0 0 2 0 0] def /FontBBox [0 0 0 0] def
+        /FMapType 2 def /Encoding [0] def /FDepVector [B] def
+      end definefont def
+      /R /R 12 dict dup begin
+        /FontType 0 def /FontMatrix [3 0 0 3 0 0] def /FontBBox [0 0 0 0] def
+        /FMapType 2 def /Encoding [0] def /FDepVector [C] def
+      end definefont def
+      R [4 0 0 4 0 0] makefont dup /FontMatrix get 0 get
+      exch /FDepVector get 0 get dup /FontMatrix get 0 get
+      exch /FDepVector get 0 get /FontMatrix get 0 get
+      """)
+    let values = try await context.results()
+    #expect(try values[2].value(as: RealValue.self).value == 12)
+    #expect(try values[1].value(as: RealValue.self).value == 24)
+    #expect(abs(try values[0].value(as: RealValue.self).value - 0.001) < 1e-12)
+  }
+
+  @Test func charpathIncludesType3PaintedPaths() async throws {
+    let context = try await Interpreter.execute(content: Self.type3Font + """
+      /F findfont 100 scalefont setfont 0 0 moveto (A) false charpath pathbbox
+      """)
+    let values = try await context.results()
+    #expect(abs(try values[3].value(as: RealValue.self).value) < 1e-9)
+    #expect(abs(try values[2].value(as: RealValue.self).value) < 1e-9)
+    #expect(abs(try values[1].value(as: RealValue.self).value - 60) < 1e-9)
+    #expect(abs(try values[0].value(as: RealValue.self).value - 70) < 1e-9)
+  }
+
   private static let type3Font = """
     /F 20 dict dup begin
       /FontType 3 def
