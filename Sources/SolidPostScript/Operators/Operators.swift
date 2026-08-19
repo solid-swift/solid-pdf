@@ -21,6 +21,7 @@ public enum Operators {
     + graphicsStateOps + colorOps + deviceRenderingOps + halftoneOps + matrixOps + pathOps + pathInsidenessOps
     + userPathOps
     + arcOps + rectangleOps + paintOps
-    + imageOps + patternOps + shadingOps + formOps + pageDeviceOps + fontOps + textOps + cMapOps + bitmapFontOps
+    + imageOps + patternOps + shadingOps + formOps + pageDeviceOps + fontOps + textOps + cMapOps + fontDataOps
+    + bitmapFontOps
 
 }

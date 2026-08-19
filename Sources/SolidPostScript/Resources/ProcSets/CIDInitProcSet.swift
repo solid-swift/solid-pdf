@@ -23,7 +23,7 @@ public struct CIDInitProcSet: ProcSet {
       /beginnotdefchar /.beginnotdefchar load /endnotdefchar /.endnotdefchar load
       /beginnotdefrange /.beginnotdefrange load /endnotdefrange /.endnotdefrange load
       /beginusematrix /.beginusematrix load /endusematrix /.endusematrix load
-      /StartData /.startdata load
+      /StartData /.cidstartdata load
       /beginrearrangedfont { pop mark } bind
       /endrearrangedfont { counttomark array astore exch pop /FDepVector exch def } bind
     >>

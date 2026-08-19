@@ -40,6 +40,31 @@ struct EncodingResources: ResourceCategory {
   var resourceExtension: (any Operators.ResourceCategoryExtension)? { EncodingResourceValidation.instance }
 }
 
+struct FontSetResources: ResourceCategory {
+  var dictionary: ResourceCategoryDictionary {
+    .init(category: "FontSet", instanceType: .dictionary, fileName: Operators.ResourceFileName.default)
+  }
+
+  var resourceExtension: (any Operators.ResourceCategoryExtension)? { FontSetResourceValidation.instance }
+}
+
+enum FontSetResourceValidation: Operators.ResourceCategoryExtension {
+  case instance
+
+  func validateDefinition(key: Object, instance: Object, context: isolated Context) throws {
+    let dictionary = try instance.value(as: DictionaryValue.self)
+    try dictionary.access.check(.read)
+    try dictionary.forEachUnchecked { _, font in
+      let fontDictionary = try font.value(as: DictionaryValue.self)
+      try Operators.validateFontDictionary(fontDictionary, requiresIdentifier: true, context: context)
+    }
+  }
+
+  func validateLoaded(key: Object, instance: Object, context: isolated Context) throws {
+    try validateDefinition(key: key, instance: instance, context: context)
+  }
+}
+
 struct CIDFontResources: ResourceCategory {
   var dictionary: ResourceCategoryDictionary {
     .init(category: "CIDFont", instanceType: .dictionary, fileName: Operators.ResourceFileName.default)

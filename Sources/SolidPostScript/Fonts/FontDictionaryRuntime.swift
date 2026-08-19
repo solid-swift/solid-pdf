@@ -38,7 +38,7 @@ extension Operators {
     }
     if fontType == 0 {
       let mapType = try dictionary.objectValue(forKey: "FMapType", as: IntegerValue.self).value
-      guard (1...9).contains(mapType) else { throw Error.invalidFont }
+      guard (2...9).contains(mapType) else { throw Error.invalidFont }
       let encoding = try dictionary.objectValue(forKey: "Encoding", as: ArrayValue.self)
       let descendants = try dictionary.objectValue(forKey: "FDepVector", as: ArrayValue.self)
       try encoding.access.check(.read)
@@ -205,12 +205,27 @@ extension Operators {
     let string = try charStringObject.value(as: StringValue.self)
     var data = try string.characters(in: string.range)
     var localSubroutines: [Data] = []
+    var globalSubroutines: [Data] = []
+    var defaultWidth = 0.0
+    var nominalWidth = 0.0
     if let privateDictionary = try font.dictionary.objectValue(forKeyIfExists: "Private", as: DictionaryValue.self) {
       if let subrs = try privateDictionary.objectValue(forKeyIfExists: "Subrs", as: ArrayValue.self) {
         localSubroutines = try subrs.objects(in: subrs.range, for: .read).map {
           let value = try $0.value(as: StringValue.self)
           return try value.characters(in: value.range)
         }
+      }
+      if let subrs = try privateDictionary.objectValue(forKeyIfExists: "GlobalSubrs", as: ArrayValue.self) {
+        globalSubroutines = try subrs.objects(in: subrs.range, for: .read).map {
+          let value = try $0.value(as: StringValue.self)
+          return try value.characters(in: value.range)
+        }
+      }
+      if let value = try privateDictionary.object(forKeyIfExists: "defaultWidthX") {
+        defaultWidth = try numeric(value)
+      }
+      if let value = try privateDictionary.object(forKeyIfExists: "nominalWidthX") {
+        nominalWidth = try numeric(value)
       }
       if font.type == 1 {
         let lenIV = try privateDictionary.objectValue(forKeyIfExists: "lenIV", as: IntegerValue.self)?.value ?? 4
@@ -223,7 +238,10 @@ extension Operators {
     let decoded = try FontCharStringDecoder.decode(
       data,
       dialect: font.type == 1 || font.type == 9 ? .type1 : .type2,
-      localSubroutines: localSubroutines
+      localSubroutines: localSubroutines,
+      globalSubroutines: globalSubroutines,
+      defaultWidth: defaultWidth,
+      nominalWidth: nominalWidth
     )
     return GraphicsGlyphDescription(
       selector: selector,

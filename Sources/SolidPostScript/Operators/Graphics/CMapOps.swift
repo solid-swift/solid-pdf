@@ -6,7 +6,7 @@ extension Operators {
     UseFont.instance, BeginBFChar.instance, EndBFChar.instance, BeginBFRange.instance, EndBFRange.instance,
     BeginCIDChar.instance, EndCIDChar.instance, BeginCIDRange.instance, EndCIDRange.instance,
     BeginNotDefChar.instance, EndNotDefChar.instance, BeginNotDefRange.instance, EndNotDefRange.instance,
-    BeginUseMatrix.instance, EndUseMatrix.instance, UseCMap.instance, StartData.instance,
+    BeginUseMatrix.instance, EndUseMatrix.instance, UseCMap.instance,
   ]
 
   enum BeginCMap: OperatorValue {
@@ -191,16 +191,6 @@ extension Operators {
     }
   }
 
-  enum StartData: OperatorValue {
-    case instance
-    static let systemDictionaryNames: [Object] = [".startdata"]
-    func execute(context: isolated Context) async throws {
-      let source = try context.operands.pop()
-      guard source.type == .string || source.type == .file else { throw Error.typeCheck }
-      _ = try context.operands.pop().value(as: IntegerValue.self)
-    }
-  }
-
   private enum CMapSelector { case base, cid, notdef }
 
   private static func beginEntries(context: isolated Context) throws {
@@ -235,10 +225,25 @@ extension Operators {
         )
         try context.adopt(code)
         let target: Object
-        if let base = values[index + 2].value as? IntegerValue {
+        let baseObject = values[index + 2]
+        if let base = baseObject.value as? IntegerValue {
+          guard offset <= Int(Int32.max), base.value <= Int32.max - Int32(offset) else {
+            throw Error.rangeCheck
+          }
           target = .integer(base.value + Int32(offset))
+        } else if let base = baseObject.value as? StringValue {
+          let source = try base.characters(in: base.range)
+          let start = try codeInteger(source)
+          guard start <= Int.max - offset else { throw Error.rangeCheck }
+          let incremented = codeData(start + offset, length: source.count)
+          guard incremented.count == source.count else { throw Error.rangeCheck }
+          target = .string(incremented, access: .readOnly, vm: context.allocationMode, kind: .literal)
+          try context.adopt(target)
+        } else if let base = baseObject.value as? ArrayValue, case .base = selector {
+          guard UInt(offset) < base.count else { throw Error.rangeCheck }
+          target = try base.object(at: UInt(offset), for: .read)
         } else {
-          target = values[index + 2]
+          target = baseObject
         }
         try addMapping(code: code, target: target, selector: selector, context: context)
       }

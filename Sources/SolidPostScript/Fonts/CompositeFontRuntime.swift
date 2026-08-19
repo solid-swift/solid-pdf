@@ -92,8 +92,6 @@ extension Operators {
   private static func decodeCompositeBytes(_ bytes: Data, font: FontDefinition) throws -> [CompositeMapping] {
     let type = try font.dictionary.objectValue(forKey: "FMapType", as: IntegerValue.self).value
     switch type {
-    case 1:
-      return bytes.map { CompositeMapping(sourceCode: $0, font: 0, selector: .code(Data([$0]))) }
     case 2:
       guard bytes.count.isMultiple(of: 2) else { throw Error.rangeCheck }
       return stride(from: 0, to: bytes.count, by: 2).map {
@@ -205,7 +203,7 @@ extension Operators {
       var code: Data?
       for length in 1...4 where index + length <= bytes.count {
         let candidate = Data(bytes[index..<(index + length)])
-        if try codeMatches(candidate, ranges: ranges) { code = candidate; break }
+        if try codeMatches(candidate, ranges: ranges) { code = candidate }
       }
       guard let code else { throw Error.rangeCheck }
       let key = cMapCodeKey(code)
