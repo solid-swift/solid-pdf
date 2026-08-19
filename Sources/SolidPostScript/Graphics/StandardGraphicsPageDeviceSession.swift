@@ -51,7 +51,9 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       numberOfCopies: 1,
       name: name,
       descriptor: descriptor,
-      colorants: Self.initialColorants(descriptor: descriptor, capabilities: capabilities)
+      colorants: Self.initialColorants(descriptor: descriptor, capabilities: capabilities),
+      trappingEnabled: false,
+      trappingDetails: Self.defaultTrappingDetails(for: descriptor)
     )
   }
 
@@ -85,6 +87,13 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       unsatisfied: &unsatisfied
     )
     descriptor = descriptor.withColorants(colorants)
+    var trappingEnabled = request.trappingEnabled
+    var trappingDetails = request.trappingDetails
+    if trappingEnabled, !capabilities.trapping.supportedTypes.contains(trappingDetails.type) {
+      unsatisfied.insert("Trapping")
+      trappingEnabled = initialConfiguration.trappingEnabled
+      trappingDetails = initialConfiguration.trappingDetails
+    }
     return GraphicsPageDeviceNegotiation(
       configuration: GraphicsPageDeviceConfiguration(
         identifier: GraphicsDeviceIdentifier(),
@@ -93,7 +102,9 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
         numberOfCopies: request.numberOfCopies,
         name: name,
         descriptor: descriptor,
-        colorants: colorants
+        colorants: colorants,
+        trappingEnabled: trappingEnabled,
+        trappingDetails: trappingDetails
       ),
       unsatisfiedParameters: unsatisfied
     )
@@ -145,7 +156,8 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       defaultSmoothness: initialDescriptor.defaultSmoothness,
       colorDevice: initialDescriptor.colorDevice,
       deviceRendering: initialDescriptor.deviceRendering,
-      colorants: initialDescriptor.colorants
+      colorants: initialDescriptor.colorants,
+      trapping: initialDescriptor.trapping
     )
   }
 
@@ -220,6 +232,36 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
     )
   }
 
+  private static func defaultTrappingDetails(
+    for descriptor: GraphicsDeviceDescriptor
+  ) -> GraphicsTrappingDetails {
+    let configured = descriptor.trapping.defaultDetails
+    let order = configured.trappingOrder.isEmpty
+      ? descriptor.colorants.effectiveSeparationOrder
+      : configured.trappingOrder
+    var details = configured.colorantDetails
+    for name in order where details[name] == nil {
+      details[name] = GraphicsColorantTrappingProperties(
+        colorantName: name,
+        neutralDensity: defaultNeutralDensity(for: name)
+      )
+    }
+    return GraphicsTrappingDetails(
+      type: configured.type,
+      trappingOrder: order,
+      colorantDetails: details
+    )
+  }
+
+  private static func defaultNeutralDensity(for name: String) -> Double {
+    switch name {
+    case "Yellow": 0.2
+    case "Black", "Gray": 1.7
+    case "Cyan", "Magenta", "Red", "Green", "Blue": 0.7
+    default: 1
+    }
+  }
+
   private static func valid(_ size: GraphicsSize) -> Bool {
     size.width.isFinite && size.height.isFinite && size.width > 0 && size.height > 0
   }
@@ -245,7 +287,8 @@ private extension GraphicsDeviceDescriptor {
       defaultSmoothness: defaultSmoothness,
       colorDevice: colorDevice,
       deviceRendering: deviceRendering,
-      colorants: colorants
+      colorants: colorants,
+      trapping: trapping
     )
   }
 }

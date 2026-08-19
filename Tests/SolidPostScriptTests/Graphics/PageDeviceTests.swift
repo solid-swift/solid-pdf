@@ -27,6 +27,33 @@ struct PageDeviceTests {
     #expect(try values[3].value(as: RealValue.self).value == 612)
   }
 
+  @Test func trappingCapabilitiesNegotiateThroughPageDevice() throws {
+    let provider = StandardGraphicsPageDeviceProvider(
+      trappingCapabilities: .semanticType1001
+    )
+    let session = try provider.makeSession(for: .letter)
+    let result = try session.negotiate(GraphicsPageDeviceRequest(
+      pageSize: session.initialConfiguration.pageSize,
+      resolution: GraphicsSize(width: 72, height: 72),
+      imagingBoundingBox: nil,
+      numberOfCopies: 1,
+      trappingEnabled: true,
+      trappingDetails: GraphicsTrappingDetails(type: 1001)
+    ))
+
+    #expect(result.unsatisfiedParameters.isEmpty)
+    #expect(result.configuration.trappingEnabled)
+    #expect(result.configuration.trappingDetails.type == 1001)
+  }
+
+  @Test func outputDeviceResourceIsAutomaticAndContextLocal() async throws {
+    let values = try await Interpreter.results(content: """
+      /SolidVirtualPageDevice /OutputDevice resourcestatus { pop 1 eq } { false } ifelse
+      """)
+
+    #expect(try values[0].value(as: BooleanValue.self).value)
+  }
+
   @Test func adaptiveSetPageDeviceChangesGeometry() async throws {
     let result = try await Interpreter.render(
       content: """

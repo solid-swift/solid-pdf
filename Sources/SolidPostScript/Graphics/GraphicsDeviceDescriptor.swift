@@ -28,6 +28,8 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
   public let deviceRendering: GraphicsDeviceRenderingDescriptor
   /// The selected process and named-colorant configuration.
   public let colorants: GraphicsColorantConfiguration
+  /// The target's trapping implementation and defaults.
+  public let trapping: GraphicsTrappingDescriptor
 
   /// Creates a graphics device descriptor.
   public init(
@@ -43,7 +45,8 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
     defaultSmoothness: Double = 0.02,
     colorDevice: GraphicsColorDeviceDescriptor = .sRGB,
     deviceRendering: GraphicsDeviceRenderingDescriptor = .continuousTone,
-    colorants: GraphicsColorantConfiguration = .compositeRGB
+    colorants: GraphicsColorantConfiguration = .compositeRGB,
+    trapping: GraphicsTrappingDescriptor = .unsupported
   ) {
     self.mediaBounds = mediaBounds
     self.imageableBounds = imageableBounds
@@ -58,6 +61,7 @@ public struct GraphicsDeviceDescriptor: Sendable, Hashable {
     self.colorDevice = colorDevice
     self.deviceRendering = deviceRendering
     self.colorants = colorants
+    self.trapping = trapping
   }
 
   /// The installation-default Letter page at 72 dots per inch.

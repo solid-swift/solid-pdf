@@ -8,6 +8,7 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
   public typealias Output = [RasterSeparatedPage]
   public typealias ColorEngine = NativeGraphicsColorEngine
   public typealias DeviceRenderingEngine = NativeGraphicsDeviceRenderingEngine
+  public typealias TrappingEngine = NativeGraphicsTrappingEngine
   public typealias PageDeviceProvider = RasterSeparationPageDeviceProvider
 
   /// A renderer dedicated to one separated raster job.
@@ -16,12 +17,14 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
     public typealias Output = [RasterSeparatedPage]
     public typealias ColorSession = NativeGraphicsColorSession
     public typealias DeviceRenderingSession = NativeGraphicsDeviceRenderingSession
+    public typealias TrappingSession = NativeGraphicsTrappingSession
 
     public private(set) var pages: [RasterSeparatedPage] = []
 
     private let preview: RasterImageTarget.Renderer
     private let colorSession: NativeGraphicsColorSession
     private let deviceRenderingSession: NativeGraphicsDeviceRenderingSession
+    private let trappingSession: NativeGraphicsTrappingSession
     private var activeDevice: GraphicsDeviceSnapshot
     private var descriptor: GraphicsDeviceDescriptor
     private var rasterMatrix: GraphicsMatrix
@@ -41,11 +44,13 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
       preview: RasterImageTarget.Renderer,
       device: GraphicsDeviceSnapshot,
       colorSession: NativeGraphicsColorSession,
-      deviceRenderingSession: NativeGraphicsDeviceRenderingSession
+      deviceRenderingSession: NativeGraphicsDeviceRenderingSession,
+      trappingSession: NativeGraphicsTrappingSession
     ) {
       self.preview = preview
       self.colorSession = colorSession
       self.deviceRenderingSession = deviceRenderingSession
+      self.trappingSession = trappingSession
       activeDevice = device
       descriptor = device.descriptor
       rasterMatrix = Self.makeRasterMatrix(device.descriptor)
@@ -204,6 +209,8 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
   public let colorEngine: NativeGraphicsColorEngine
   /// The native transfer and halftone engine.
   public let deviceRenderingEngine = NativeGraphicsDeviceRenderingEngine()
+  /// The native Type 1001 trapping engine.
+  public let trappingEngine = NativeGraphicsTrappingEngine()
   /// The adaptive or fixed separation page-device provider.
   public let pageDeviceProvider: RasterSeparationPageDeviceProvider
 
@@ -233,7 +240,8 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
       defaultSmoothness: deviceDescriptor.defaultSmoothness,
       colorDevice: deviceDescriptor.colorDevice,
       deviceRendering: deviceDescriptor.deviceRendering,
-      colorants: colorants
+      colorants: colorants,
+      trapping: .rasterType1001
     )
     colorEngine = NativeGraphicsColorEngine()
     pageDeviceProvider = RasterSeparationPageDeviceProvider(mode: pageDeviceMode)
@@ -261,6 +269,21 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
     colorSession: sending NativeGraphicsColorSession,
     deviceRenderingSession: sending NativeGraphicsDeviceRenderingSession
   ) throws -> sending Renderer {
+    try makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession,
+      fontSession: SemanticGraphicsFontSession(),
+      trappingSession: trappingEngine.makeSession(for: deviceDescriptor)
+    )
+  }
+
+  /// Creates a renderer with all caller-supplied render-scoped services.
+  public func makeRenderer(
+    colorSession: sending NativeGraphicsColorSession,
+    deviceRenderingSession: sending NativeGraphicsDeviceRenderingSession,
+    fontSession: sending SemanticGraphicsFontSession,
+    trappingSession: sending NativeGraphicsTrappingSession
+  ) throws -> sending Renderer {
     guard deviceDescriptor.colorants.processModel != .deviceN
       || deviceDescriptor.colorants.hasUsableDeviceNLookup
     else { throw SolidPostScript.Error.configurationError }
@@ -286,7 +309,8 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
       preview: preview,
       device: snapshot,
       colorSession: colorSession,
-      deviceRenderingSession: deviceRenderingSession
+      deviceRenderingSession: deviceRenderingSession,
+      trappingSession: trappingSession
     )
   }
 }

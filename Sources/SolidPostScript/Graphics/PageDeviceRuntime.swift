@@ -293,7 +293,8 @@ extension GraphicsDeviceDescriptor {
       defaultSmoothness: defaultSmoothness,
       colorDevice: colorDevice,
       deviceRendering: deviceRendering,
-      colorants: colorants
+      colorants: colorants,
+      trapping: trapping
     )
   }
 }
@@ -307,7 +308,9 @@ extension GraphicsPageDeviceConfiguration {
       numberOfCopies: numberOfCopies,
       name: name,
       descriptor: descriptor,
-      colorants: colorants
+      colorants: colorants,
+      trappingEnabled: trappingEnabled,
+      trappingDetails: trappingDetails
     )
   }
 }

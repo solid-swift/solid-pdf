@@ -74,11 +74,13 @@ public enum Interpreter {
     let colorSession = try target.colorEngine.makeSession(for: target.deviceDescriptor)
     let deviceRenderingSession = try target.deviceRenderingEngine.makeSession(for: target.deviceDescriptor)
     let fontSession = try target.fontEngine.makeSession(for: target.deviceDescriptor)
+    let trappingSession = try target.trappingEngine.makeSession(for: target.deviceDescriptor)
     let pageDeviceSession = try target.pageDeviceProvider.makeSession(for: target.deviceDescriptor)
     let renderer = try target.makeRenderer(
       colorSession: colorSession,
       deviceRenderingSession: deviceRenderingSession,
-      fontSession: fontSession
+      fontSession: fontSession,
+      trappingSession: trappingSession
     )
     let context = Context(environment: environment)
     do {

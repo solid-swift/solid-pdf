@@ -339,6 +339,7 @@ public actor Context {
     try resetGraphics(for: pageDeviceSession.initialConfiguration)
     graphicsPageDeviceSession = pageDeviceSession
     try ensurePageDevice()
+    try installCurrentOutputDeviceResource()
     graphicsEventConsumer = renderer
     do {
       try renderer.activateDevice(graphicsState.device.snapshot)
@@ -394,6 +395,7 @@ public actor Context {
     try await withUserTimeAccounting {
       try beginJob(persistent: false, authorization: .ordinary)
       try ensurePageDevice()
+      try installCurrentOutputDeviceResource()
       try await prepareIdiomResources()
     }
   }

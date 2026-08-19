@@ -7,11 +7,13 @@ public protocol GraphicsTarget<PageOutput, Output, Renderer>: Sendable {
   associatedtype ColorEngine: GraphicsColorEngine = SemanticGraphicsColorEngine
   associatedtype DeviceRenderingEngine: GraphicsDeviceRenderingEngine = SemanticGraphicsDeviceRenderingEngine
   associatedtype FontEngine: GraphicsFontEngine = SemanticGraphicsFontEngine
+  associatedtype TrappingEngine: GraphicsTrappingEngine = SemanticGraphicsTrappingEngine
   associatedtype PageDeviceProvider: GraphicsPageDeviceProvider = StandardGraphicsPageDeviceProvider
   associatedtype Renderer: GraphicsRenderer<PageOutput, Output>
     where Renderer.ColorSession == ColorEngine.Session,
       Renderer.DeviceRenderingSession == DeviceRenderingEngine.Session,
-      Renderer.FontSession == FontEngine.Session
+      Renderer.FontSession == FontEngine.Session,
+      Renderer.TrappingSession == TrappingEngine.Session
 
   /// The device geometry and default transformation used for the render.
   var deviceDescriptor: GraphicsDeviceDescriptor { get }
@@ -24,6 +26,9 @@ public protocol GraphicsTarget<PageOutput, Output, Renderer>: Sendable {
 
   /// The font engine used to create render-scoped glyph preparation state.
   var fontEngine: FontEngine { get }
+
+  /// The trapping engine used to prepare render-scoped trapping programs.
+  var trappingEngine: TrappingEngine { get }
 
   /// The provider used to negotiate page geometry during this render.
   var pageDeviceProvider: PageDeviceProvider { get }
@@ -45,6 +50,14 @@ public protocol GraphicsTarget<PageOutput, Output, Renderer>: Sendable {
     colorSession: sending ColorEngine.Session,
     deviceRenderingSession: sending DeviceRenderingEngine.Session,
     fontSession: sending FontEngine.Session
+  ) throws -> sending Renderer
+
+  /// Creates a renderer using all render-scoped device services.
+  func makeRenderer(
+    colorSession: sending ColorEngine.Session,
+    deviceRenderingSession: sending DeviceRenderingEngine.Session,
+    fontSession: sending FontEngine.Session,
+    trappingSession: sending TrappingEngine.Session
   ) throws -> sending Renderer
 }
 
@@ -95,6 +108,25 @@ extension GraphicsTarget where FontEngine == SemanticGraphicsFontEngine {
     try makeRenderer(
       colorSession: colorSession,
       deviceRenderingSession: deviceRenderingSession
+    )
+  }
+}
+
+extension GraphicsTarget where TrappingEngine == SemanticGraphicsTrappingEngine {
+  /// The source-compatible semantic trapping engine used by targets that do not select one.
+  public var trappingEngine: SemanticGraphicsTrappingEngine { SemanticGraphicsTrappingEngine() }
+
+  /// Creates the existing renderer while preserving source compatibility for custom targets.
+  public func makeRenderer(
+    colorSession: sending ColorEngine.Session,
+    deviceRenderingSession: sending DeviceRenderingEngine.Session,
+    fontSession: sending FontEngine.Session,
+    trappingSession: sending SemanticGraphicsTrappingSession
+  ) throws -> sending Renderer {
+    try makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession,
+      fontSession: fontSession
     )
   }
 }
@@ -154,6 +186,7 @@ public protocol GraphicsRenderer<PageOutput, Output>: GraphicsEventConsumer {
   associatedtype ColorSession: GraphicsColorSession = SemanticGraphicsColorSession
   associatedtype DeviceRenderingSession: GraphicsDeviceRenderingSession = SemanticGraphicsDeviceRenderingSession
   associatedtype FontSession: GraphicsFontSession = SemanticGraphicsFontSession
+  associatedtype TrappingSession: GraphicsTrappingSession = SemanticGraphicsTrappingSession
 
   /// Pages transmitted so far.
   var pages: [PageOutput] { get }

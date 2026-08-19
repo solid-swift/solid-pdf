@@ -16,6 +16,10 @@ public struct GraphicsPageDeviceConfiguration: Sendable, Hashable {
   public let descriptor: GraphicsDeviceDescriptor
   /// The realized process and named-colorant configuration.
   public let colorants: GraphicsColorantConfiguration
+  /// Whether the installed device performs in-RIP trapping.
+  public let trappingEnabled: Bool
+  /// The installed type-specific trapping details.
+  public let trappingDetails: GraphicsTrappingDetails
 
   /// Creates a page-device configuration.
   public init(
@@ -25,7 +29,9 @@ public struct GraphicsPageDeviceConfiguration: Sendable, Hashable {
     numberOfCopies: Int?,
     name: String,
     descriptor: GraphicsDeviceDescriptor,
-    colorants: GraphicsColorantConfiguration = .compositeRGB
+    colorants: GraphicsColorantConfiguration = .compositeRGB,
+    trappingEnabled: Bool = false,
+    trappingDetails: GraphicsTrappingDetails = GraphicsTrappingDetails()
   ) {
     self.identifier = identifier
     self.pageSize = pageSize
@@ -34,5 +40,7 @@ public struct GraphicsPageDeviceConfiguration: Sendable, Hashable {
     self.name = name
     self.descriptor = descriptor
     self.colorants = colorants
+    self.trappingEnabled = trappingEnabled
+    self.trappingDetails = trappingDetails
   }
 }

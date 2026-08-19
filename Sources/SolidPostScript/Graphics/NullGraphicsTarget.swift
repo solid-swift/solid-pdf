@@ -51,7 +51,8 @@ public struct NullGraphicsTarget: GraphicsTarget, Sendable {
     self.deviceDescriptor = deviceDescriptor
     self.pageDeviceProvider = StandardGraphicsPageDeviceProvider(
       mode: pageDeviceMode,
-      colorantCapabilities: .semantic
+      colorantCapabilities: .semantic,
+      trappingCapabilities: .semanticType1001
     )
   }
 

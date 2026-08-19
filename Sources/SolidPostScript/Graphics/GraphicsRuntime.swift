@@ -13,7 +13,9 @@ extension Context {
       numberOfCopies: 1,
       name: "SolidVirtualPageDevice",
       descriptor: descriptor,
-      colorants: descriptor.colorants
+      colorants: descriptor.colorants,
+      trappingEnabled: false,
+      trappingDetails: descriptor.trapping.defaultDetails
     )
     try resetGraphics(for: configuration)
   }

@@ -5,6 +5,7 @@ final class PostScriptDeviceRecord: Sendable {
   struct State: Sendable {
     var configuration: GraphicsPageDeviceConfiguration?
     var pageNumber: Int
+    var trapping: GraphicsTrappingSnapshot
   }
 
   let identifier: GraphicsDeviceIdentifier
@@ -14,14 +15,22 @@ final class PostScriptDeviceRecord: Sendable {
   init(configuration: GraphicsPageDeviceConfiguration) {
     self.identifier = configuration.identifier
     self.kind = .page
-    self.state = Mutex(State(configuration: configuration, pageNumber: 0))
+    self.state = Mutex(State(
+      configuration: configuration,
+      pageNumber: 0,
+      trapping: GraphicsTrappingSnapshot(
+        enabled: configuration.trappingEnabled,
+        details: configuration.trappingDetails,
+        parameters: configuration.descriptor.trapping.defaultParameters
+      )
+    ))
     self.nullDescriptor = nil
   }
 
   init(nullDescriptor descriptor: GraphicsDeviceDescriptor) {
     self.identifier = GraphicsDeviceIdentifier()
     self.kind = .null
-    self.state = Mutex(State(configuration: nil, pageNumber: 0))
+    self.state = Mutex(State(configuration: nil, pageNumber: 0, trapping: .disabled))
     self.nullDescriptor = descriptor
   }
 
@@ -46,7 +55,8 @@ final class PostScriptDeviceRecord: Sendable {
       kind: kind,
       descriptor: current.configuration?.descriptor ?? nullDescriptor ?? .letter,
       pageNumber: current.pageNumber,
-      numberOfCopies: current.configuration?.numberOfCopies
+      numberOfCopies: current.configuration?.numberOfCopies,
+      trapping: current.trapping
     )
   }
 
@@ -60,6 +70,14 @@ final class PostScriptDeviceRecord: Sendable {
 
   func updateConfiguration(_ configuration: GraphicsPageDeviceConfiguration) {
     state.withLock { $0.configuration = configuration }
+  }
+
+  var trapping: GraphicsTrappingSnapshot {
+    state.withLock { $0.trapping }
+  }
+
+  func updateTrapping(_ trapping: GraphicsTrappingSnapshot) {
+    state.withLock { $0.trapping = trapping }
   }
 
   static func page(descriptor: GraphicsDeviceDescriptor) -> PostScriptDeviceRecord {

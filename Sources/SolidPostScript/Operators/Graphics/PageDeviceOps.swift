@@ -113,6 +113,11 @@ extension Operators {
         vm: vm,
         context: context
       )
+      let trappingDetails = try trappingDetailsDictionary(
+        configuration.trappingDetails,
+        vm: vm,
+        context: context
+      )
       let copies: Object = if let numberOfCopies = configuration.numberOfCopies,
         let integer = Object.integer(exactly: numberOfCopies)
       {
@@ -135,6 +140,8 @@ extension Operators {
         (.literalName("MaxSeparations"), .integer(Int32(configuration.colorants.maximumSeparations))),
         (.literalName("SeparationColorNames"), separationNames),
         (.literalName("SeparationOrder"), separationOrder),
+        (.literalName("Trapping"), .boolean(configuration.trappingEnabled)),
+        (.literalName("TrappingDetails"), trappingDetails),
       ], access: .readOnly, vm: vm)
       context.operands.push(dictionary)
     }
@@ -193,6 +200,8 @@ extension Operators {
     var producesSeparations = currentConfiguration.colorants.producesSeparations
     var additionalColorants = currentConfiguration.colorants.additionalColorants
     var separationOrder = currentConfiguration.colorants.separationOrder
+    var trappingEnabled = currentConfiguration.trappingEnabled
+    var trappingDetails = currentConfiguration.trappingDetails
     var recovered: [String: Int32] = [:]
     let originals = entries
 
@@ -261,6 +270,10 @@ extension Operators {
           }
         case "SeparationOrder":
           separationOrder = try pageDeviceNameArray(value)
+        case "Trapping":
+          trappingEnabled = try value.value(as: BooleanValue.self).value
+        case "TrappingDetails":
+          trappingDetails = try parseTrappingDetails(value, merging: trappingDetails)
         case "PageDeviceName":
           let requested = try value.value(as: StringValue.self).readableString
           guard requested == currentConfiguration.name else {
@@ -293,7 +306,9 @@ extension Operators {
           maximumSeparations: currentConfiguration.colorants.maximumSeparations,
           supportsOverprint: currentConfiguration.colorants.supportsOverprint,
           rgbToDeviceN: currentConfiguration.colorants.rgbToDeviceN
-        )
+        ),
+        trappingEnabled: trappingEnabled,
+        trappingDetails: trappingDetails
       ),
       parameters: PostScriptPageDeviceParameters(
         install: install,
@@ -454,6 +469,69 @@ extension Operators {
     )
     try context.adopt(array)
     return array
+  }
+
+  private static func parseTrappingDetails(
+    _ object: Object,
+    merging current: GraphicsTrappingDetails
+  ) throws -> GraphicsTrappingDetails {
+    let dictionary = try object.value(as: DictionaryValue.self)
+    try dictionary.access.check(.read)
+    var type = current.type
+    var order = current.trappingOrder
+    var details = current.colorantDetails
+    if let value = try dictionary.object(forKeyIfExists: .literalName("Type")) {
+      type = Int(try value.value(as: IntegerValue.self).value)
+    }
+    if let value = try dictionary.object(forKeyIfExists: .literalName("TrappingOrder")) {
+      order = try pageDeviceNameArray(value)
+    }
+    if let value = try dictionary.object(forKeyIfExists: .literalName("ColorantDetails")) {
+      let colorants = try value.value(as: DictionaryValue.self)
+      try colorants.access.check(.read)
+      try colorants.forEachUnchecked { key, value in
+        let name = try key.value(as: NameValue.self).value
+        let colorant = try value.value(as: DictionaryValue.self)
+        try colorant.access.check(.read)
+        let previous = details[name]
+        let reportedName = try colorant.object(forKeyIfExists: .literalName("ColorantName"))
+          .map { try $0.value(as: NameValue.self).value } ?? previous?.colorantName ?? name
+        let kind = try colorant.object(forKeyIfExists: .literalName("ColorantType"))
+          .map { try $0.value(as: NameValue.self).value }
+          .flatMap(GraphicsTrappingColorantType.init(rawValue:)) ?? previous?.colorantType ?? .normal
+        let density = try colorant.object(forKeyIfExists: .literalName("NeutralDensity"))
+          .map(trappingNumber) ?? previous?.neutralDensity ?? 1
+        guard (0.001...10).contains(density) else { throw Error.rangeCheck }
+        details[name] = GraphicsColorantTrappingProperties(
+          colorantName: reportedName,
+          colorantType: kind,
+          neutralDensity: density
+        )
+      }
+    }
+    return GraphicsTrappingDetails(type: type, trappingOrder: order, colorantDetails: details)
+  }
+
+  private static func trappingDetailsDictionary(
+    _ details: GraphicsTrappingDetails,
+    vm: VM,
+    context: isolated Context
+  ) throws -> Object {
+    let order = try nameArray(details.trappingOrder, vm: vm, context: context)
+    let colorantEntries = try details.colorantDetails.sorted { $0.key < $1.key }.map { name, properties in
+      let value = try context.makeDictionary([
+        (.literalName("ColorantName"), .literalName(properties.colorantName)),
+        (.literalName("ColorantType"), .literalName(properties.colorantType.rawValue)),
+        (.literalName("NeutralDensity"), try Object.real(properties.neutralDensity)),
+      ], access: .readOnly, vm: vm)
+      return (Object.literalName(name), value)
+    }
+    let colorants = try context.makeDictionary(colorantEntries, access: .readOnly, vm: vm)
+    return try context.makeDictionary([
+      (.literalName("Type"), .integer(Int32(clamping: details.type))),
+      (.literalName("TrappingOrder"), order),
+      (.literalName("ColorantDetails"), colorants),
+    ], access: .readOnly, vm: vm)
   }
 
   private static func resultVM(

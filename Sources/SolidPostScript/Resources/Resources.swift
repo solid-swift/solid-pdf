@@ -22,14 +22,15 @@ public enum Resources {
     "Pattern": PatternResources(),
     "ProcSet": ProcSetResources(procSets: [
       ColorRenderingProcSet(), CIDInitProcSet(), FontSetInitProcSet(), BitmapFontInitProcSet(),
+      TrappingProcSet(),
     ]),
     "ColorSpace": StandardResourceCategory(category: "ColorSpace", instanceType: .array),
     "Halftone": HalftoneResources(),
     "ColorRendering": StandardResourceCategory(category: "ColorRendering", instanceType: .dictionary),
     "IdiomSet": IdiomSetResources.instance,
-    "InkParams": StandardResourceCategory(category: "InkParams", instanceType: .dictionary),
-    "TrapParams": StandardResourceCategory(category: "TrapParams", instanceType: .dictionary),
-    "OutputDevice": StandardResourceCategory(category: "OutputDevice", instanceType: .dictionary),
+    "InkParams": InkParamsResources(),
+    "TrapParams": TrapParamsResources(),
+    "OutputDevice": OutputDeviceResources(),
     "ControlLanguage": StandardResourceCategory(category: "ControlLanguage", instanceType: .dictionary),
     "Localization": StandardResourceCategory(category: "Localization", instanceType: .dictionary),
     "PDL": StandardResourceCategory(category: "PDL", instanceType: .dictionary),
@@ -47,7 +48,7 @@ public enum Resources {
     "PatternType": IntegerImplicitResources(category: "PatternType", values: [1, 2]),
     "FunctionType": IntegerImplicitResources(category: "FunctionType", values: [0, 2, 3]),
     "ShadingType": IntegerImplicitResources(category: "ShadingType", values: Set(1...7)),
-    "TrappingType": ImplicitResourceCategory(category: "TrappingType", instanceType: .integer),
+    "TrappingType": IntegerImplicitResources(category: "TrappingType", values: [1001]),
     "Category": CategoryResources.instance,
   ]
 

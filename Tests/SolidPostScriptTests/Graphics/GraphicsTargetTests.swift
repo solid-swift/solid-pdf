@@ -84,6 +84,12 @@ struct GraphicsTargetTests {
     #expect(result.output == "font-session")
   }
 
+  @Test func renderCreatesTypedTrappingSession() async throws {
+    let result = try await Interpreter.render(content: "", to: TrappingSessionTarget())
+
+    #expect(result.output == 1001)
+  }
+
   @Test func standardPageDeviceProviderNegotiatesAdaptiveGeometry() throws {
     let provider = StandardGraphicsPageDeviceProvider(mode: .adaptive)
     let session = try provider.makeSession(for: .letter)
@@ -134,6 +140,60 @@ struct GraphicsTargetTests {
     #expect(result.output.totalRows == 40)
     #expect(result.output.maximumRowsPerTransfer <= 32)
     #expect(result.output.maximumComponentsPerTransfer <= 64 * 32)
+  }
+}
+
+private struct TrappingSessionTarget: GraphicsTarget {
+  typealias PageOutput = Void
+  typealias Output = Int
+  typealias TrappingEngine = Engine
+
+  struct Engine: GraphicsTrappingEngine {
+    func makeSession(for device: GraphicsDeviceDescriptor) -> sending Session {
+      Session(value: 1001)
+    }
+  }
+
+  final class Session: GraphicsTrappingSession {
+    let value: Int
+
+    init(value: Int) { self.value = value }
+
+    func resolve(
+      _ state: GraphicsTrappingSnapshot,
+      for device: GraphicsDeviceDescriptor
+    ) -> Int {
+      value
+    }
+  }
+
+  final class Renderer: GraphicsRenderer {
+    typealias PageOutput = Void
+    typealias Output = Int
+    typealias TrappingSession = Session
+
+    let session: Session
+    var pages: [Void] = []
+
+    init(session: Session) { self.session = session }
+
+    func process(_ event: GraphicsEvent) {}
+    func finish() -> sending Int { session.value }
+    func abort() {}
+  }
+
+  let deviceDescriptor = GraphicsDeviceDescriptor.letter
+  let trappingEngine = Engine()
+
+  func makeRenderer() -> sending Renderer { Renderer(session: Session(value: -1)) }
+
+  func makeRenderer(
+    colorSession: sending SemanticGraphicsColorSession,
+    deviceRenderingSession: sending SemanticGraphicsDeviceRenderingSession,
+    fontSession: sending SemanticGraphicsFontSession,
+    trappingSession: sending Session
+  ) -> sending Renderer {
+    Renderer(session: trappingSession)
   }
 }
 

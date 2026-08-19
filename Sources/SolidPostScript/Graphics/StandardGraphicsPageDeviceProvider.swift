@@ -14,6 +14,8 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
   public let name: String
   /// The process and named-colorant capabilities reported by new sessions.
   public let colorantCapabilities: GraphicsColorantCapabilities
+  /// The trapping implementations supported by new sessions.
+  public let trappingCapabilities: GraphicsTrappingCapabilities
 
   /// Creates a standard page-device provider.
   public init(
@@ -22,7 +24,8 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
     maximumPixelHeight: Int = 32_768,
     maximumSurfaceBytes: Int = 512 * 1_024 * 1_024,
     name: String = "SolidVirtualPageDevice",
-    colorantCapabilities: GraphicsColorantCapabilities = .compositeRGB
+    colorantCapabilities: GraphicsColorantCapabilities = .compositeRGB,
+    trappingCapabilities: GraphicsTrappingCapabilities = .unsupported
   ) {
     self.mode = mode
     self.maximumPixelWidth = maximumPixelWidth
@@ -30,6 +33,7 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
     self.maximumSurfaceBytes = maximumSurfaceBytes
     self.name = name
     self.colorantCapabilities = colorantCapabilities
+    self.trappingCapabilities = trappingCapabilities
   }
 
   /// Creates a render-scoped standard session.
@@ -43,7 +47,8 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
         maximumPixelWidth: maximumPixelWidth,
         maximumPixelHeight: maximumPixelHeight,
         maximumSurfaceBytes: maximumSurfaceBytes,
-        colorants: colorantCapabilities
+        colorants: colorantCapabilities,
+        trapping: trappingCapabilities
       ),
       name: name
     )

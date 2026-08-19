@@ -9,11 +9,19 @@ public struct GraphicsColorant: Sendable, Hashable {
   public let isProcessColorant: Bool
   /// A diagnostic additive RGB preview color for maximum tint.
   public let previewColor: ColorRGB?
+  /// Device trapping properties for the colorant.
+  public let trapping: GraphicsColorantTrappingProperties?
 
   /// Creates a device colorant.
-  public init(name: String, isProcessColorant: Bool, previewColor: ColorRGB? = nil) {
+  public init(
+    name: String,
+    isProcessColorant: Bool,
+    previewColor: ColorRGB? = nil,
+    trapping: GraphicsColorantTrappingProperties? = nil
+  ) {
     self.name = name
     self.isProcessColorant = isProcessColorant
     self.previewColor = previewColor
+    self.trapping = trapping
   }
 }

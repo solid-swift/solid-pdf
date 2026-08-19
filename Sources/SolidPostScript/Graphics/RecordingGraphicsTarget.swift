@@ -55,7 +55,11 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       case .paint(.text(let run)):
         effects.append(.text(run, state: event.before))
       case .page(.show), .page(.copy):
-        pages.append(RecordedGraphicsPage(deviceDescriptor: event.before.device.descriptor, effects: effects))
+        pages.append(RecordedGraphicsPage(
+          deviceDescriptor: event.before.device.descriptor,
+          effects: effects,
+          trapping: event.before.device.trapping
+        ))
         effects.removeAll(keepingCapacity: true)
       default:
         break
@@ -141,7 +145,11 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
     /// Records the requested immutable copies and clears the transmitted page.
     public func transmitPage(_ event: GraphicsEvent, copies: Int) throws {
       guard copies >= 0 else { throw Error.ioError }
-      let page = RecordedGraphicsPage(deviceDescriptor: event.before.device.descriptor, effects: effects)
+      let page = RecordedGraphicsPage(
+        deviceDescriptor: event.before.device.descriptor,
+        effects: effects,
+        trapping: event.before.device.trapping
+      )
       pages.append(contentsOf: repeatElement(page, count: copies))
       effects.removeAll(keepingCapacity: true)
     }
@@ -181,7 +189,8 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
     self.deviceDescriptor = deviceDescriptor
     self.pageDeviceProvider = StandardGraphicsPageDeviceProvider(
       mode: pageDeviceMode,
-      colorantCapabilities: .semantic
+      colorantCapabilities: .semantic,
+      trappingCapabilities: .semanticType1001
     )
   }
 

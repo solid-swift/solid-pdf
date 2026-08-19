@@ -12,6 +12,10 @@ public struct GraphicsPageDeviceRequest: Sendable, Hashable {
   public let numberOfCopies: Int?
   /// The requested process and named-colorant configuration.
   public let colorants: GraphicsColorantConfiguration
+  /// Whether the requested page device should perform in-RIP trapping.
+  public let trappingEnabled: Bool
+  /// The requested type-specific trapping details.
+  public let trappingDetails: GraphicsTrappingDetails
 
   /// Creates a page-device request.
   public init(
@@ -19,12 +23,16 @@ public struct GraphicsPageDeviceRequest: Sendable, Hashable {
     resolution: GraphicsSize,
     imagingBoundingBox: GraphicsRect?,
     numberOfCopies: Int?,
-    colorants: GraphicsColorantConfiguration = .compositeRGB
+    colorants: GraphicsColorantConfiguration = .compositeRGB,
+    trappingEnabled: Bool = false,
+    trappingDetails: GraphicsTrappingDetails = GraphicsTrappingDetails()
   ) {
     self.pageSize = pageSize
     self.resolution = resolution
     self.imagingBoundingBox = imagingBoundingBox
     self.numberOfCopies = numberOfCopies
     self.colorants = colorants
+    self.trappingEnabled = trappingEnabled
+    self.trappingDetails = trappingDetails
   }
 }

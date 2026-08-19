@@ -12,6 +12,8 @@ public struct GraphicsPageDeviceCapabilities: Sendable, Hashable {
   public let maximumSurfaceBytes: Int
   /// The process, named-colorant, separation, and overprint capabilities.
   public let colorants: GraphicsColorantCapabilities
+  /// The trapping implementations accepted by the provider.
+  public let trapping: GraphicsTrappingCapabilities
 
   /// Creates page-device capabilities.
   public init(
@@ -19,12 +21,14 @@ public struct GraphicsPageDeviceCapabilities: Sendable, Hashable {
     maximumPixelWidth: Int = 32_768,
     maximumPixelHeight: Int = 32_768,
     maximumSurfaceBytes: Int = 512 * 1_024 * 1_024,
-    colorants: GraphicsColorantCapabilities = .compositeRGB
+    colorants: GraphicsColorantCapabilities = .compositeRGB,
+    trapping: GraphicsTrappingCapabilities = .unsupported
   ) {
     self.mode = mode
     self.maximumPixelWidth = maximumPixelWidth
     self.maximumPixelHeight = maximumPixelHeight
     self.maximumSurfaceBytes = maximumSurfaceBytes
     self.colorants = colorants
+    self.trapping = trapping
   }
 }

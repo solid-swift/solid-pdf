@@ -27,7 +27,8 @@ public struct RasterSeparationPageDeviceProvider: GraphicsPageDeviceProvider, Se
         supportsOverprint: true,
         acceptsDynamicColorants: true,
         maximumSeparations: 250
-      )
+      ),
+      trappingCapabilities: .rasterType1001
     ).makeSession(for: descriptor)
   }
 }
