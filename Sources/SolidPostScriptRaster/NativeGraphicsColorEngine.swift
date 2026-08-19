@@ -38,6 +38,19 @@ public final class NativeGraphicsColorSession: GraphicsColorSession {
     return .solid(RasterColor(red: rgb.red, green: rgb.green, blue: rgb.blue))
   }
 
+  /// Resolves a paint and applies its captured device transfer functions.
+  public func resolve(
+    _ paint: GraphicsPaint,
+    deviceRendering: GraphicsDeviceRenderingSnapshot
+  ) throws -> RasterPaint {
+    let rgb = try resolvedRGB(paint)
+    return .solid(RasterColor(
+      red: clipped(deviceRendering.transferFunctions.red.evaluate(rgb.red)),
+      green: clipped(deviceRendering.transferFunctions.green.evaluate(rgb.green)),
+      blue: clipped(deviceRendering.transferFunctions.blue.evaluate(rgb.blue))
+    ))
+  }
+
   /// Creates an ordered image converter for one sampled image.
   public func makeImageConverter(
     for descriptor: GraphicsImageDescriptor
@@ -52,7 +65,28 @@ public final class NativeGraphicsColorSession: GraphicsColorSession {
     return NativeGraphicsColorImageConverter(
       descriptor: descriptor,
       maskPaint: maskPaint,
-      byteCapacity: byteCapacity
+      byteCapacity: byteCapacity,
+      transferFunctions: .identity
+    )
+  }
+
+  /// Creates an image converter that applies captured transfer functions.
+  public func makeImageConverter(
+    for descriptor: GraphicsImageDescriptor,
+    deviceRendering: GraphicsDeviceRenderingSnapshot
+  ) throws -> sending NativeGraphicsColorImageConverter {
+    let byteCapacity = try imageByteCapacity(descriptor)
+    let maskPaint: RasterPaint?
+    if case .mask(let paint) = descriptor.kind {
+      maskPaint = try resolve(paint, deviceRendering: deviceRendering)
+    } else {
+      maskPaint = nil
+    }
+    return NativeGraphicsColorImageConverter(
+      descriptor: descriptor,
+      maskPaint: maskPaint,
+      byteCapacity: byteCapacity,
+      transferFunctions: deviceRendering.transferFunctions
     )
   }
 
@@ -102,6 +136,8 @@ public final class NativeGraphicsColorSession: GraphicsColorSession {
     }
     return totalBytes.partialValue
   }
+
+  private func clipped(_ value: Double) -> Double { min(1, max(0, value)) }
 }
 
 /// Incrementally converts semantic image rows into a native raster image.
@@ -111,11 +147,18 @@ public final class NativeGraphicsColorImageConverter: GraphicsColorImageConverte
   private var bytes: Data
   private var nextRow = 0
   private var aborted = false
+  private let transferFunctions: GraphicsTransferFunctions
 
-  init(descriptor: GraphicsImageDescriptor, maskPaint: RasterPaint?, byteCapacity: Int) {
+  init(
+    descriptor: GraphicsImageDescriptor,
+    maskPaint: RasterPaint?,
+    byteCapacity: Int,
+    transferFunctions: GraphicsTransferFunctions
+  ) {
     self.descriptor = descriptor
     self.maskPaint = maskPaint
     self.bytes = Data(repeating: 0, count: byteCapacity)
+    self.transferFunctions = transferFunctions
   }
 
   /// Converts and appends a bounded group of complete rows.
@@ -194,9 +237,12 @@ public final class NativeGraphicsColorImageConverter: GraphicsColorImageConverte
         green = Float(color.green) * alpha
         blue = Float(color.blue) * alpha
       }
-      bytes[destinationOffset] = UInt8((min(1, max(0, red)) * 255).rounded())
-      bytes[destinationOffset + 1] = UInt8((min(1, max(0, green)) * 255).rounded())
-      bytes[destinationOffset + 2] = UInt8((min(1, max(0, blue)) * 255).rounded())
+      let transferredRed = transferFunctions.red.evaluate(Double(red))
+      let transferredGreen = transferFunctions.green.evaluate(Double(green))
+      let transferredBlue = transferFunctions.blue.evaluate(Double(blue))
+      bytes[destinationOffset] = UInt8((min(1, max(0, transferredRed)) * 255).rounded())
+      bytes[destinationOffset + 1] = UInt8((min(1, max(0, transferredGreen)) * 255).rounded())
+      bytes[destinationOffset + 2] = UInt8((min(1, max(0, transferredBlue)) * 255).rounded())
       bytes[destinationOffset + 3] = UInt8((min(1, max(0, alpha)) * 255).rounded())
       destinationOffset += 4
     }

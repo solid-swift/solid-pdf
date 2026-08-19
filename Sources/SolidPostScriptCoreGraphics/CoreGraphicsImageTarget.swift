@@ -97,7 +97,7 @@ where
       case .paint(.strokeRectangles(let paths, let matrix)):
         try strokeRectangles(paths, matrix: matrix, state: event.before, in: context)
       case .paint(.shading(let shading)):
-        try paintShading(shading, clip: event.before.clip, in: context)
+        try paintShading(shading, clip: event.before.clip, state: event.before, in: context)
       case .paint(.form(let form)):
         try paintForm(form, in: context, depth: 0)
       case .page(.show), .page(.copy):
@@ -115,7 +115,10 @@ where
       activeImage = (
         descriptor,
         event.before,
-        try colorSession.makeImageConverter(for: descriptor),
+        try colorSession.makeImageConverter(
+          for: descriptor,
+          deviceRendering: event.before.deviceRendering
+        ),
         [],
         0
       )
@@ -300,7 +303,7 @@ where
       context.saveGState()
       replay(state.clip, in: context)
       context.addPath(path.cgPath)
-      try setPaint(state.paint, in: context)
+      try setPaint(state.paint, state: state, in: context)
       context.drawPath(using: rule == .evenOdd ? .eoFill : .fill)
       context.restoreGState()
     }
@@ -330,7 +333,7 @@ where
       replay(state.clip, in: context)
       context.concatenate(matrix.cgAffineTransform)
       context.addPath(path.transformed(by: inverse).cgPath)
-      try setPaint(state.paint, in: context)
+      try setPaint(state.paint, state: state, in: context)
       context.setLineWidth(state.lineWidth)
       context.setLineCap(state.lineCap.cgLineCap)
       context.setLineJoin(state.lineJoin.cgLineJoin)
@@ -353,7 +356,7 @@ where
       case .empty:
         return
       case .shading(let shading):
-        try paintShading(shading, clip: nil, in: context)
+        try paintShading(shading, clip: nil, state: state, in: context)
       case .tiling(let pattern, let underlying):
         context.saveGState()
         defer { context.restoreGState() }
@@ -402,7 +405,10 @@ where
       case .strokeRectangles(let paths, let matrix, let state):
         try strokeRectangles(paths, matrix: matrix, state: state, in: context)
       case .image(let image, let state):
-        let converter = try colorSession.makeImageConverter(for: image.descriptor)
+        let converter = try colorSession.makeImageConverter(
+          for: image.descriptor,
+          deviceRendering: state.deviceRendering
+        )
         do {
           try converter.write(GraphicsImageRows(
             startRow: 0,
@@ -422,7 +428,7 @@ where
           throw error
         }
       case .shading(let shading, let state):
-        try paintShading(shading, clip: state.clip, in: context)
+        try paintShading(shading, clip: state.clip, state: state, in: context)
       case .form(let nested, _):
         try paintForm(nested, in: context, depth: depth)
       }
@@ -457,7 +463,10 @@ where
           interpolate: image.descriptor.interpolate,
           mask: image.descriptor.mask?.transformed(by: translation)
         )
-        let converter = try colorSession.makeImageConverter(for: descriptor)
+        let converter = try colorSession.makeImageConverter(
+          for: descriptor,
+          deviceRendering: imageState.deviceRendering
+        )
         do {
           try converter.write(GraphicsImageRows(
             startRow: 0,
@@ -481,7 +490,9 @@ where
             flatness: imageState.flatness,
             strokeAdjustment: imageState.strokeAdjustment,
             smoothness: imageState.smoothness,
-            pathBoundingBox: imageState.pathBoundingBox
+            pathBoundingBox: imageState.pathBoundingBox,
+            device: imageState.device,
+            deviceRendering: imageState.deviceRendering
           )
           try draw(
             converter.finish(),
@@ -552,7 +563,7 @@ where
             .init(path: $0.path.transformed(by: translation), rule: $0.rule)
           }
         )
-        try paintShading(translated, clip: translatedClip, in: context)
+        try paintShading(translated, clip: translatedClip, state: shadingState, in: context)
         return
       }
       let selectedPaint = underlying ?? state.paint
@@ -568,7 +579,7 @@ where
         context.beginPath()
       }
       context.addPath(path.cgPath)
-      try setPaint(selectedPaint, in: context)
+      try setPaint(selectedPaint, state: state, in: context)
       context.drawPath(using: rule == .evenOdd ? .eoFill : .fill)
     }
 
@@ -629,7 +640,7 @@ where
       context.saveGState()
       replay(state.clip, in: context)
       for path in paths { context.addPath(path.cgPath) }
-      try setPaint(state.paint, in: context)
+      try setPaint(state.paint, state: state, in: context)
       context.fillPath()
       context.restoreGState()
     }
@@ -637,12 +648,13 @@ where
     private func paintShading(
       _ shading: GraphicsShading,
       clip: GraphicsClip?,
+      state: GraphicsStateSnapshot,
       in context: CGContext
     ) throws {
       let paints = shading.mesh.triangles.flatMap {
         [$0.first.paint, $0.second.paint, $0.third.paint]
       }
-      let colors = try colorSession.resolve(paints)
+      let colors = try colorSession.resolve(paints, deviceRendering: state.deviceRendering)
       var offset = 0
       let rasterMatrix = GraphicsMatrix(
         a: 1, b: 0, c: 0, d: -1,
@@ -682,7 +694,7 @@ where
         context.beginPath()
       }
       if let background = shading.background {
-        try setPaint(background, in: context)
+        try setPaint(background, state: state, in: context)
         context.fill(descriptor.mediaBounds.cgRect)
       }
       context.draw(image, in: descriptor.mediaBounds.cgRect)
@@ -964,8 +976,12 @@ where
       return GraphicsRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
-    private func setPaint(_ paint: GraphicsPaint, in context: CGContext) throws {
-      let color = try colorSession.resolve(paint)
+    private func setPaint(
+      _ paint: GraphicsPaint,
+      state: GraphicsStateSnapshot,
+      in context: CGContext
+    ) throws {
+      let color = try colorSession.resolve(paint, deviceRendering: state.deviceRendering)
       context.setFillColor(color)
       context.setStrokeColor(color)
     }

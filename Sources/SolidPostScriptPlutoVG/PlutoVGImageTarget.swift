@@ -103,7 +103,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       case .paint(.strokeRectangles(let paths, let matrix)):
         try strokeRectangles(paths, matrix: matrix, state: event.before, in: canvas)
       case .paint(.shading(let shading)):
-        try paintShading(shading, clip: event.before.clip, in: canvas)
+        try paintShading(shading, clip: event.before.clip, state: event.before, in: canvas)
       case .paint(.form(let form)):
         try paintForm(form, in: canvas, depth: 0)
       case .page(.show), .page(.copy):
@@ -124,7 +124,10 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       activeImage = (
         descriptor,
         event.before,
-        try colorSession.makeImageConverter(for: descriptor),
+        try colorSession.makeImageConverter(
+          for: descriptor,
+          deviceRendering: event.before.deviceRendering
+        ),
         [],
         0
       )
@@ -385,7 +388,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       try setMatrix(rasterMatrix, in: canvas)
       try add(path, to: canvas)
       setFillRule(rule, in: canvas)
-      try setPaint(state.paint, in: canvas)
+      try setPaint(state.paint, state: state, in: canvas)
       plutovg_canvas_fill(canvas)
     }
 
@@ -419,7 +422,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       try replay(state.clip, in: canvas)
       try setMatrix(matrix.concatenated(with: rasterMatrix), in: canvas)
       try add(path.transformed(by: inverse), to: canvas)
-      try setPaint(state.paint, in: canvas)
+      try setPaint(state.paint, state: state, in: canvas)
       plutovg_canvas_set_line_width(canvas, try float(state.lineWidth))
       plutovg_canvas_set_line_cap(canvas, state.lineCap.plutoVG)
       plutovg_canvas_set_line_join(canvas, state.lineJoin.plutoVG)
@@ -449,7 +452,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       case .empty:
         return
       case .shading(let shading):
-        try paintShading(shading, clip: nil, in: canvas)
+        try paintShading(shading, clip: nil, state: state, in: canvas)
       case .tiling(let pattern, let underlying):
         plutovg_canvas_save(canvas)
         defer { plutovg_canvas_restore(canvas) }
@@ -499,7 +502,10 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       case .strokeRectangles(let paths, let matrix, let state):
         try strokeRectangles(paths, matrix: matrix, state: state, in: canvas)
       case .image(let image, let state):
-        let converter = try colorSession.makeImageConverter(for: image.descriptor)
+        let converter = try colorSession.makeImageConverter(
+          for: image.descriptor,
+          deviceRendering: state.deviceRendering
+        )
         do {
           try converter.write(GraphicsImageRows(
             startRow: 0,
@@ -519,7 +525,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
           throw error
         }
       case .shading(let shading, let state):
-        try paintShading(shading, clip: state.clip, in: canvas)
+        try paintShading(shading, clip: state.clip, state: state, in: canvas)
       case .form(let nested, _):
         try paintForm(nested, in: canvas, depth: depth)
       }
@@ -550,7 +556,10 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
           interpolate: image.descriptor.interpolate,
           mask: image.descriptor.mask?.transformed(by: translation)
         )
-        let converter = try colorSession.makeImageConverter(for: descriptor)
+        let converter = try colorSession.makeImageConverter(
+          for: descriptor,
+          deviceRendering: imageState.deviceRendering
+        )
         do {
           try converter.write(GraphicsImageRows(
             startRow: 0,
@@ -577,7 +586,9 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
             flatness: imageState.flatness,
             strokeAdjustment: imageState.strokeAdjustment,
             smoothness: imageState.smoothness,
-            pathBoundingBox: imageState.pathBoundingBox
+            pathBoundingBox: imageState.pathBoundingBox,
+            device: imageState.device,
+            deviceRendering: imageState.deviceRendering
           )
           try draw(
             converter.finish(),
@@ -649,6 +660,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
               .init(path: $0.path.transformed(by: translation), rule: $0.rule)
             }
           ),
+          state: shadingState,
           in: canvas
         )
         return
@@ -669,7 +681,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       }
       try add(path, to: canvas)
       setFillRule(rule, in: canvas)
-      try setPaint(selectedPaint, in: canvas)
+      try setPaint(selectedPaint, state: state, in: canvas)
       plutovg_canvas_fill(canvas)
     }
 
@@ -735,19 +747,20 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       try replay(state.clip, in: canvas)
       try setMatrix(rasterMatrix, in: canvas)
       try add(GraphicsPath(elements: paths.flatMap(\.elements)), to: canvas)
-      try setPaint(state.paint, in: canvas)
+      try setPaint(state.paint, state: state, in: canvas)
       plutovg_canvas_fill(canvas)
     }
 
     private func paintShading(
       _ shading: GraphicsShading,
       clip: GraphicsClip?,
+      state: GraphicsStateSnapshot,
       in canvas: OpaquePointer
     ) throws {
       let paints = shading.mesh.triangles.flatMap {
         [$0.first.paint, $0.second.paint, $0.third.paint]
       }
-      let resolved = try colorSession.resolve(paints)
+      let resolved = try colorSession.resolve(paints, deviceRendering: state.deviceRendering)
       var offset = 0
       let triangles = try shading.mesh.triangles.map { triangle -> RasterGradientTriangle in
         defer { offset += 3 }
@@ -795,14 +808,16 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         lineCap: .butt,
         lineJoin: .miter,
         miterLimit: 10,
-        dash: .init()
+        dash: .init(),
+        device: state.device,
+        deviceRendering: state.deviceRendering
       )
       if let background = shading.background {
         plutovg_canvas_save(canvas)
         defer { plutovg_canvas_restore(canvas) }
         try replay(state.clip, in: canvas)
         try setMatrix(rasterMatrix, in: canvas)
-        try setPaint(background, in: canvas)
+        try setPaint(background, state: state, in: canvas)
         try addRect(descriptor.mediaBounds, to: canvas)
         plutovg_canvas_fill(canvas)
       }
@@ -1123,8 +1138,12 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       plutovg_canvas_add_path(canvas, nativePath)
     }
 
-    private func setPaint(_ paint: GraphicsPaint, in canvas: OpaquePointer) throws {
-      let resolved = try colorSession.resolve(paint)
+    private func setPaint(
+      _ paint: GraphicsPaint,
+      state: GraphicsStateSnapshot,
+      in canvas: OpaquePointer
+    ) throws {
+      let resolved = try colorSession.resolve(paint, deviceRendering: state.deviceRendering)
       guard case .solid(let color) = resolved else { throw SolidPostScript.Error.ioError }
       plutovg_canvas_set_rgb(canvas, try float(color.red), try float(color.green), try float(color.blue))
     }

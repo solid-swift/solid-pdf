@@ -96,7 +96,7 @@ where
           state: event.before
         )
       case .paint(.shading(let shading)):
-        try paintShading(shading, clip: event.before.clip)
+        try paintShading(shading, clip: event.before.clip, state: event.before)
       case .paint(.form(let form)):
         try paintForm(form, depth: 0)
       case .page(.show), .page(.copy):
@@ -115,7 +115,10 @@ where
       activeImage = (
         descriptor,
         event.before,
-        try colorSession.makeImageConverter(for: descriptor),
+        try colorSession.makeImageConverter(
+          for: descriptor,
+          deviceRendering: event.before.deviceRendering
+        ),
         [],
         0
       )
@@ -310,13 +313,17 @@ where
 
     private func fill(_ path: GraphicsPath, rule: GraphicsFillRule, state: GraphicsStateSnapshot) throws {
       if case .pattern(let pattern) = state.paint {
-        try paintPattern(pattern, through: path, rule: rule, clip: state.clip, depth: 0)
+        try paintPattern(pattern, through: path, rule: rule, clip: state.clip, state: state, depth: 0)
         return
       }
       let transformed = path.transformed(by: rasterMatrix).rasterPath
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(state.clip))
-        try canvas.fill(transformed, rule: rule.raster, paint: try colorSession.resolve(state.paint))
+        try canvas.fill(
+          transformed,
+          rule: rule.raster,
+          paint: try colorSession.resolve(state.paint, deviceRendering: state.deviceRendering)
+        )
       }
     }
 
@@ -350,7 +357,7 @@ where
         try canvas.stroke(
           path.transformed(by: inverse).rasterPath,
           style: style,
-          paint: try colorSession.resolve(state.paint),
+          paint: try colorSession.resolve(state.paint, deviceRendering: state.deviceRendering),
           transform: strokeTransform
         )
       }
@@ -361,6 +368,7 @@ where
       through path: GraphicsPath,
       rule: GraphicsFillRule,
       clip: GraphicsClip,
+      state: GraphicsStateSnapshot,
       depth: Int
     ) throws {
       guard depth < 16 else { throw SolidPostScript.Error.ioError }
@@ -372,7 +380,7 @@ where
           imageableBounds: clip.imageableBounds,
           constraints: clip.constraints + [GraphicsClipConstraint(path: path, rule: rule)]
         )
-        try paintShading(shading, clip: combinedClip)
+        try paintShading(shading, clip: combinedClip, state: state)
       case .tiling(let pattern, let underlying):
         let translations = try tileTranslations(for: pattern)
         guard translations.count <= 1_000_000 else { throw SolidPostScript.Error.ioError }
@@ -415,7 +423,10 @@ where
         let effectiveMatrix = matrix?.concatenated(with: state.matrix) ?? state.matrix
         try stroke(GraphicsPath(elements: paths.flatMap(\.elements)), matrix: effectiveMatrix, state: state)
       case .image(let image, let state):
-        let converter = try colorSession.makeImageConverter(for: image.descriptor)
+        let converter = try colorSession.makeImageConverter(
+          for: image.descriptor,
+          deviceRendering: state.deviceRendering
+        )
         do {
           try converter.write(GraphicsImageRows(
             startRow: 0,
@@ -434,7 +445,7 @@ where
           throw error
         }
       case .shading(let shading, let state):
-        try paintShading(shading, clip: state.clip)
+        try paintShading(shading, clip: state.clip, state: state)
       case .form(let nested, _):
         try paintForm(nested, depth: depth)
       }
@@ -475,7 +486,10 @@ where
           interpolate: image.descriptor.interpolate,
           mask: image.descriptor.mask?.transformed(by: translation)
         )
-        let converter = try colorSession.makeImageConverter(for: descriptor)
+        let converter = try colorSession.makeImageConverter(
+          for: descriptor,
+          deviceRendering: imageState.deviceRendering
+        )
         do {
           try converter.write(GraphicsImageRows(
             startRow: 0,
@@ -500,7 +514,9 @@ where
             flatness: state.flatness,
             strokeAdjustment: state.strokeAdjustment,
             smoothness: state.smoothness,
-            pathBoundingBox: state.pathBoundingBox
+            pathBoundingBox: state.pathBoundingBox,
+            device: state.device,
+            deviceRendering: state.deviceRendering
           )
           try draw(
             converter.finish(),
@@ -594,7 +610,8 @@ where
             constraints: clip.constraints
               + [GraphicsClipConstraint(path: paintedPath, rule: paintedRule)]
               + translatedConstraints
-          )
+          ),
+          state: shadingState
         )
         return
       }
@@ -610,17 +627,32 @@ where
       )
       let effectPaint = underlying ?? effectState.paint
       if case .pattern(let nested) = effectPaint {
-        try paintPattern(nested, through: effectPath, rule: effectRule, clip: combinedClip, depth: depth)
+        try paintPattern(
+          nested,
+          through: effectPath,
+          rule: effectRule,
+          clip: combinedClip,
+          state: effectState,
+          depth: depth
+        )
         return
       }
       let transformed = effectPath.transformed(by: rasterMatrix).rasterPath
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(combinedClip))
-        try canvas.fill(transformed, rule: effectRule.raster, paint: try colorSession.resolve(effectPaint))
+        try canvas.fill(
+          transformed,
+          rule: effectRule.raster,
+          paint: try colorSession.resolve(effectPaint, deviceRendering: effectState.deviceRendering)
+        )
       }
     }
 
-    private func paintShading(_ shading: GraphicsShading, clip: GraphicsClip) throws {
+    private func paintShading(
+      _ shading: GraphicsShading,
+      clip: GraphicsClip,
+      state: GraphicsStateSnapshot
+    ) throws {
       let effectiveClip = GraphicsClip(
         imageableBounds: clip.imageableBounds,
         constraints: clip.constraints + (shading.clipPath.map {
@@ -630,7 +662,7 @@ where
       let paints = shading.mesh.triangles.flatMap {
         [$0.first.paint, $0.second.paint, $0.third.paint]
       }
-      let resolved = try colorSession.resolve(paints)
+      let resolved = try colorSession.resolve(paints, deviceRendering: state.deviceRendering)
       var offset = 0
       let triangles = try shading.mesh.triangles.map { triangle -> RasterGradientTriangle in
         defer { offset += 3 }
@@ -659,7 +691,7 @@ where
           try canvas.fill(
             GraphicsPath.rectangle(descriptor.mediaBounds).transformed(by: rasterMatrix).rasterPath,
             rule: .winding,
-            paint: try colorSession.resolve(background)
+            paint: try colorSession.resolve(background, deviceRendering: state.deviceRendering)
           )
         }
         try canvas.paint(RasterGradientMesh(triangles: triangles))

@@ -108,6 +108,35 @@ struct ColorSemanticsTests {
     #expect(try values[1].value(as: BooleanValue.self).value)
   }
 
+  @Test func transferAndColorAdjustmentProceduresAreCompiledAndRestored() async throws {
+    let values = try await Interpreter.results(content: """
+      /invert {1 exch sub} def
+      /invert load settransfer
+      currenttransfer /invert load eq
+      gsave {} settransfer grestore currenttransfer /invert load eq
+      save {} settransfer restore currenttransfer /invert load eq
+      {} setblackgeneration
+      {.1 add} setundercolorremoval
+      .2 .4 .6 setrgbcolor currentcmykcolor
+      """)
+
+    let numbers = try values.prefix(4).map { try $0.value(as: RealValue.self).value }.reversed()
+    #expect(zip(numbers, [0.3, 0.1, 0, 0.4]).allSatisfy { abs($0 - $1) < 1e-9 })
+    #expect(try values[4].value(as: BooleanValue.self).value)
+    #expect(try values[5].value(as: BooleanValue.self).value)
+    #expect(try values[6].value(as: BooleanValue.self).value)
+  }
+
+  @Test func transferProcedureRequiresBalancedSingleNumericResult() async throws {
+    let values = try await Interpreter.results(content: """
+      {{dup} settransfer} stopped
+      $error /errorname get
+      """)
+
+    #expect(try values[0].value(as: NameValue.self).value == "typecheck")
+    #expect(try values[1].value(as: BooleanValue.self).value)
+  }
+
   @Test func typeOneColorRenderingTransformsCIEValuesIntoDeviceColor() async throws {
     let result = try await Interpreter.render(
       content: """

@@ -448,10 +448,29 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["currentcmykcolor"]
 
     func execute(context: isolated Context) async throws {
-      let components: (cyan: Double, magenta: Double, yellow: Double, black: Double) =
-        context.graphicsState.colorSpace.isDeviceSpace
-          ? context.graphicsState.paint.cmykComponents
-          : (0, 0, 0, 1)
+      let components: (cyan: Double, magenta: Double, yellow: Double, black: Double)
+      if context.graphicsState.colorSpace.isDeviceSpace {
+        switch context.graphicsState.paint {
+        case .deviceRGB, .deviceGray:
+          let rgb = context.graphicsState.paint.rgbComponents
+          let cyan = 1 - rgb.red
+          let magenta = 1 - rgb.green
+          let yellow = 1 - rgb.blue
+          let common = min(cyan, magenta, yellow)
+          let black = context.graphicsState.deviceRendering.blackGeneration.evaluate(common)
+          let removal = context.graphicsState.deviceRendering.undercolorRemoval.evaluate(common)
+          components = (
+            min(1, max(0, cyan - removal)),
+            min(1, max(0, magenta - removal)),
+            min(1, max(0, yellow - removal)),
+            min(1, max(0, black))
+          )
+        default:
+          components = context.graphicsState.paint.cmykComponents
+        }
+      } else {
+        components = (0, 0, 0, 1)
+      }
       context.operands.push(
         try .real(components.black),
         try .real(components.yellow),

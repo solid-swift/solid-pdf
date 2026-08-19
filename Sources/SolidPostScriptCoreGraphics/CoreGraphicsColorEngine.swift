@@ -50,6 +50,19 @@ public final class CoreGraphicsColorSession: CoreGraphicsCompatibleColorSession 
     }
   }
 
+  /// Resolves a paint and applies captured device transfer functions.
+  public func resolve(
+    _ paint: GraphicsPaint,
+    deviceRendering: GraphicsDeviceRenderingSnapshot
+  ) throws -> CGColor {
+    let rgb = paint.rgbComponents
+    return try destinationColor(
+      red: clipped(deviceRendering.transferFunctions.red.evaluate(rgb.red)),
+      green: clipped(deviceRendering.transferFunctions.green.evaluate(rgb.green)),
+      blue: clipped(deviceRendering.transferFunctions.blue.evaluate(rgb.blue))
+    )
+  }
+
   /// Creates a bulk image converter for one sampled-image transfer.
   public func makeImageConverter(
     for descriptor: GraphicsImageDescriptor
@@ -71,7 +84,35 @@ public final class CoreGraphicsColorSession: CoreGraphicsCompatibleColorSession 
       descriptor: descriptor,
       destinationColorSpace: destinationColorSpace,
       maskComponents: maskComponents,
-      byteCapacity: byteCapacity
+      byteCapacity: byteCapacity,
+      transferFunctions: .identity
+    )
+  }
+
+  /// Creates an image converter that applies captured device transfer functions.
+  public func makeImageConverter(
+    for descriptor: GraphicsImageDescriptor,
+    deviceRendering: GraphicsDeviceRenderingSnapshot
+  ) throws -> sending CoreGraphicsColorImageConverter {
+    let byteCapacity = try imageByteCapacity(descriptor)
+    let maskComponents: [CGFloat]?
+    if case .mask(let paint) = descriptor.kind {
+      let sourceSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+      guard let color = try resolve(paint, deviceRendering: deviceRendering).converted(
+        to: sourceSpace,
+        intent: .relativeColorimetric,
+        options: nil
+      ) else { throw SolidPostScript.Error.ioError }
+      maskComponents = color.components
+    } else {
+      maskComponents = nil
+    }
+    return CoreGraphicsColorImageConverter(
+      descriptor: descriptor,
+      destinationColorSpace: destinationColorSpace,
+      maskComponents: maskComponents,
+      byteCapacity: byteCapacity,
+      transferFunctions: deviceRendering.transferFunctions
     )
   }
 
@@ -129,6 +170,8 @@ public final class CoreGraphicsColorSession: CoreGraphicsCompatibleColorSession 
     else { throw SolidPostScript.Error.ioError }
     return converted
   }
+
+  private func clipped(_ value: Double) -> Double { min(1, max(0, value)) }
 }
 
 /// Converts ordered semantic rows into a destination-space Core Graphics image.
@@ -139,16 +182,19 @@ public final class CoreGraphicsColorImageConverter: GraphicsColorImageConverter 
   private var bytes: Data
   private var nextRow = 0
   private var aborted = false
+  private let transferFunctions: GraphicsTransferFunctions
 
   init(
     descriptor: GraphicsImageDescriptor,
     destinationColorSpace: CGColorSpace,
     maskComponents: [CGFloat]?,
-    byteCapacity: Int
+    byteCapacity: Int,
+    transferFunctions: GraphicsTransferFunctions
   ) {
     self.descriptor = descriptor
     self.destinationColorSpace = destinationColorSpace
     self.maskComponents = maskComponents
+    self.transferFunctions = transferFunctions
     self.bytes = Data(repeating: 0, count: byteCapacity)
   }
 
@@ -247,9 +293,12 @@ public final class CoreGraphicsColorImageConverter: GraphicsColorImageConverter 
         green = Float(color[min(1, color.count - 1)]) * alpha
         blue = Float(color[min(2, color.count - 1)]) * alpha
       }
-      bytes[destinationOffset] = UInt8((min(1, max(0, red)) * 255).rounded())
-      bytes[destinationOffset + 1] = UInt8((min(1, max(0, green)) * 255).rounded())
-      bytes[destinationOffset + 2] = UInt8((min(1, max(0, blue)) * 255).rounded())
+      let transferredRed = transferFunctions.red.evaluate(Double(red))
+      let transferredGreen = transferFunctions.green.evaluate(Double(green))
+      let transferredBlue = transferFunctions.blue.evaluate(Double(blue))
+      bytes[destinationOffset] = UInt8((min(1, max(0, transferredRed)) * 255).rounded())
+      bytes[destinationOffset + 1] = UInt8((min(1, max(0, transferredGreen)) * 255).rounded())
+      bytes[destinationOffset + 2] = UInt8((min(1, max(0, transferredBlue)) * 255).rounded())
       bytes[destinationOffset + 3] = UInt8((min(1, max(0, alpha)) * 255).rounded())
       destinationOffset += 4
     }

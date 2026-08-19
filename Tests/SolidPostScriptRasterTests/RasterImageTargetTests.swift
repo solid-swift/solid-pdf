@@ -6,6 +6,16 @@ import SolidRaster
 import Testing
 
 @Suite struct RasterImageTargetTests {
+  @Test func transferFunctionsApplyToNativeVectorPaint() async throws {
+    let result = try await Interpreter.render(
+      content: "{1 exch sub} settransfer .25 setgray 0 0 20 20 rectfill showpage",
+      to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20)
+    )
+
+    let image = try #require(result.output.first)
+    #expect(abs(try gray(x: 10, y: 10, image: image) - 0.75) < 0.01)
+  }
+
   @Test func adaptivePageDevicesProduceMixedRasterDimensions() async throws {
     let result = try await Interpreter.render(
       content: """
