@@ -107,18 +107,24 @@ extension Operators {
     func execute(context: isolated Context) async throws {
       let string = try context.operands.pop().value(as: StringValue.self)
       let bytes = try string.characters(in: string.range)
-      let font = try currentFontDefinition(context: context)
-      let transform = glyphTransform(font: font, ctm: context.graphicsState.matrix, origin: .zero)
+      let root = try currentFontDefinition(context: context)
+      let mappings = try mapCharacters(bytes, root: root, context: context)
       var width = GraphicsPoint.zero
-      for byte in bytes {
-        let selector = try glyphSelector(byte, font: font)
+      for mapping in mappings {
+        let transform = glyphTransform(
+          fontMatrix: mapping.effectiveMatrix,
+          ctm: context.graphicsState.matrix,
+          origin: .zero
+        )
         let glyph = try await context.resolveGlyph(
-          selector: selector,
-          characterCode: byte,
-          font: font,
+          selector: mapping.selector,
+          characterCode: mapping.sourceCode,
+          font: mapping.font,
           transform: transform
         )
-        let advance = font.matrix.transformDistance(glyph.metrics.horizontalAdvance)
+        let advance = mapping.effectiveMatrix.transformDistance(
+          advanceMetrics(glyph.metrics, writingMode: root.description.writingMode)
+        )
         width = GraphicsPoint(x: width.x + advance.x, y: width.y + advance.y)
       }
       context.operands.push(try .real(width.y), try .real(width.x))
@@ -133,23 +139,29 @@ extension Operators {
       let string = try context.operands.pop().value(as: StringValue.self)
       let bytes = try string.characters(in: string.range)
       guard let start = context.graphicsState.path.currentPoint else { throw Error.noCurrentPoint }
-      let font = try currentFontDefinition(context: context)
+      let root = try currentFontDefinition(context: context)
+      let mappings = try mapCharacters(bytes, root: root, context: context)
       var current = start
       var additions: [GraphicsPath.Element] = []
-      for byte in bytes {
-        let selector = try glyphSelector(byte, font: font)
-        let transform = glyphTransform(font: font, ctm: context.graphicsState.matrix, origin: current)
+      for mapping in mappings {
+        let transform = glyphTransform(
+          fontMatrix: mapping.effectiveMatrix,
+          ctm: context.graphicsState.matrix,
+          origin: current
+        )
         let glyph = try await context.resolveGlyph(
-          selector: selector,
-          characterCode: byte,
-          font: font,
+          selector: mapping.selector,
+          characterCode: mapping.sourceCode,
+          font: mapping.font,
           transform: transform
         )
         if case .outline(let outline) = glyph.program {
           additions.append(contentsOf: outline.transformed(by: transform).elements)
         }
         let advance = context.graphicsState.matrix.transformDistance(
-          font.matrix.transformDistance(glyph.metrics.horizontalAdvance)
+          mapping.effectiveMatrix.transformDistance(
+            advanceMetrics(glyph.metrics, writingMode: root.description.writingMode)
+          )
         )
         current = GraphicsPoint(x: current.x + advance.x, y: current.y + advance.y)
       }
@@ -168,24 +180,35 @@ extension Operators {
       try procedure.checkProcedure()
       let value = try string.value(as: StringValue.self)
       let bytes = try value.characters(in: value.range)
-      let originalFont = context.graphicsState.fontSource
-      defer { context.graphicsState.fontSource = originalFont }
-      for character in bytes {
-        let font = try currentFontDefinition(context: context)
-        let selector = try glyphSelector(character, font: font)
-        let transform = glyphTransform(font: font, ctm: context.graphicsState.matrix, origin: .zero)
+      let rootObject = context.graphicsState.fontSource
+      let root = try currentFontDefinition(context: context)
+      let mappings = try mapCharacters(bytes, root: root, context: context)
+      context.textRootFontSource = rootObject
+      defer {
+        context.graphicsState.fontSource = rootObject
+        context.textRootFontSource = nil
+      }
+      for mapping in mappings {
+        context.graphicsState.fontSource = mapping.font.object
+        let transform = glyphTransform(
+          fontMatrix: mapping.effectiveMatrix,
+          ctm: context.graphicsState.matrix,
+          origin: .zero
+        )
         let glyph = try await context.resolveGlyph(
-          selector: selector,
-          characterCode: character,
-          font: font,
+          selector: mapping.selector,
+          characterCode: mapping.sourceCode,
+          font: mapping.font,
           transform: transform
         )
-        let advance = font.matrix.transformDistance(glyph.metrics.horizontalAdvance)
+        let advance = mapping.effectiveMatrix.transformDistance(
+          advanceMetrics(glyph.metrics, writingMode: root.description.writingMode)
+        )
         try await context.execute(
           proc: procedure,
-          ops: [try .real(advance.y), try .real(advance.x), .integer(Int32(character))]
+          ops: [try .real(advance.y), try .real(advance.x), .integer(Int32(mapping.sourceCode))]
         )
-        context.graphicsState.fontSource = originalFont
+        context.graphicsState.fontSource = rootObject
       }
     }
   }
@@ -270,16 +293,18 @@ extension Operators {
   ) async throws {
     let string = try object.value(as: StringValue.self)
     let bytes = Array(try string.characters(in: string.range))
-    if let displacements, displacements.count != bytes.count { throw Error.rangeCheck }
-    for (index, byte) in bytes.enumerated() {
-      let extra = displacements?[index] ?? perGlyph(byte)
-      let advance = try await showGlyph(
-        try glyphSelector(byte, font: currentFontDefinition(context: context)),
-        characterCode: byte,
+    let root = try currentFontDefinition(context: context)
+    let mappings = try mapCharacters(Data(bytes), root: root, context: context)
+    if let displacements, displacements.count != mappings.count { throw Error.rangeCheck }
+    for (index, mapping) in mappings.enumerated() {
+      let extra = displacements?[index] ?? perGlyph(mapping.sourceCode)
+      let advance = try await showMappedGlyph(
+        mapping,
+        root: root,
         extraAdvance: extra,
         context: context
       )
-      try await afterGlyph?(byte, advance)
+      try await afterGlyph?(mapping.sourceCode, advance)
     }
   }
 
@@ -290,16 +315,42 @@ extension Operators {
     extraAdvance: GraphicsPoint = .zero,
     context: isolated Context
   ) async throws -> GraphicsPoint {
-    guard let origin = context.graphicsState.path.currentPoint else { throw Error.noCurrentPoint }
     let font = try currentFontDefinition(context: context)
-    let transform = glyphTransform(font: font, ctm: context.graphicsState.matrix, origin: origin)
+    guard font.type != 0 else { throw Error.invalidFont }
+    return try await showMappedGlyph(
+      MappedCharacter(
+        sourceCode: characterCode ?? 0,
+        selector: selector,
+        font: font,
+        effectiveMatrix: font.matrix
+      ),
+      root: font,
+      extraAdvance: extraAdvance,
+      context: context
+    )
+  }
+
+  private static func showMappedGlyph(
+    _ mapping: MappedCharacter,
+    root: FontDefinition,
+    extraAdvance: GraphicsPoint,
+    context: isolated Context
+  ) async throws -> GraphicsPoint {
+    guard let origin = context.graphicsState.path.currentPoint else { throw Error.noCurrentPoint }
+    let transform = glyphTransform(
+      fontMatrix: mapping.effectiveMatrix,
+      ctm: context.graphicsState.matrix,
+      origin: origin
+    )
     let glyph = try await context.resolveGlyph(
-      selector: selector,
-      characterCode: characterCode,
-      font: font,
+      selector: mapping.selector,
+      characterCode: mapping.sourceCode,
+      font: mapping.font,
       transform: transform
     )
-    var advance = font.matrix.transformDistance(glyph.metrics.horizontalAdvance)
+    var advance = mapping.effectiveMatrix.transformDistance(
+      advanceMetrics(glyph.metrics, writingMode: root.description.writingMode)
+    )
     advance = GraphicsPoint(x: advance.x + extraAdvance.x, y: advance.y + extraAdvance.y)
     let deviceAdvance = context.graphicsState.matrix.transformDistance(advance)
     let end = GraphicsPoint(x: origin.x + deviceAdvance.x, y: origin.y + deviceAdvance.y)
@@ -309,7 +360,7 @@ extension Operators {
       transform: transform,
       advance: advance
     )
-    let run = GraphicsGlyphRun(rootFont: font.description, glyphs: [placement])
+    let run = GraphicsGlyphRun(rootFont: root.description, glyphs: [placement])
     try context.applyGraphicsOperation(.paint(.text(run))) { try $0.appendPath(.move(to: end)) }
     return advance
   }
@@ -319,18 +370,18 @@ extension Operators {
     return try fontDefinition(object, context: context)
   }
 
-  private static func glyphSelector(_ byte: UInt8, font: FontDefinition) throws -> GraphicsGlyphSelector {
+  static func glyphSelector(_ byte: UInt8, font: FontDefinition) throws -> GraphicsGlyphSelector {
     let encoding = try font.dictionary.objectValue(forKey: "Encoding", as: ArrayValue.self)
     let name = try encoding.object(at: UInt(byte), for: .read).value(as: NameValue.self).value
     return .name(name)
   }
 
   private static func glyphTransform(
-    font: FontDefinition,
+    fontMatrix: GraphicsMatrix,
     ctm: GraphicsMatrix,
     origin: GraphicsPoint
   ) -> GraphicsMatrix {
-    let combined = font.matrix.concatenated(with: ctm)
+    let combined = fontMatrix.concatenated(with: ctm)
     return GraphicsMatrix(
       a: combined.a,
       b: combined.b,
@@ -339,6 +390,10 @@ extension Operators {
       tx: origin.x + combined.tx - ctm.tx,
       ty: origin.y + combined.ty - ctm.ty
     )
+  }
+
+  private static func advanceMetrics(_ metrics: GraphicsGlyphMetrics, writingMode: Int) -> GraphicsPoint {
+    writingMode == 1 ? metrics.verticalAdvance ?? metrics.horizontalAdvance : metrics.horizontalAdvance
   }
 
   private static func displacementValues(_ object: Object) throws -> [Double] {

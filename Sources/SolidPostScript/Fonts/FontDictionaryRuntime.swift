@@ -5,7 +5,8 @@ extension Operators {
   struct FontDefinition {
     let object: Object
     let dictionary: DictionaryValue
-    let identifier: FontIDValue
+    let identifier: GraphicsFontIdentifier
+    let providerFace: FontProviderFace?
     let type: Int32
     let matrix: GraphicsMatrix
     let description: GraphicsFontDescription
@@ -35,6 +36,24 @@ extension Operators {
       try buildGlyph?.checkProcedure()
       try buildChar?.checkProcedure()
     }
+    if fontType == 0 {
+      let mapType = try dictionary.objectValue(forKey: "FMapType", as: IntegerValue.self).value
+      guard (1...9).contains(mapType) else { throw Error.invalidFont }
+      let encoding = try dictionary.objectValue(forKey: "Encoding", as: ArrayValue.self)
+      let descendants = try dictionary.objectValue(forKey: "FDepVector", as: ArrayValue.self)
+      try encoding.access.check(.read)
+      try descendants.access.check(.read)
+      guard encoding.count > 0, descendants.count > 0 else { throw Error.invalidFont }
+      for entry in try encoding.objects(in: encoding.range, for: .read) {
+        let index = try entry.value(as: IntegerValue.self).value
+        guard index >= 0, UInt(index) < descendants.count else { throw Error.invalidFont }
+      }
+      for descendant in try descendants.objects(in: descendants.range, for: .read) {
+        _ = try descendant.value(as: DictionaryValue.self)
+      }
+      let mode = try dictionary.objectValue(forKeyIfExists: "WMode", as: IntegerValue.self)?.value ?? 0
+      guard mode == 0 || mode == 1 else { throw Error.invalidFont }
+    }
     if [1, 2, 3, 14, 42].contains(fontType) {
       let encoding = try dictionary.objectValue(forKey: "Encoding", as: ArrayValue.self)
       try encoding.access.check(.read)
@@ -47,22 +66,29 @@ extension Operators {
 
   static func fontDefinition(_ object: Object, context: isolated Context) throws -> FontDefinition {
     let dictionary = try object.value(as: DictionaryValue.self)
-    try validateFontDictionary(dictionary, requiresIdentifier: true, context: context)
-    let identifier = try dictionary.objectValue(forKey: "FID", as: FontIDValue.self)
+    let cidFont = try dictionary.object(forKeyIfExists: "CIDFontType") != nil
+    try validateFontDictionary(dictionary, requiresIdentifier: !cidFont, context: context)
+    let identifierValue = try dictionary.objectValue(forKeyIfExists: "FID", as: FontIDValue.self)
+    guard identifierValue != nil || cidFont else { throw Error.invalidFont }
     let type = try dictionary.objectValue(forKey: "FontType", as: IntegerValue.self).value
     let matrix = try readMatrix(dictionary.object(forKey: "FontMatrix"))
     let fontName = try dictionary.objectValue(forKeyIfExists: "FontName", as: NameValue.self)?.value
+      ?? dictionary.objectValue(forKeyIfExists: "CIDFontName", as: NameValue.self)?.value
+    let identifier = identifierValue?.identifier
+      ?? GraphicsFontIdentifier("CID:\(dictionary.allocation.identity.hashValue)")
     let description = GraphicsFontDescription(
-      identifier: identifier.identifier,
+      identifier: identifier,
       resourceName: fontName,
-      postScriptName: identifier.providerFace?.asset.descriptor.postScriptName ?? fontName,
+      postScriptName: identifierValue?.providerFace?.asset.descriptor.postScriptName ?? fontName,
       matrix: matrix,
-      asset: identifier.providerFace?.asset
+      writingMode: Int(try dictionary.objectValue(forKeyIfExists: "WMode", as: IntegerValue.self)?.value ?? 0),
+      asset: identifierValue?.providerFace?.asset
     )
     return FontDefinition(
       object: object,
       dictionary: dictionary,
       identifier: identifier,
+      providerFace: identifierValue?.providerFace,
       type: type,
       matrix: matrix,
       description: description
@@ -84,6 +110,21 @@ extension Operators {
     }
     try dictionary.access.check(.write)
     try validateFontDictionary(dictionary, requiresIdentifier: false, context: context)
+
+    if try dictionary.objectValue(forKey: "FontType", as: IntegerValue.self).value == 0 {
+      let mapType = try dictionary.objectValue(forKey: "FMapType", as: IntegerValue.self).value
+      if (mapType == 3 || mapType == 7), try dictionary.object(forKeyIfExists: "EscChar") == nil {
+        try context.updateDictionary(dictionary, value: .integer(255), forKey: "EscChar")
+      }
+      if mapType == 8 {
+        if try dictionary.object(forKeyIfExists: "ShiftOut") == nil {
+          try context.updateDictionary(dictionary, value: .integer(14), forKey: "ShiftOut")
+        }
+        if try dictionary.object(forKeyIfExists: "ShiftIn") == nil {
+          try context.updateDictionary(dictionary, value: .integer(15), forKey: "ShiftIn")
+        }
+      }
+    }
 
     let identifier = GraphicsFontIdentifier(UUID().uuidString)
     let fid = Object.fontID(identifier: identifier, providerFace: providerFace, vm: dictionary.vm)
@@ -139,18 +180,27 @@ extension Operators {
     selector: GraphicsGlyphSelector,
     font: FontDefinition
   ) throws -> GraphicsGlyphDescription {
-    guard font.type == 1 || font.type == 2 else {
+    if font.type == 32 { return try decodeBitmapGlyph(selector: selector, font: font) }
+    guard font.type == 1 || font.type == 2 || font.type == 9 else {
       return .missing(selector)
-    }
-    let glyphName: String
-    switch selector {
-    case .name(let name): glyphName = name
-    default: return .missing(selector)
     }
     let charStrings = try font.dictionary.objectValue(forKey: "CharStrings", as: DictionaryValue.self)
     try charStrings.access.check(.read)
-    let charStringObject = try charStrings.object(forKeyIfExists: .literalName(glyphName))
-      ?? charStrings.object(forKeyIfExists: .literalName(".notdef"))
+    let key: Object
+    let fallback: Object
+    switch selector {
+    case .name(let name):
+      key = .literalName(name)
+      fallback = .literalName(".notdef")
+    case .cid(let cid):
+      guard cid <= UInt32(Int32.max) else { return .missing(selector) }
+      key = .integer(Int32(cid))
+      fallback = .integer(0)
+    default:
+      return .missing(selector)
+    }
+    let charStringObject = try charStrings.object(forKeyIfExists: key)
+      ?? charStrings.object(forKeyIfExists: fallback)
     guard let charStringObject else { return .missing(selector) }
     let string = try charStringObject.value(as: StringValue.self)
     var data = try string.characters(in: string.range)
@@ -172,7 +222,7 @@ extension Operators {
     }
     let decoded = try FontCharStringDecoder.decode(
       data,
-      dialect: font.type == 1 ? .type1 : .type2,
+      dialect: font.type == 1 || font.type == 9 ? .type1 : .type2,
       localSubroutines: localSubroutines
     )
     return GraphicsGlyphDescription(
@@ -181,6 +231,40 @@ extension Operators {
         horizontalAdvance: GraphicsPoint(x: decoded.advance.x, y: decoded.advance.y)
       ),
       program: .outline(GraphicsPath(decoded.outline))
+    )
+  }
+
+  private static func decodeBitmapGlyph(
+    selector: GraphicsGlyphSelector,
+    font: FontDefinition
+  ) throws -> GraphicsGlyphDescription {
+    guard case .cid(let cid) = selector, cid <= UInt32(Int32.max) else { return .missing(selector) }
+    let directory = try font.dictionary.objectValue(forKey: "GlyphDirectory", as: DictionaryValue.self)
+    guard let entry = try directory.object(forKeyIfExists: .integer(Int32(cid)))
+      ?? directory.object(forKeyIfExists: .integer(0))
+    else { return .missing(selector) }
+    let glyph = try entry.value(as: DictionaryValue.self)
+    let width = try glyph.objectValue(forKey: "Width", as: IntegerValue.self).value
+    let height = try glyph.objectValue(forKey: "Height", as: IntegerValue.self).value
+    let data = try glyph.objectValue(forKey: "Data", as: StringValue.self)
+    let bytes = try data.characters(in: data.range)
+    guard width >= 0, height >= 0 else { throw Error.invalidFont }
+    let rowBytes = (Int(width) + 7) / 8
+    guard bytes.count == rowBytes * Int(height) else { throw Error.invalidFont }
+    var coverage = Data(count: Int(width) * Int(height))
+    for row in 0..<Int(height) {
+      for column in 0..<Int(width) {
+        coverage[row * Int(width) + column] = bytes[row * rowBytes + column / 8] & (0x80 >> (column % 8)) == 0
+          ? 0 : 255
+      }
+    }
+    let advance = try glyph.objectValue(forKeyIfExists: "Advance", as: IntegerValue.self)?.value ?? width
+    return GraphicsGlyphDescription(
+      selector: selector,
+      metrics: GraphicsGlyphMetrics(horizontalAdvance: GraphicsPoint(x: Double(advance), y: 0)),
+      program: .bitmap(try FontGlyphBitmap(
+        width: Int(width), height: Int(height), bytesPerRow: Int(width), originX: 0, originY: Int(height), coverage: coverage
+      ))
     )
   }
 }

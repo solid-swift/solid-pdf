@@ -14,13 +14,15 @@ public enum Resources {
   /// The standard LanguageLevel 3 resource-category providers.
   public static let resources: [Object: any ResourceCategory] = [
     "Font": FontResources(),
-    "CIDFont": StandardResourceCategory(category: "CIDFont", instanceType: .dictionary),
-    "CMap": StandardResourceCategory(category: "CMap", instanceType: .dictionary),
+    "CIDFont": CIDFontResources(),
+    "CMap": CMapResources(),
     "FontSet": StandardResourceCategory(category: "FontSet", instanceType: .dictionary),
     "Encoding": EncodingResources(),
     "Form": FormResources(),
     "Pattern": PatternResources(),
-    "ProcSet": ProcSetResources(procSets: [ColorRenderingProcSet()]),
+    "ProcSet": ProcSetResources(procSets: [
+      ColorRenderingProcSet(), CIDInitProcSet(), BitmapFontInitProcSet(),
+    ]),
     "ColorSpace": StandardResourceCategory(category: "ColorSpace", instanceType: .array),
     "Halftone": HalftoneResources(),
     "ColorRendering": StandardResourceCategory(category: "ColorRendering", instanceType: .dictionary),
@@ -37,7 +39,7 @@ public enum Resources {
     "Emulator": ImplicitResourceCategory(category: "Emulator", instanceType: .name),
     "IODevice": IODeviceResources.instance,
     "ColorRenderingType": ImplicitResourceCategory(category: "ColorRenderingType", instanceType: .integer),
-    "FMapType": ImplicitResourceCategory(category: "FMapType", instanceType: .integer),
+    "FMapType": IntegerImplicitResources(category: "FMapType", values: Set(1...9)),
     "FontType": ImplicitResourceCategory(category: "FontType", instanceType: .integer),
     "FormType": IntegerImplicitResources(category: "FormType", values: [1]),
     "HalftoneType": IntegerImplicitResources(category: "HalftoneType", values: [1, 2, 3, 4, 5, 6, 10, 16]),

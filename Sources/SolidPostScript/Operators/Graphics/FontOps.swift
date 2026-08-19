@@ -11,6 +11,8 @@ extension Operators {
     SetFont.instance,
     CurrentFont.instance,
     RootFont.instance,
+    FindEncoding.instance,
+    ComposeFont.instance,
     CacheStatus.instance,
     SetCacheLimit.instance,
     SetCacheParams.instance,
@@ -155,7 +157,92 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["rootfont"]
 
     func execute(context: isolated Context) async throws {
-      try await CurrentFont.instance.execute(context: context)
+      if let root = context.textRootFontSource {
+        context.operands.push(root)
+      } else {
+        try await CurrentFont.instance.execute(context: context)
+      }
+    }
+  }
+
+  enum FindEncoding: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["findencoding"]
+
+    func execute(context: isolated Context) async throws {
+      let key = try canonicalResourceKey(context.operands.pop())
+      context.operands.push(try await ResourceRuntime.find(key, in: .literalName("Encoding"), context: context))
+    }
+  }
+
+  enum ComposeFont: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["composefont"]
+
+    func execute(context: isolated Context) async throws {
+      let (descendantsObject, cmapObject, keyObject) = try context.operands.pop3()
+      let key = try canonicalResourceKey(keyObject)
+      let name = try key.value(as: NameValue.self).value
+      let cmap: Object
+      if cmapObject.value is DictionaryValue {
+        cmap = cmapObject
+      } else {
+        cmap = try await ResourceRuntime.find(cmapObject, in: .literalName("CMap"), context: context)
+      }
+      try CMapResourceValidation.instance.validateDefinition(key: key, instance: cmap, context: context)
+      let requested = try arrayObjects(descendantsObject)
+      guard !requested.isEmpty else { throw Error.rangeCheck }
+      var descendants: [Object] = []
+      descendants.reserveCapacity(requested.count)
+      for requestedFont in requested {
+        if requestedFont.value is DictionaryValue {
+          descendants.append(requestedFont)
+          continue
+        }
+        do {
+          descendants.append(try await ResourceRuntime.find(
+            requestedFont, in: .literalName("CIDFont"), context: context
+          ))
+        } catch Error.undefinedResource {
+          descendants.append(try await ResourceRuntime.find(
+            requestedFont, in: .literalName("Font"), context: context
+          ))
+        }
+      }
+      let vm = context.allocationMode
+      let encoding = try Object.array(
+        descendants.indices.map { .integer(Int32($0)) },
+        access: .readOnly,
+        vm: vm,
+        kind: .literal
+      )
+      let vector = try Object.array(descendants, access: .readOnly, vm: vm, kind: .literal)
+      try context.adopt(encoding)
+      try context.adopt(vector)
+      let matrix = try makeMatrixObject(.identity, context: context)
+      let bounds = try Object.array([0, 0, 0, 0], access: .readOnly, vm: vm, kind: .literal)
+      try context.adopt(bounds)
+      let cmapDictionary = try cmap.value(as: DictionaryValue.self)
+      let writingMode = try cmapDictionary.objectValue(forKeyIfExists: "WMode", as: IntegerValue.self)?.value ?? 0
+      let dictionary = try context.makeDictionary([
+        (.literalName("FontType"), .integer(0)),
+        (.literalName("FontName"), .literalName(name)),
+        (.literalName("FontMatrix"), matrix),
+        (.literalName("FontBBox"), bounds),
+        (.literalName("FMapType"), .integer(9)),
+        (.literalName("Encoding"), encoding),
+        (.literalName("FDepVector"), vector),
+        (.literalName("CMap"), cmap),
+        (.literalName("WMode"), .integer(writingMode)),
+      ], access: .unlimited, vm: vm)
+      let initialized = try initializeFont(dictionary, resourceName: name, context: context)
+      context.operands.push(try await ResourceRuntime.define(
+        initialized,
+        for: key,
+        in: .literalName("Font"),
+        origin: .explicit,
+        context: context
+      ))
     }
   }
 

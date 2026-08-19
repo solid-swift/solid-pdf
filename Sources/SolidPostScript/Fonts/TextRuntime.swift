@@ -14,6 +14,12 @@ extension Context {
     font: Operators.FontDefinition,
     transform: GraphicsMatrix
   ) async throws -> GraphicsGlyphDescription {
+    if font.type == 32 {
+      return environment.fontManager.glyphCache.pinnedGlyph(
+        font: font.identifier,
+        selector: selector
+      ) ?? .missing(selector)
+    }
     let key = FontGlyphCacheKey(
       font: font.description.identifier,
       selector: selector,
@@ -24,14 +30,14 @@ extension Context {
     if let cached = environment.fontManager.glyphCache.glyph(for: key) { return cached }
 
     let glyph: GraphicsGlyphDescription
-    if font.type == 3 {
+    if font.type == 3 || font.type == 10 {
       glyph = try await buildType3Glyph(
         selector: selector,
         characterCode: characterCode,
         font: font,
         transform: transform
       )
-    } else if let face = font.identifier.providerFace,
+    } else if let face = font.providerFace,
       let provider = environment.fontManager.provider(identifier: face.providerIdentifier)
     {
       let portableSelector = try selector.fontSelector
@@ -59,7 +65,13 @@ extension Context {
     let arguments: [Object]
     if let buildGlyph = try font.dictionary.object(forKeyIfExists: "BuildGlyph") {
       procedure = buildGlyph
-      arguments = [.literalName(selector.nameValue), font.object]
+      let glyph: Object = switch selector {
+      case .cid(let cid): .integer(Int32(bitPattern: cid))
+      case .index(let index): .integer(Int32(bitPattern: index))
+      case .character(let code): .integer(Int32(code))
+      case .name(let name): .literalName(name)
+      }
+      arguments = [glyph, font.object]
     } else {
       guard let characterCode else { return .missing(selector) }
       procedure = try font.dictionary.object(forKey: "BuildChar")

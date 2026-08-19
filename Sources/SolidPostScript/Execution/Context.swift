@@ -97,6 +97,7 @@ public actor Context {
   var imageDataSourceCallbackDepth = 0
   var activeImageDictionaries: [(dictionary: DictionaryValue, revision: UInt64)] = []
   var activeGlyphBuild: GlyphBuildState?
+  var textRootFontSource: Object?
   var graphicsStack: [GraphicsStackFrame] = []
   var pageDeviceCallbackStack: [PageDeviceCallback] = []
   private var executionBoundarySequence: UInt64 = 0
