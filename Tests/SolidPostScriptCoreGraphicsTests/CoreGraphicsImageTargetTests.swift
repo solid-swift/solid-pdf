@@ -4,9 +4,26 @@ import Testing
 
 import SolidPostScript
 import SolidPostScriptCoreGraphics
+import SolidPostScriptCoreText
 
 @Suite
 struct CoreGraphicsImageTargetTests {
+
+  @Test func coreTextSessionRendersInterpreterSelectedHostGlyphs() async throws {
+    let result = try await Interpreter.render(
+      content: "/Helvetica findfont 30 scalefont setfont 5 10 moveto (A) show showpage",
+      to: CoreGraphicsImageTarget(pixelWidth: 50, pixelHeight: 50),
+      environment: .coreText()
+    )
+    let image = try #require(result.output.first)
+    var containsMark = false
+    for y in 0..<image.height where !containsMark {
+      for x in 0..<image.width where try gray(atX: x, y: y, in: image) < 0.9 {
+        containsMark = true
+      }
+    }
+    #expect(containsMark)
+  }
 
   @Test func adaptivePageDevicesProduceMixedBitmapDimensions() async throws {
     let result = try await Interpreter.render(

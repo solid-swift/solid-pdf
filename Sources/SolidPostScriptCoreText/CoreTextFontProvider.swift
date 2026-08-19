@@ -13,6 +13,9 @@ public struct CoreTextFontProvider: FontResourceProvider, Sendable {
   /// Creates a CoreText font provider.
   public init() {}
 
+  /// CoreText opens embedded sfnt fonts and every face in sfnt collections.
+  public var supportedAssetFormats: Set<FontAsset.Format> { [.sfnt] }
+
   /// Returns the installed PostScript font names known to CoreText.
   public func availableFontNames() async throws -> [String] {
     (CTFontManagerCopyAvailablePostScriptNames() as? [String] ?? []).sorted()
@@ -40,6 +43,19 @@ public struct CoreTextFontProvider: FontResourceProvider, Sendable {
     else { return nil }
     return Self.portableGlyph(selector: selector, glyph: glyph, font: font)
   }
+
+  /// Opens the exact face selected by an embedded sfnt asset.
+  public func open(_ asset: FontAsset) async throws -> FontProviderFace? {
+    guard supportedAssetFormats.contains(asset.format),
+      let font = Self.font(for: asset)
+    else { return nil }
+    let resolved = try Self.asset(for: font, data: asset.data, faceIndex: asset.faceIndex)
+    return FontProviderFace(
+      providerIdentifier: identifier,
+      faceKey: "embedded:\(asset.faceIndex):\(resolved.descriptor.postScriptName)",
+      asset: resolved
+    )
+  }
 }
 
 private extension CoreTextFontProvider {
@@ -49,20 +65,36 @@ private extension CoreTextFontProvider {
       return nil
     }
     let data = try Data(contentsOf: url, options: .mappedIfSafe)
+    let name = CTFontCopyPostScriptName(font) as String
+    let descriptors = fontDescriptors(in: data)
+    let faceIndex = descriptors.firstIndex {
+      let candidate = CTFontCreateWithFontDescriptor($0, 1_000, nil)
+      return CTFontCopyPostScriptName(candidate) as String == name
+    } ?? 0
+    return try asset(for: font, data: data, faceIndex: faceIndex)
+  }
+
+  static func asset(for font: CTFont, data: Data?, faceIndex: Int) throws -> FontAsset {
+    guard let data else { throw FontError.invalidData }
     let metadata = try FontDescriptor(
       postScriptName: CTFontCopyPostScriptName(font) as String,
       familyName: CTFontCopyFamilyName(font) as String,
       styleName: CTFontCopyName(font, kCTFontStyleNameKey) as String?,
       unitsPerEm: UInt32(CTFontGetUnitsPerEm(font))
     )
-    return try FontAsset(descriptor: metadata, format: .sfnt, data: data)
+    return try FontAsset(descriptor: metadata, format: .sfnt, data: data, faceIndex: faceIndex)
   }
 
   static func font(for asset: FontAsset) -> CTFont? {
-    guard let data = asset.data,
-      let descriptor = CTFontManagerCreateFontDescriptorFromData(data as CFData)
-    else { return nil }
+    guard let data = asset.data else { return nil }
+    let descriptors = fontDescriptors(in: data)
+    guard descriptors.indices.contains(asset.faceIndex) else { return nil }
+    let descriptor = descriptors[asset.faceIndex]
     return CTFontCreateWithFontDescriptor(descriptor, CGFloat(asset.descriptor.unitsPerEm), nil)
+  }
+
+  static func fontDescriptors(in data: Data) -> [CTFontDescriptor] {
+    CTFontManagerCreateFontDescriptorsFromData(data as CFData) as? [CTFontDescriptor] ?? []
   }
 
   static func glyphIndex(_ selector: FontGlyphSelector, in font: CTFont) -> CGGlyph? {

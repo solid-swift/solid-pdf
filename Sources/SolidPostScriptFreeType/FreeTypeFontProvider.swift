@@ -13,6 +13,9 @@ public struct FreeTypeFontProvider: FontResourceProvider, Sendable {
   /// Creates a FreeType and Fontconfig font provider.
   public init() {}
 
+  /// FreeType opens embedded Type 1, CFF, and sfnt assets.
+  public var supportedAssetFormats: Set<FontAsset.Format> { [.type1, .compactFontFormat, .sfnt] }
+
   /// Returns installed PostScript font names known to Fontconfig.
   public func availableFontNames() async throws -> [String] {
     let count = solid_fc_postscript_names(nil, 0)
@@ -84,6 +87,37 @@ public struct FreeTypeFontProvider: FontResourceProvider, Sendable {
           selector: selector,
           metrics: Self.metrics(slot: slot),
           program: Self.program(slot: slot)
+        )
+      }
+    }
+    return result ?? nil
+  }
+
+  /// Opens one exact embedded face without consulting Fontconfig.
+  public func open(_ asset: FontAsset) async throws -> FontProviderFace? {
+    guard supportedAssetFormats.contains(asset.format), let data = asset.data else { return nil }
+    let result: FontProviderFace?? = try data.withUnsafeBytes { bytes in
+      try Self.withFace(data: bytes, index: asset.faceIndex) { face -> FontProviderFace? in
+        let postScriptName = FT_Get_Postscript_Name(face).map { String(cString: $0) }
+          ?? asset.descriptor.postScriptName
+        let descriptor = try FontDescriptor(
+          postScriptName: postScriptName,
+          familyName: face.pointee.family_name.map { String(cString: $0) }
+            ?? asset.descriptor.familyName,
+          styleName: face.pointee.style_name.map { String(cString: $0) }
+            ?? asset.descriptor.styleName,
+          unitsPerEm: UInt32(max(1, Int(face.pointee.units_per_EM)))
+        )
+        let opened = try FontAsset(
+          descriptor: descriptor,
+          format: asset.format,
+          data: data,
+          faceIndex: asset.faceIndex
+        )
+        return FontProviderFace(
+          providerIdentifier: identifier,
+          faceKey: "embedded:\(asset.faceIndex):\(postScriptName)",
+          asset: opened
         )
       }
     }

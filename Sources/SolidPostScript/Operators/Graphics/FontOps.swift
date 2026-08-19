@@ -28,7 +28,17 @@ extension Operators {
       let key = try canonicalResourceKey(keyObject)
       let name = try key.value(as: NameValue.self).value
       let dictionary = try dictionaryObject.value(as: DictionaryValue.self)
-      let initialized = try initializeFont(dictionaryObject, resourceName: name, context: context)
+      let providerFace = try await embeddedProviderFace(
+        for: dictionary,
+        resourceName: name,
+        context: context
+      )
+      let initialized = try initializeFont(
+        dictionaryObject,
+        resourceName: name,
+        providerFace: providerFace,
+        context: context
+      )
       let savedMode = context.allocationMode
       context.allocationMode = dictionary.vm
       defer { context.allocationMode = savedMode }

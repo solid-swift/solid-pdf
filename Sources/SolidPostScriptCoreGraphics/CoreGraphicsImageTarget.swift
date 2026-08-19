@@ -1,7 +1,9 @@
 #if canImport(CoreGraphics)
 import CoreGraphics
+import CoreText
 import Foundation
 import SolidPostScript
+import SolidPostScriptCoreText
 import SolidRaster
 
 /// A Core Graphics image target parameterized by a compatible color engine.
@@ -12,6 +14,7 @@ where
   public typealias PageOutput = CGImage
   public typealias Output = [CGImage]
   public typealias DeviceRenderingEngine = CoreGraphicsDeviceRenderingEngine
+  public typealias FontEngine = CoreTextGraphicsFontEngine
 
   /// The renderer dedicated to one Core Graphics image render.
   public final class Renderer: GraphicsRenderer {
@@ -19,6 +22,7 @@ where
     public typealias Output = [CGImage]
     public typealias ColorSession = ColorEngine.Session
     public typealias DeviceRenderingSession = CoreGraphicsDeviceRenderingSession
+    public typealias FontSession = CoreTextGraphicsFontSession
 
     /// Images transmitted by `showpage` so far.
     public private(set) var pages: [CGImage] = []
@@ -28,6 +32,7 @@ where
     private var descriptor: GraphicsDeviceDescriptor
     private let colorSession: ColorEngine.Session
     private let deviceRenderingSession: CoreGraphicsDeviceRenderingSession
+    private let fontSession: CoreTextGraphicsFontSession
     private var rasterMatrix: GraphicsMatrix
     private var activeDeviceIdentifier: GraphicsDeviceIdentifier?
     private var renderingEnabled = true
@@ -46,7 +51,8 @@ where
       pixelHeight: Int,
       descriptor: GraphicsDeviceDescriptor,
       colorSession: ColorEngine.Session,
-      deviceRenderingSession: CoreGraphicsDeviceRenderingSession
+      deviceRenderingSession: CoreGraphicsDeviceRenderingSession,
+      fontSession: CoreTextGraphicsFontSession
     ) throws {
       guard colorSession.destinationColorSpace.model == .rgb else {
         throw SolidPostScript.Error.configurationError
@@ -56,6 +62,7 @@ where
       self.descriptor = descriptor
       self.colorSession = colorSession
       self.deviceRenderingSession = deviceRenderingSession
+      self.fontSession = fontSession
       rasterMatrix = GraphicsMatrix(
         a: 1,
         b: 0,
@@ -446,6 +453,9 @@ where
     ) throws {
       guard depth < 16 else { throw SolidPostScript.Error.ioError }
       for placement in run.glyphs {
+        if try paintPreparedGlyph(placement, rootFont: run.rootFont, state: state, in: context) {
+          continue
+        }
         switch placement.glyph.program {
         case .outline(let path):
           try fill(path.transformed(by: placement.transform), rule: .winding, state: state, in: context)
@@ -455,6 +465,30 @@ where
           break
         }
       }
+    }
+
+    private func paintPreparedGlyph(
+      _ placement: GraphicsGlyphPlacement,
+      rootFont: GraphicsFontDescription,
+      state: GraphicsStateSnapshot,
+      in context: CGContext
+    ) throws -> Bool {
+      if case .pattern = state.paint { return false }
+      guard !state.overprint,
+        state.deviceRendering == .continuousTone,
+        let preparedFont = try fontSession.prepare(placement.font ?? rootFont),
+        let preparedGlyph = try fontSession.prepare(placement.glyph, in: preparedFont),
+        let path = CTFontCreatePathForGlyph(preparedFont, preparedGlyph.glyph, nil)
+      else { return false }
+      var transform = placement.transform.cgAffineTransform
+      guard let transformed = path.copy(using: &transform) else { return false }
+      context.saveGState()
+      defer { context.restoreGState() }
+      replay(state.clip, in: context)
+      try setPaint(state.paint, state: state, in: context)
+      context.addPath(transformed)
+      context.fillPath()
+      return true
     }
 
     private func replayPatternEffect(
@@ -1049,6 +1083,8 @@ where
   public let colorEngine: ColorEngine
   /// The device-rendering engine used for direct-path and fallback selection.
   public let deviceRenderingEngine = CoreGraphicsDeviceRenderingEngine()
+  /// The CoreText engine used for exact embedded-face preparation.
+  public let fontEngine = CoreTextGraphicsFontEngine()
   /// The virtual page-device provider used by this target.
   public let pageDeviceProvider: StandardGraphicsPageDeviceProvider
 
@@ -1105,12 +1141,26 @@ where
     colorSession: sending ColorEngine.Session,
     deviceRenderingSession: sending CoreGraphicsDeviceRenderingSession
   ) throws -> sending Renderer {
+    try makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession,
+      fontSession: fontEngine.makeSession(for: deviceDescriptor)
+    )
+  }
+
+  /// Creates a renderer with prepared color, device-rendering, and CoreText font state.
+  public func makeRenderer(
+    colorSession: sending ColorEngine.Session,
+    deviceRenderingSession: sending CoreGraphicsDeviceRenderingSession,
+    fontSession: sending CoreTextGraphicsFontSession
+  ) throws -> sending Renderer {
     try Renderer(
       pixelWidth: pixelWidth,
       pixelHeight: pixelHeight,
       descriptor: deviceDescriptor,
       colorSession: colorSession,
-      deviceRenderingSession: deviceRenderingSession
+      deviceRenderingSession: deviceRenderingSession,
+      fontSession: fontSession
     )
   }
 }

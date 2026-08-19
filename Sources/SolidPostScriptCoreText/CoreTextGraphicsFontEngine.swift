@@ -30,10 +30,10 @@ public final class CoreTextGraphicsFontSession: GraphicsFontSession {
 
   /// Creates a data-backed CoreText face for a portable font asset.
   public func prepare(_ font: GraphicsFontDescription) throws -> CTFont? {
-    guard let asset = font.asset,
-      let data = asset.data,
-      let descriptor = CTFontManagerCreateFontDescriptorFromData(data as CFData)
-    else { return nil }
+    guard let asset = font.asset, let data = asset.data else { return nil }
+    let descriptors = CTFontManagerCreateFontDescriptorsFromData(data as CFData) as? [CTFontDescriptor] ?? []
+    guard descriptors.indices.contains(asset.faceIndex) else { return nil }
+    let descriptor = descriptors[asset.faceIndex]
     return CTFontCreateWithFontDescriptor(descriptor, CGFloat(asset.descriptor.unitsPerEm), nil)
   }
 

@@ -176,6 +176,7 @@ extension Operators {
     return try initializeFont(
       dictionary,
       resourceName: source.description.resourceName,
+      providerFace: source.providerFace,
       propagateCompositeMatrix: false,
       context: context
     )
@@ -234,6 +235,54 @@ extension Operators {
       providerFace: face,
       context: context
     )
+  }
+
+  static func embeddedProviderFace(
+    for dictionary: DictionaryValue,
+    resourceName: String,
+    context: isolated Context
+  ) async throws -> FontProviderFace? {
+    let fontType = try dictionary.objectValue(forKey: "FontType", as: IntegerValue.self).value
+    guard fontType == 42 || fontType == 11 else { return nil }
+    _ = try dictionary.objectValue(forKey: "CharStrings", as: DictionaryValue.self)
+    let fragments = try arrayObjects(dictionary.object(forKey: "sfnts"))
+    guard !fragments.isEmpty else { throw Error.invalidFont }
+    var data = Data()
+    for fragment in fragments {
+      let string = try fragment.value(as: StringValue.self)
+      data.append(try string.characters(in: string.range))
+    }
+    let collection: SFNTCollection
+    do {
+      collection = try SFNTCollection(data: data)
+    } catch {
+      throw Error.invalidFont
+    }
+    let requestedName = try dictionary.objectValue(forKeyIfExists: "FontName", as: NameValue.self)?.value
+      ?? dictionary.objectValue(forKeyIfExists: "CIDFontName", as: NameValue.self)?.value
+      ?? resourceName
+    let providers = context.environment.fontProviders.filter { $0.supportedAssetFormats.contains(.sfnt) }
+    guard !providers.isEmpty else { throw Error.invalidFont }
+    for provider in providers {
+      for faceIndex in collection.faces.indices {
+        let descriptor: FontDescriptor
+        let asset: FontAsset
+        do {
+          descriptor = try FontDescriptor(postScriptName: requestedName, unitsPerEm: 1_000)
+          asset = try FontAsset(
+            descriptor: descriptor,
+            format: .sfnt,
+            data: data,
+            faceIndex: faceIndex
+          )
+        } catch {
+          throw Error.invalidFont
+        }
+        let opened = try await context.withUserTimeSuspended { try await provider.open(asset) }
+        if let opened, opened.asset.descriptor.postScriptName == requestedName { return opened }
+      }
+    }
+    throw Error.invalidFont
   }
 
   static func decodeDictionaryGlyph(

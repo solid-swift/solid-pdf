@@ -121,9 +121,19 @@ public final class InterpreterEnvironment: Sendable {
     var categories = Resources.resources
     categories.merge(resourceCategories) { _, replacement in replacement }
     if resourceCategories["FontType"] == nil {
-      var fontTypes: Set<Int32> = [0, 1, 2, 3, 9, 10, 11, 32, 42]
+      var fontTypes: Set<Int32> = [0, 1, 2, 3, 9, 10, 32]
+      if fontProviders.contains(where: { $0.supportedAssetFormats.contains(.sfnt) }) {
+        fontTypes.formUnion([11, 42])
+      }
       if fontProviders.contains(where: { $0.supportsChameleonFonts }) { fontTypes.insert(14) }
       categories["FontType"] = IntegerImplicitResources(category: "FontType", values: fontTypes)
+    }
+    if resourceCategories["CIDFontType"] == nil {
+      var cidFontTypes: Set<Int32> = [0, 1, 4]
+      if fontProviders.contains(where: { $0.supportedAssetFormats.contains(.sfnt) }) {
+        cidFontTypes.insert(2)
+      }
+      categories["CIDFontType"] = IntegerImplicitResources(category: "CIDFontType", values: cidFontTypes)
     }
     if resourceCategories["IODevice"] == nil {
       categories["IODevice"] = IODeviceResources(fileDevices: self.fileDevices)

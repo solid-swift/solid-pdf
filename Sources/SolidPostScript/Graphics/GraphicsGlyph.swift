@@ -77,6 +77,8 @@ public struct GraphicsGlyphDescription: Sendable, Hashable {
 public struct GraphicsGlyphPlacement: Sendable, Hashable {
   /// The resolved glyph.
   public let glyph: GraphicsGlyphDescription
+  /// The descendant font that supplied this glyph, or the run's root font for legacy producers.
+  public let font: GraphicsFontDescription?
   /// The device-space glyph origin.
   public let origin: GraphicsPoint
   /// The glyph-to-device transform.
@@ -89,9 +91,11 @@ public struct GraphicsGlyphPlacement: Sendable, Hashable {
     glyph: GraphicsGlyphDescription,
     origin: GraphicsPoint,
     transform: GraphicsMatrix,
-    advance: GraphicsPoint
+    advance: GraphicsPoint,
+    font: GraphicsFontDescription? = nil
   ) {
     self.glyph = glyph
+    self.font = font
     self.origin = origin
     self.transform = transform
     self.advance = advance

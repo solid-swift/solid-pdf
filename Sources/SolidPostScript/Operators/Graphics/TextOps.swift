@@ -360,7 +360,8 @@ extension Operators {
       glyph: glyph,
       origin: origin,
       transform: transform,
-      advance: advance
+      advance: advance,
+      font: mapping.font.description
     )
     let run = GraphicsGlyphRun(rootFont: root.description, glyphs: [placement])
     try context.applyGraphicsOperation(.paint(.text(run))) { try $0.appendPath(.move(to: end)) }

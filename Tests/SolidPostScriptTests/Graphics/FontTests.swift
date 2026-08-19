@@ -1,3 +1,4 @@
+import SolidFont
 import Testing
 
 @testable import SolidPostScript
@@ -215,6 +216,38 @@ import Testing
     #expect(abs(try values[0].value(as: RealValue.self).value - 70) < 1e-9)
   }
 
+  @Test func embeddedType42UsesACapableProviderAndAdvertisesItsTypes() async throws {
+    let environment = InterpreterEnvironment(fontProviders: [EmbeddedSFNTProvider()])
+    let context = try await Interpreter.execute(content: """
+      42 /FontType resourcestatus { pop pop true } { false } ifelse
+      11 /FontType resourcestatus { pop pop true } { false } ifelse
+      2 /CIDFontType resourcestatus { pop pop true } { false } ifelse
+      /T 12 dict dup begin
+        /FontType 42 def /FontMatrix [0.001 0 0 0.001 0 0] def
+        /FontBBox [0 0 500 700] def /Encoding StandardEncoding def
+        /CharStrings 2 dict dup begin /.notdef 0 def /A 1 def end def
+        /sfnts [<000100000000000000000000>] def
+      end definefont pop
+      /T findfont 100 scalefont setfont (A) stringwidth
+      """, environment: environment)
+    let values = try await context.results()
+    #expect(try values[4].value(as: BooleanValue.self).value)
+    #expect(try values[3].value(as: BooleanValue.self).value)
+    #expect(try values[2].value(as: BooleanValue.self).value)
+    #expect(abs(try values[1].value(as: RealValue.self).value - 50) < 1e-9)
+    #expect(abs(try values[0].value(as: RealValue.self).value) < 1e-9)
+  }
+
+  @Test func sfntFontTypesAreUnavailableWithoutACapableProvider() async throws {
+    let context = try await Interpreter.execute(content: """
+      42 /FontType resourcestatus 11 /FontType resourcestatus
+      2 /CIDFontType resourcestatus
+      """)
+    let values = try await context.results()
+    #expect(values.count == 3)
+    #expect(values.allSatisfy { (try? $0.value(as: BooleanValue.self).value) == false })
+  }
+
   private static let type3Font = """
     /F 20 dict dup begin
       /FontType 3 def
@@ -231,5 +264,31 @@ import Testing
       /BuildGlyph { exch begin CharProcs exch get exec end } bind def
     end
     /F exch definefont pop
-    """
+  """
+}
+
+private struct EmbeddedSFNTProvider: FontResourceProvider {
+  let identifier = "test.embedded-sfnt"
+  let supportedAssetFormats: Set<FontAsset.Format> = [.sfnt]
+
+  func availableFontNames() async throws -> [String] { [] }
+
+  func resolve(_ query: FontResourceQuery) async throws -> FontProviderFace? { nil }
+
+  func open(_ asset: FontAsset) async throws -> FontProviderFace? {
+    FontProviderFace(providerIdentifier: identifier, faceKey: "face-\(asset.faceIndex)", asset: asset)
+  }
+
+  func glyph(_ selector: FontGlyphSelector, in face: FontProviderFace) async throws -> FontGlyph? {
+    FontGlyph(
+      selector: selector,
+      metrics: FontGlyphMetrics(horizontalAdvance: FontPoint(x: 500, y: 0)),
+      program: .outline(FontOutline(elements: [
+        .move(FontPoint(x: 0, y: 0)),
+        .line(FontPoint(x: 500, y: 0)),
+        .line(FontPoint(x: 250, y: 700)),
+        .close,
+      ]))
+    )
+  }
 }

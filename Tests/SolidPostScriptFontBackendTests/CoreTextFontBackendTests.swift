@@ -19,6 +19,10 @@ struct CoreTextFontBackendTests {
 
     #expect(face.asset.format == .sfnt)
     #expect(glyph != nil)
+    #expect(provider.supportedAssetFormats == [.sfnt])
+    let reopened = try #require(try await provider.open(face.asset))
+    #expect(reopened.asset.faceIndex == face.asset.faceIndex)
+    #expect(reopened.asset.descriptor.postScriptName == face.asset.descriptor.postScriptName)
 
     let session = CoreTextGraphicsFontEngine().makeSession(for: .letter)
     let font = GraphicsFontDescription(
@@ -33,6 +37,23 @@ struct CoreTextFontBackendTests {
       program: .empty
     )
     #expect(try session.prepare(description, in: preparedFont) != nil)
+  }
+
+
+  @Test("Provider rejects an out-of-range embedded face index")
+  func invalidEmbeddedFaceIndex() async throws {
+    let provider = CoreTextFontProvider()
+    let name = try #require(try await provider.availableFontNames().first)
+    let face = try #require(try await provider.resolve(
+      FontResourceQuery(name: name, permitsSubstitution: false)
+    ))
+    let invalid = try FontAsset(
+      descriptor: face.asset.descriptor,
+      format: .sfnt,
+      data: face.asset.data,
+      faceIndex: Int.max
+    )
+    #expect(try await provider.open(invalid) == nil)
   }
 
   @Test("Environment factory enables host font lookup")

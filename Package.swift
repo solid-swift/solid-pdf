@@ -72,6 +72,7 @@ let package = Package(
     .testTarget(
       name: "SolidPostScriptTests",
       dependencies: [
+        "SolidFont",
         "SolidPostScript",
         .product(name: "SolidCore", package: "solid-foundation"),
         .product(name: "SolidIO", package: "solid-foundation"),
@@ -81,7 +82,7 @@ let package = Package(
     ),
     .target(
       name: "SolidPostScriptCoreGraphics",
-      dependencies: ["SolidFont", "SolidPostScript", "SolidRaster"],
+      dependencies: ["SolidFont", "SolidPostScript", "SolidPostScriptCoreText", "SolidRaster"],
       plugins: lintPlugins
     ),
     .target(
@@ -141,7 +142,7 @@ let package = Package(
     ),
     .testTarget(
       name: "SolidPostScriptCoreGraphicsTests",
-      dependencies: ["SolidPostScript", "SolidPostScriptCoreGraphics"],
+      dependencies: ["SolidPostScript", "SolidPostScriptCoreGraphics", "SolidPostScriptCoreText"],
       plugins: lintPlugins
     ),
     .target(
