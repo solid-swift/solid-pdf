@@ -220,6 +220,23 @@ if benchmarkEnabled {
   ]
   package.targets += [
     .target(
+      name: "SolidFontBenchmarkSupport",
+      dependencies: ["SolidFont"],
+      path: "Benchmarks/SolidFontBenchmarkSupport"
+    ),
+    .executableTarget(
+      name: "SolidFontBenchmark",
+      dependencies: [
+        "SolidFont",
+        "SolidFontBenchmarkSupport",
+        .product(name: "Benchmark", package: "benchmark"),
+      ],
+      path: "Benchmarks/SolidFontBenchmark",
+      plugins: [
+        .plugin(name: "BenchmarkPlugin", package: "benchmark")
+      ]
+    ),
+    .target(
       name: "SolidRasterBenchmarkSupport",
       dependencies: [
         "SolidPostScript",
@@ -267,6 +284,12 @@ if benchmarkEnabled {
         "SolidRasterBenchmarkSupport",
       ],
       path: "Tests/SolidRasterBenchmarkSupportTests",
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidFontBenchmarkSupportTests",
+      dependencies: ["SolidFont", "SolidFontBenchmarkSupport"],
+      path: "Tests/SolidFontBenchmarkSupportTests",
       plugins: lintPlugins
     ),
   ]

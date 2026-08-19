@@ -23,8 +23,8 @@ import Testing
         /CIDFontType 0 def /FontType 9 def /CIDFontName /BinaryCID def
         /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> def
         /CIDCount 1 def /FontMatrix [.001 0 0 .001 0 0] def /FontBBox [0 0 1 1] def
-        (Binary) 3 StartData 
-      """
+        (Binary) 3 StartData
+      """ + " "
     var program = Data(prefix.utf8)
     program.append(contentsOf: [65, 66, 67])
     program.append(Data(" end end /BinaryCID /CIDFont findresource /GlyphData get length 123".utf8))

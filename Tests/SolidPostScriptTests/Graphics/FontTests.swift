@@ -172,6 +172,98 @@ import Testing
     #expect(abs(try values[0].value(as: RealValue.self).value) < 1e-9)
   }
 
+  @Test func cDevProcUsesPostScriptResultOrder() async throws {
+    let context = try await Interpreter.execute(content: """
+      /F 16 dict dup begin
+        /FontType 1 def /FontMatrix [0.001 0 0 0.001 0 0] def
+        /FontBBox [0 0 600 700] def /Encoding StandardEncoding def
+        /Private 2 dict dup begin /lenIV -1 def end def
+        /CharStrings 2 dict dup begin
+          /.notdef <8BF8EC0D0E> def
+          /A <8BF8EC0D8B8B15F8888B8BF950FC888B8BFDB005090E> def
+        end def
+        /CDevProc {
+          pop pop pop pop pop pop pop pop pop pop pop
+          700 0 10 20 510 720 0 -900 250 880
+        } bind def
+      end definefont pop
+      /F findfont 100 scalefont setfont (A) stringwidth
+      """)
+    let values = try await context.results()
+    #expect(abs(try values[1].value(as: RealValue.self).value - 70) < 1e-9)
+    #expect(abs(try values[0].value(as: RealValue.self).value) < 1e-9)
+  }
+
+  @Test func type1CompositeCharStringsResolveStandardEncodingComponents() async throws {
+    let context = try await Interpreter.execute(content: """
+      /F 16 dict dup begin
+        /FontType 1 def /FontMatrix [0.001 0 0 0.001 0 0] def
+        /FontBBox [0 0 800 800] def
+        /Encoding StandardEncoding 256 array copy dup 67 /C put def
+        /Private 2 dict dup begin /lenIV -1 def end def
+        /CharStrings 4 dict dup begin
+          /.notdef <8BF8EC0D0E> def
+          /A <8BF8EC0D8B8B158BEF050E> def
+          /B <8BF8EC0D8B8B158BEF050E> def
+          /C <8B959FCCCD0C060E> def
+        end def
+      end definefont pop
+      /F findfont 100 scalefont setfont 0 0 moveto (C) false charpath pathbbox
+      """)
+    let values = try await context.results()
+    #expect(abs(try values[3].value(as: RealValue.self).value) < 1e-9)
+    #expect(abs(try values[2].value(as: RealValue.self).value) < 1e-9)
+    #expect(abs(try values[1].value(as: RealValue.self).value - 1) < 1e-9)
+    #expect(abs(try values[0].value(as: RealValue.self).value - 12) < 1e-9)
+  }
+
+  @Test func duplicateGlyphCacheInsertDoesNotDoubleCountStorage() {
+    let cache = FontGlyphCache()
+    let font = GraphicsFontIdentifier("F")
+    let key = FontGlyphProgramCacheKey(font: font, selector: .name("A"), writingMode: 0, revision: 1)
+    let glyph = GraphicsGlyphDescription(
+      selector: .name("A"),
+      metrics: GraphicsGlyphMetrics(horizontalAdvance: GraphicsPoint(x: 500, y: 0)),
+      program: .empty
+    )
+
+    cache.insertProgram(glyph, for: key, maximumItemBytes: FontGlyphCache.maximumItemBytes)
+    let initial = cache.status()
+    cache.insertProgram(glyph, for: key, maximumItemBytes: FontGlyphCache.maximumItemBytes)
+    let duplicate = cache.status()
+
+    #expect(duplicate.bytes == initial.bytes)
+    #expect(duplicate.entries == initial.entries)
+  }
+
+  @Test func concurrentGlyphCacheMissesConvergeOnOneEntry() async {
+    let cache = FontGlyphCache()
+    let key = FontGlyphProgramCacheKey(
+      font: GraphicsFontIdentifier("F"),
+      selector: .name("A"),
+      writingMode: 0,
+      revision: 1
+    )
+    let glyph = GraphicsGlyphDescription(
+      selector: .name("A"),
+      metrics: GraphicsGlyphMetrics(horizontalAdvance: GraphicsPoint(x: 500, y: 0)),
+      program: .empty
+    )
+
+    await withTaskGroup(of: Void.self) { group in
+      for _ in 0..<100 {
+        group.addTask {
+          cache.insertProgram(glyph, for: key, maximumItemBytes: FontGlyphCache.maximumItemBytes)
+          _ = cache.program(for: key)
+        }
+      }
+    }
+
+    let status = cache.status()
+    #expect(status.bytes == 128)
+    #expect(status.entries == 1)
+  }
+
   @Test func glyphTransformCacheKeyIgnoresIntegerTranslationButKeepsPhase() {
     let base = GraphicsMatrix(a: 2, b: 0, c: 0, d: 3, tx: 10.25, ty: -4.75)
     let translated = GraphicsMatrix(a: 2, b: 0, c: 0, d: 3, tx: 101.25, ty: 27.25)

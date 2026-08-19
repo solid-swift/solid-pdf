@@ -136,6 +136,19 @@ extension Context {
         let currentBearing = metrics.bounds.map { GraphicsPoint(x: $0.x, y: $0.y) } ?? .zero
         let offset = GraphicsPoint(x: bearing.x - currentBearing.x, y: bearing.y - currentBearing.y)
         program = program.translated(by: offset)
+        if let bounds = metrics.bounds {
+          metrics = GraphicsGlyphMetrics(
+            horizontalAdvance: metrics.horizontalAdvance,
+            verticalAdvance: metrics.verticalAdvance,
+            verticalOrigin: metrics.verticalOrigin,
+            bounds: GraphicsRect(
+              x: bounds.x + offset.x,
+              y: bounds.y + offset.y,
+              width: bounds.width,
+              height: bounds.height
+            )
+          )
+        }
       }
       metrics = GraphicsGlyphMetrics(
         horizontalAdvance: override.advance,
@@ -171,7 +184,7 @@ extension Context {
         try .real(verticalOrigin.x), try .real(verticalOrigin.y), selectorObject,
       ])
       guard operands.depth == depth + 10 else { throw Error.invalidFont }
-      let values = try operands.pop(count: 10).map(Operators.numeric)
+      let values = try operands.pop(count: 10).reversed().map(Operators.numeric)
       let adjustedBounds = GraphicsRect(
         x: values[2], y: values[3], width: values[4] - values[2], height: values[5] - values[3]
       )

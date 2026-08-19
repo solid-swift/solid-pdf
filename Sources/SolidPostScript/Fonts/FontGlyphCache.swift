@@ -98,7 +98,11 @@ final class FontGlyphCache: Sendable {
     for key: FontGlyphProgramCacheKey,
     maximumItemBytes: Int
   ) {
-    insert(glyph, key: key, maximumItemBytes: maximumItemBytes) { state, entry in
+    insert(
+      glyph,
+      maximumItemBytes: maximumItemBytes,
+      contains: { $0.programs[key] != nil }
+    ) { state, entry in
       state.programs[key] = entry
     }
   }
@@ -108,21 +112,26 @@ final class FontGlyphCache: Sendable {
     for key: FontGlyphRealizationCacheKey,
     maximumItemBytes: Int
   ) {
-    insert(glyph, key: key, maximumItemBytes: maximumItemBytes) { state, entry in
+    insert(
+      glyph,
+      maximumItemBytes: maximumItemBytes,
+      contains: { $0.realizations[key] != nil }
+    ) { state, entry in
       state.realizations[key] = entry
     }
   }
 
-  private func insert<Key: Hashable>(
+  private func insert(
     _ glyph: GraphicsGlyphDescription,
-    key: Key,
     maximumItemBytes: Int,
+    contains: (State) -> Bool,
     store: (inout State, Entry) -> Void
   ) {
     let bytes = footprint(glyph)
     let itemLimit = min(max(0, maximumItemBytes), Self.maximumItemBytes)
     guard bytes <= itemLimit else { return }
     state.withLock { state in
+      guard !contains(state) else { return }
       guard bytes <= state.maximumBytes else { return }
       while state.entryCount > 0,
         state.entryCount >= Self.maximumEntries || state.bytes > state.maximumBytes - bytes

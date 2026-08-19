@@ -289,6 +289,15 @@ extension Operators {
     selector: GraphicsGlyphSelector,
     font: FontDefinition
   ) throws -> GraphicsGlyphDescription {
+    try decodeDictionaryGlyph(selector: selector, font: font, compositeDepth: 0)
+  }
+
+  private static func decodeDictionaryGlyph(
+    selector: GraphicsGlyphSelector,
+    font: FontDefinition,
+    compositeDepth: Int
+  ) throws -> GraphicsGlyphDescription {
+    guard compositeDepth <= FontParsingLimits.default.maximumSubroutineDepth else { throw Error.limitCheck }
     if font.type == 32 { return try decodeBitmapGlyph(selector: selector, font: font) }
     guard font.type == 1 || font.type == 2 || font.type == 9 else {
       return .missing(selector)
@@ -352,12 +361,34 @@ extension Operators {
       defaultWidth: defaultWidth,
       nominalWidth: nominalWidth
     )
+    var outline = GraphicsPath(decoded.outline)
+    for component in decoded.components {
+      let glyph = try decodeDictionaryGlyph(
+        selector: .name(StandardEncodings.standardName(for: component.characterCode)),
+        font: font,
+        compositeDepth: compositeDepth + 1
+      )
+      guard case .outline(let componentPath) = glyph.program else { continue }
+      let translated = componentPath.transformed(by: GraphicsMatrix(
+        a: 1,
+        b: 0,
+        c: 0,
+        d: 1,
+        tx: component.offset.x,
+        ty: component.offset.y
+      ))
+      let count = outline.elements.count.addingReportingOverflow(translated.elements.count)
+      guard !count.overflow, count.partialValue <= FontParsingLimits.default.maximumOutlineElements else {
+        throw Error.limitCheck
+      }
+      outline = GraphicsPath(elements: outline.elements + translated.elements)
+    }
     return GraphicsGlyphDescription(
       selector: selector,
       metrics: GraphicsGlyphMetrics(
         horizontalAdvance: GraphicsPoint(x: decoded.advance.x, y: decoded.advance.y)
       ),
-      program: .outline(GraphicsPath(decoded.outline))
+      program: .outline(outline)
     )
   }
 

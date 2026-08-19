@@ -1,6 +1,10 @@
 import Foundation
 
 enum StandardEncodings {
+  static func standardName(for code: UInt8) -> String {
+    standardNames[Int(code)] ?? ".notdef"
+  }
+
   static func standard(vm: VM = .global) throws -> Object {
     try encoding(overrides: standardNames, vm: vm)
   }
