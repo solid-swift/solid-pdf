@@ -6,17 +6,24 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
   public let capabilities: GraphicsPageDeviceCapabilities
   /// The settings active when the render begins.
   public let initialConfiguration: GraphicsPageDeviceConfiguration
+  /// The output devices selectable during this render.
+  public let outputDeviceProfiles: [GraphicsOutputDeviceProfile]
 
   private let initialPageSize: GraphicsSize
   private let initialResolution: GraphicsSize
   private let initialDescriptor: GraphicsDeviceDescriptor
   private let margins: (left: Double, bottom: Double, right: Double, top: Double)
   private let name: String
+  private let outputDeviceIdentifier: GraphicsOutputDeviceIdentifier
 
   init(
     descriptor: GraphicsDeviceDescriptor,
     capabilities: GraphicsPageDeviceCapabilities,
-    name: String
+    name: String,
+    inputMedia: GraphicsMediaCatalog,
+    outputDestinations: GraphicsOutputCatalog,
+    outputDeviceIdentifier: GraphicsOutputDeviceIdentifier,
+    outputDeviceProfiles: [GraphicsOutputDeviceProfile]
   ) throws {
     let descriptor = descriptor.withTrappingCapabilities(capabilities.trapping)
     guard descriptor.horizontalResolution.isFinite,
@@ -45,6 +52,18 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
     self.initialDescriptor = descriptor
     self.margins = (left, bottom, right, top)
     self.name = name
+    self.outputDeviceIdentifier = outputDeviceIdentifier
+    let initialProfile = GraphicsOutputDeviceProfile(
+      identifier: outputDeviceIdentifier,
+      resourceName: name,
+      pageDeviceName: name,
+      inputMedia: inputMedia,
+      outputDestinations: outputDestinations,
+      physicalCapabilities: capabilities.physical
+    )
+    self.outputDeviceProfiles = [initialProfile] + outputDeviceProfiles.filter {
+      $0.resourceName != name
+    }
     self.initialConfiguration = GraphicsPageDeviceConfiguration(
       identifier: GraphicsDeviceIdentifier(),
       pageSize: pageSize,
@@ -55,7 +74,12 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       colorants: Self.initialColorants(descriptor: descriptor, capabilities: capabilities),
       trappingEnabled: false,
       trappingDetails: Self.defaultTrappingDetails(for: descriptor),
-      usesCIEColor: false
+      usesCIEColor: false,
+      outputDeviceIdentifier: outputDeviceIdentifier,
+      outputDevice: capabilities.physical == .virtual ? nil : name,
+      inputMedia: inputMedia,
+      mediaSelection: .virtual,
+      outputDestinations: outputDestinations
     )
   }
 
@@ -85,7 +109,24 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       if request.resolution != initialResolution { unsatisfied.insert("HWResolution") }
     }
 
-    var descriptor = try makeDescriptor(pageSize: selectedPageSize, resolution: selectedResolution)
+    let profile = outputDeviceProfiles.first { $0.resourceName == request.outputDevice }
+      ?? outputDeviceProfiles[0]
+    let mediaSelection = negotiatedMediaSelection(
+      request,
+      physical: profile.physicalCapabilities,
+      unsatisfied: &unsatisfied
+    )
+    let physicalPageSize: GraphicsSize = if case let .selected(source) = mediaSelection,
+      let size = source.attributes?.pageSize
+    {
+      size
+    } else {
+      selectedPageSize
+    }
+    var descriptor = try makeDescriptor(pageSize: physicalPageSize, resolution: selectedResolution)
+    descriptor = descriptor.replacing(
+      defaultMatrix: request.placement.mediaAdjustment.concatenated(with: descriptor.defaultMatrix)
+    )
     let maximumSeparations = maximumSeparations(for: descriptor)
     let colorants = negotiatedColorants(
       request.colorants,
@@ -105,21 +146,89 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       unsatisfied.insert("UseCIEColor")
       usesCIEColor = initialConfiguration.usesCIEColor
     }
+    let delivery = negotiatedDelivery(
+      request,
+      physical: profile.physicalCapabilities,
+      unsatisfied: &unsatisfied
+    )
     return GraphicsPageDeviceNegotiation(
       configuration: GraphicsPageDeviceConfiguration(
         identifier: GraphicsDeviceIdentifier(),
         pageSize: selectedPageSize,
         imagingBoundingBox: request.imagingBoundingBox,
         numberOfCopies: request.numberOfCopies,
-        name: name,
+        name: profile.pageDeviceName,
         descriptor: descriptor,
         colorants: colorants,
         trappingEnabled: trappingEnabled,
         trappingDetails: trappingDetails,
-        usesCIEColor: usesCIEColor
+        usesCIEColor: usesCIEColor,
+        outputDeviceIdentifier: profile.identifier,
+        outputDevice: profile.resourceName,
+        inputMedia: request.inputMedia,
+        mediaRequest: request.mediaRequest,
+        mediaSelection: mediaSelection,
+        outputDestinations: request.outputDestinations,
+        outputType: request.outputType,
+        placement: request.placement,
+        delivery: delivery
       ),
       unsatisfiedParameters: unsatisfied
     )
+  }
+
+  private func negotiatedMediaSelection(
+    _ request: GraphicsPageDeviceRequest,
+    physical: GraphicsPhysicalPageDeviceCapabilities,
+    unsatisfied: inout Set<String>
+  ) -> GraphicsMediaSelection {
+    if request.mediaRequest.isDeferred {
+      guard physical.supportsDeferredSelection else {
+        unsatisfied.insert("DeferredMediaSelection")
+        return initialConfiguration.mediaSelection
+      }
+      return .deferred(request.mediaRequest)
+    }
+    guard physical.supportsMediaSelection else {
+      return .virtual
+    }
+    guard let selected = GraphicsMediaMatcher.select(
+      request: request.mediaRequest,
+      catalog: request.inputMedia,
+      rollFed: request.delivery.isRollFed
+    ) else {
+      for name in GraphicsMediaMatcher.unsatisfiedParameters(
+        request: request.mediaRequest,
+        catalog: request.inputMedia,
+        rollFed: request.delivery.isRollFed
+      ) {
+        unsatisfied.insert(name)
+      }
+      return initialConfiguration.mediaSelection
+    }
+    return .selected(selected)
+  }
+
+  private func negotiatedDelivery(
+    _ request: GraphicsPageDeviceRequest,
+    physical: GraphicsPhysicalPageDeviceCapabilities,
+    unsatisfied: inout Set<String>
+  ) -> GraphicsPageDeliveryConfiguration {
+    var delivery = request.delivery
+    if delivery.collates, !physical.supportsCollation {
+      unsatisfied.insert("Collate")
+      delivery = initialConfiguration.delivery
+    }
+    if delivery.isRollFed, !physical.supportsRollMedia {
+      unsatisfied.insert("RollFedMedia")
+      delivery = initialConfiguration.delivery
+    }
+    if request.placement.isDuplex, !physical.supportsDuplex { unsatisfied.insert("Duplex") }
+    if request.placement.mirrorsPage, !physical.supportsMirrorPrint { unsatisfied.insert("MirrorPrint") }
+    if request.placement.producesNegative, !physical.supportsNegativePrint {
+      unsatisfied.insert("NegativePrint")
+    }
+    return delivery
   }
 
   private func makeDescriptor(

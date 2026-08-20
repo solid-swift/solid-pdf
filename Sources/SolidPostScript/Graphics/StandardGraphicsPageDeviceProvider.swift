@@ -18,6 +18,16 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
   public let trappingCapabilities: GraphicsTrappingCapabilities
   /// Whether new sessions accept Device-to-CIE color-space remapping.
   public let supportsCIEColorRemapping: Bool
+  /// Physical media, placement, and delivery capabilities.
+  public let physicalCapabilities: GraphicsPhysicalPageDeviceCapabilities
+  /// The initial input-media catalog.
+  public let inputMedia: GraphicsMediaCatalog
+  /// The initial output-destination catalog.
+  public let outputDestinations: GraphicsOutputCatalog
+  /// The stable output-device identity.
+  public let outputDeviceIdentifier: GraphicsOutputDeviceIdentifier
+  /// Additional output-device profiles selectable during a render.
+  public let outputDeviceProfiles: [GraphicsOutputDeviceProfile]
 
   /// Creates a standard page-device provider.
   public init(
@@ -28,7 +38,12 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
     name: String = "SolidVirtualPageDevice",
     colorantCapabilities: GraphicsColorantCapabilities = .compositeRGB,
     trappingCapabilities: GraphicsTrappingCapabilities = .unsupported,
-    supportsCIEColorRemapping: Bool = true
+    supportsCIEColorRemapping: Bool = true,
+    physicalCapabilities: GraphicsPhysicalPageDeviceCapabilities = .virtual,
+    inputMedia: GraphicsMediaCatalog = .empty,
+    outputDestinations: GraphicsOutputCatalog = .empty,
+    outputDeviceIdentifier: GraphicsOutputDeviceIdentifier = .virtual,
+    outputDeviceProfiles: [GraphicsOutputDeviceProfile] = []
   ) {
     self.mode = mode
     self.maximumPixelWidth = maximumPixelWidth
@@ -38,6 +53,11 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
     self.colorantCapabilities = colorantCapabilities
     self.trappingCapabilities = trappingCapabilities
     self.supportsCIEColorRemapping = supportsCIEColorRemapping
+    self.physicalCapabilities = physicalCapabilities
+    self.inputMedia = inputMedia
+    self.outputDestinations = outputDestinations
+    self.outputDeviceIdentifier = outputDeviceIdentifier
+    self.outputDeviceProfiles = outputDeviceProfiles
   }
 
   /// Creates a render-scoped standard session.
@@ -53,9 +73,14 @@ public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Se
         maximumSurfaceBytes: maximumSurfaceBytes,
         colorants: colorantCapabilities,
         trapping: trappingCapabilities,
-        supportsCIEColorRemapping: supportsCIEColorRemapping
+        supportsCIEColorRemapping: supportsCIEColorRemapping,
+        physical: physicalCapabilities
       ),
-      name: name
+      name: name,
+      inputMedia: inputMedia,
+      outputDestinations: outputDestinations,
+      outputDeviceIdentifier: outputDeviceIdentifier,
+      outputDeviceProfiles: outputDeviceProfiles
     )
   }
 }

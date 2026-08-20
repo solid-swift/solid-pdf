@@ -30,9 +30,10 @@ extension Operators {
         request,
         currentConfiguration: currentConfiguration,
         currentParameters: currentParameters,
+        session: session,
         context: context
       )
-      let negotiation: GraphicsPageDeviceNegotiation
+      var negotiation: GraphicsPageDeviceNegotiation
       do {
         negotiation = try session.negotiate(parsed.request)
       } catch GraphicsPageDeviceError.limitExceeded {
@@ -53,6 +54,35 @@ extension Operators {
           )
         }
         recovered[name] = policy
+      }
+      let pageSizePolicy = try parsed.originalValues["PageSize"].map {
+        _ in try policy(for: "PageSize", in: parsed.parameters.policies)
+      }
+      if !negotiation.unsatisfiedParameters.isEmpty || pageSizePolicy == 7 {
+        let recoveredRequest = try recoverMediaRequest(
+          parsed.request,
+          unsatisfied: negotiation.unsatisfiedParameters,
+          policies: parsed.parameters.policies,
+          pageSizePolicy: pageSizePolicy
+        )
+        if recoveredRequest != parsed.request {
+          do {
+            negotiation = try session.negotiate(recoveredRequest)
+          } catch GraphicsPageDeviceError.limitExceeded {
+            throw Error.limitCheck
+          } catch {
+            throw Error.configurationError
+          }
+          guard negotiation.unsatisfiedParameters.isEmpty else {
+            let name = negotiation.unsatisfiedParameters.sorted().first ?? "PageSize"
+            throw PostScriptParameterFailure(
+              error: .configurationError,
+              key: .literalName(name),
+              value: parsed.originalValues[name]
+            )
+          }
+          if pageSizePolicy == 7 { recovered["PageSize"] = 7 }
+        }
       }
 
       try await context.activatePageDevice(
@@ -125,7 +155,7 @@ extension Operators {
       } else {
         .null
       }
-      let dictionary = try context.makeDictionary([
+      var entries: [(Object, Object)] = [
         (.literalName("PageSize"), pageSize),
         (.literalName("HWResolution"), resolution),
         (.literalName("ImagingBBox"), imagingBoundingBox),
@@ -143,7 +173,51 @@ extension Operators {
         (.literalName("Trapping"), .boolean(configuration.trappingEnabled)),
         (.literalName("TrappingDetails"), trappingDetails),
         (.literalName("UseCIEColor"), .boolean(configuration.usesCIEColor)),
-      ], access: .readOnly, vm: vm)
+      ]
+      if context.graphicsPageDeviceSession?.capabilities.physical.supportsMediaSelection == true {
+        entries.append((
+          .literalName("InputAttributes"),
+          try inputAttributesDictionary(configuration.inputMedia, vm: vm, context: context)
+        ))
+        entries.append((
+          .literalName("MediaColor"),
+          byteStringOrNull(configuration.mediaRequest.attributes.color, vm: vm)
+        ))
+        entries.append((
+          .literalName("MediaWeight"),
+          configuration.mediaRequest.attributes.weight.flatMap(Object.real(finite:)) ?? .null
+        ))
+        entries.append((
+          .literalName("MediaType"),
+          byteStringOrNull(configuration.mediaRequest.attributes.type, vm: vm)
+        ))
+        entries.append((
+          .literalName("MediaClass"),
+          byteStringOrNull(configuration.mediaRequest.attributes.mediaClass, vm: vm)
+        ))
+        entries.append((
+          .literalName("InsertSheet"),
+          configuration.mediaRequest.attributes.insertsSheet.map(Object.boolean) ?? .null
+        ))
+        entries.append((
+          .literalName("LeadingEdge"),
+          configuration.mediaRequest.leadingEdge.map { .integer(Int32($0.rawValue)) } ?? .null
+        ))
+        entries.append((
+          .literalName("MediaPosition"),
+          configuration.mediaRequest.position.flatMap(Object.integer(exactly:)) ?? .null
+        ))
+        entries.append((.literalName("ManualFeed"), .boolean(configuration.mediaRequest.manualFeed)))
+        entries.append((.literalName("TraySwitch"), .boolean(configuration.mediaRequest.traySwitch)))
+        entries.append((
+          .literalName("DeferredMediaSelection"),
+          .boolean(configuration.mediaRequest.isDeferred)
+        ))
+      }
+      if let outputDevice = configuration.outputDevice {
+        entries.append((.literalName("OutputDevice"), .literalName(outputDevice)))
+      }
+      let dictionary = try context.makeDictionary(entries, access: .readOnly, vm: vm)
       context.operands.push(dictionary)
     }
   }
@@ -172,6 +246,7 @@ extension Operators {
     _ dictionary: DictionaryValue,
     currentConfiguration: GraphicsPageDeviceConfiguration,
     currentParameters: PostScriptPageDeviceParameters,
+    session: any GraphicsPageDeviceSession,
     context: isolated Context
   ) throws -> ParsedPageDeviceRequest {
     var entries: [String: Object] = [:]
@@ -181,12 +256,55 @@ extension Operators {
       }
       entries[name] = value
     }
+    let originals = entries
 
     let policies = try mergedPolicies(
       entries.removeValue(forKey: "Policies"),
       current: currentParameters.policies,
       context: context
     )
+    var recovered: [String: Int32] = [:]
+    var outputDevice = currentConfiguration.outputDevice
+    var selectedProfile = session.outputDeviceProfiles.first {
+      $0.resourceName == currentConfiguration.outputDevice
+    } ?? session.outputDeviceProfiles[0]
+    if let outputDeviceObject = entries.removeValue(forKey: "OutputDevice") {
+      let requested = try PostScriptParameterFailure.wrapping(
+        key: .literalName("OutputDevice"),
+        value: outputDeviceObject
+      ) {
+        try pageDeviceNameOrString(outputDeviceObject)
+      }
+      if let profile = session.outputDeviceProfiles.first(where: { $0.resourceName == requested }) {
+        selectedProfile = profile
+        outputDevice = requested
+      } else {
+        try recover(
+          name: "OutputDevice",
+          value: outputDeviceObject,
+          policies: policies,
+          into: &recovered
+        )
+      }
+    }
+    let physical = selectedProfile.physicalCapabilities
+    let changedOutputDevice = selectedProfile.identifier != currentConfiguration.outputDeviceIdentifier
+    var inputMedia = changedOutputDevice ? selectedProfile.inputMedia : currentConfiguration.inputMedia
+    if let inputAttributes = entries.removeValue(forKey: "InputAttributes") {
+      if physical.supportsMediaSelection {
+        inputMedia = try mergedInputMedia(
+          inputAttributes,
+          current: inputMedia
+        )
+      } else {
+        try recover(
+          name: "InputAttributes",
+          value: inputAttributes,
+          policies: policies,
+          into: &recovered
+        )
+      }
+    }
     var pageSize = currentConfiguration.pageSize
     var resolution = GraphicsSize(
       width: currentConfiguration.descriptor.horizontalResolution,
@@ -204,8 +322,12 @@ extension Operators {
     var trappingEnabled = currentConfiguration.trappingEnabled
     var trappingDetails = currentConfiguration.trappingDetails
     var usesCIEColor = currentConfiguration.usesCIEColor
-    var recovered: [String: Int32] = [:]
-    let originals = entries
+    var mediaAttributes = currentConfiguration.mediaRequest.attributes
+    var leadingEdge = currentConfiguration.mediaRequest.leadingEdge
+    var manualFeed = currentConfiguration.mediaRequest.manualFeed
+    var traySwitch = currentConfiguration.mediaRequest.traySwitch
+    var mediaPosition = currentConfiguration.mediaRequest.position
+    var deferredMediaSelection = currentConfiguration.mediaRequest.isDeferred
 
     for (name, value) in entries {
       do {
@@ -214,6 +336,83 @@ extension Operators {
           let values = try pageDeviceNumericArray(value, count: 2)
           guard values.allSatisfy({ $0.isFinite && $0 > 0 }) else { throw Error.rangeCheck }
           pageSize = GraphicsSize(width: values[0], height: values[1])
+          mediaAttributes.pageSize = pageSize
+        case "MediaColor":
+          guard physical.supportsMediaSelection else {
+            try recover(name: name, value: value, policies: policies, into: &recovered)
+            continue
+          }
+          mediaAttributes.color = try pageDeviceOptionalBytes(value)
+        case "MediaWeight":
+          guard physical.supportsMediaSelection else {
+            try recover(name: name, value: value, policies: policies, into: &recovered)
+            continue
+          }
+          if value.value is NullValue {
+            mediaAttributes.weight = nil
+          } else {
+            let weight = try numeric(value)
+            guard weight.isFinite, weight >= 0 else { throw Error.rangeCheck }
+            mediaAttributes.weight = weight
+          }
+        case "MediaType":
+          guard physical.supportsMediaSelection else {
+            try recover(name: name, value: value, policies: policies, into: &recovered)
+            continue
+          }
+          mediaAttributes.type = try pageDeviceOptionalBytes(value)
+        case "MediaClass":
+          guard physical.supportsMediaSelection else {
+            try recover(name: name, value: value, policies: policies, into: &recovered)
+            continue
+          }
+          mediaAttributes.mediaClass = try pageDeviceOptionalBytes(value)
+        case "InsertSheet":
+          guard physical.supportsMediaSelection else {
+            try recover(name: name, value: value, policies: policies, into: &recovered)
+            continue
+          }
+          mediaAttributes.insertsSheet = try value.value(as: BooleanValue.self).value
+        case "LeadingEdge":
+          guard physical.supportsMediaSelection else {
+            try recover(name: name, value: value, policies: policies, into: &recovered)
+            continue
+          }
+          if value.value is NullValue {
+            leadingEdge = nil
+          } else {
+            let raw = try value.value(as: IntegerValue.self).value
+            guard let selected = GraphicsLeadingEdge(rawValue: Int(raw)) else { throw Error.rangeCheck }
+            leadingEdge = selected
+          }
+        case "ManualFeed":
+          guard physical.supportsManualFeed else {
+            try recover(name: name, value: value, policies: policies, into: &recovered)
+            continue
+          }
+          manualFeed = try value.value(as: BooleanValue.self).value
+        case "TraySwitch":
+          guard physical.supportsTraySwitch else {
+            try recover(name: name, value: value, policies: policies, into: &recovered)
+            continue
+          }
+          traySwitch = try value.value(as: BooleanValue.self).value
+        case "MediaPosition":
+          guard physical.supportsMediaSelection else {
+            try recover(name: name, value: value, policies: policies, into: &recovered)
+            continue
+          }
+          if value.value is NullValue {
+            mediaPosition = nil
+          } else {
+            mediaPosition = Int(try value.value(as: IntegerValue.self).value)
+          }
+        case "DeferredMediaSelection":
+          guard physical.supportsDeferredSelection else {
+            try recover(name: name, value: value, policies: policies, into: &recovered)
+            continue
+          }
+          deferredMediaSelection = try value.value(as: BooleanValue.self).value
         case "HWResolution":
           let values = try pageDeviceNumericArray(value, count: 2)
           guard values.allSatisfy({ $0.isFinite && $0 > 0 }) else { throw Error.rangeCheck }
@@ -313,7 +512,23 @@ extension Operators {
         ),
         trappingEnabled: trappingEnabled,
         trappingDetails: trappingDetails,
-        usesCIEColor: usesCIEColor
+        usesCIEColor: usesCIEColor,
+        outputDevice: outputDevice,
+        inputMedia: inputMedia,
+        mediaRequest: GraphicsMediaRequest(
+          attributes: mediaAttributes,
+          leadingEdge: leadingEdge,
+          manualFeed: manualFeed,
+          position: mediaPosition,
+          traySwitch: traySwitch,
+          isDeferred: deferredMediaSelection
+        ),
+        outputDestinations: changedOutputDevice
+          ? selectedProfile.outputDestinations
+          : currentConfiguration.outputDestinations,
+        outputType: changedOutputDevice ? nil : currentConfiguration.outputType,
+        placement: changedOutputDevice ? .simplex : currentConfiguration.placement,
+        delivery: changedOutputDevice ? .virtual : currentConfiguration.delivery
       ),
       parameters: PostScriptPageDeviceParameters(
         install: install,
@@ -366,6 +581,72 @@ extension Operators {
     return try context.makeDictionary(entries, access: .readOnly, vm: vm)
   }
 
+  private static func mergedInputMedia(
+    _ requested: Object,
+    current: GraphicsMediaCatalog
+  ) throws -> GraphicsMediaCatalog {
+    if requested.value is NullValue { return .empty }
+    let dictionary = try requested.value(as: DictionaryValue.self)
+    try dictionary.access.check(.read)
+    var sources = current.sources
+    var priority = current.priority
+    try dictionary.forEachUnchecked { key, value in
+      if let name = key.value as? NameValue {
+        guard name.value == "Priority" else { throw Error.typeCheck }
+        priority = try pageDeviceIntegerArray(value)
+        return
+      }
+      let position = Int(try key.value(as: IntegerValue.self).value)
+      if value.value is NullValue {
+        sources[position] = GraphicsMediaSource(
+          position: position,
+          attributes: nil,
+          isManual: sources[position]?.isManual ?? false
+        )
+        return
+      }
+      let source = try value.value(as: DictionaryValue.self)
+      try source.access.check(.read)
+      guard let pageSizeObject = try source.object(forKeyIfExists: .literalName("PageSize")) else {
+        throw Error.rangeCheck
+      }
+      let pageSizeValues = try pageDeviceNumericArray(pageSizeObject, count: 2)
+      guard pageSizeValues.allSatisfy({ $0.isFinite && $0 > 0 }) else { throw Error.rangeCheck }
+      var attributes = GraphicsMediaAttributes(pageSize: GraphicsSize(
+        width: pageSizeValues[0],
+        height: pageSizeValues[1]
+      ))
+      if let object = try source.object(forKeyIfExists: .literalName("MediaColor")) {
+        attributes.color = try pageDeviceOptionalBytes(object)
+      }
+      if let object = try source.object(forKeyIfExists: .literalName("MediaWeight")) {
+        if !(object.value is NullValue) {
+          let weight = try numeric(object)
+          guard weight.isFinite, weight >= 0 else { throw Error.rangeCheck }
+          attributes.weight = weight
+        }
+      }
+      if let object = try source.object(forKeyIfExists: .literalName("MediaType")) {
+        attributes.type = try pageDeviceOptionalBytes(object)
+      }
+      if let object = try source.object(forKeyIfExists: .literalName("MediaClass")) {
+        attributes.mediaClass = try pageDeviceOptionalBytes(object)
+      }
+      if let object = try source.object(forKeyIfExists: .literalName("InsertSheet")) {
+        attributes.insertsSheet = try object.value(as: BooleanValue.self).value
+      }
+      let matchAll = try source.object(forKeyIfExists: .literalName("MatchAll"))
+        .map { try $0.value(as: BooleanValue.self).value } ?? false
+      sources[position] = GraphicsMediaSource(
+        position: position,
+        attributes: attributes,
+        matchesAllAttributes: matchAll,
+        isManual: sources[position]?.isManual ?? false
+      )
+    }
+    return GraphicsMediaCatalog(sources: sources, priority: priority)
+  }
+
   private static func recover(
     name: String,
     value: Object,
@@ -381,6 +662,169 @@ extension Operators {
       )
     }
     recovered[name] = code
+  }
+
+  private static func recoverMediaRequest(
+    _ request: GraphicsPageDeviceRequest,
+    unsatisfied: Set<String>,
+    policies: Object,
+    pageSizePolicy: Int32?
+  ) throws -> GraphicsPageDeviceRequest {
+    let mediaNames: Set<String> = [
+      "PageSize", "MediaColor", "MediaWeight", "MediaType", "MediaClass", "InsertSheet",
+      "ManualFeed", "MediaPosition",
+    ]
+    guard !unsatisfied.isDisjoint(with: mediaNames) || pageSizePolicy == 7 else { return request }
+
+    var attributes = request.mediaRequest.attributes
+    var manualFeed = request.mediaRequest.manualFeed
+    var position = request.mediaRequest.position
+    for name in unsatisfied where name != "PageSize" {
+      guard try policy(for: name, in: policies) == 1 else { continue }
+      switch name {
+      case "MediaColor": attributes.color = nil
+      case "MediaWeight": attributes.weight = nil
+      case "MediaType": attributes.type = nil
+      case "MediaClass": attributes.mediaClass = nil
+      case "InsertSheet": attributes.insertsSheet = nil
+      case "ManualFeed": manualFeed = false
+      case "MediaPosition": position = nil
+      default: break
+      }
+    }
+
+    let code: Int32?
+    if let pageSizePolicy {
+      code = pageSizePolicy
+    } else if unsatisfied.contains("PageSize") {
+      code = try policy(for: "PageSize", in: policies)
+    } else {
+      code = nil
+    }
+    var pageSize = request.pageSize
+    var placement = request.placement
+    if let code {
+      let base = GraphicsMediaRequest(
+        attributes: attributes,
+        leadingEdge: request.mediaRequest.leadingEdge,
+        manualFeed: manualFeed,
+        position: position,
+        traySwitch: request.mediaRequest.traySwitch,
+        isDeferred: false
+      )
+      let selected: GraphicsMediaSource?
+      switch code {
+      case 1:
+        var withoutSize = attributes
+        withoutSize.pageSize = nil
+        selected = GraphicsMediaMatcher.select(
+          request: GraphicsMediaRequest(
+            attributes: withoutSize,
+            leadingEdge: base.leadingEdge,
+            manualFeed: base.manualFeed,
+            position: base.position,
+            traySwitch: base.traySwitch
+          ),
+          catalog: request.inputMedia,
+          rollFed: request.delivery.isRollFed
+        )
+      case 3, 5:
+        selected = GraphicsMediaMatcher.alternative(
+          request: base,
+          catalog: request.inputMedia,
+          nextLarger: false
+        )
+      case 4, 6:
+        selected = GraphicsMediaMatcher.alternative(
+          request: base,
+          catalog: request.inputMedia,
+          nextLarger: true
+        )
+      case 7:
+        selected = GraphicsMediaMatcher.select(
+          request: base,
+          catalog: request.inputMedia,
+          rollFed: request.delivery.isRollFed
+        )
+      default:
+        selected = nil
+      }
+      guard let selected, let selectedAttributes = selected.attributes,
+        let selectedSize = selectedAttributes.pageSize
+      else {
+        throw PostScriptParameterFailure(
+          error: .configurationError,
+          key: .literalName("PageSize"),
+          value: nil
+        )
+      }
+      attributes = selectedAttributes
+      position = selected.position
+      if code == 1 || code == 5 || code == 6 { pageSize = selectedSize }
+      if code == 3 || code == 4 {
+        guard !request.mediaRequest.isDeferred else {
+          throw PostScriptParameterFailure(
+            error: .configurationError,
+            key: .literalName("PageSize"),
+            value: nil
+          )
+        }
+        let scale = min(
+          1,
+          selectedSize.width / request.pageSize.width,
+          selectedSize.height / request.pageSize.height
+        )
+        let offset = GraphicsPoint(
+          x: (selectedSize.width - request.pageSize.width * scale) / 2,
+          y: (selectedSize.height - request.pageSize.height * scale) / 2
+        )
+        placement = GraphicsPagePlacement(
+          orientation: placement.orientation,
+          side: placement.side,
+          leadingEdge: placement.leadingEdge,
+          imageShift: placement.imageShift,
+          pageOffset: placement.pageOffset,
+          mediaAdjustment: GraphicsMatrix(
+            a: scale,
+            b: 0,
+            c: 0,
+            d: scale,
+            tx: offset.x,
+            ty: offset.y
+          ),
+          margins: placement.margins,
+          mirrorsPage: placement.mirrorsPage,
+          producesNegative: placement.producesNegative,
+          isDuplex: placement.isDuplex,
+          tumbles: placement.tumbles
+        )
+      }
+    }
+
+    return GraphicsPageDeviceRequest(
+      pageSize: pageSize,
+      resolution: request.resolution,
+      imagingBoundingBox: request.imagingBoundingBox,
+      numberOfCopies: request.numberOfCopies,
+      colorants: request.colorants,
+      trappingEnabled: request.trappingEnabled,
+      trappingDetails: request.trappingDetails,
+      usesCIEColor: request.usesCIEColor,
+      outputDevice: request.outputDevice,
+      inputMedia: request.inputMedia,
+      mediaRequest: GraphicsMediaRequest(
+        attributes: attributes,
+        leadingEdge: request.mediaRequest.leadingEdge,
+        manualFeed: manualFeed,
+        position: position,
+        traySwitch: request.mediaRequest.traySwitch,
+        isDeferred: request.mediaRequest.isDeferred
+      ),
+      outputDestinations: request.outputDestinations,
+      outputType: request.outputType,
+      placement: placement,
+      delivery: request.delivery
+    )
   }
 
   private static func policy(for name: String, in policies: Object) throws -> Int32 {
@@ -438,6 +882,30 @@ extension Operators {
     }
   }
 
+  private static func pageDeviceIntegerArray(_ object: Object) throws -> [Int] {
+    let values: [Object]
+    if let array = object.value as? ArrayValue {
+      values = Array(try array.objects(in: array.range, for: .read))
+    } else if let array = object.value as? PackedArrayValue {
+      values = Array(try array.objects(in: array.range, for: .read))
+    } else {
+      throw Error.typeCheck
+    }
+    return try values.map { Int(try $0.value(as: IntegerValue.self).value) }
+  }
+
+  private static func pageDeviceOptionalBytes(_ object: Object) throws -> Data? {
+    if object.value is NullValue { return nil }
+    let string = try object.value(as: StringValue.self)
+    return try string.characters(in: string.range)
+  }
+
+  private static func pageDeviceNameOrString(_ object: Object) throws -> String {
+    if let name = object.value as? NameValue { return name.value }
+    if let string = object.value as? StringValue { return try string.readableString }
+    throw Error.typeCheck
+  }
+
   private static func numberArray(
     _ values: [Double],
     vm: VM,
@@ -472,6 +940,72 @@ extension Operators {
       vm: vm,
       kind: .literal
     )
+    try context.adopt(array)
+    return array
+  }
+
+  private static func inputAttributesDictionary(
+    _ catalog: GraphicsMediaCatalog,
+    vm: VM,
+    context: isolated Context
+  ) throws -> Object {
+    var entries: [(Object, Object)] = []
+    for source in catalog.sources.values.sorted(by: { $0.position < $1.position }) {
+      let value: Object
+      if let attributes = source.attributes {
+        var sourceEntries: [(Object, Object)] = []
+        if let size = attributes.pageSize {
+          sourceEntries.append((
+            .literalName("PageSize"),
+            try numberArray([size.width, size.height], vm: vm, context: context)
+          ))
+        }
+        sourceEntries.append((.literalName("MediaColor"), byteStringOrNull(attributes.color, vm: vm)))
+        sourceEntries.append((
+          .literalName("MediaWeight"),
+          attributes.weight.flatMap(Object.real(finite:)) ?? .null
+        ))
+        sourceEntries.append((.literalName("MediaType"), byteStringOrNull(attributes.type, vm: vm)))
+        sourceEntries.append((.literalName("MediaClass"), byteStringOrNull(attributes.mediaClass, vm: vm)))
+        sourceEntries.append((
+          .literalName("InsertSheet"),
+          attributes.insertsSheet.map(Object.boolean) ?? .null
+        ))
+        if source.matchesAllAttributes {
+          sourceEntries.append((.literalName("MatchAll"), .boolean(true)))
+        }
+        value = try context.makeDictionary(sourceEntries, access: .readOnly, vm: vm)
+      } else {
+        value = .null
+      }
+      guard let key = Object.integer(exactly: source.position) else { throw Error.rangeCheck }
+      entries.append((key, value))
+    }
+    if !catalog.priority.isEmpty {
+      let priority = try integerArray(catalog.priority, vm: vm, context: context)
+      entries.append((.literalName("Priority"), priority))
+    }
+    return try context.makeDictionary(entries, access: .readOnly, vm: vm)
+  }
+
+  private static func byteStringOrNull(_ data: Data?, vm: VM) -> Object {
+    data.map { .string($0, access: .readOnly, vm: vm, kind: .literal) } ?? .null
+  }
+
+  private static func integerArray(
+    _ values: [Int],
+    vm: VM,
+    context: isolated Context
+  ) throws -> Object {
+    try context.preflightAllocation(
+      bytes: context.estimatedAllocationSize(count: values.count, objectType: .array),
+      vm: vm
+    )
+    let objects = try values.map { value -> Object in
+      guard let object = Object.integer(exactly: value) else { throw Error.rangeCheck }
+      return object
+    }
+    let array = try Object.array(objects, access: .readOnly, vm: vm, kind: .literal)
     try context.adopt(array)
     return array
   }

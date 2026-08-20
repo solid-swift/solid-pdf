@@ -362,7 +362,16 @@ extension GraphicsPageDeviceConfiguration {
       colorants: colorants,
       trappingEnabled: trappingEnabled,
       trappingDetails: trappingDetails,
-      usesCIEColor: usesCIEColor
+      usesCIEColor: usesCIEColor,
+      outputDeviceIdentifier: outputDeviceIdentifier,
+      outputDevice: outputDevice,
+      inputMedia: inputMedia,
+      mediaRequest: mediaRequest,
+      mediaSelection: mediaSelection,
+      outputDestinations: outputDestinations,
+      outputType: outputType,
+      placement: placement,
+      delivery: delivery
     )
   }
 }

@@ -16,6 +16,8 @@ public struct GraphicsPageDeviceCapabilities: Sendable, Hashable {
   public let trapping: GraphicsTrappingCapabilities
   /// Whether the provider accepts Device-to-CIE color-space remapping.
   public let supportsCIEColorRemapping: Bool
+  /// Physical media, placement, and delivery behaviors.
+  public let physical: GraphicsPhysicalPageDeviceCapabilities
 
   /// Creates page-device capabilities.
   public init(
@@ -25,7 +27,8 @@ public struct GraphicsPageDeviceCapabilities: Sendable, Hashable {
     maximumSurfaceBytes: Int = 512 * 1_024 * 1_024,
     colorants: GraphicsColorantCapabilities = .compositeRGB,
     trapping: GraphicsTrappingCapabilities = .unsupported,
-    supportsCIEColorRemapping: Bool = false
+    supportsCIEColorRemapping: Bool = false,
+    physical: GraphicsPhysicalPageDeviceCapabilities = .virtual
   ) {
     self.mode = mode
     self.maximumPixelWidth = maximumPixelWidth
@@ -34,5 +37,6 @@ public struct GraphicsPageDeviceCapabilities: Sendable, Hashable {
     self.colorants = colorants
     self.trapping = trapping
     self.supportsCIEColorRemapping = supportsCIEColorRemapping
+    self.physical = physical
   }
 }

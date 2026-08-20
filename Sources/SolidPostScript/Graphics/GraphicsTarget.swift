@@ -151,6 +151,8 @@ public protocol GraphicsEventConsumer: AnyObject {
   func deactivateDevice(_ device: GraphicsDeviceSnapshot) throws
   /// Transmits the current page one or more times before clearing its raster.
   func transmitPage(_ event: GraphicsEvent, copies: Int) throws
+  /// Transmits the current page with complete physical delivery metadata.
+  func transmitPage(_ event: GraphicsEvent, transmission: GraphicsPageTransmission) throws
   /// Abandons the current render without producing output.
   func abort()
 }
@@ -176,6 +178,14 @@ extension GraphicsEventConsumer {
   public func transmitPage(_ event: GraphicsEvent, copies: Int) throws {
     guard copies == 1 else { throw Error.ioError }
     try process(event)
+  }
+  /// Adapts virtual uncollated transmissions to the original page-consumer contract.
+  public func transmitPage(_ event: GraphicsEvent, transmission: GraphicsPageTransmission) throws {
+    guard !transmission.delivery.requiresPhysicalDelivery,
+      transmission.mediaSelection == .virtual,
+      transmission.placement == .simplex
+    else { throw Error.ioError }
+    try transmitPage(event, copies: transmission.copies)
   }
 }
 

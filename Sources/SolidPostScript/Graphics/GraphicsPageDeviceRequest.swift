@@ -18,6 +18,20 @@ public struct GraphicsPageDeviceRequest: Sendable, Hashable {
   public let trappingDetails: GraphicsTrappingDetails
   /// Whether Device color spaces should be remapped through Default ColorSpace resources.
   public let usesCIEColor: Bool
+  /// The requested stable output-device resource name.
+  public let outputDevice: String?
+  /// The current input-media catalog after cumulative merging.
+  public let inputMedia: GraphicsMediaCatalog
+  /// The normalized physical media request.
+  public let mediaRequest: GraphicsMediaRequest
+  /// The current output-destination catalog after cumulative merging.
+  public let outputDestinations: GraphicsOutputCatalog
+  /// The requested destination type, or `nil` for no preference.
+  public let outputType: Data?
+  /// The requested physical placement.
+  public let placement: GraphicsPagePlacement
+  /// The requested delivery and roll-media behavior.
+  public let delivery: GraphicsPageDeliveryConfiguration
 
   /// Creates a page-device request.
   public init(
@@ -28,7 +42,14 @@ public struct GraphicsPageDeviceRequest: Sendable, Hashable {
     colorants: GraphicsColorantConfiguration = .compositeRGB,
     trappingEnabled: Bool = false,
     trappingDetails: GraphicsTrappingDetails = GraphicsTrappingDetails(),
-    usesCIEColor: Bool = false
+    usesCIEColor: Bool = false,
+    outputDevice: String? = nil,
+    inputMedia: GraphicsMediaCatalog = .empty,
+    mediaRequest: GraphicsMediaRequest? = nil,
+    outputDestinations: GraphicsOutputCatalog = .empty,
+    outputType: Data? = nil,
+    placement: GraphicsPagePlacement = .simplex,
+    delivery: GraphicsPageDeliveryConfiguration = .virtual
   ) {
     self.pageSize = pageSize
     self.resolution = resolution
@@ -38,5 +59,14 @@ public struct GraphicsPageDeviceRequest: Sendable, Hashable {
     self.trappingEnabled = trappingEnabled
     self.trappingDetails = trappingDetails
     self.usesCIEColor = usesCIEColor
+    self.outputDevice = outputDevice
+    self.inputMedia = inputMedia
+    self.mediaRequest = mediaRequest ?? GraphicsMediaRequest(
+      attributes: GraphicsMediaAttributes(pageSize: pageSize)
+    )
+    self.outputDestinations = outputDestinations
+    self.outputType = outputType
+    self.placement = placement
+    self.delivery = delivery
   }
 }

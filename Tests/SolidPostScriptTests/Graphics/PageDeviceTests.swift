@@ -1,9 +1,102 @@
 import Testing
+import Foundation
 
 @testable import SolidPostScript
 
 @Suite
 struct PageDeviceTests {
+  @Test func mediaMatchingUsesExactAttributesPriorityAndSwappedDimensions() {
+    let blue = Data("blue".utf8)
+    let catalog = GraphicsMediaCatalog(
+      sources: [
+        1: GraphicsMediaSource(
+          position: 1,
+          attributes: GraphicsMediaAttributes(
+            pageSize: GraphicsSize(width: 612, height: 792),
+            color: blue
+          )
+        ),
+        2: GraphicsMediaSource(
+          position: 2,
+          attributes: GraphicsMediaAttributes(
+            pageSize: GraphicsSize(width: 792, height: 612),
+            color: blue
+          )
+        ),
+      ],
+      priority: [2, 1]
+    )
+    let request = GraphicsMediaRequest(attributes: GraphicsMediaAttributes(
+      pageSize: GraphicsSize(width: 612, height: 792),
+      color: blue
+    ))
+
+    #expect(GraphicsMediaMatcher.select(request: request, catalog: catalog, rollFed: false)?.position == 2)
+  }
+
+  @Test func mediaMatchingHonorsUnavailableManualAndMatchAllSources() {
+    let catalog = GraphicsMediaCatalog(sources: [
+      1: GraphicsMediaSource(position: 1, attributes: nil),
+      2: GraphicsMediaSource(
+        position: 2,
+        attributes: GraphicsMediaAttributes(
+          pageSize: GraphicsSize(width: 100, height: 200),
+          type: Data("label".utf8)
+        ),
+        matchesAllAttributes: true,
+        isManual: true
+      ),
+    ])
+    let incomplete = GraphicsMediaRequest(
+      attributes: GraphicsMediaAttributes(pageSize: GraphicsSize(width: 100, height: 200)),
+      manualFeed: true
+    )
+    let complete = GraphicsMediaRequest(
+      attributes: GraphicsMediaAttributes(
+        pageSize: GraphicsSize(width: 100, height: 200),
+        type: Data("label".utf8)
+      ),
+      manualFeed: true
+    )
+
+    #expect(GraphicsMediaMatcher.select(request: incomplete, catalog: catalog, rollFed: false) == nil)
+    #expect(GraphicsMediaMatcher.select(request: complete, catalog: catalog, rollFed: false)?.position == 2)
+  }
+
+  @Test func outputDeviceProfileSelectionChangesStableIdentityAndCatalogs() throws {
+    let secondaryID = GraphicsOutputDeviceIdentifier()
+    let secondaryMedia = GraphicsMediaCatalog(sources: [
+      9: GraphicsMediaSource(
+        position: 9,
+        attributes: GraphicsMediaAttributes(pageSize: GraphicsSize(width: 300, height: 400))
+      ),
+    ])
+    let provider = StandardGraphicsPageDeviceProvider(
+      physicalCapabilities: .printSpool,
+      outputDeviceProfiles: [GraphicsOutputDeviceProfile(
+        identifier: secondaryID,
+        resourceName: "SecondaryDevice",
+        inputMedia: secondaryMedia,
+        physicalCapabilities: .printSpool
+      )]
+    )
+    let session = try provider.makeSession(for: .letter)
+    let result = try session.negotiate(GraphicsPageDeviceRequest(
+      pageSize: GraphicsSize(width: 300, height: 400),
+      resolution: GraphicsSize(width: 72, height: 72),
+      imagingBoundingBox: nil,
+      numberOfCopies: 1,
+      outputDevice: "SecondaryDevice",
+      inputMedia: secondaryMedia,
+      mediaRequest: GraphicsMediaRequest(
+        attributes: GraphicsMediaAttributes(pageSize: GraphicsSize(width: 300, height: 400))
+      )
+    ))
+
+    #expect(result.unsatisfiedParameters.isEmpty)
+    #expect(result.configuration.outputDeviceIdentifier == secondaryID)
+    #expect(result.configuration.mediaSelection == .selected(secondaryMedia.sources[9]!))
+  }
   @Test func operatorsAreRegistered() async throws {
     let values = try await Interpreter.results(
       content: "/setpagedevice where /currentpagedevice where /nulldevice where"

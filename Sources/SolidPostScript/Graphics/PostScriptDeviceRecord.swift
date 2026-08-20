@@ -73,7 +73,10 @@ final class PostScriptDeviceRecord: Sendable {
       pageNumber: current.pageNumber,
       numberOfCopies: current.configuration?.numberOfCopies,
       trapping: current.trapping,
-      usesCIEColor: current.configuration?.usesCIEColor ?? false
+      usesCIEColor: current.configuration?.usesCIEColor ?? false,
+      mediaSelection: current.configuration?.mediaSelection ?? .virtual,
+      placement: current.configuration?.placement ?? .simplex,
+      delivery: current.configuration?.delivery ?? .virtual
     )
   }
 

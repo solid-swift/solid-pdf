@@ -16,6 +16,12 @@ public struct GraphicsDeviceSnapshot: Sendable, Hashable {
   public let trapping: GraphicsTrappingSnapshot
   /// Whether Device color spaces are remapped through Default ColorSpace resources.
   public let usesCIEColor: Bool
+  /// The selected or deferred physical input medium.
+  public let mediaSelection: GraphicsMediaSelection
+  /// Physical placement for the current page side.
+  public let placement: GraphicsPagePlacement
+  /// Physical page-delivery behavior.
+  public let delivery: GraphicsPageDeliveryConfiguration
 
   /// Creates a device snapshot.
   public init(
@@ -25,7 +31,10 @@ public struct GraphicsDeviceSnapshot: Sendable, Hashable {
     pageNumber: Int,
     numberOfCopies: Int?,
     trapping: GraphicsTrappingSnapshot = .disabled,
-    usesCIEColor: Bool = false
+    usesCIEColor: Bool = false,
+    mediaSelection: GraphicsMediaSelection = .virtual,
+    placement: GraphicsPagePlacement = .simplex,
+    delivery: GraphicsPageDeliveryConfiguration = .virtual
   ) {
     self.identifier = identifier
     self.kind = kind
@@ -34,6 +43,9 @@ public struct GraphicsDeviceSnapshot: Sendable, Hashable {
     self.numberOfCopies = numberOfCopies
     self.trapping = trapping
     self.usesCIEColor = usesCIEColor
+    self.mediaSelection = mediaSelection
+    self.placement = placement
+    self.delivery = delivery
   }
 
   /// The default virtual Letter page device.
