@@ -174,12 +174,12 @@ let package = Package(
     ),
     .target(
       name: "SolidPostScriptPDF",
-      dependencies: ["SolidPDF", "SolidPostScript", "SolidPostScriptRaster", "SolidRaster"],
+      dependencies: ["SolidFont", "SolidPDF", "SolidPostScript", "SolidPostScriptRaster", "SolidRaster"],
       plugins: lintPlugins
     ),
     .testTarget(
       name: "SolidPostScriptPDFTests",
-      dependencies: ["SolidPDF", "SolidPostScript", "SolidPostScriptPDF"],
+      dependencies: ["SolidFont", "SolidPDF", "SolidPostScript", "SolidPostScriptPDF"],
       plugins: lintPlugins
     ),
     .testTarget(

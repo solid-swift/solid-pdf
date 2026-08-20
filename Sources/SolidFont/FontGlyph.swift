@@ -90,11 +90,19 @@ public struct FontGlyph: Sendable, Hashable {
   public let metrics: FontGlyphMetrics
   /// The glyph drawing program.
   public let program: FontGlyphProgram
+  /// The exact backend glyph index selected for this result, when available.
+  public let resolvedGlyphIndex: UInt32?
 
   /// Creates a portable glyph.
-  public init(selector: FontGlyphSelector, metrics: FontGlyphMetrics, program: FontGlyphProgram) {
+  public init(
+    selector: FontGlyphSelector,
+    metrics: FontGlyphMetrics,
+    program: FontGlyphProgram,
+    resolvedGlyphIndex: UInt32? = nil
+  ) {
     self.selector = selector
     self.metrics = metrics
     self.program = program
+    self.resolvedGlyphIndex = resolvedGlyphIndex
   }
 }

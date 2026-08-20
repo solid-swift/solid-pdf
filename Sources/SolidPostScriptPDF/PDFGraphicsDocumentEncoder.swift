@@ -25,6 +25,8 @@ enum PDFGraphicsDocumentEncoder {
     let pagesRoot = try writer.reserveObject()
     let resourcesReference = try writer.reserveObject()
     let resources = PDFResourceManager<Sink>(resourcesReference: resourcesReference)
+    let fontUsage = try PDFFontUsageCatalog(plans: plans)
+    var diagnostics = try resources.prepareFonts(fontUsage, version: options.version, writer: &writer)
     let pageCount = try plans.reduce(into: 0) { count, plan in
       let (sum, overflow) = count.addingReportingOverflow(plan.copies)
       guard !overflow else { throw PDFError.limitExceeded }
@@ -32,7 +34,6 @@ enum PDFGraphicsDocumentEncoder {
     }
     let pageReferences = try (0..<pageCount).map { _ in try writer.reserveObject() }
     var pageDefinitions: [(reference: PDFObjectReference, contents: PDFObjectReference, plan: PDFPagePlan)] = []
-    var diagnostics: [PDFDiagnostic] = []
 
     for plan in plans where plan.copies > 0 {
       let contentsReference = try writer.reserveObject()

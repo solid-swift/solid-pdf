@@ -18,6 +18,7 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
 
     private let sink: Sink
     private let options: PDFRenderOptions
+    private let fontSession: PDFGraphicsFontSession
     private var descriptor: GraphicsDeviceDescriptor
     private var effects: [GraphicsEffect] = []
     private var plans: [PDFPagePlan] = []
@@ -33,10 +34,16 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
     private var aborted = false
     private var transmittedPageCount = 0
 
-    fileprivate init(sink: Sink, options: PDFRenderOptions, descriptor: GraphicsDeviceDescriptor) {
+    fileprivate init(
+      sink: Sink,
+      options: PDFRenderOptions,
+      descriptor: GraphicsDeviceDescriptor,
+      fontSession: PDFGraphicsFontSession
+    ) {
       self.sink = sink
       self.options = options
       self.descriptor = descriptor
+      self.fontSession = fontSession
     }
 
     public func process(_ event: GraphicsEvent) throws {
@@ -213,7 +220,12 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
   }
 
   public func makeRenderer() -> sending Renderer {
-    Renderer(sink: sink, options: options, descriptor: deviceDescriptor)
+    Renderer(
+      sink: sink,
+      options: options,
+      descriptor: deviceDescriptor,
+      fontSession: PDFGraphicsFontSession()
+    )
   }
 
   public func makeRenderer(
@@ -221,7 +233,12 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
     deviceRenderingSession: sending SemanticGraphicsDeviceRenderingSession,
     fontSession: sending PDFGraphicsFontSession
   ) -> sending Renderer {
-    Renderer(sink: sink, options: options, descriptor: deviceDescriptor)
+    Renderer(
+      sink: sink,
+      options: options,
+      descriptor: deviceDescriptor,
+      fontSession: fontSession
+    )
   }
 
   public func makeRenderer(
@@ -230,7 +247,12 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
     fontSession: sending PDFGraphicsFontSession,
     trappingSession: sending SemanticGraphicsTrappingSession
   ) -> sending Renderer {
-    Renderer(sink: sink, options: options, descriptor: deviceDescriptor)
+    Renderer(
+      sink: sink,
+      options: options,
+      descriptor: deviceDescriptor,
+      fontSession: fontSession
+    )
   }
 }
 

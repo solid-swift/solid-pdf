@@ -134,7 +134,12 @@ private extension CoreTextFontProvider {
     } else {
       program = .empty
     }
-    return FontGlyph(selector: selector, metrics: metrics, program: program)
+    return FontGlyph(
+      selector: selector,
+      metrics: metrics,
+      program: program,
+      resolvedGlyphIndex: UInt32(glyph)
+    )
   }
 }
 

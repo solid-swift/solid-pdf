@@ -86,7 +86,8 @@ public struct FreeTypeFontProvider: FontResourceProvider, Sendable {
         return FontGlyph(
           selector: selector,
           metrics: Self.metrics(slot: slot),
-          program: Self.program(slot: slot)
+          program: Self.program(slot: slot),
+          resolvedGlyphIndex: UInt32(glyphIndex)
         )
       }
     }

@@ -199,7 +199,12 @@ extension Context {
       )
     }
 
-    return GraphicsGlyphDescription(selector: selector, metrics: metrics, program: program)
+    return GraphicsGlyphDescription(
+      selector: selector,
+      metrics: metrics,
+      program: program,
+      resolvedGlyphIndex: glyph.resolvedGlyphIndex
+    )
   }
 
   private func horizontalMetrics(_ object: Object) throws -> (bearing: GraphicsPoint?, advance: GraphicsPoint) {
@@ -304,7 +309,8 @@ extension GraphicsGlyphDescription {
           )
         }
       ),
-      program: program
+      program: program,
+      resolvedGlyphIndex: glyph.resolvedGlyphIndex
     )
   }
 

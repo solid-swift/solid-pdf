@@ -132,11 +132,7 @@ enum PDFGraphicsContentEncoder {
         case .outline(let path):
           guard !isEmptyPattern(state.paint, override: paintOverride) else { continue }
           let font = placement.font ?? run.rootFont
-          if let name = try resources.ensureGlyphFont(
-            font: font,
-            glyph: placement.glyph,
-            writer: &writer
-          ) {
+          if let selection = resources.fontSelection(font: font, glyph: placement.glyph) {
             try begin(
               state,
               in: &builder,
@@ -146,9 +142,12 @@ enum PDFGraphicsContentEncoder {
               paintOverride: paintOverride
             )
             builder.command("BT")
-            builder.command("/\(String(decoding: name.bytes, as: UTF8.self)) 1 Tf")
+            builder.command(
+              "/\(String(decoding: selection.name.bytes, as: UTF8.self)) "
+                + "\(builder.number(selection.size)) Tf"
+            )
             builder.command("\(builder.matrix(placement.transform)) Tm")
-            builder.command("<00> Tj")
+            builder.command("<\(selection.code.map { String(format: "%02X", $0) }.joined())> Tj")
             builder.command("ET")
             builder.command("Q")
             continue
@@ -175,16 +174,16 @@ enum PDFGraphicsContentEncoder {
             )
           }
         case .empty, .missing:
-          guard let name = try resources.ensureGlyphFont(
-            font: placement.font ?? run.rootFont,
-            glyph: placement.glyph,
-            writer: &writer
-          ) else { continue }
+          let font = placement.font ?? run.rootFont
+          guard let selection = resources.fontSelection(font: font, glyph: placement.glyph) else { continue }
           try beginClip(state, in: &builder)
           builder.command("BT")
-          builder.command("/\(String(decoding: name.bytes, as: UTF8.self)) 1 Tf")
+          builder.command(
+            "/\(String(decoding: selection.name.bytes, as: UTF8.self)) "
+              + "\(builder.number(selection.size)) Tf"
+          )
           builder.command("\(builder.matrix(placement.transform)) Tm")
-          builder.command("<00> Tj")
+          builder.command("<\(selection.code.map { String(format: "%02X", $0) }.joined())> Tj")
           builder.command("ET")
           builder.command("Q")
         case .bitmap:

@@ -1,17 +1,19 @@
 import Foundation
+import SolidFont
 import SolidPDF
 import SolidPostScript
 import SolidRaster
+
+struct PDFFontSelection {
+  let name: PDFName
+  let code: Data
+  let size: Double
+}
 
 final class PDFResourceManager<Sink: PDFOutputSink> {
   private struct NamedReference {
     let name: PDFName
     let reference: PDFObjectReference
-  }
-
-  private struct GlyphFontKey: Hashable {
-    let font: GraphicsFontIdentifier
-    let glyph: GraphicsGlyphDescription
   }
 
   private var images: [GraphicsImage: NamedReference] = [:]
@@ -21,7 +23,7 @@ final class PDFResourceManager<Sink: PDFOutputSink> {
   private var shadings: [GraphicsShading: NamedReference] = [:]
   private var colorSpaces: [GraphicsColorSpaceDescription: NamedReference] = [:]
   private var overprintStates: [Bool: NamedReference] = [:]
-  private var glyphFonts: [GlyphFontKey: NamedReference] = [:]
+  private var plannedGlyphs: [PDFFontGroupKey: [PDFFontGlyphKey: PDFFontSelection]] = [:]
   private var xObjects: [PDFName: PDFObjectReference] = [:]
   private var shadingObjects: [PDFName: PDFObjectReference] = [:]
   private var patternObjects: [PDFName: PDFObjectReference] = [:]
@@ -32,6 +34,512 @@ final class PDFResourceManager<Sink: PDFOutputSink> {
 
   init(resourcesReference: PDFObjectReference) {
     self.resourcesReference = resourcesReference
+  }
+
+  func prepareFonts(
+    _ catalog: PDFFontUsageCatalog,
+    version: PDFVersion,
+    writer: inout PDFDocumentWriter<Sink>
+  ) throws -> [PDFDiagnostic] {
+    var diagnostics: [PDFDiagnostic] = []
+    for groupKey in catalog.order {
+      guard let group = catalog.groups[groupKey] else { continue }
+      if let asset = group.font.asset,
+        asset.format != .type1 || version == .v1_7,
+        group.glyphs.allSatisfy({ $0.resolvedIndex != nil }),
+        try prepareEmbeddedFont(group, asset: asset, writer: &writer)
+      {
+        continue
+      }
+      try prepareType3Fonts(group, writer: &writer)
+      diagnostics.append(PDFDiagnostic(
+        kind: .rendering,
+        message: "Represented font \(group.font.postScriptName ?? group.font.identifier.value) "
+          + "as an aggregated PDF Type 3 font because its binary program was unavailable, "
+          + "restricted, unsupported, or unsafe for this PDF version."
+      ))
+    }
+    return diagnostics
+  }
+
+  func fontSelection(
+    font: GraphicsFontDescription,
+    glyph: GraphicsGlyphDescription
+  ) -> PDFFontSelection? {
+    plannedGlyphs[PDFFontGroupKey(font: font)]?[PDFFontGlyphKey(glyph)]
+  }
+
+  private func prepareEmbeddedFont(
+    _ group: PDFFontUsageGroup,
+    asset: FontAsset,
+    writer: inout PDFDocumentWriter<Sink>
+  ) throws -> Bool {
+    let indexes = group.glyphs.compactMap(\.resolvedIndex)
+    let subset: FontSubset
+    do {
+      subset = try FontSubsetter.subset(asset, request: FontSubsetRequest(glyphIndexes: indexes))
+    } catch {
+      return false
+    }
+    switch subset.format {
+    case .nameKeyedCFF:
+      return try prepareNameKeyedCFF(group, asset: asset, subset: subset, writer: &writer)
+    case .cidKeyedCFF:
+      return try prepareCIDKeyedCFF(group, subset: subset, writer: &writer)
+    case .type1:
+      return try prepareType1(group, subset: subset, writer: &writer)
+    case .trueType:
+      break
+    }
+    let name = PDFName("F\(fontObjects.count + 1)")
+    let fontReference = try writer.reserveObject()
+    let descendantReference = try writer.reserveObject()
+    let descriptorReference = try writer.reserveObject()
+    let programReference = try writer.reserveObject()
+    let mapReference = try writer.reserveObject()
+    let unicodeEntries = group.glyphs.enumerated().compactMap { index, key -> (Int, [UInt32])? in
+      group.uses[key]?.unicode.map { (index + 1, $0) }
+    }
+    let toUnicodeReference = unicodeEntries.isEmpty ? nil : try writer.reserveObject()
+    fontObjects[name] = fontReference
+
+    var selections: [PDFFontGlyphKey: PDFFontSelection] = [:]
+    var cidToGID = Data(repeating: 0, count: (group.glyphs.count + 1) * 2)
+    var widths: [PDFObject] = []
+    for (offset, key) in group.glyphs.enumerated() {
+      guard let original = key.resolvedIndex, let subsetIndex = subset.glyphMapping[original],
+        let use = group.uses[key]
+      else { return false }
+      let code = offset + 1
+      cidToGID[code * 2] = UInt8(truncatingIfNeeded: subsetIndex >> 8)
+      cidToGID[code * 2 + 1] = UInt8(truncatingIfNeeded: subsetIndex)
+      let width = use.glyph.metrics.horizontalAdvance.x * 1_000 / Double(subset.unitsPerEm)
+      widths.append(.real(width))
+      selections[key] = PDFFontSelection(
+        name: name,
+        code: Data([UInt8(truncatingIfNeeded: code >> 8), UInt8(truncatingIfNeeded: code)]),
+        size: Double(subset.unitsPerEm)
+      )
+    }
+    plannedGlyphs[PDFFontGroupKey(font: group.font)] = selections
+
+    try writer.writeStream(chunks: [subset.data], to: programReference)
+    try writer.writeStream(chunks: [cidToGID], compressed: false, to: mapReference)
+    if let toUnicodeReference {
+      try writer.writeStream(
+        chunks: [makeToUnicode(entries: unicodeEntries, twoByteCodes: true)],
+        compressed: false,
+        to: toUnicodeReference
+      )
+    }
+    let bounds = subset.metrics.bounds ?? FontBounds(
+      minimumX: 0, minimumY: subset.metrics.descent,
+      maximumX: Double(subset.unitsPerEm), maximumY: subset.metrics.ascent
+    )
+    var descriptor: [PDFName: PDFObject] = [
+      "Type": .name("FontDescriptor"),
+      "FontName": .name(PDFName(subset.postScriptName)),
+      "Flags": .integer(4),
+      "FontBBox": .array([
+        .real(bounds.minimumX), .real(bounds.minimumY), .real(bounds.maximumX), .real(bounds.maximumY),
+      ]),
+      "ItalicAngle": .real(subset.metrics.italicAngle),
+      "Ascent": .real(subset.metrics.ascent),
+      "Descent": .real(subset.metrics.descent),
+      "CapHeight": .real(subset.metrics.capHeight ?? subset.metrics.ascent),
+      "StemV": .real(subset.metrics.stemV ?? 80),
+      "FontFile2": .reference(programReference),
+    ]
+    if subset.metrics.ascent == 0 { descriptor["Ascent"] = .real(Double(subset.unitsPerEm) * 0.8) }
+    if subset.metrics.descent == 0 { descriptor["Descent"] = .real(-Double(subset.unitsPerEm) * 0.2) }
+    try writer.write(.dictionary(descriptor), to: descriptorReference)
+    var descendant: [PDFName: PDFObject] = [
+      "Type": .name("Font"),
+      "Subtype": .name("CIDFontType2"),
+      "BaseFont": .name(PDFName(subset.postScriptName)),
+      "CIDSystemInfo": .dictionary([
+        "Registry": .string(PDFString("Adobe")),
+        "Ordering": .string(PDFString("Identity")),
+        "Supplement": .integer(0),
+      ]),
+      "FontDescriptor": .reference(descriptorReference),
+      "DW": .integer(1_000),
+      "W": .array([.integer(1), .array(widths)]),
+      "CIDToGIDMap": .reference(mapReference),
+    ]
+    if group.font.writingMode == 1 {
+      descendant["DW2"] = .array([.integer(880), .integer(-1_000)])
+    }
+    try writer.write(.dictionary(descendant), to: descendantReference)
+    var font: [PDFName: PDFObject] = [
+      "Type": .name("Font"),
+      "Subtype": .name("Type0"),
+      "BaseFont": .name(PDFName(subset.postScriptName)),
+      "Encoding": .name(group.font.writingMode == 1 ? "Identity-V" : "Identity-H"),
+      "DescendantFonts": .array([.reference(descendantReference)]),
+    ]
+    if let toUnicodeReference { font["ToUnicode"] = .reference(toUnicodeReference) }
+    try writer.write(.dictionary(font), to: fontReference)
+    return true
+  }
+
+  private func prepareNameKeyedCFF(
+    _ group: PDFFontUsageGroup,
+    asset: FontAsset,
+    subset: FontSubset,
+    writer: inout PDFDocumentWriter<Sink>
+  ) throws -> Bool {
+    guard let data = asset.data,
+      let collection = try? CompactFontCollection(data: data),
+      collection.faces.indices.contains(asset.faceIndex)
+    else { return false }
+    let face = collection.faces[asset.faceIndex]
+    guard
+      !face.isCIDKeyed,
+      group.glyphs.count <= 255
+    else { return false }
+    var codeByGlyph: [UInt32: UInt8] = [:]
+    for (code, glyph) in face.encoding where codeByGlyph[glyph] == nil {
+      codeByGlyph[glyph] = code
+    }
+    var codes: [(code: Int, key: PDFFontGlyphKey, use: PDFFontGlyphUse)] = []
+    for key in group.glyphs {
+      guard let index = key.resolvedIndex,
+        let code = codeByGlyph[index],
+        let use = group.uses[key]
+      else { return false }
+      codes.append((Int(code), key, use))
+    }
+    guard Set(codes.map(\.code)).count == codes.count else { return false }
+
+    let name = PDFName("F\(fontObjects.count + 1)")
+    let fontReference = try writer.reserveObject()
+    let descriptorReference = try writer.reserveObject()
+    let programReference = try writer.reserveObject()
+    let unicodeEntries = codes.compactMap { entry in
+      entry.use.unicode.map { (entry.code, $0) }
+    }
+    let toUnicodeReference = unicodeEntries.isEmpty ? nil : try writer.reserveObject()
+    fontObjects[name] = fontReference
+
+    let first = codes.map(\.code).min() ?? 0
+    let last = codes.map(\.code).max() ?? 0
+    var widthByCode: [Int: Double] = [:]
+    var selections: [PDFFontGlyphKey: PDFFontSelection] = [:]
+    for entry in codes {
+      widthByCode[entry.code] = entry.use.glyph.metrics.horizontalAdvance.x
+        * 1_000 / Double(subset.unitsPerEm)
+      selections[entry.key] = PDFFontSelection(
+        name: name, code: Data([UInt8(entry.code)]), size: Double(subset.unitsPerEm)
+      )
+    }
+    plannedGlyphs[PDFFontGroupKey(font: group.font)] = selections
+
+    try writer.writeStream(
+      dictionary: ["Subtype": .name("Type1C")], chunks: [subset.data], to: programReference
+    )
+    try writeFontDescriptor(subset, programKey: "FontFile3", programReference, to: descriptorReference, writer: &writer)
+    if let toUnicodeReference {
+      try writer.writeStream(
+        chunks: [makeToUnicode(entries: unicodeEntries, twoByteCodes: false)],
+        compressed: false,
+        to: toUnicodeReference
+      )
+    }
+    var font: [PDFName: PDFObject] = [
+      "Type": .name("Font"), "Subtype": .name("Type1"),
+      "BaseFont": .name(PDFName(subset.postScriptName)),
+      "FirstChar": .integer(first), "LastChar": .integer(last),
+      "Widths": .array((first...last).map { .real(widthByCode[$0] ?? 0) }),
+      "FontDescriptor": .reference(descriptorReference),
+    ]
+    if let toUnicodeReference { font["ToUnicode"] = .reference(toUnicodeReference) }
+    try writer.write(.dictionary(font), to: fontReference)
+    return true
+  }
+
+  private func prepareCIDKeyedCFF(
+    _ group: PDFFontUsageGroup,
+    subset: FontSubset,
+    writer: inout PDFDocumentWriter<Sink>
+  ) throws -> Bool {
+    let glyphByOriginal = Dictionary(uniqueKeysWithValues: subset.glyphs.map { ($0.originalIndex, $0) })
+    var entries: [(cid: Int, key: PDFFontGlyphKey, use: PDFFontGlyphUse)] = []
+    for key in group.glyphs {
+      guard let index = key.resolvedIndex,
+        let cid = glyphByOriginal[index]?.cid,
+        cid <= UInt16.max,
+        let use = group.uses[key]
+      else { return false }
+      entries.append((Int(cid), key, use))
+    }
+    guard Set(entries.map(\.cid)).count == entries.count else { return false }
+
+    let name = PDFName("F\(fontObjects.count + 1)")
+    let fontReference = try writer.reserveObject()
+    let descendantReference = try writer.reserveObject()
+    let descriptorReference = try writer.reserveObject()
+    let programReference = try writer.reserveObject()
+    let unicodeEntries = entries.compactMap { entry in
+      entry.use.unicode.map { (entry.cid, $0) }
+    }
+    let toUnicodeReference = unicodeEntries.isEmpty ? nil : try writer.reserveObject()
+    fontObjects[name] = fontReference
+
+    var selections: [PDFFontGlyphKey: PDFFontSelection] = [:]
+    var widths: [PDFObject] = []
+    for entry in entries {
+      widths.append(.integer(entry.cid))
+      widths.append(.array([.real(
+        entry.use.glyph.metrics.horizontalAdvance.x * 1_000 / Double(subset.unitsPerEm)
+      )]))
+      selections[entry.key] = PDFFontSelection(
+        name: name,
+        code: Data([UInt8(truncatingIfNeeded: entry.cid >> 8), UInt8(truncatingIfNeeded: entry.cid)]),
+        size: Double(subset.unitsPerEm)
+      )
+    }
+    plannedGlyphs[PDFFontGroupKey(font: group.font)] = selections
+
+    try writer.writeStream(
+      dictionary: ["Subtype": .name("CIDFontType0C")], chunks: [subset.data], to: programReference
+    )
+    try writeFontDescriptor(subset, programKey: "FontFile3", programReference, to: descriptorReference, writer: &writer)
+    if let toUnicodeReference {
+      try writer.writeStream(
+        chunks: [makeToUnicode(entries: unicodeEntries, twoByteCodes: true)],
+        compressed: false,
+        to: toUnicodeReference
+      )
+    }
+    var descendant: [PDFName: PDFObject] = [
+      "Type": .name("Font"), "Subtype": .name("CIDFontType0"),
+      "BaseFont": .name(PDFName(subset.postScriptName)),
+      "CIDSystemInfo": .dictionary([
+        "Registry": .string(PDFString("Adobe")), "Ordering": .string(PDFString("Identity")),
+        "Supplement": .integer(0),
+      ]),
+      "FontDescriptor": .reference(descriptorReference), "DW": .integer(1_000),
+      "W": .array(widths),
+    ]
+    if group.font.writingMode == 1 { descendant["DW2"] = .array([.integer(880), .integer(-1_000)]) }
+    try writer.write(.dictionary(descendant), to: descendantReference)
+    var font: [PDFName: PDFObject] = [
+      "Type": .name("Font"), "Subtype": .name("Type0"),
+      "BaseFont": .name(PDFName(subset.postScriptName)),
+      "Encoding": .name(group.font.writingMode == 1 ? "Identity-V" : "Identity-H"),
+      "DescendantFonts": .array([.reference(descendantReference)]),
+    ]
+    if let toUnicodeReference { font["ToUnicode"] = .reference(toUnicodeReference) }
+    try writer.write(.dictionary(font), to: fontReference)
+    return true
+  }
+
+  private func prepareType1(
+    _ group: PDFFontUsageGroup,
+    subset: FontSubset,
+    writer: inout PDFDocumentWriter<Sink>
+  ) throws -> Bool {
+    guard group.glyphs.count <= 255 else { return false }
+    var glyphs: [(key: PDFFontGlyphKey, use: PDFFontGlyphUse, name: String)] = []
+    for key in group.glyphs {
+      guard let use = group.uses[key], case .name(let glyphName) = use.glyph.selector else { return false }
+      glyphs.append((key, use, glyphName))
+    }
+    let name = PDFName("F\(fontObjects.count + 1)")
+    let fontReference = try writer.reserveObject()
+    let descriptorReference = try writer.reserveObject()
+    let programReference = try writer.reserveObject()
+    let unicodeEntries = glyphs.enumerated().compactMap { code, entry in
+      entry.use.unicode.map { (code, $0) }
+    }
+    let toUnicodeReference = unicodeEntries.isEmpty ? nil : try writer.reserveObject()
+    fontObjects[name] = fontReference
+
+    var selections: [PDFFontGlyphKey: PDFFontSelection] = [:]
+    for (code, entry) in glyphs.enumerated() {
+      selections[entry.key] = PDFFontSelection(
+        name: name, code: Data([UInt8(code)]), size: Double(subset.unitsPerEm)
+      )
+    }
+    plannedGlyphs[PDFFontGroupKey(font: group.font)] = selections
+    let lengths = subset.type1SegmentLengths ?? [subset.data.count, 0, 0]
+    guard lengths.count == 3 else { return false }
+    let program = try type1PDFProgram(subset.data)
+    try writer.writeStream(
+      dictionary: [
+        "Length1": .integer(lengths[0]), "Length2": .integer(lengths[1]),
+        "Length3": .integer(lengths[2]),
+      ],
+      chunks: [program], to: programReference
+    )
+    try writeFontDescriptor(subset, programKey: "FontFile", programReference, to: descriptorReference, writer: &writer)
+    if let toUnicodeReference {
+      try writer.writeStream(
+        chunks: [makeToUnicode(entries: unicodeEntries, twoByteCodes: false)], compressed: false,
+        to: toUnicodeReference
+      )
+    }
+    var differences: [PDFObject] = [.integer(0)]
+    differences.append(contentsOf: glyphs.map { .name(PDFName($0.name)) })
+    var font: [PDFName: PDFObject] = [
+      "Type": .name("Font"), "Subtype": .name("Type1"),
+      "BaseFont": .name(PDFName(subset.postScriptName)),
+      "Encoding": .dictionary(["Type": .name("Encoding"), "Differences": .array(differences)]),
+      "FirstChar": .integer(0), "LastChar": .integer(max(0, glyphs.count - 1)),
+      "Widths": .array(glyphs.map { .real(
+        $0.use.glyph.metrics.horizontalAdvance.x * 1_000 / Double(subset.unitsPerEm)
+      ) }),
+      "FontDescriptor": .reference(descriptorReference),
+    ]
+    if let toUnicodeReference { font["ToUnicode"] = .reference(toUnicodeReference) }
+    try writer.write(.dictionary(font), to: fontReference)
+    return true
+  }
+
+  private func writeFontDescriptor(
+    _ subset: FontSubset,
+    programKey: PDFName,
+    _ programReference: PDFObjectReference,
+    to reference: PDFObjectReference,
+    writer: inout PDFDocumentWriter<Sink>
+  ) throws {
+    let bounds = subset.metrics.bounds ?? FontBounds(
+      minimumX: 0, minimumY: subset.metrics.descent,
+      maximumX: Double(subset.unitsPerEm), maximumY: subset.metrics.ascent
+    )
+    try writer.write(.dictionary([
+      "Type": .name("FontDescriptor"), "FontName": .name(PDFName(subset.postScriptName)),
+      "Flags": .integer(4),
+      "FontBBox": .array([
+        .real(bounds.minimumX), .real(bounds.minimumY), .real(bounds.maximumX), .real(bounds.maximumY),
+      ]),
+      "ItalicAngle": .real(subset.metrics.italicAngle),
+      "Ascent": .real(subset.metrics.ascent == 0 ? Double(subset.unitsPerEm) * 0.8 : subset.metrics.ascent),
+      "Descent": .real(subset.metrics.descent == 0 ? -Double(subset.unitsPerEm) * 0.2 : subset.metrics.descent),
+      "CapHeight": .real(subset.metrics.capHeight ?? subset.metrics.ascent),
+      "StemV": .real(subset.metrics.stemV ?? 80), programKey: .reference(programReference),
+    ]), to: reference)
+  }
+
+  private func type1PDFProgram(_ data: Data) throws -> Data {
+    guard data.first == 0x80 else { return data }
+    var offset = 0
+    var result = Data()
+    while offset < data.count {
+      guard offset <= data.count - 2, data[offset] == 0x80 else { throw PDFError.invalidObject }
+      let kind = data[offset + 1]
+      offset += 2
+      if kind == 3 { return result }
+      guard (kind == 1 || kind == 2), offset <= data.count - 4 else { throw PDFError.invalidObject }
+      let count = Int(data[offset]) | Int(data[offset + 1]) << 8
+        | Int(data[offset + 2]) << 16 | Int(data[offset + 3]) << 24
+      offset += 4
+      guard count >= 0, offset <= data.count - count else { throw PDFError.invalidObject }
+      result.append(data[offset..<offset + count])
+      offset += count
+    }
+    throw PDFError.invalidObject
+  }
+
+  private func prepareType3Fonts(
+    _ group: PDFFontUsageGroup,
+    writer: inout PDFDocumentWriter<Sink>
+  ) throws {
+    for start in stride(from: 0, to: group.glyphs.count, by: 255) {
+      let keys = Array(group.glyphs[start..<min(start + 255, group.glyphs.count)])
+      let name = PDFName("F\(fontObjects.count + 1)")
+      let fontReference = try writer.reserveObject()
+      fontObjects[name] = fontReference
+      var charProcs: [PDFName: PDFObject] = [:]
+      var differences: [PDFObject] = [.integer(0)]
+      var widths: [PDFObject] = []
+      var bounds: [GraphicsRect] = []
+      var unicodeEntries: [(Int, [UInt32])] = []
+      var selections = plannedGlyphs[PDFFontGroupKey(font: group.font)] ?? [:]
+      for (code, key) in keys.enumerated() {
+        guard let use = group.uses[key] else { continue }
+        let characterName = PDFName("g\(code)")
+        let characterReference = try writer.reserveObject()
+        let glyphBounds = use.glyph.metrics.bounds ?? pathBounds(use.glyph.program)
+        bounds.append(glyphBounds)
+        var character = PDFContentBuilder()
+        character.command(
+          "\(character.number(use.glyph.metrics.horizontalAdvance.x)) "
+            + "\(character.number(use.glyph.metrics.horizontalAdvance.y)) "
+            + "\(character.number(glyphBounds.x)) \(character.number(glyphBounds.y)) "
+            + "\(character.number(glyphBounds.maxX)) \(character.number(glyphBounds.maxY)) d1"
+        )
+        if case .outline(let path) = use.glyph.program {
+          character.path(path)
+          character.command("f")
+        }
+        try writer.writeStream(chunks: [character.data], to: characterReference)
+        charProcs[characterName] = .reference(characterReference)
+        differences.append(.name(characterName))
+        widths.append(.real(use.glyph.metrics.horizontalAdvance.x))
+        if let unicode = use.unicode { unicodeEntries.append((code, unicode)) }
+        selections[key] = PDFFontSelection(name: name, code: Data([UInt8(code)]), size: 1)
+      }
+      plannedGlyphs[PDFFontGroupKey(font: group.font)] = selections
+      let combined = bounds.reduce(GraphicsRect(x: 0, y: 0, width: 0, height: 0)) { value, next in
+        guard value.width != 0 || value.height != 0 else { return next }
+        let minimumX = min(value.x, next.x)
+        let minimumY = min(value.y, next.y)
+        return GraphicsRect(
+          x: minimumX, y: minimumY,
+          width: max(value.maxX, next.maxX) - minimumX,
+          height: max(value.maxY, next.maxY) - minimumY
+        )
+      }
+      let toUnicodeReference = unicodeEntries.isEmpty ? nil : try writer.reserveObject()
+      if let toUnicodeReference {
+        try writer.writeStream(
+          chunks: [makeToUnicode(entries: unicodeEntries, twoByteCodes: false)],
+          compressed: false,
+          to: toUnicodeReference
+        )
+      }
+      var dictionary: [PDFName: PDFObject] = [
+        "Type": .name("Font"), "Subtype": .name("Type3"),
+        "Name": .name(PDFName(group.font.postScriptName ?? "SolidGlyphs")),
+        "FontBBox": .array([.real(combined.x), .real(combined.y), .real(combined.maxX), .real(combined.maxY)]),
+        "FontMatrix": .array([.integer(1), .integer(0), .integer(0), .integer(1), .integer(0), .integer(0)]),
+        "CharProcs": .dictionary(charProcs),
+        "Encoding": .dictionary(["Type": .name("Encoding"), "Differences": .array(differences)]),
+        "FirstChar": .integer(0), "LastChar": .integer(max(0, keys.count - 1)),
+        "Widths": .array(widths), "Resources": .reference(resourcesReference),
+      ]
+      if let toUnicodeReference { dictionary["ToUnicode"] = .reference(toUnicodeReference) }
+      try writer.write(.dictionary(dictionary), to: fontReference)
+    }
+  }
+
+  private func makeToUnicode(entries: [(Int, [UInt32])], twoByteCodes: Bool) -> Data {
+    var lines = [
+      "/CIDInit /ProcSet findresource begin", "12 dict begin", "begincmap",
+      "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def",
+      "/CMapName /SolidToUnicode def", "/CMapType 2 def", "1 begincodespacerange",
+      twoByteCodes ? "<0000> <FFFF>" : "<00> <FF>", "endcodespacerange",
+    ]
+    for start in stride(from: 0, to: entries.count, by: 100) {
+      let chunk = entries[start..<min(start + 100, entries.count)]
+      lines.append("\(chunk.count) beginbfchar")
+      for entry in chunk {
+        let source = String(format: twoByteCodes ? "%04X" : "%02X", entry.0)
+        let destination = entry.1.flatMap(utf16).map { String(format: "%04X", $0) }.joined()
+        lines.append("<\(source)> <\(destination)>")
+      }
+      lines.append("endbfchar")
+    }
+    lines.append(contentsOf: ["endcmap", "CMapName currentdict /CMap defineresource pop", "end", "end"])
+    return Data((lines.joined(separator: "\n") + "\n").utf8)
+  }
+
+  private func utf16(_ scalar: UInt32) -> [UInt16] {
+    if scalar <= 0xFFFF { return [UInt16(scalar)] }
+    let value = scalar - 0x1_0000
+    return [UInt16(0xD800 + (value >> 10)), UInt16(0xDC00 + (value & 0x3FF))]
   }
 
   func finish(writer: inout PDFDocumentWriter<Sink>) throws {
@@ -55,65 +563,6 @@ final class PDFResourceManager<Sink: PDFOutputSink> {
       resources["Font"] = .dictionary(fontObjects.mapValues(PDFObject.reference))
     }
     try writer.write(.dictionary(resources), to: resourcesReference)
-  }
-
-  func ensureGlyphFont(
-    font: GraphicsFontDescription,
-    glyph: GraphicsGlyphDescription,
-    writer: inout PDFDocumentWriter<Sink>
-  ) throws -> PDFName? {
-    switch glyph.program {
-    case .outline, .empty, .missing: break
-    case .bitmap, .displayList: return nil
-    }
-    let key = GlyphFontKey(font: font.identifier, glyph: glyph)
-    if let existing = glyphFonts[key] { return existing.name }
-    let name = PDFName("F\(glyphFonts.count + 1)")
-    let fontReference = try writer.reserveObject()
-    let characterReference = try writer.reserveObject()
-    let characterName = PDFName("g")
-    glyphFonts[key] = NamedReference(name: name, reference: fontReference)
-    fontObjects[name] = fontReference
-
-    let bounds = glyph.metrics.bounds ?? pathBounds(glyph.program)
-    var character = PDFContentBuilder()
-    character.command(
-      "\(character.number(glyph.metrics.horizontalAdvance.x)) "
-        + "\(character.number(glyph.metrics.horizontalAdvance.y)) "
-        + "\(character.number(bounds.x)) \(character.number(bounds.y)) "
-        + "\(character.number(bounds.maxX)) \(character.number(bounds.maxY)) d1"
-    )
-    if case .outline(let path) = glyph.program {
-      character.path(path)
-      character.command("f")
-    }
-    try writer.writeStream(chunks: [character.data], to: characterReference)
-
-    let baseName = font.postScriptName ?? font.resourceName ?? "SolidGlyph"
-    try writer.write(
-      .dictionary([
-        "Type": .name("Font"),
-        "Subtype": .name("Type3"),
-        "Name": .name(PDFName(baseName)),
-        "FontBBox": .array([
-          .real(bounds.x), .real(bounds.y), .real(bounds.maxX), .real(bounds.maxY),
-        ]),
-        "FontMatrix": .array([
-          .integer(1), .integer(0), .integer(0), .integer(1), .integer(0), .integer(0),
-        ]),
-        "CharProcs": .dictionary([characterName: .reference(characterReference)]),
-        "Encoding": .dictionary([
-          "Type": .name("Encoding"),
-          "Differences": .array([.integer(0), .name(characterName)]),
-        ]),
-        "FirstChar": .integer(0),
-        "LastChar": .integer(0),
-        "Widths": .array([.real(glyph.metrics.horizontalAdvance.x)]),
-        "Resources": .reference(resourcesReference),
-      ]),
-      to: fontReference
-    )
-    return name
   }
 
   func ensureImage(

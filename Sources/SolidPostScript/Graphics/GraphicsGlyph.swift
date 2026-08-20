@@ -60,16 +60,20 @@ public struct GraphicsGlyphDescription: Sendable, Hashable {
   public let metrics: GraphicsGlyphMetrics
   /// The portable rendering fallback.
   public let program: GraphicsGlyphProgram
+  /// The exact glyph index selected in the portable font asset, when known.
+  public let resolvedGlyphIndex: UInt32?
 
   /// Creates a resolved glyph description.
   public init(
     selector: GraphicsGlyphSelector,
     metrics: GraphicsGlyphMetrics,
-    program: GraphicsGlyphProgram
+    program: GraphicsGlyphProgram,
+    resolvedGlyphIndex: UInt32? = nil
   ) {
     self.selector = selector
     self.metrics = metrics
     self.program = program
+    self.resolvedGlyphIndex = resolvedGlyphIndex
   }
 }
 
@@ -85,6 +89,10 @@ public struct GraphicsGlyphPlacement: Sendable, Hashable {
   public let transform: GraphicsMatrix
   /// The user-space advance applied after this glyph.
   public let advance: GraphicsPoint
+  /// The source character bytes consumed to select this glyph.
+  public let sourceBytes: Data?
+  /// Known Unicode provenance for document extraction metadata.
+  public let unicodeScalars: [Unicode.Scalar]?
 
   /// Creates a glyph placement.
   public init(
@@ -92,13 +100,17 @@ public struct GraphicsGlyphPlacement: Sendable, Hashable {
     origin: GraphicsPoint,
     transform: GraphicsMatrix,
     advance: GraphicsPoint,
-    font: GraphicsFontDescription? = nil
+    font: GraphicsFontDescription? = nil,
+    sourceBytes: Data? = nil,
+    unicodeScalars: [Unicode.Scalar]? = nil
   ) {
     self.glyph = glyph
     self.font = font
     self.origin = origin
     self.transform = transform
     self.advance = advance
+    self.sourceBytes = sourceBytes
+    self.unicodeScalars = unicodeScalars
   }
 }
 

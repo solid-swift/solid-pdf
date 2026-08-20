@@ -1,4 +1,5 @@
 import Foundation
+import SolidFont
 import SolidPDF
 import SolidPostScript
 import SolidPostScriptPDF
@@ -165,8 +166,48 @@ struct PDFGraphicsTargetTests {
     try renderer.transmitPage(.init(operation: .page(.show), before: state, after: state), copies: 1)
     let output = try renderer.finish()
     #expect(output.data.containsASCII("/Subtype /Type3"))
+    #expect(output.data.containsASCII("/ToUnicode"))
     #expect(output.data.containsASCII("BT"))
     #expect(output.data.containsASCII("<00> Tj"))
+  }
+
+  @Test
+  func embedsSubsetTrueTypeWithSearchableUnicode() throws {
+    let target = PDFDataGraphicsTarget(
+      sink: PDFDataOutputSink(),
+      options: .init(compressionLevel: 0)
+    )
+    let renderer = target.makeRenderer()
+    let font = GraphicsFontDescription(
+      identifier: .init("synthetic-tt"),
+      postScriptName: "SyntheticTT",
+      asset: try PDFFontFixture.trueTypeAsset()
+    )
+    let glyph = GraphicsGlyphDescription(
+      selector: .name("A"),
+      metrics: .init(horizontalAdvance: .init(x: 600, y: 0)),
+      program: .empty,
+      resolvedGlyphIndex: 1
+    )
+    let run = GraphicsGlyphRun(rootFont: font, glyphs: [
+      .init(
+        glyph: glyph,
+        origin: .init(x: 20, y: 30),
+        transform: .init(a: 0.012, b: 0, c: 0, d: 0.012, tx: 20, ty: 30),
+        advance: .init(x: 7.2, y: 0),
+        unicodeScalars: ["A".unicodeScalars.first!]
+      ),
+    ])
+    let state = GraphicsStateSnapshot.fixture(font: font)
+    try renderer.process(.init(operation: .paint(.text(run)), before: state, after: state))
+    try renderer.transmitPage(.init(operation: .page(.show), before: state, after: state), copies: 1)
+    let output = try renderer.finish()
+
+    #expect(output.data.containsASCII("/Subtype /CIDFontType2"))
+    #expect(output.data.containsASCII("/FontFile2"))
+    #expect(output.data.containsASCII("/ToUnicode"))
+    #expect(output.data.containsASCII("<0001> Tj"))
+    #expect(!output.data.containsASCII("/Subtype /Type3"))
   }
 }
 
