@@ -9,6 +9,11 @@ final class PDFResourceManager<Sink: PDFOutputSink> {
     let reference: PDFObjectReference
   }
 
+  private struct GlyphFontKey: Hashable {
+    let font: GraphicsFontIdentifier
+    let glyph: GraphicsGlyphDescription
+  }
+
   private var images: [GraphicsImage: NamedReference] = [:]
   private var rasterImages: [RasterImage: NamedReference] = [:]
   private var forms: [GraphicsForm: NamedReference] = [:]
@@ -16,11 +21,13 @@ final class PDFResourceManager<Sink: PDFOutputSink> {
   private var shadings: [GraphicsShading: NamedReference] = [:]
   private var colorSpaces: [GraphicsColorSpaceDescription: NamedReference] = [:]
   private var overprintStates: [Bool: NamedReference] = [:]
+  private var glyphFonts: [GlyphFontKey: NamedReference] = [:]
   private var xObjects: [PDFName: PDFObjectReference] = [:]
   private var shadingObjects: [PDFName: PDFObjectReference] = [:]
   private var patternObjects: [PDFName: PDFObjectReference] = [:]
   private var colorSpaceObjects: [PDFName: PDFObjectReference] = [:]
   private var graphicsStates: [PDFName: PDFObjectReference] = [:]
+  private var fontObjects: [PDFName: PDFObjectReference] = [:]
   private let resourcesReference: PDFObjectReference
 
   init(resourcesReference: PDFObjectReference) {
@@ -44,7 +51,69 @@ final class PDFResourceManager<Sink: PDFOutputSink> {
     if !graphicsStates.isEmpty {
       resources["ExtGState"] = .dictionary(graphicsStates.mapValues(PDFObject.reference))
     }
+    if !fontObjects.isEmpty {
+      resources["Font"] = .dictionary(fontObjects.mapValues(PDFObject.reference))
+    }
     try writer.write(.dictionary(resources), to: resourcesReference)
+  }
+
+  func ensureGlyphFont(
+    font: GraphicsFontDescription,
+    glyph: GraphicsGlyphDescription,
+    writer: inout PDFDocumentWriter<Sink>
+  ) throws -> PDFName? {
+    switch glyph.program {
+    case .outline, .empty, .missing: break
+    case .bitmap, .displayList: return nil
+    }
+    let key = GlyphFontKey(font: font.identifier, glyph: glyph)
+    if let existing = glyphFonts[key] { return existing.name }
+    let name = PDFName("F\(glyphFonts.count + 1)")
+    let fontReference = try writer.reserveObject()
+    let characterReference = try writer.reserveObject()
+    let characterName = PDFName("g")
+    glyphFonts[key] = NamedReference(name: name, reference: fontReference)
+    fontObjects[name] = fontReference
+
+    let bounds = glyph.metrics.bounds ?? pathBounds(glyph.program)
+    var character = PDFContentBuilder()
+    character.command(
+      "\(character.number(glyph.metrics.horizontalAdvance.x)) "
+        + "\(character.number(glyph.metrics.horizontalAdvance.y)) "
+        + "\(character.number(bounds.x)) \(character.number(bounds.y)) "
+        + "\(character.number(bounds.maxX)) \(character.number(bounds.maxY)) d1"
+    )
+    if case .outline(let path) = glyph.program {
+      character.path(path)
+      character.command("f")
+    }
+    try writer.writeStream(chunks: [character.data], to: characterReference)
+
+    let baseName = font.postScriptName ?? font.resourceName ?? "SolidGlyph"
+    try writer.write(
+      .dictionary([
+        "Type": .name("Font"),
+        "Subtype": .name("Type3"),
+        "Name": .name(PDFName(baseName)),
+        "FontBBox": .array([
+          .real(bounds.x), .real(bounds.y), .real(bounds.maxX), .real(bounds.maxY),
+        ]),
+        "FontMatrix": .array([
+          .integer(1), .integer(0), .integer(0), .integer(1), .integer(0), .integer(0),
+        ]),
+        "CharProcs": .dictionary([characterName: .reference(characterReference)]),
+        "Encoding": .dictionary([
+          "Type": .name("Encoding"),
+          "Differences": .array([.integer(0), .name(characterName)]),
+        ]),
+        "FirstChar": .integer(0),
+        "LastChar": .integer(0),
+        "Widths": .array([.real(glyph.metrics.horizontalAdvance.x)]),
+        "Resources": .reference(resourcesReference),
+      ]),
+      to: fontReference
+    )
+    return name
   }
 
   func ensureImage(
@@ -401,6 +470,21 @@ final class PDFResourceManager<Sink: PDFOutputSink> {
       to: reference
     )
     return reference
+  }
+
+  private func pathBounds(_ program: GraphicsGlyphProgram) -> GraphicsRect {
+    guard case .outline(let path) = program else { return .init(x: 0, y: 0, width: 0, height: 0) }
+    let points = path.elements.flatMap { element -> [GraphicsPoint] in
+      switch element {
+      case .move(let point), .line(let point): [point]
+      case .curve(let first, let second, let end): [first, second, end]
+      case .close: []
+      }
+    }
+    guard let minimumX = points.map(\.x).min(), let maximumX = points.map(\.x).max(),
+      let minimumY = points.map(\.y).min(), let maximumY = points.map(\.y).max()
+    else { return .init(x: 0, y: 0, width: 0, height: 0) }
+    return GraphicsRect(x: minimumX, y: minimumY, width: maximumX - minimumX, height: maximumY - minimumY)
   }
 }
 

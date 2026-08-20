@@ -1,6 +1,12 @@
 import ArgumentParser
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 import SolidIO
+import SolidPDF
 import SolidPostScript
 #if canImport(CoreText)
 import SolidPostScriptCoreText
@@ -9,6 +15,7 @@ import SolidPostScriptCoreText
 import SolidPostScriptFreeType
 #endif
 import SolidPostScriptDocument
+import SolidPostScriptPDF
 import SolidPostScriptRaster
 import SolidRaster
 import SolidRasterPNG
@@ -23,13 +30,16 @@ struct SolidPS: AsyncParsableCommand {
 }
 
 private struct Render: AsyncParsableCommand {
-  static let configuration = CommandConfiguration(abstract: "Render selected pages as PNG images.")
+  static let configuration = CommandConfiguration(abstract: "Render selected pages as PNG images or a PDF document.")
 
   @Argument(help: "Input PS/EPS path, or - for standard input.")
   var input: String
 
-  @Option(name: .long, help: "PNG file, directory, or - for standard output.")
+  @Option(name: .long, help: "PDF/PNG file, PNG directory, or - for standard output.")
   var output: String
+
+  @Option(name: .long, help: "Output format: auto, png, or pdf.")
+  var format = OutputFormat.auto
 
   @Option(name: .long, help: "Output resolution in dots per inch.")
   var dpi = 144.0
@@ -61,9 +71,20 @@ private struct Render: AsyncParsableCommand {
   @Flag(name: .long, help: "Suppress non-error diagnostics.")
   var quiet = false
 
+  @Option(name: .long, help: "PDF compatibility version: 2.0 or 1.7.")
+  var pdfVersion = PDFVersionOption.v2_0
+
+  @Option(name: .long, help: "Resolution for exact PDF raster fallback.")
+  var fallbackDPI = 300.0
+
+  @Flag(name: .long, help: "Fail when an effect cannot be represented natively in PDF.")
+  var noRasterFallback = false
+
   mutating func run() async throws {
-    guard dpi.isFinite, dpi > 0, timeout.isFinite, timeout >= 0 else {
-      throw ValidationError("--dpi must be positive and --timeout must be nonnegative")
+    guard dpi.isFinite, dpi > 0, fallbackDPI.isFinite, fallbackDPI > 0,
+      timeout.isFinite, timeout >= 0
+    else {
+      throw ValidationError("--dpi and --fallback-dpi must be positive and --timeout must be nonnegative")
     }
     let source: Data
     do { source = try readInput() }
@@ -93,6 +114,14 @@ private struct Render: AsyncParsableCommand {
       timeout: timeout == 0 ? nil : .seconds(timeout)
     )
     let environment = try makeEnvironment(standardInput: document.programData)
+    if try resolvedFormat() == .pdf {
+      try await renderPDF(
+        document,
+        documentOptions: renderOptions,
+        environment: environment
+      )
+      return
+    }
     let pngOptions = PNGEncodingOptions(
       colorFormat: parsedBackground == .transparent ? .rgba : .rgb,
       resolutionDPI: dpi,
@@ -130,6 +159,79 @@ private struct Render: AsyncParsableCommand {
     catch { throw fail("output error: \(error)", status: 73) }
     if !quiet, output != "-" {
       FileHandle.standardError.write(Data("rendered \(rendered.output.count) page(s)\n".utf8))
+    }
+  }
+
+  private func resolvedFormat() throws -> OutputFormat {
+    guard format == .auto else { return format }
+    guard output != "-" else {
+      throw ValidationError("--format is required when writing to standard output")
+    }
+    switch URL(fileURLWithPath: output).pathExtension.lowercased() {
+    case "pdf": return .pdf
+    case "png": return .png
+    default: return .png
+    }
+  }
+
+  private func renderPDF(
+    _ document: PostScriptDocument,
+    documentOptions: PostScriptDocumentRenderOptions,
+    environment: InterpreterEnvironment
+  ) async throws {
+    let options = PDFRenderOptions(
+      version: pdfVersion.value,
+      fallbackPolicy: noRasterFallback ? .vectorOnly : .exact,
+      fallbackDPI: fallbackDPI
+    )
+    let rendered: GraphicsRenderResult<PDFEncodedDocument>
+    do {
+      rendered = try await document.renderPDF(
+        options: options,
+        documentOptions: documentOptions,
+        environment: environment
+      )
+    } catch PostScriptDocumentError.timeout {
+      throw fail("render timed out", status: 124)
+    } catch is CancellationError {
+      throw fail("render interrupted", status: 130)
+    } catch {
+      throw fail("render error: \(error)", status: 65)
+    }
+    do { try publishPDF(rendered.output.data) }
+    catch let error as ExitCode { throw error }
+    catch { throw fail("output error: \(error)", status: 73) }
+    if !quiet {
+      for diagnostic in rendered.output.diagnostics {
+        FileHandle.standardError.write(Data("solid-ps: \(diagnostic.message)\n".utf8))
+      }
+      if output != "-" {
+        FileHandle.standardError.write(Data("rendered \(rendered.output.pageCount) page(s)\n".utf8))
+      }
+    }
+  }
+
+  private func publishPDF(_ data: Data) throws {
+    if output == "-" {
+      FileHandle.standardOutput.write(data)
+      return
+    }
+    let destination = URL(fileURLWithPath: output)
+    let manager = FileManager.default
+    if manager.fileExists(atPath: destination.path), !force { throw PDFError.outputExists }
+    let temporary = destination.deletingLastPathComponent().appendingPathComponent(
+      ".\(destination.lastPathComponent).\(UUID().uuidString).tmp"
+    )
+    do {
+      try data.write(to: temporary)
+      if manager.fileExists(atPath: destination.path) {
+        try replacePublishedFile(at: destination, with: temporary)
+      } else {
+        try manager.moveItem(at: temporary, to: destination)
+      }
+    } catch {
+      try? manager.removeItem(at: temporary)
+      throw error
     }
   }
 
@@ -195,7 +297,7 @@ private struct Render: AsyncParsableCommand {
       guard pages.count == 1 else { throw fail("a .png destination requires exactly one selected page", status: 64) }
       if FileManager.default.fileExists(atPath: destination.path) {
         guard force else { throw PNGEncodingError.outputExists }
-        _ = try FileManager.default.replaceItemAt(destination, withItemAt: pages[0].url)
+        try replacePublishedFile(at: destination, with: pages[0].url)
       } else {
         try FileManager.default.moveItem(at: pages[0].url, to: destination)
       }
@@ -212,11 +314,46 @@ private struct Render: AsyncParsableCommand {
     }
     for pair in pairs {
       if FileManager.default.fileExists(atPath: pair.final.path) {
-        _ = try FileManager.default.replaceItemAt(pair.final, withItemAt: pair.temporary)
+        try replacePublishedFile(at: pair.final, with: pair.temporary)
       } else {
         try FileManager.default.moveItem(at: pair.temporary, to: pair.final)
       }
     }
+  }
+}
+
+private func replacePublishedFile(at destination: URL, with temporary: URL) throws {
+  #if canImport(Darwin) || canImport(Glibc)
+  let result = temporary.withUnsafeFileSystemRepresentation { sourcePath in
+    destination.withUnsafeFileSystemRepresentation { destinationPath in
+      guard let sourcePath, let destinationPath else { return Int32(-1) }
+      #if canImport(Darwin)
+      return Darwin.rename(sourcePath, destinationPath)
+      #else
+      return Glibc.rename(sourcePath, destinationPath)
+      #endif
+    }
+  }
+  guard result == 0 else {
+    throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+  }
+  #else
+  _ = try FileManager.default.replaceItemAt(destination, withItemAt: temporary)
+  #endif
+}
+
+private enum OutputFormat: String, ExpressibleByArgument {
+  case auto
+  case png
+  case pdf
+}
+
+private enum PDFVersionOption: String, ExpressibleByArgument {
+  case v2_0 = "2.0"
+  case v1_7 = "1.7"
+
+  var value: PDFVersion {
+    switch self { case .v2_0: .v2_0; case .v1_7: .v1_7 }
   }
 }
 

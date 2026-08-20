@@ -66,7 +66,7 @@ public struct PDFAtomicFileOutputSink: PDFOutputSink, Sendable {
         let manager = FileManager.default
         if manager.fileExists(atPath: destination.path) {
           guard replacingExisting else { throw PDFError.outputExists }
-          _ = try manager.replaceItemAt(destination, withItemAt: temporary)
+          try PDFFilePublisher.replace(destination, with: temporary)
         } else {
           try manager.moveItem(at: temporary, to: destination)
         }

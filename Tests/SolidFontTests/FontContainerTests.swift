@@ -39,4 +39,21 @@ import Testing
       _ = try CompactFontCollection(data: Data(repeating: 1, count: 5), limits: limits)
     }
   }
+
+  @Test func readsSFNTEmbeddingRestrictionsAndBuildsStablePlans() throws {
+    var sfnt = Data([0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0])
+    sfnt.append(contentsOf: [0x4F, 0x53, 0x2F, 0x32, 0, 0, 0, 0, 0, 0, 0, 28, 0, 0, 0, 10])
+    sfnt.append(contentsOf: [0, 0, 0, 0, 0, 0, 0, 0, 0x03, 0x02])
+    let descriptor = try FontDescriptor(postScriptName: "Restricted", unitsPerEm: 1_000)
+    let asset = try FontAsset(descriptor: descriptor, format: .sfnt, data: sfnt)
+    let permissions = try FontSubsetter.permissions(for: asset)
+    #expect(permissions.allowsEmbedding == false)
+    #expect(permissions.allowsSubsetting == false)
+    #expect(permissions.bitmapOnly)
+    let first = try FontSubsetter.plan(asset: asset, glyphs: [7, 2, 7])
+    let second = try FontSubsetter.plan(asset: asset, glyphs: [2, 7])
+    #expect(first.strategy == .portableGlyphs)
+    #expect(first.subsetPrefix == second.subsetPrefix)
+    #expect(first.glyphs == [2, 7])
+  }
 }

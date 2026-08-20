@@ -35,6 +35,16 @@ struct PDFGraphicsTargetTests {
   }
 
   @Test
+  func reportsAssignedPageReferences() throws {
+    let renderer = PDFDataGraphicsTarget(sink: PDFDataOutputSink()).makeRenderer()
+    let state = GraphicsStateSnapshot.fixture(font: .invalid)
+    try renderer.transmitPage(.init(operation: .page(.show), before: state, after: state), copies: 2)
+    _ = try renderer.finish()
+
+    #expect(renderer.pages.map(\.pageReference?.objectNumber) == [4, 5])
+  }
+
+  @Test
   func emitsNativeImagesFormsShadingsAndOverprintState() async throws {
     let content = """
     true setoverprint
@@ -115,6 +125,65 @@ struct PDFGraphicsTargetTests {
     let outputs = try await [first.output, second.output]
     #expect(outputs.allSatisfy { $0.pageCount == 1 })
     #expect(outputs[0].data != outputs[1].data)
+  }
+
+  @Test
+  func preservesPortableOutlineGlyphsAsPDFText() throws {
+    let target = PDFDataGraphicsTarget(
+      sink: PDFDataOutputSink(),
+      options: .init(compressionLevel: 0)
+    )
+    let renderer = target.makeRenderer()
+    let font = GraphicsFontDescription(
+      identifier: .init("fixture"),
+      postScriptName: "Fixture"
+    )
+    let path = GraphicsPath(elements: [
+      .move(to: .init(x: 0, y: 0)),
+      .line(to: .init(x: 500, y: 0)),
+      .line(to: .init(x: 250, y: 700)),
+      .close,
+    ])
+    let glyph = GraphicsGlyphDescription(
+      selector: .name("A"),
+      metrics: .init(
+        horizontalAdvance: .init(x: 600, y: 0),
+        bounds: .init(x: 0, y: 0, width: 500, height: 700)
+      ),
+      program: .outline(path)
+    )
+    let run = GraphicsGlyphRun(rootFont: font, glyphs: [
+      .init(
+        glyph: glyph,
+        origin: .init(x: 20, y: 30),
+        transform: .init(a: 0.1, b: 0, c: 0, d: 0.1, tx: 20, ty: 30),
+        advance: .init(x: 60, y: 0)
+      ),
+    ])
+    let state = GraphicsStateSnapshot.fixture(font: font)
+    try renderer.process(.init(operation: .paint(.text(run)), before: state, after: state))
+    try renderer.transmitPage(.init(operation: .page(.show), before: state, after: state), copies: 1)
+    let output = try renderer.finish()
+    #expect(output.data.containsASCII("/Subtype /Type3"))
+    #expect(output.data.containsASCII("BT"))
+    #expect(output.data.containsASCII("<00> Tj"))
+  }
+}
+
+private extension GraphicsStateSnapshot {
+  static func fixture(font: GraphicsFontDescription) -> Self {
+    Self(
+      matrix: .identity,
+      path: .init(),
+      clip: .init(imageableBounds: .init(x: 0, y: 0, width: 612, height: 792)),
+      paint: .deviceGray(0),
+      lineWidth: 1,
+      lineCap: .butt,
+      lineJoin: .miter,
+      miterLimit: 10,
+      dash: .init(),
+      font: font
+    )
   }
 }
 

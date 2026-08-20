@@ -6,11 +6,13 @@ import SolidPostScript
 public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
   public typealias PageOutput = PDFPageOutput
   public typealias Output = Sink.Session.Output
+  public typealias FontEngine = PDFGraphicsFontEngine
 
   /// A renderer dedicated to one PDF document.
   public final class Renderer: GraphicsRenderer {
     public typealias PageOutput = PDFPageOutput
     public typealias Output = Sink.Session.Output
+    public typealias FontSession = PDFGraphicsFontSession
 
     public private(set) var pages: [PDFPageOutput] = []
 
@@ -29,6 +31,7 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
       nextMaskRow: Int
     )?
     private var aborted = false
+    private var transmittedPageCount = 0
 
     fileprivate init(sink: Sink, options: PDFRenderOptions, descriptor: GraphicsDeviceDescriptor) {
       self.sink = sink
@@ -126,11 +129,18 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
       if fallback != .vector, options.fallbackPolicy == .vectorOnly {
         throw SolidPostScript.Error.ioError
       }
-      plans.append(PDFPagePlan(device: event.before.device, effects: effects, copies: copies))
-      for _ in 0..<copies {
+      let selectedCopies = (0..<copies).reduce(into: 0) { count, _ in
+        transmittedPageCount += 1
+        if options.selectedPageOrdinals?.contains(transmittedPageCount) ?? true { count += 1 }
+      }
+      if selectedCopies > 0 {
+        plans.append(PDFPagePlan(device: event.before.device, effects: effects, copies: selectedCopies))
+      }
+      for _ in 0..<selectedCopies {
         pages.append(PDFPageOutput(
           ordinal: pages.count + 1,
           device: event.before.device,
+          pageReference: PDFObjectReference(objectNumber: pages.count + 4),
           fallback: fallback
         ))
       }
@@ -139,6 +149,12 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
 
     public func finish() throws -> sending Sink.Session.Output {
       guard !aborted else { throw SolidPostScript.Error.ioError }
+      if let requested = options.selectedPageOrdinals,
+        requested.contains(where: { $0 > transmittedPageCount })
+      {
+        throw SolidPostScript.Error.rangeCheck
+      }
+      guard !plans.isEmpty else { throw SolidPostScript.Error.rangeCheck }
       aborted = true
       activeImage = nil
       do {
@@ -169,6 +185,7 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
 
   public let deviceDescriptor: GraphicsDeviceDescriptor
   public let pageDeviceProvider: StandardGraphicsPageDeviceProvider
+  public let fontEngine = PDFGraphicsFontEngine()
   public let sink: Sink
   public let options: PDFRenderOptions
 
@@ -196,6 +213,23 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
   }
 
   public func makeRenderer() -> sending Renderer {
+    Renderer(sink: sink, options: options, descriptor: deviceDescriptor)
+  }
+
+  public func makeRenderer(
+    colorSession: sending SemanticGraphicsColorSession,
+    deviceRenderingSession: sending SemanticGraphicsDeviceRenderingSession,
+    fontSession: sending PDFGraphicsFontSession
+  ) -> sending Renderer {
+    Renderer(sink: sink, options: options, descriptor: deviceDescriptor)
+  }
+
+  public func makeRenderer(
+    colorSession: sending SemanticGraphicsColorSession,
+    deviceRenderingSession: sending SemanticGraphicsDeviceRenderingSession,
+    fontSession: sending PDFGraphicsFontSession,
+    trappingSession: sending SemanticGraphicsTrappingSession
+  ) -> sending Renderer {
     Renderer(sink: sink, options: options, descriptor: deviceDescriptor)
   }
 }

@@ -3,7 +3,7 @@ public struct PDFObjectReference: Sendable, Hashable, Comparable {
   /// The one-based object number.
   public let objectNumber: Int
 
-  init(objectNumber: Int) {
+  package init(objectNumber: Int) {
     self.objectNumber = objectNumber
   }
 

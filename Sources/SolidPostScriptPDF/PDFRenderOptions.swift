@@ -1,4 +1,5 @@
 import SolidPDF
+import SolidPostScript
 
 /// Options controlling PostScript-to-PDF rendering.
 public struct PDFRenderOptions: Sendable, Hashable {
@@ -14,6 +15,12 @@ public struct PDFRenderOptions: Sendable, Hashable {
   public var limits: PDFWritingLimits
   /// Optional deterministic document metadata.
   public var metadata: PDFDocumentMetadata
+  /// One-based transmitted page ordinals to retain, or `nil` for all pages.
+  public var selectedPageOrdinals: Set<Int>?
+  /// Labels assigned to retained pages in output order.
+  public var pageLabels: [String]
+  /// Optional crop rectangles assigned to retained pages in output order.
+  public var cropBoxes: [GraphicsRect?]
 
   /// Creates rendering options.
   public init(
@@ -22,7 +29,10 @@ public struct PDFRenderOptions: Sendable, Hashable {
     fallbackDPI: Double = 300,
     compressionLevel: Int = -1,
     limits: PDFWritingLimits = .init(),
-    metadata: PDFDocumentMetadata = .init()
+    metadata: PDFDocumentMetadata = .init(),
+    selectedPageOrdinals: Set<Int>? = nil,
+    pageLabels: [String] = [],
+    cropBoxes: [GraphicsRect?] = []
   ) {
     self.version = version
     self.fallbackPolicy = fallbackPolicy
@@ -30,5 +40,8 @@ public struct PDFRenderOptions: Sendable, Hashable {
     self.compressionLevel = compressionLevel
     self.limits = limits
     self.metadata = metadata
+    self.selectedPageOrdinals = selectedPageOrdinals
+    self.pageLabels = pageLabels
+    self.cropBoxes = cropBoxes
   }
 }

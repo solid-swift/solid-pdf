@@ -93,6 +93,25 @@ struct PDFDocumentWriterTests {
     #expect(output == destination)
     #expect(try Data(contentsOf: output).containsASCII("%PDF-1.7"))
   }
+
+  @Test
+  func atomicSinkReplacesExistingOutput() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let destination = directory.appendingPathComponent("document.pdf")
+    try Data("old".utf8).write(to: destination)
+
+    var writer = try PDFDocumentWriter(
+      sink: PDFAtomicFileOutputSink(destination: destination, replacingExisting: true),
+      options: .init(version: .v1_7)
+    )
+    let root = try writer.reserveObject()
+    try writer.write(.dictionary(["Type": .name("Catalog")]), to: root)
+    _ = try writer.finish(root: root, pageCount: 0)
+
+    #expect(try Data(contentsOf: destination).containsASCII("%PDF-1.7"))
+  }
 }
 
 private func makeDocument(version: PDFVersion) throws -> PDFEncodedDocument {

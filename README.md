@@ -1,7 +1,8 @@
 # SolidPDF
 
-SolidPDF is a Swift package for PDF and related document-language implementations. Its first library,
-`SolidPostScript`, provides a Swift PostScript interpreter that will support later PDF parsing work.
+SolidPDF is a Swift package for PDF and related document-language implementations. `SolidPostScript`
+provides a Swift PostScript interpreter, while `SolidPDF` and `SolidPostScriptPDF` provide deterministic
+PDF writing and vector-preserving PostScript rendering.
 
 ## Requirements
 
@@ -36,6 +37,32 @@ print(result.value) // 30
 
 Callers migrating from the archived implementation should replace `import TPPostScript` with
 `import SolidPostScript`. This package does not provide a `TPPostScript` compatibility module.
+
+### PS/EPS to PDF
+
+`PostScriptDocument` renders DSC PostScript and EPS directly to PDF 2.0 or PDF 1.7. Native paths,
+images, reusable graphics, named colors, overprint, and portable outline glyphs remain PDF graphics.
+Effects that PDF cannot reproduce exactly are rasterized in isolation when composition permits it;
+cross-effect dependencies trigger an explicit page fallback and diagnostic.
+
+```swift
+import SolidPostScriptDocument
+
+let document = try PostScriptDocument(contentsOf: inputURL)
+let result = try await document.renderPDF(to: outputURL)
+print(result.output)
+```
+
+The command-line renderer infers PDF and PNG from the output extension:
+
+```sh
+solid-ps render artwork.eps --output artwork.pdf
+solid-ps render document.ps --output pages --format png --dpi 144
+solid-ps render document.ps --output - --format pdf --pdf-version 1.7
+```
+
+Use `--no-raster-fallback` when a job must remain entirely native PDF graphics. PDF output is composite;
+physical separation plates and in-RIP trapping remain available through `RasterSeparationTarget`.
 
 ## Compatibility baseline
 

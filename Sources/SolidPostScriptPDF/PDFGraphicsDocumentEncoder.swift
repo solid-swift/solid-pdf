@@ -25,7 +25,12 @@ enum PDFGraphicsDocumentEncoder {
     let pagesRoot = try writer.reserveObject()
     let resourcesReference = try writer.reserveObject()
     let resources = PDFResourceManager<Sink>(resourcesReference: resourcesReference)
-    var pageReferences: [PDFObjectReference] = []
+    let pageCount = try plans.reduce(into: 0) { count, plan in
+      let (sum, overflow) = count.addingReportingOverflow(plan.copies)
+      guard !overflow else { throw PDFError.limitExceeded }
+      count = sum
+    }
+    let pageReferences = try (0..<pageCount).map { _ in try writer.reserveObject() }
     var pageDefinitions: [(reference: PDFObjectReference, contents: PDFObjectReference, plan: PDFPagePlan)] = []
     var diagnostics: [PDFDiagnostic] = []
 
@@ -34,53 +39,79 @@ enum PDFGraphicsDocumentEncoder {
       let disposition = PDFPageAnalyzer.disposition(for: plan.effects)
       let content: Data
       switch disposition {
-      case .vector, .localized:
+      case .vector:
         content = try PDFGraphicsContentEncoder.encode(
           plan.effects,
           resources: resources,
           writer: &writer
         )
-      case .page:
-        guard options.fallbackPolicy == .exact else { throw PDFError.incompatibleVersion }
-        let image = try rasterize(plan: plan, dpi: options.fallbackDPI)
-        let name = try resources.ensureRasterImage(image, writer: &writer)
+      case .localized:
         var builder = PDFContentBuilder()
-        let bounds = plan.device.descriptor.mediaBounds
-        builder.command("q")
-        builder.command(
-          "\(builder.number(bounds.width)) 0 0 -\(builder.number(bounds.height)) "
-            + "\(builder.number(bounds.x)) \(builder.number(bounds.maxY)) cm"
-        )
-        builder.command("/\(String(decoding: name.bytes, as: UTF8.self)) Do")
-        builder.command("Q")
+        for effect in plan.effects {
+          switch PDFPageAnalyzer.disposition(for: effect) {
+          case .vector:
+            builder.append(try PDFGraphicsContentEncoder.encode(
+              [effect],
+              resources: resources,
+              writer: &writer
+            ))
+          case .localized:
+            let image = try rasterize(
+              plan: PDFPagePlan(device: plan.device, effects: [effect], copies: 1),
+              dpi: options.fallbackDPI,
+              background: .init(red: 0, green: 0, blue: 0, alpha: 0)
+            )
+            let name = try resources.ensureRasterImage(image, writer: &writer)
+            appendPageImage(name, bounds: plan.device.descriptor.mediaBounds, to: &builder)
+          case .page:
+            throw PDFError.invalidObject
+          }
+        }
         content = builder.data
         diagnostics.append(PDFDiagnostic(
           kind: .rendering,
-          message: "Rasterized output page \(pageReferences.count + 1) at \(options.fallbackDPI) dpi "
+          message: "Rasterized isolated effects on output page \(pageDefinitions.count + 1) "
+            + "at \(options.fallbackDPI) dpi."
+        ))
+      case .page:
+        guard options.fallbackPolicy == .exact else { throw PDFError.incompatibleVersion }
+        let image = try rasterize(plan: plan, dpi: options.fallbackDPI, background: .white)
+        let name = try resources.ensureRasterImage(image, writer: &writer)
+        var builder = PDFContentBuilder()
+        appendPageImage(name, bounds: plan.device.descriptor.mediaBounds, to: &builder)
+        content = builder.data
+        diagnostics.append(PDFDiagnostic(
+          kind: .rendering,
+          message: "Rasterized output page \(pageDefinitions.count + 1) at \(options.fallbackDPI) dpi "
             + "because its effects depend on non-native rendering state."
         ))
       }
       try writer.writeStream(chunks: [content], to: contentsReference)
       for _ in 0..<plan.copies {
-        let pageReference = try writer.reserveObject()
-        pageReferences.append(pageReference)
+        let pageReference = pageReferences[pageDefinitions.count]
         pageDefinitions.append((pageReference, contentsReference, plan))
       }
     }
 
     try resources.finish(writer: &writer)
-    for definition in pageDefinitions {
+    for (index, definition) in pageDefinitions.enumerated() {
       let bounds = definition.plan.device.descriptor.mediaBounds
-      try writer.write(
-        .dictionary([
-          "Type": .name("Page"),
-          "Parent": .reference(pagesRoot),
-          "MediaBox": .array([
-            .real(bounds.x), .real(bounds.y), .real(bounds.maxX), .real(bounds.maxY),
-          ]),
-          "Resources": .reference(resourcesReference),
-          "Contents": .reference(definition.contents),
+      var page: [PDFName: PDFObject] = [
+        "Type": .name("Page"),
+        "Parent": .reference(pagesRoot),
+        "MediaBox": .array([
+          .real(bounds.x), .real(bounds.y), .real(bounds.maxX), .real(bounds.maxY),
         ]),
+        "Resources": .reference(resourcesReference),
+        "Contents": .reference(definition.contents),
+      ]
+      if index < options.cropBoxes.count, let crop = options.cropBoxes[index] {
+        page["CropBox"] = .array([
+          .real(crop.x), .real(crop.y), .real(crop.maxX), .real(crop.maxY),
+        ])
+      }
+      try writer.write(
+        .dictionary(page),
         to: definition.reference
       )
     }
@@ -92,13 +123,18 @@ enum PDFGraphicsDocumentEncoder {
       ]),
       to: pagesRoot
     )
-    try writer.write(
-      .dictionary([
-        "Type": .name("Catalog"),
-        "Pages": .reference(pagesRoot),
-      ]),
-      to: catalog
-    )
+    var catalogValues: [PDFName: PDFObject] = [
+      "Type": .name("Catalog"),
+      "Pages": .reference(pagesRoot),
+    ]
+    if !options.pageLabels.isEmpty {
+      catalogValues["PageLabels"] = .dictionary([
+        "Nums": .array(options.pageLabels.prefix(pageReferences.count).enumerated().flatMap { index, label in
+          [.integer(index), .dictionary(["P": .string(PDFString(label))])]
+        }),
+      ])
+    }
+    try writer.write(.dictionary(catalogValues), to: catalog)
     let info = try makeInfo(options.metadata, writer: &writer)
     return try writer.finish(
       root: catalog,
@@ -108,7 +144,11 @@ enum PDFGraphicsDocumentEncoder {
     )
   }
 
-  private static func rasterize(plan: PDFPagePlan, dpi: Double) throws -> RasterImage {
+  private static func rasterize(
+    plan: PDFPagePlan,
+    dpi: Double,
+    background: RasterColor
+  ) throws -> RasterImage {
     let bounds = plan.device.descriptor.mediaBounds
     let scale = dpi / 72
     let width = Int((bounds.width * scale).rounded(.up))
@@ -118,7 +158,7 @@ enum PDFGraphicsDocumentEncoder {
       pixelWidth: width,
       pixelHeight: height,
       resolution: dpi,
-      background: .white,
+      background: background,
       pageDeviceMode: .fixed
     )
     let renderer = try target.makeRenderer()
@@ -128,6 +168,20 @@ enum PDFGraphicsDocumentEncoder {
       sourceDevice: plan.device.descriptor,
       scale: scale
     )
+  }
+
+  private static func appendPageImage(
+    _ name: PDFName,
+    bounds: GraphicsRect,
+    to builder: inout PDFContentBuilder
+  ) {
+    builder.command("q")
+    builder.command(
+      "\(builder.number(bounds.width)) 0 0 -\(builder.number(bounds.height)) "
+        + "\(builder.number(bounds.x)) \(builder.number(bounds.maxY)) cm"
+    )
+    builder.command("/\(String(decoding: name.bytes, as: UTF8.self)) Do")
+    builder.command("Q")
   }
 
   private static func makeInfo<Sink: PDFOutputSink>(

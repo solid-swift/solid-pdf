@@ -131,6 +131,28 @@ enum PDFGraphicsContentEncoder {
         switch placement.glyph.program {
         case .outline(let path):
           guard !isEmptyPattern(state.paint, override: paintOverride) else { continue }
+          let font = placement.font ?? run.rootFont
+          if let name = try resources.ensureGlyphFont(
+            font: font,
+            glyph: placement.glyph,
+            writer: &writer
+          ) {
+            try begin(
+              state,
+              in: &builder,
+              resources: resources,
+              writer: &writer,
+              stroking: false,
+              paintOverride: paintOverride
+            )
+            builder.command("BT")
+            builder.command("/\(String(decoding: name.bytes, as: UTF8.self)) 1 Tf")
+            builder.command("\(builder.matrix(placement.transform)) Tm")
+            builder.command("<00> Tj")
+            builder.command("ET")
+            builder.command("Q")
+            continue
+          }
           try begin(
             state,
             in: &builder,
@@ -152,7 +174,20 @@ enum PDFGraphicsContentEncoder {
               paintOverride: paintOverride
             )
           }
-        case .bitmap, .empty, .missing:
+        case .empty, .missing:
+          guard let name = try resources.ensureGlyphFont(
+            font: placement.font ?? run.rootFont,
+            glyph: placement.glyph,
+            writer: &writer
+          ) else { continue }
+          try beginClip(state, in: &builder)
+          builder.command("BT")
+          builder.command("/\(String(decoding: name.bytes, as: UTF8.self)) 1 Tf")
+          builder.command("\(builder.matrix(placement.transform)) Tm")
+          builder.command("<00> Tj")
+          builder.command("ET")
+          builder.command("Q")
+        case .bitmap:
           break
         }
       }

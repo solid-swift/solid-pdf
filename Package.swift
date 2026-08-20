@@ -163,7 +163,13 @@ let package = Package(
     ),
     .target(
       name: "SolidPostScriptDocument",
-      dependencies: ["SolidPostScript", "SolidPostScriptRaster", "SolidRaster"],
+      dependencies: [
+        "SolidPDF",
+        "SolidPostScript",
+        "SolidPostScriptPDF",
+        "SolidPostScriptRaster",
+        "SolidRaster",
+      ],
       plugins: lintPlugins
     ),
     .target(
@@ -179,8 +185,10 @@ let package = Package(
     .testTarget(
       name: "SolidPostScriptDocumentTests",
       dependencies: [
+        "SolidPDF",
         "SolidPostScript",
         "SolidPostScriptDocument",
+        "SolidPostScriptPDF",
         "SolidPostScriptRaster",
         .product(name: "SolidIO", package: "solid-foundation"),
       ],
@@ -242,10 +250,12 @@ let package = Package(
     .executableTarget(
       name: "solid-ps",
       dependencies: [
+        "SolidPDF",
         "SolidPostScript",
         "SolidPostScriptCoreText",
         "SolidPostScriptDocument",
         "SolidPostScriptFreeType",
+        "SolidPostScriptPDF",
         "SolidPostScriptRaster",
         "SolidRaster",
         "SolidRasterPNG",

@@ -1,11 +1,16 @@
 import SolidPostScript
 
 enum PDFPageAnalyzer {
+  enum EffectDisposition: Equatable { case vector, localized, page }
+
   static func disposition(for effects: [GraphicsEffect]) -> PDFPageFallbackDisposition {
-    effects.contains(where: requiresPageFallback) ? .page : .vector
+    let dispositions = effects.map(disposition)
+    if dispositions.contains(where: { $0 == .page }) { return .page }
+    if dispositions.contains(where: { $0 == .localized }) { return .localized }
+    return .vector
   }
 
-  private static func requiresPageFallback(_ effect: GraphicsEffect) -> Bool {
+  static func disposition(for effect: GraphicsEffect) -> EffectDisposition {
     let state: GraphicsStateSnapshot
     switch effect {
     case .fill(_, _, let value), .stroke(_, let value), .userPathFill(_, _, let value),
@@ -14,35 +19,39 @@ enum PDFPageAnalyzer {
       .form(_, let value), .text(_, let value):
       state = value
     }
-    guard state.deviceRendering == .continuousTone, !state.strokeAdjustment else { return true }
-    if requiresPageFallback(state.paint) { return true }
+    let unsupportedState = state.deviceRendering != .continuousTone || state.strokeAdjustment
+      || requiresFallback(state.paint)
+    if unsupportedState { return state.overprint || addressesNamedColorants(state.paint) ? .page : .localized }
     switch effect {
     case .form(let form, _):
-      return form.displayList.effects.contains(where: requiresPageFallback)
+      let nested = disposition(for: form.displayList.effects)
+      return nested == .vector ? .vector : (state.overprint ? .page : .localized)
     case .text(let run, _):
-      return run.glyphs.contains { placement in
+      let unsupported = run.glyphs.contains { placement in
         switch placement.glyph.program {
         case .bitmap: true
-        case .displayList(let list): list.effects.contains(where: requiresPageFallback)
+        case .displayList(let list): disposition(for: list.effects) != .vector
         case .outline, .empty, .missing: false
         }
       }
+      return unsupported ? (state.overprint ? .page : .localized) : .vector
     case .shading(let shading, _):
-      return shading.mesh.triangles.contains { triangle in
+      let unsupported = shading.mesh.triangles.contains { triangle in
         [triangle.first.paint, triangle.second.paint, triangle.third.paint]
-          .contains(where: requiresPageFallback)
+          .contains(where: requiresFallback)
       }
+      return unsupported ? (state.overprint ? .page : .localized) : .vector
     case .image(let image, _):
       if case .explicit(_, _, let maskToDevice, _) = image.descriptor.mask,
         maskToDevice != image.descriptor.imageToDevice
-      { return true }
-      return false
+      { return state.overprint ? .page : .localized }
+      return .vector
     default:
-      return false
+      return .vector
     }
   }
 
-  private static func requiresPageFallback(_ paint: GraphicsPaint) -> Bool {
+  private static func requiresFallback(_ paint: GraphicsPaint) -> Bool {
     switch paint {
     case .deviceGray, .deviceRGB, .deviceCMYK:
       false
@@ -55,13 +64,17 @@ enum PDFPageAnalyzer {
     case .pattern(.empty):
       false
     case .pattern(.tiling(let pattern, let underlying)):
-      (underlying.map(requiresPageFallback) ?? false)
-        || pattern.displayList.effects.contains(where: requiresPageFallback)
+      (underlying.map(requiresFallback) ?? false)
+        || disposition(for: pattern.displayList.effects) != .vector
     case .pattern(.shading(let shading)):
       shading.mesh.triangles.contains { triangle in
         [triangle.first.paint, triangle.second.paint, triangle.third.paint]
-          .contains(where: requiresPageFallback)
+          .contains(where: requiresFallback)
       }
     }
+  }
+
+  private static func addressesNamedColorants(_ paint: GraphicsPaint) -> Bool {
+    if case .color(.directColorants) = paint { true } else { false }
   }
 }
