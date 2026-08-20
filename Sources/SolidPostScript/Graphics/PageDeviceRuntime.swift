@@ -108,6 +108,7 @@ extension Context {
     configuration: GraphicsPageDeviceConfiguration,
     parameters: PostScriptPageDeviceParameters
   ) async throws {
+    let initialColor = try await initialColor(for: configuration)
     let oldState = graphicsState
     if oldState.device.kind == .page {
       let transmit = try await callEndPage(reason: 2)
@@ -125,7 +126,7 @@ extension Context {
     let record = PostScriptDeviceRecord(configuration: configuration)
     graphicsDeviceDescriptor = configuration.descriptor
     graphicsState = .initial(for: configuration.descriptor, device: record)
-    try await selectInitialColor(for: configuration.colorants)
+    apply(initialColor, to: &graphicsState)
     graphicsState.pageDeviceParameters = parameters
     graphicsStack.removeAll()
     do {
@@ -281,7 +282,24 @@ extension Context {
   }
 
   private func initialColor() async throws -> InitialColor {
-    let colorants = graphicsState.device.configuration?.colorants ?? graphicsDeviceDescriptor.colorants
+    let configuration = graphicsState.device.configuration
+    return try await initialColor(
+      colorants: configuration?.colorants ?? graphicsDeviceDescriptor.colorants,
+      usesCIEColor: configuration?.usesCIEColor ?? false
+    )
+  }
+
+  private func initialColor(for configuration: GraphicsPageDeviceConfiguration) async throws -> InitialColor {
+    try await initialColor(
+      colorants: configuration.colorants,
+      usesCIEColor: configuration.usesCIEColor
+    )
+  }
+
+  private func initialColor(
+    colorants: GraphicsColorantConfiguration,
+    usesCIEColor: Bool
+  ) async throws -> InitialColor {
     let source: PostScriptColorSpace = switch colorants.processModel {
     case .deviceGray:
       .deviceGray(nil)
@@ -292,15 +310,15 @@ extension Context {
     case .deviceN:
       .deviceGray(nil)
     }
-    let selection = try await Operators.selectColorSpace(source, context: self)
+    let selection = try await Operators.selectColorSpace(
+      source,
+      usesCIEColor: usesCIEColor,
+      availableColorants: Set(colorants.availableColorants.map(\.name)),
+      context: self
+    )
     let components = source.initialComponents
     let paint = try await Operators.resolveColor(components, in: selection, context: self)
     return InitialColor(selection: selection, components: components, paint: Operators.graphicsPaint(paint))
-  }
-
-  private func selectInitialColor(for _: GraphicsColorantConfiguration) async throws {
-    let initial = try await initialColor()
-    apply(initial, to: &graphicsState)
   }
 
   private func apply(_ initial: InitialColor, to state: inout GraphicsCanonicalState) {

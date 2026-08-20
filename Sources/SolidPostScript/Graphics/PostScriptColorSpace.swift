@@ -1,9 +1,9 @@
 import Foundation
 import SolidColor
 
-indirect enum PostScriptColorSpace: Sendable {
-  struct CIE: Sendable {
-    enum InitialTransform: Sendable {
+indirect enum PostScriptColorSpace: Sendable, Hashable {
+  struct CIE: Sendable, Hashable {
+    enum InitialTransform: Sendable, Hashable {
       case matrix([Double])
       case lookup(inputRange: [ColorComponentRange], table: ColorLookupTable)
     }

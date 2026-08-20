@@ -9,6 +9,21 @@ import SolidPostScriptCoreText
 @Suite
 struct CoreGraphicsImageTargetTests {
 
+  @Test func useCIEColorRemapsDevicePaintThroughCoreGraphics() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      /DefaultRGB [/CIEBasedABC << /WhitePoint [1 1 1]
+        /MatrixABC [0 0 0 0 0 0 0 0 0] >>]
+        /ColorSpace defineresource pop
+      << /UseCIEColor true >> setpagedevice
+      1 0 0 setrgbcolor 0 0 10 10 rectfill showpage
+      """,
+      to: CoreGraphicsImageTarget(pixelWidth: 10, pixelHeight: 10)
+    )
+
+    #expect(try gray(atX: 5, y: 5, in: #require(result.output.first)) < 0.01)
+  }
+
   @Test func coreTextSessionRendersInterpreterSelectedHostGlyphs() async throws {
     let result = try await Interpreter.render(
       content: "/Helvetica findfont 30 scalefont setfont 5 10 moveto (A) show showpage",

@@ -11,6 +11,7 @@ struct FormCacheKey: Sendable, Hashable {
   let paintProcedureRevision: UInt64
   let device: GraphicsDeviceDescriptor
   let savedState: GraphicsStateSnapshot
+  let colorSelectionFingerprint: Int
 }
 
 final class FormCache: Sendable {

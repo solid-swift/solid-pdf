@@ -6,6 +6,21 @@ import SolidRaster
 import Testing
 
 @Suite struct RasterImageTargetTests {
+  @Test func useCIEColorRemapsDevicePaintThroughNativeRaster() async throws {
+    let result = try await Interpreter.render(
+      content: """
+      /DefaultRGB [/CIEBasedABC << /WhitePoint [1 1 1]
+        /MatrixABC [0 0 0 0 0 0 0 0 0] >>]
+        /ColorSpace defineresource pop
+      << /UseCIEColor true >> setpagedevice
+      1 0 0 setrgbcolor 0 0 10 10 rectfill showpage
+      """,
+      to: RasterImageTarget(pixelWidth: 10, pixelHeight: 10)
+    )
+
+    #expect(try gray(x: 5, y: 5, image: #require(result.output.first)) < 0.01)
+  }
+
   @Test func type3GlyphDisplayListsRenderThroughNativeRaster() async throws {
     let result = try await Interpreter.render(
       content: """

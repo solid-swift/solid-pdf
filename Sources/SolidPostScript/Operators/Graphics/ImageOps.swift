@@ -21,7 +21,7 @@ extension Operators {
         _ = try context.operands.pop()
         specification = try imageDictionary(dictionary, mask: false, context: context)
       } else {
-        specification = try separateImageOperands(context: context)
+        specification = try await separateImageOperands(context: context)
       }
       try await paintImage(specification, context: context)
     }
@@ -79,13 +79,21 @@ extension Operators {
       let width = Int(try context.operands.pop().value(as: IntegerValue.self).value)
       try validateSameSourceTypes(sources)
       let decode = Array(repeating: [0.0, 1.0], count: componentCount).flatMap { $0 }
+      let sourceColorSpace: PostScriptColorSpace = switch colorSpace {
+      case .deviceGray: .deviceGray(nil)
+      case .deviceRGB: .deviceRGB(nil)
+      case .deviceCMYK: .deviceCMYK(nil)
+      }
+      let selection = try await selectColorSpace(sourceColorSpace, context: context)
       try await paintImage(
         ImageSpecification(
           width: width,
           height: height,
           bitsPerComponent: bits,
           imageMatrix: matrix,
-          kind: .color(colorSpace),
+          kind: selection.hasIdentityDeviceRoute ? .color(colorSpace) : .color(.deviceRGB),
+          sourceColorSpace: sourceColorSpace,
+          colorSelection: selection.hasIdentityDeviceRoute ? nil : selection,
           decode: decode,
           interpolate: false,
           sources: sources,
@@ -103,6 +111,7 @@ extension Operators {
     let imageMatrix: GraphicsMatrix
     let kind: GraphicsImageKind
     let sourceColorSpace: PostScriptColorSpace?
+    let colorSelection: PostScriptColorSelection?
     let decode: [Double]
     let interpolate: Bool
     var sources: [ImageDataSource]
@@ -117,6 +126,7 @@ extension Operators {
       imageMatrix: GraphicsMatrix,
       kind: GraphicsImageKind,
       sourceColorSpace: PostScriptColorSpace? = nil,
+      colorSelection: PostScriptColorSelection? = nil,
       decode: [Double],
       interpolate: Bool,
       sources: [ImageDataSource],
@@ -141,6 +151,7 @@ extension Operators {
       self.imageMatrix = imageMatrix
       self.kind = kind
       self.sourceColorSpace = sourceColorSpace
+      self.colorSelection = colorSelection
       self.decode = decode
       self.interpolate = interpolate
       self.sources = sources
@@ -271,18 +282,22 @@ extension Operators {
     }
   }
 
-  static func separateImageOperands(context: isolated Context) throws -> ImageSpecification {
+  static func separateImageOperands(context: isolated Context) async throws -> ImageSpecification {
     let source = try ImageDataSource(context.operands.pop())
     let matrix = try readMatrix(context.operands.pop())
     let bits = Int(try context.operands.pop().value(as: IntegerValue.self).value)
     let height = Int(try context.operands.pop().value(as: IntegerValue.self).value)
     let width = Int(try context.operands.pop().value(as: IntegerValue.self).value)
+    let sourceColorSpace = PostScriptColorSpace.deviceGray(nil)
+    let selection = try await selectColorSpace(sourceColorSpace, context: context)
     return try ImageSpecification(
       width: width,
       height: height,
       bitsPerComponent: bits,
       imageMatrix: matrix,
-      kind: .color(.deviceGray),
+      kind: selection.hasIdentityDeviceRoute ? .color(.deviceGray) : .color(.deviceRGB),
+      sourceColorSpace: sourceColorSpace,
+      colorSelection: selection.hasIdentityDeviceRoute ? nil : selection,
       decode: [0, 1],
       interpolate: false,
       sources: [source],
@@ -329,24 +344,25 @@ extension Operators {
       ?? false
     let kind: GraphicsImageKind
     let sourceColorSpace: PostScriptColorSpace?
+    let colorSelection: PostScriptColorSelection?
     if mask {
       kind = .mask(context.graphicsState.paint)
       sourceColorSpace = nil
+      colorSelection = nil
     } else {
       if case .pattern = context.graphicsState.colorSpace { throw Error.undefined }
-      switch context.graphicsState.colorSpace {
+      let selection = context.graphicsState.colorSelection
+      sourceColorSpace = selection.source
+      colorSelection = selection.hasIdentityDeviceRoute ? nil : selection
+      switch selection.source {
       case .deviceGray:
-        kind = .color(.deviceGray)
-        sourceColorSpace = nil
+        kind = selection.hasIdentityDeviceRoute ? .color(.deviceGray) : .color(.deviceRGB)
       case .deviceRGB:
         kind = .color(.deviceRGB)
-        sourceColorSpace = nil
       case .deviceCMYK:
-        kind = .color(.deviceCMYK)
-        sourceColorSpace = nil
+        kind = selection.hasIdentityDeviceRoute ? .color(.deviceCMYK) : .color(.deviceRGB)
       default:
         kind = .color(.deviceRGB)
-        sourceColorSpace = context.graphicsState.colorSpace
       }
     }
     guard !mask || (!multiple && bits == 1) else { throw Error.rangeCheck }
@@ -370,6 +386,7 @@ extension Operators {
       imageMatrix: matrix,
       kind: kind,
       sourceColorSpace: sourceColorSpace,
+      colorSelection: colorSelection,
       decode: decode,
       interpolate: interpolate,
       sources: sources,
@@ -898,14 +915,14 @@ extension Operators {
     specification: ImageSpecification,
     context: isolated Context
   ) async throws -> ImageRow {
-    guard let sourceSpace = specification.sourceColorSpace else {
+    guard let selection = specification.colorSelection else {
       return ImageRow(components: components, sourceComponents: nil, rawComponents: rawComponents)
     }
     var alternative: [Float] = []
     alternative.reserveCapacity(specification.width * 3)
-    for offset in stride(from: 0, to: components.count, by: sourceSpace.componentCount) {
-      let source = components[offset..<(offset + sourceSpace.componentCount)].map(Double.init)
-      let resolved = try await resolveColor(source, in: sourceSpace, context: context)
+    for offset in stride(from: 0, to: components.count, by: selection.source.componentCount) {
+      let source = components[offset..<(offset + selection.source.componentCount)].map(Double.init)
+      let resolved = try await resolveColor(source, in: selection, context: context)
       let rgb = resolved.rgb
       alternative.append(Float(rgb.red))
       alternative.append(Float(rgb.green))

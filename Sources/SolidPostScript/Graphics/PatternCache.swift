@@ -8,6 +8,7 @@ struct PatternCacheKey: Sendable, Hashable {
   let matrix: GraphicsMatrix
   let device: GraphicsDeviceDescriptor
   let savedState: GraphicsStateSnapshot
+  let colorSelectionFingerprint: Int
 }
 
 final class PatternCache: Sendable {

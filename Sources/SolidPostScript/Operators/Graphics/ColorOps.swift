@@ -84,7 +84,7 @@ extension Operators {
         let paint = try await resolvePattern(
           pattern,
           dictionary: dictionary,
-          underlying: underlying,
+          underlying: context.graphicsState.colorSelection.patternUnderlyingSelection,
           components: components,
           context: context
         )
@@ -445,12 +445,26 @@ extension Operators {
   ) async throws -> PostScriptColorSelection {
     let available = availableColorants(in: context)
     let usesCIEColor = context.graphicsState.device.configuration?.usesCIEColor ?? false
+    return try await selectColorSpace(
+      source,
+      usesCIEColor: usesCIEColor,
+      availableColorants: available,
+      context: context
+    )
+  }
+
+  static func selectColorSpace(
+    _ source: PostScriptColorSpace,
+    usesCIEColor: Bool,
+    availableColorants: Set<String>,
+    context: isolated Context
+  ) async throws -> PostScriptColorSelection {
     return PostScriptColorSelection(
       source: source,
       route: try await selectColorRoute(
         source,
         usesCIEColor: usesCIEColor,
-        availableColorants: available,
+        availableColorants: availableColorants,
         context: context
       )
     )

@@ -269,6 +269,33 @@ struct RasterSeparationTargetTests {
     #expect(page.plates[0].tint == page.plates[2].tint)
   }
 
+  @Test func directSpotBypassesDefaultAlternativeRemapping() async throws {
+    let result = try await Interpreter.render(
+      content: """
+        /DefaultCMYK [/DeviceCMYK] /ColorSpace defineresource pop
+        << /ProcessColorModel /DeviceCMYK /UseCIEColor true
+           /SeparationColorNames [/Varnish] /SeparationOrder [/Varnish]
+        >> setpagedevice
+        /DefaultCMYK /ColorSpace undefineresource
+        /called false def
+        [/Separation /Varnish /DeviceCMYK
+          { /called true store 0 0 0 0 }] setcolorspace
+        .5 setcolor
+        /DefaultCMYK [/DeviceCMYK] /ColorSpace defineresource pop
+        0 0 1 1 rectfill showpage
+        called
+      """,
+      to: smallTarget(width: 1, height: 1)
+    )
+    let values = try await result.context.results()
+    let called = try #require(values.first).value(as: BooleanValue.self)
+    let page = try #require(result.output.first)
+
+    #expect(!called.value)
+    #expect(page.plates.map(\.colorant) == ["Varnish"])
+    #expect(page.plates[0].tint.data[0] == 128)
+  }
+
   @Test func stencilImagesApplyPaintTintAndMaskCoverage() async throws {
     let result = try await Interpreter.render(
       content: """

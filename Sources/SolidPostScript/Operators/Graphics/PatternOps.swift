@@ -83,22 +83,28 @@ extension Operators {
         : 1
 
       let underlying: PostScriptColorSpace?
+      let underlyingSelection: PostScriptColorSelection?
       let components: [Double]
       switch context.graphicsState.colorSpace {
       case .pattern(_, let base):
         underlying = base
+        underlyingSelection = context.graphicsState.colorSelection.patternUnderlyingSelection
         components = context.graphicsState.colorComponents
       default:
         underlying = paintType == 2 ? context.graphicsState.colorSpace : nil
+        underlyingSelection = paintType == 2 ? context.graphicsState.colorSelection : nil
         components = paintType == 2 ? context.graphicsState.colorComponents : []
       }
       let source = try makePatternColorSpaceObject(underlying, context: context)
       let space = PostScriptColorSpace.pattern(source: source, underlying: underlying)
-      let selection = try await selectColorSpace(space, context: context)
+      let selection = PostScriptColorSelection(
+        source: space,
+        route: .pattern(underlying: underlyingSelection?.route)
+      )
       let paint = try await resolvePattern(
         pattern,
         dictionary: dictionary,
-        underlying: underlying,
+        underlying: underlyingSelection,
         components: components,
         context: context
       )
@@ -130,7 +136,7 @@ extension Operators {
   static func resolvePattern(
     _ pattern: Object,
     dictionary: DictionaryValue,
-    underlying: PostScriptColorSpace?,
+    underlying: PostScriptColorSelection?,
     components: [Double],
     context: isolated Context
   ) async throws -> GraphicsPatternPaint {
@@ -295,7 +301,8 @@ extension Operators {
       xuid: xuid,
       matrix: matrix,
       device: context.graphicsDeviceDescriptor,
-      savedState: savedState.snapshot
+      savedState: savedState.snapshot,
+      colorSelectionFingerprint: savedState.colorSelection.cacheFingerprint
     )
   }
 

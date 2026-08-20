@@ -162,7 +162,8 @@ extension Operators {
       paintProcedureIdentity: usesXUID ? nil : definition.paintProcedureIdentity,
       paintProcedureRevision: usesXUID ? 0 : definition.paintProcedureRevision,
       device: context.graphicsDeviceDescriptor,
-      savedState: state.replacingDevice(cacheDevice)
+      savedState: state.replacingDevice(cacheDevice),
+      colorSelectionFingerprint: context.graphicsState.colorSelection.cacheFingerprint
     )
   }
 }

@@ -66,10 +66,12 @@ extension Operators {
 
   private struct ShadingCommon {
     let type: Int
-    let colorSpace: PostScriptColorSpace
+    let colorSelection: PostScriptColorSelection
     let background: GraphicsPaint?
     let bounds: GraphicsRect?
     let antialias: Bool
+
+    var colorSpace: PostScriptColorSpace { colorSelection.source }
   }
 
   private struct ShadingFunctions {
@@ -163,13 +165,14 @@ extension Operators {
     guard (1...7).contains(type) else { throw Error.rangeCheck }
     let colorSpace = try await parseColorSpace(dictionary.object(forKey: "ColorSpace"), context: context)
     if case .pattern = colorSpace { throw Error.rangeCheck }
+    let colorSelection = try await selectColorSpace(colorSpace, context: context)
     let hasFunction = try dictionary.object(forKeyIfExists: "Function") != nil
     if hasFunction, case .indexed = colorSpace { throw Error.rangeCheck }
     let background: GraphicsPaint?
     if includeBackground, let value = try dictionary.object(forKeyIfExists: "Background") {
       let components = try numericArray(value)
       guard components.count == colorSpace.componentCount else { throw Error.rangeCheck }
-      background = .color(try await resolveColor(components, in: colorSpace, context: context))
+      background = graphicsPaint(try await resolveColor(components, in: colorSelection, context: context))
     } else {
       background = nil
     }
@@ -185,7 +188,7 @@ extension Operators {
     let antialias = try dictionary.objectValue(forKeyIfExists: "AntiAlias", as: BooleanValue.self)?.value ?? false
     return ShadingCommon(
       type: type,
-      colorSpace: colorSpace,
+      colorSelection: colorSelection,
       background: background,
       bounds: bounds,
       antialias: antialias
@@ -233,7 +236,7 @@ extension Operators {
     context: isolated Context
   ) async throws -> GraphicsPaint {
     guard components.count == common.colorSpace.componentCount else { throw Error.rangeCheck }
-    return .color(try await resolveColor(components, in: common.colorSpace, context: context))
+    return graphicsPaint(try await resolveColor(components, in: common.colorSelection, context: context))
   }
 
   private static func compileFunctionShading(

@@ -2,7 +2,7 @@ import Foundation
 
 /// A language-visible color space paired with the route selected for device realization.
 struct PostScriptColorSelection: Sendable {
-  indirect enum Route: Sendable {
+  indirect enum Route: Sendable, Hashable {
     case colorSpace(PostScriptColorSpace)
     case indexed(base: Self, maximumIndex: Int, lookup: Object)
     case directColorants(space: GraphicsColorSpaceDescription, names: [String])
@@ -40,6 +40,36 @@ struct PostScriptColorSelection: Sendable {
   let route: Route
 
   var retainedObjects: [Object] { source.retainedObjects + route.retainedObjects }
+
+  var cacheFingerprint: Int {
+    var hasher = Hasher()
+    hasher.combine(source)
+    hasher.combine(route)
+    for object in retainedObjects {
+      hasher.combine(Self.revision(of: object))
+    }
+    return hasher.finalize()
+  }
+
+  var hasIdentityDeviceRoute: Bool {
+    switch (source, route) {
+    case (.deviceGray, .colorSpace(.deviceGray)),
+         (.deviceRGB, .colorSpace(.deviceRGB)),
+         (.deviceCMYK, .colorSpace(.deviceCMYK)):
+      true
+    default:
+      false
+    }
+  }
+
+  var patternUnderlyingSelection: Self? {
+    guard case .pattern(_, let underlyingSource) = source,
+      let underlyingSource,
+      case .pattern(let underlyingRoute) = route,
+      let underlyingRoute
+    else { return nil }
+    return Self(source: underlyingSource, route: underlyingRoute)
+  }
 
   static func direct(
     _ source: PostScriptColorSpace,
@@ -88,6 +118,15 @@ struct PostScriptColorSelection: Sendable {
       return .pattern(
         underlying: underlying.map { directRoute(for: $0, availableColorants: availableColorants) }
       )
+    }
+  }
+
+  private static func revision(of object: Object) -> UInt64 {
+    switch object.value {
+    case let value as ArrayValue: value.revision
+    case let value as PackedArrayValue: value.revision
+    case let value as DictionaryValue: value.revision
+    default: 0
     }
   }
 }
