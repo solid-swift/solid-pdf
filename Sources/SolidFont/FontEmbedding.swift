@@ -24,6 +24,8 @@ public struct FontEmbeddingPermissions: Sendable, Hashable {
 public struct FontEmbeddingPlan: Sendable, Hashable {
   /// How the asset must be represented in a document.
   public enum Strategy: Sendable, Hashable {
+    /// Embed a rebuilt font program containing the selected glyph closure.
+    case subsetFont
     /// Embed the complete original font program.
     case completeFont
     /// Build a document-native font from portable glyph programs.
@@ -38,13 +40,22 @@ public struct FontEmbeddingPlan: Sendable, Hashable {
   public let subsetPrefix: String
   /// Glyph identifiers included by the caller.
   public let glyphs: [UInt32]
+  /// The rebuilt subset when `strategy` is `subsetFont`.
+  public let subset: FontSubset?
 
   /// Creates a font embedding plan.
-  public init(strategy: Strategy, data: Data?, subsetPrefix: String, glyphs: [UInt32]) {
+  public init(
+    strategy: Strategy,
+    data: Data?,
+    subsetPrefix: String,
+    glyphs: [UInt32],
+    subset: FontSubset? = nil
+  ) {
     self.strategy = strategy
     self.data = data
     self.subsetPrefix = subsetPrefix
     self.glyphs = glyphs
+    self.subset = subset
   }
 }
 
@@ -78,7 +89,52 @@ public enum FontSubsetter {
     guard permissions.allowsEmbedding, !permissions.bitmapOnly, let data = asset.data else {
       return FontEmbeddingPlan(strategy: .portableGlyphs, data: nil, subsetPrefix: prefix, glyphs: glyphs)
     }
+    if permissions.allowsSubsetting,
+      let subset = try? subset(asset, request: FontSubsetRequest(glyphIndexes: glyphs))
+    {
+      return FontEmbeddingPlan(
+        strategy: .subsetFont,
+        data: subset.data,
+        subsetPrefix: prefix,
+        glyphs: glyphs,
+        subset: subset
+      )
+    }
     return FontEmbeddingPlan(strategy: .completeFont, data: data, subsetPrefix: prefix, glyphs: glyphs)
+  }
+
+  /// Rebuilds one font asset with only the requested glyph closure.
+  public static func subset(
+    _ asset: FontAsset,
+    request: FontSubsetRequest,
+    limits: FontParsingLimits = .default
+  ) throws -> FontSubset {
+    guard let data = asset.data else { throw FontError.invalidData }
+    guard data.count <= limits.maximumDataBytes else { throw FontError.limitExceeded }
+    let prefix = subsetPrefix(asset: asset, glyphs: request.glyphIndexes)
+    switch asset.format {
+    case .compactFontFormat:
+      return try CFFFontSubsetter.subset(
+        data: data,
+        faceIndex: asset.faceIndex,
+        descriptor: asset.descriptor,
+        request: request,
+        prefix: prefix,
+        limits: limits
+      )
+    case .sfnt:
+      throw FontError.unsupportedFormat
+    case .type1:
+      return try Type1FontSubsetter.subset(
+        data: data,
+        descriptor: asset.descriptor,
+        request: request,
+        prefix: prefix,
+        limits: limits
+      )
+    case .type3, .chameleon:
+      throw FontError.unsupportedFormat
+    }
   }
 
   private static func subsetPrefix(asset: FontAsset, glyphs: [UInt32]) -> String {
