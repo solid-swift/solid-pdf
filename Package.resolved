@@ -1,5 +1,5 @@
 {
-  "originHash" : "87eb24eb63aa39e54bc3269e331fd28fce827bbff908c7a7af468dc336e6466f",
+  "originHash" : "af086c6d887972d1a928473dc6bbf18c7634c845c2dc9d387c25cb7c7d7ef235",
   "pins" : [
     {
       "identity" : "benchmark",
@@ -42,7 +42,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/solid-swift/solid-foundation.git",
       "state" : {
-        "revision" : "0d229d759279998ca1e865a7ab654cea16275819"
+        "revision" : "b9faad05b471afd5bfe3ce4512e10addca96ea3c"
       }
     },
     {

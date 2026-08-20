@@ -15,18 +15,22 @@ let package = Package(
     .library(name: "SolidColor", targets: ["SolidColor"]),
     .library(name: "SolidFont", targets: ["SolidFont"]),
     .library(name: "SolidRaster", targets: ["SolidRaster"]),
+    .library(name: "SolidRasterPNG", targets: ["SolidRasterPNG"]),
     .library(name: "SolidPostScript", targets: ["SolidPostScript"]),
+    .library(name: "SolidPostScriptDocument", targets: ["SolidPostScriptDocument"]),
     .library(name: "SolidPostScriptRaster", targets: ["SolidPostScriptRaster"]),
     .library(name: "SolidPostScriptCoreGraphics", targets: ["SolidPostScriptCoreGraphics"]),
     .library(name: "SolidPostScriptCoreText", targets: ["SolidPostScriptCoreText"]),
     .library(name: "SolidPostScriptFreeType", targets: ["SolidPostScriptFreeType"]),
     .library(name: "SolidPostScriptPlutoVG", targets: ["SolidPostScriptPlutoVG"]),
+    .executable(name: "solid-ps", targets: ["solid-ps"]),
   ],
   dependencies: [
     .package(
       url: "https://github.com/solid-swift/solid-foundation.git",
-      revision: "0d229d759279998ca1e865a7ab654cea16275819"
+      revision: "b9faad05b471afd5bfe3ce4512e10addca96ea3c"
     ),
+    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.0"),
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
   ],
   targets: [
@@ -55,6 +59,19 @@ let package = Package(
     .testTarget(
       name: "SolidRasterTests",
       dependencies: ["SolidRaster"],
+      plugins: lintPlugins
+    ),
+    .target(
+      name: "SolidRasterPNG",
+      dependencies: [
+        "SolidRaster",
+        .product(name: "SolidIO", package: "solid-foundation"),
+      ],
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidRasterPNGTests",
+      dependencies: ["SolidRaster", "SolidRasterPNG"],
       plugins: lintPlugins
     ),
     .target(
@@ -130,6 +147,21 @@ let package = Package(
       dependencies: ["SolidPostScript", "SolidRaster"],
       plugins: lintPlugins
     ),
+    .target(
+      name: "SolidPostScriptDocument",
+      dependencies: ["SolidPostScript", "SolidPostScriptRaster", "SolidRaster"],
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidPostScriptDocumentTests",
+      dependencies: [
+        "SolidPostScript",
+        "SolidPostScriptDocument",
+        "SolidPostScriptRaster",
+        .product(name: "SolidIO", package: "solid-foundation"),
+      ],
+      plugins: lintPlugins
+    ),
     .testTarget(
       name: "SolidPostScriptRasterTests",
       dependencies: [
@@ -180,6 +212,21 @@ let package = Package(
         "SolidPostScript",
         "SolidPostScriptCoreGraphics",
         "SolidPostScriptPlutoVG",
+      ],
+      plugins: lintPlugins
+    ),
+    .executableTarget(
+      name: "solid-ps",
+      dependencies: [
+        "SolidPostScript",
+        "SolidPostScriptCoreText",
+        "SolidPostScriptDocument",
+        "SolidPostScriptFreeType",
+        "SolidPostScriptRaster",
+        "SolidRaster",
+        "SolidRasterPNG",
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+        .product(name: "SolidIO", package: "solid-foundation"),
       ],
       plugins: lintPlugins
     ),
