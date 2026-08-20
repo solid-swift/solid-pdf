@@ -32,6 +32,7 @@ where
     private var pixelWidth: Int
     private var pixelHeight: Int
     private var descriptor: GraphicsDeviceDescriptor
+    private var logicalMediaBounds: GraphicsRect
     private let colorSession: ColorEngine.Session
     private let deviceRenderingSession: NativeGraphicsDeviceRenderingSession
     private var rasterMatrix: GraphicsMatrix
@@ -62,6 +63,7 @@ where
       self.pixelWidth = pixelWidth
       self.pixelHeight = pixelHeight
       self.descriptor = descriptor
+      logicalMediaBounds = descriptor.mediaBounds
       self.colorSession = colorSession
       self.deviceRenderingSession = deviceRenderingSession
       self.background = background
@@ -192,6 +194,7 @@ where
       pixelWidth = width
       pixelHeight = height
       descriptor = device.descriptor
+      logicalMediaBounds = device.descriptor.mediaBounds
       rasterMatrix = Self.makeRasterMatrix(device.descriptor)
       canvas = nil
       cachedGraphicsClip = nil
@@ -241,6 +244,31 @@ where
       let output = pages
       pages.removeAll(keepingCapacity: true)
       return output
+    }
+
+    package func renderCapturedPage(
+      _ effects: [GraphicsEffect],
+      sourceDevice: GraphicsDeviceDescriptor,
+      scale: Double
+    ) throws -> RasterImage {
+      guard lifecycle == .active, scale.isFinite, scale > 0, canvas == nil else {
+        throw SolidPostScript.Error.ioError
+      }
+      logicalMediaBounds = sourceDevice.mediaBounds
+      rasterMatrix = GraphicsMatrix(
+        a: scale,
+        b: 0,
+        c: 0,
+        d: -scale,
+        tx: -sourceDevice.mediaBounds.x * scale,
+        ty: sourceDevice.mediaBounds.maxY * scale
+      )
+      cachedGraphicsClip = nil
+      cachedRasterClip = nil
+      for effect in effects { try replayFormEffect(effect, depth: 0) }
+      let current = try takeCanvas()
+      canvas = nil
+      return try current.finish()
     }
 
     /// Abandons the render and all transmitted output.
@@ -631,7 +659,7 @@ where
         effectRule = .winding
         effectState = state
       case .erase(let state):
-        effectPath = GraphicsPath.rectangle(descriptor.mediaBounds).transformed(by: translation)
+        effectPath = GraphicsPath.rectangle(logicalMediaBounds).transformed(by: translation)
         effectRule = .winding
         effectState = state
       case .image:
@@ -812,7 +840,7 @@ where
         try canvas.setClip(try rasterClip(effectiveClip))
         if let background = shading.background {
           try canvas.fill(
-            GraphicsPath.rectangle(descriptor.mediaBounds).transformed(by: rasterMatrix).rasterPath,
+            GraphicsPath.rectangle(logicalMediaBounds).transformed(by: rasterMatrix).rasterPath,
             rule: .winding,
             paint: try colorSession.resolve(background, deviceRendering: state.deviceRendering),
             deviceRendering: deviceProgram
@@ -837,7 +865,7 @@ where
         ty: origin.y
       )
       guard let inverse = lattice.inverted else { throw SolidPostScript.Error.ioError }
-      let media = descriptor.mediaBounds
+      let media = logicalMediaBounds
       let coordinates = [
         GraphicsPoint(x: media.x, y: media.y),
         GraphicsPoint(x: media.maxX, y: media.y),
@@ -887,7 +915,7 @@ where
 
     private func erasePage() throws {
       let clip = GraphicsClip(imageableBounds: descriptor.imageableBounds)
-      let mediaPath = GraphicsPath.rectangle(descriptor.mediaBounds).transformed(by: rasterMatrix).rasterPath
+      let mediaPath = GraphicsPath.rectangle(logicalMediaBounds).transformed(by: rasterMatrix).rasterPath
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(clip))
         try canvas.fill(mediaPath, rule: .winding, paint: .solid(background))

@@ -19,6 +19,7 @@ let package = Package(
     .library(name: "SolidRasterPNG", targets: ["SolidRasterPNG"]),
     .library(name: "SolidPostScript", targets: ["SolidPostScript"]),
     .library(name: "SolidPostScriptDocument", targets: ["SolidPostScriptDocument"]),
+    .library(name: "SolidPostScriptPDF", targets: ["SolidPostScriptPDF"]),
     .library(name: "SolidPostScriptRaster", targets: ["SolidPostScriptRaster"]),
     .library(name: "SolidPostScriptCoreGraphics", targets: ["SolidPostScriptCoreGraphics"]),
     .library(name: "SolidPostScriptCoreText", targets: ["SolidPostScriptCoreText"]),
@@ -163,6 +164,16 @@ let package = Package(
     .target(
       name: "SolidPostScriptDocument",
       dependencies: ["SolidPostScript", "SolidPostScriptRaster", "SolidRaster"],
+      plugins: lintPlugins
+    ),
+    .target(
+      name: "SolidPostScriptPDF",
+      dependencies: ["SolidPDF", "SolidPostScript", "SolidPostScriptRaster", "SolidRaster"],
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidPostScriptPDFTests",
+      dependencies: ["SolidPDF", "SolidPostScript", "SolidPostScriptPDF"],
       plugins: lintPlugins
     ),
     .testTarget(

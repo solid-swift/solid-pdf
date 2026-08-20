@@ -124,6 +124,9 @@ struct PDFObjectSerializer {
   private static func real(_ value: Double) throws -> String {
     guard value.isFinite else { throw PDFError.invalidObject }
     if value == 0 { return "0" }
+    if value.rounded() == value, value >= Double(Int64.min), value <= Double(Int64.max) {
+      return String(Int64(value))
+    }
     let source = String(value)
     guard let exponentIndex = source.firstIndex(where: { $0 == "e" || $0 == "E" }) else {
       return source

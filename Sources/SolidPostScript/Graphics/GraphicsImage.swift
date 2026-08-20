@@ -39,6 +39,10 @@ public struct GraphicsImageDescriptor: Sendable, Hashable {
   public let kind: GraphicsImageKind
   /// The semantic PostScript source space when samples were converted to an alternative device space.
   public let sourceColorSpace: GraphicsColorSpaceDescription?
+  /// The original source precision before color conversion.
+  public let sourceBitsPerComponent: Int
+  /// Immutable target-facing realization data for the selected source space.
+  public let colorRealization: GraphicsColorSpaceRealization?
   /// The transformation from image space to device space.
   public let imageToDevice: GraphicsMatrix
   /// Whether the target should interpolate between samples.
@@ -52,6 +56,8 @@ public struct GraphicsImageDescriptor: Sendable, Hashable {
     height: Int,
     kind: GraphicsImageKind,
     sourceColorSpace: GraphicsColorSpaceDescription? = nil,
+    sourceBitsPerComponent: Int = 8,
+    colorRealization: GraphicsColorSpaceRealization? = nil,
     imageToDevice: GraphicsMatrix,
     interpolate: Bool = false,
     mask: GraphicsImageMaskDescriptor? = nil
@@ -60,6 +66,8 @@ public struct GraphicsImageDescriptor: Sendable, Hashable {
     self.height = height
     self.kind = kind
     self.sourceColorSpace = sourceColorSpace
+    self.sourceBitsPerComponent = sourceBitsPerComponent
+    self.colorRealization = colorRealization
     self.imageToDevice = imageToDevice
     self.interpolate = interpolate
     self.mask = mask
