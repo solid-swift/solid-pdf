@@ -74,6 +74,7 @@ final class PostScriptDeviceRecord: Sendable {
     let current = state.withLock { $0 }
     return GraphicsDeviceSnapshot(
       identifier: identifier,
+      outputDeviceIdentifier: current.configuration?.outputDeviceIdentifier ?? .virtual,
       kind: kind,
       descriptor: current.configuration?.descriptor ?? nullDescriptor ?? .letter,
       pageNumber: current.pageNumber,

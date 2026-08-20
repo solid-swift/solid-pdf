@@ -218,6 +218,20 @@ extension Operators {
         entries.append((.literalName("OutputDevice"), .literalName(outputDevice)))
       }
       if context.graphicsPageDeviceSession?.capabilities.physical != .virtual {
+        entries.append((
+          .literalName("OutputAttributes"),
+          try outputAttributesDictionary(configuration.outputDestinations, vm: vm, context: context)
+        ))
+        entries.append((
+          .literalName("OutputType"),
+          byteStringOrNull(configuration.outputType, vm: vm)
+        ))
+        entries.append((.literalName("Collate"), .boolean(configuration.delivery.collates)))
+        entries.append((.literalName("Jog"), .integer(Int32(configuration.delivery.jog.rawValue))))
+        entries.append((
+          .literalName("OutputFaceUp"),
+          .boolean(configuration.delivery.outputFace == .faceUp)
+        ))
         entries.append((.literalName("RollFedMedia"), .boolean(configuration.delivery.isRollFed)))
         entries.append((
           .literalName("Orientation"),
@@ -355,6 +369,24 @@ extension Operators {
         )
       }
     }
+    var outputDestinations = changedOutputDevice
+      ? selectedProfile.outputDestinations
+      : currentConfiguration.outputDestinations
+    if let outputAttributes = entries.removeValue(forKey: "OutputAttributes") {
+      if physical.supportsOutputSelection {
+        outputDestinations = try mergedOutputDestinations(
+          outputAttributes,
+          current: outputDestinations
+        )
+      } else {
+        try recover(
+          name: "OutputAttributes",
+          value: outputAttributes,
+          policies: policies,
+          into: &recovered
+        )
+      }
+    }
     var pageSize = currentConfiguration.pageSize
     var resolution = GraphicsSize(
       width: currentConfiguration.descriptor.horizontalResolution,
@@ -394,6 +426,10 @@ extension Operators {
     var advanceMedia = baseDelivery.advanceMedia
     var advanceDistance = baseDelivery.advanceDistance
     var cutMedia = baseDelivery.cutMedia
+    var outputType = changedOutputDevice ? nil : currentConfiguration.outputType
+    var collates = baseDelivery.collates
+    var jog = baseDelivery.jog
+    var outputFace = baseDelivery.outputFace
 
     for (name, value) in entries {
       do {
@@ -481,6 +517,20 @@ extension Operators {
           deferredMediaSelection = try value.value(as: BooleanValue.self).value
         case "RollFedMedia":
           rollFedMedia = try value.value(as: BooleanValue.self).value
+        case "OutputType":
+          guard physical.supportsOutputSelection else {
+            try recover(name: name, value: value, policies: policies, into: &recovered)
+            continue
+          }
+          outputType = try pageDeviceOptionalBytes(value)
+        case "Collate":
+          collates = try value.value(as: BooleanValue.self).value
+        case "Jog":
+          let raw = try value.value(as: IntegerValue.self).value
+          guard let selected = GraphicsJogMode(rawValue: Int(raw)) else { throw Error.rangeCheck }
+          jog = selected
+        case "OutputFaceUp":
+          outputFace = try value.value(as: BooleanValue.self).value ? .faceUp : .faceDown
         case "Orientation":
           let raw = try value.value(as: IntegerValue.self).value
           guard let selected = GraphicsPageOrientation(rawValue: Int(raw)) else { throw Error.rangeCheck }
@@ -621,10 +671,8 @@ extension Operators {
           traySwitch: traySwitch,
           isDeferred: deferredMediaSelection
         ),
-        outputDestinations: changedOutputDevice
-          ? selectedProfile.outputDestinations
-          : currentConfiguration.outputDestinations,
-        outputType: changedOutputDevice ? nil : currentConfiguration.outputType,
+        outputDestinations: outputDestinations,
+        outputType: outputType,
         placement: GraphicsPagePlacement(
           orientation: orientation,
           side: changedOutputDevice ? .recto : currentConfiguration.placement.side,
@@ -642,9 +690,9 @@ extension Operators {
           deferredOutputType: changedOutputDevice
             ? nil
             : currentConfiguration.delivery.deferredOutputType,
-          collates: changedOutputDevice ? false : currentConfiguration.delivery.collates,
-          outputFace: changedOutputDevice ? .faceDown : currentConfiguration.delivery.outputFace,
-          jog: changedOutputDevice ? .never : currentConfiguration.delivery.jog,
+          collates: collates,
+          outputFace: outputFace,
+          jog: jog,
           isRollFed: rollFedMedia,
           advanceMedia: advanceMedia,
           advanceDistance: advanceDistance,
@@ -766,6 +814,41 @@ extension Operators {
       )
     }
     return GraphicsMediaCatalog(sources: sources, priority: priority)
+  }
+
+  private static func mergedOutputDestinations(
+    _ requested: Object,
+    current: GraphicsOutputCatalog
+  ) throws -> GraphicsOutputCatalog {
+    if requested.value is NullValue { return .empty }
+    let dictionary = try requested.value(as: DictionaryValue.self)
+    try dictionary.access.check(.read)
+    var destinations = current.destinations
+    var priority = current.priority
+    try dictionary.forEachUnchecked { key, value in
+      if let name = key.value as? NameValue {
+        guard name.value == "Priority" else { throw Error.typeCheck }
+        priority = try pageDeviceIntegerArray(value)
+        return
+      }
+      let position = Int(try key.value(as: IntegerValue.self).value)
+      if value.value is NullValue {
+        destinations.removeValue(forKey: position)
+        return
+      }
+      let destination = try value.value(as: DictionaryValue.self)
+      try destination.access.check(.read)
+      let outputType = try destination.object(forKey: .literalName("OutputType"))
+      let type = try pageDeviceRequiredBytes(outputType)
+      let matchAll = try destination.object(forKeyIfExists: .literalName("MatchAll"))
+        .map { try $0.value(as: BooleanValue.self).value } ?? false
+      destinations[position] = GraphicsOutputDestination(
+        position: position,
+        type: type,
+        matchesAllAttributes: matchAll
+      )
+    }
+    return GraphicsOutputCatalog(destinations: destinations, priority: priority)
   }
 
   private static func recover(
@@ -1027,6 +1110,11 @@ extension Operators {
     return try string.characters(in: string.range)
   }
 
+  private static func pageDeviceRequiredBytes(_ object: Object) throws -> Data {
+    guard let value = try pageDeviceOptionalBytes(object) else { throw Error.typeCheck }
+    return value
+  }
+
   private static func pageDeviceNameOrString(_ object: Object) throws -> String {
     if let name = object.value as? NameValue { return name.value }
     if let string = object.value as? StringValue { return try string.readableString }
@@ -1111,6 +1199,39 @@ extension Operators {
     if !catalog.priority.isEmpty {
       let priority = try integerArray(catalog.priority, vm: vm, context: context)
       entries.append((.literalName("Priority"), priority))
+    }
+    return try context.makeDictionary(entries, access: .readOnly, vm: vm)
+  }
+
+  private static func outputAttributesDictionary(
+    _ catalog: GraphicsOutputCatalog,
+    vm: VM,
+    context: isolated Context
+  ) throws -> Object {
+    var entries: [(Object, Object)] = []
+    for destination in catalog.destinations.values.sorted(by: { $0.position < $1.position }) {
+      var destinationEntries: [(Object, Object)] = [
+        (.literalName("OutputType"), Object.string(
+          Array(destination.type),
+          access: .readOnly,
+          vm: vm,
+          kind: .literal
+        )),
+      ]
+      if destination.matchesAllAttributes {
+        destinationEntries.append((.literalName("MatchAll"), .boolean(true)))
+      }
+      guard let position = Object.integer(exactly: destination.position) else { throw Error.rangeCheck }
+      entries.append((
+        position,
+        try context.makeDictionary(destinationEntries, access: .readOnly, vm: vm)
+      ))
+    }
+    if !catalog.priority.isEmpty {
+      entries.append((
+        .literalName("Priority"),
+        try integerArray(catalog.priority, vm: vm, context: context)
+      ))
     }
     return try context.makeDictionary(entries, access: .readOnly, vm: vm)
   }

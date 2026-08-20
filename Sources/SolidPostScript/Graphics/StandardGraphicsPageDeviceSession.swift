@@ -64,6 +64,16 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
     self.outputDeviceProfiles = [initialProfile] + outputDeviceProfiles.filter {
       $0.resourceName != name
     }
+    let initialMediaRequest = GraphicsMediaRequest(
+      attributes: GraphicsMediaAttributes(pageSize: pageSize)
+    )
+    let initialMediaSelection = capabilities.physical.supportsMediaSelection
+      ? GraphicsMediaMatcher.select(request: initialMediaRequest, catalog: inputMedia, rollFed: false)
+        .map(GraphicsMediaSelection.selected) ?? .virtual
+      : .virtual
+    let initialDestination = capabilities.physical.supportsOutputSelection
+      ? GraphicsOutputMatcher.select(type: nil, catalog: outputDestinations)
+      : nil
     self.initialConfiguration = GraphicsPageDeviceConfiguration(
       identifier: GraphicsDeviceIdentifier(),
       pageSize: pageSize,
@@ -78,8 +88,10 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       outputDeviceIdentifier: outputDeviceIdentifier,
       outputDevice: capabilities.physical == .virtual ? nil : name,
       inputMedia: inputMedia,
-      mediaSelection: .virtual,
-      outputDestinations: outputDestinations
+      mediaRequest: initialMediaRequest,
+      mediaSelection: initialMediaSelection,
+      outputDestinations: outputDestinations,
+      delivery: GraphicsPageDeliveryConfiguration(destination: initialDestination)
     )
   }
 
@@ -221,6 +233,25 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
     unsatisfied: inout Set<String>
   ) -> GraphicsPageDeliveryConfiguration {
     var delivery = request.delivery
+    var destination = delivery.destination
+    var deferredOutputType = delivery.deferredOutputType
+    if physical.supportsOutputSelection {
+      if request.mediaRequest.isDeferred, physical.supportsDeferredSelection {
+        destination = nil
+        deferredOutputType = request.outputType
+      } else if !request.outputDestinations.destinations.isEmpty {
+        destination = GraphicsOutputMatcher.select(
+          type: request.outputType,
+          catalog: request.outputDestinations
+        )
+        deferredOutputType = nil
+        if destination == nil { unsatisfied.insert("OutputType") }
+      }
+    } else if request.outputType != nil {
+      unsatisfied.insert("OutputType")
+      destination = initialConfiguration.delivery.destination
+      deferredOutputType = initialConfiguration.delivery.deferredOutputType
+    }
     if delivery.collates, !physical.supportsCollation {
       unsatisfied.insert("Collate")
       delivery = initialConfiguration.delivery
@@ -229,7 +260,22 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       unsatisfied.insert("RollFedMedia")
       delivery = initialConfiguration.delivery
     }
-    return delivery
+    if !physical.supportsRollMedia {
+      if delivery.advanceMedia != .never { unsatisfied.insert("AdvanceMedia") }
+      if delivery.advanceDistance != 0 { unsatisfied.insert("AdvanceDistance") }
+      if delivery.cutMedia != .never { unsatisfied.insert("CutMedia") }
+    }
+    return GraphicsPageDeliveryConfiguration(
+      destination: destination,
+      deferredOutputType: deferredOutputType,
+      collates: delivery.collates,
+      outputFace: delivery.outputFace,
+      jog: delivery.jog,
+      isRollFed: delivery.isRollFed,
+      advanceMedia: delivery.advanceMedia,
+      advanceDistance: delivery.advanceDistance,
+      cutMedia: delivery.cutMedia
+    )
   }
 
   private func negotiatedPlacement(

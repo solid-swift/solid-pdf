@@ -4,6 +4,8 @@ import Foundation
 public struct GraphicsDeviceSnapshot: Sendable, Hashable {
   /// The installed device's identity.
   public let identifier: GraphicsDeviceIdentifier
+  /// Stable identity of the physical output device across installations.
+  public let outputDeviceIdentifier: GraphicsOutputDeviceIdentifier
   /// The installed device's kind.
   public let kind: GraphicsDeviceKind
   /// Geometry and rendering characteristics of the device.
@@ -26,6 +28,7 @@ public struct GraphicsDeviceSnapshot: Sendable, Hashable {
   /// Creates a device snapshot.
   public init(
     identifier: GraphicsDeviceIdentifier,
+    outputDeviceIdentifier: GraphicsOutputDeviceIdentifier = .virtual,
     kind: GraphicsDeviceKind,
     descriptor: GraphicsDeviceDescriptor,
     pageNumber: Int,
@@ -37,6 +40,7 @@ public struct GraphicsDeviceSnapshot: Sendable, Hashable {
     delivery: GraphicsPageDeliveryConfiguration = .virtual
   ) {
     self.identifier = identifier
+    self.outputDeviceIdentifier = outputDeviceIdentifier
     self.kind = kind
     self.descriptor = descriptor
     self.pageNumber = pageNumber

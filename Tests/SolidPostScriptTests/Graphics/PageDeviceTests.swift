@@ -436,4 +436,16 @@ struct PageDeviceTests {
     #expect(try values[1].value(as: IntegerValue.self).value == 0)
     #expect(try values[0].value(as: IntegerValue.self).value == 1)
   }
+
+  @Test func unsupportedPhysicalDeliveryUsesPageDevicePolicies() async throws {
+    let values = try await Interpreter.results(content: """
+      { << /Policies << /Collate 0 >> /Collate true >> setpagedevice } stopped
+      $error /errorname get
+      $error /errorinfo get 0 get
+    """)
+
+    #expect(try values[2].value(as: BooleanValue.self).value)
+    #expect(try values[1].value(as: NameValue.self).value == "configurationerror")
+    #expect(try values[0].value(as: NameValue.self).value == "Collate")
+  }
 }

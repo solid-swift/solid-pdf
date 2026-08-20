@@ -18,6 +18,8 @@ public struct GraphicsPhysicalPageDeviceCapabilities: Sendable, Hashable {
   public let supportsNegativePrint: Bool
   /// Whether document collation is supported.
   public let supportsCollation: Bool
+  /// Whether physical output-destination matching is supported.
+  public let supportsOutputSelection: Bool
   /// Whether collated sets may span compatible page-device installations.
   public let supportsCrossDeviceCollation: Bool
   /// Whether roll-media advance and cut actions are supported.
@@ -41,6 +43,7 @@ public struct GraphicsPhysicalPageDeviceCapabilities: Sendable, Hashable {
     supportsMirrorPrint: Bool = false,
     supportsNegativePrint: Bool = false,
     supportsCollation: Bool = false,
+    supportsOutputSelection: Bool = false,
     supportsCrossDeviceCollation: Bool = false,
     supportsRollMedia: Bool = false,
     supportedOrientations: Set<GraphicsPageOrientation> = [.defaultOrientation],
@@ -56,6 +59,7 @@ public struct GraphicsPhysicalPageDeviceCapabilities: Sendable, Hashable {
     self.supportsMirrorPrint = supportsMirrorPrint
     self.supportsNegativePrint = supportsNegativePrint
     self.supportsCollation = supportsCollation
+    self.supportsOutputSelection = supportsOutputSelection
     self.supportsCrossDeviceCollation = supportsCrossDeviceCollation
     self.supportsRollMedia = supportsRollMedia
     self.supportedOrientations = supportedOrientations
@@ -77,6 +81,7 @@ public struct GraphicsPhysicalPageDeviceCapabilities: Sendable, Hashable {
     supportsMirrorPrint: true,
     supportsNegativePrint: true,
     supportsCollation: true,
+    supportsOutputSelection: true,
     supportsCrossDeviceCollation: true,
     supportsRollMedia: true,
     supportedOrientations: Set(GraphicsPageOrientation.allCases),

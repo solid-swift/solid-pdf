@@ -355,6 +355,17 @@ if benchmarkEnabled {
         .plugin(name: "BenchmarkPlugin", package: "benchmark")
       ]
     ),
+    .executableTarget(
+      name: "SolidPostScriptPageDeviceBenchmark",
+      dependencies: [
+        "SolidPostScript",
+        .product(name: "Benchmark", package: "benchmark"),
+      ],
+      path: "Benchmarks/SolidPostScriptPageDeviceBenchmark",
+      plugins: [
+        .plugin(name: "BenchmarkPlugin", package: "benchmark")
+      ]
+    ),
     .testTarget(
       name: "SolidRasterBenchmarkSupportTests",
       dependencies: [
