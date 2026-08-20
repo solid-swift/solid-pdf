@@ -28,7 +28,11 @@ Scripts/linux-container stop
 Scripts/linux-container remove
 ```
 
-`stop` preserves the container and volumes. `remove` deletes only the replaceable container and preserves its build, dependency, and benchmark caches; the next build recreates and starts it.
+Each checkout and target platform has one stable container identity. A matching container is reused and restarted as needed. Changing the Swift image, dependency generation, script schema, or expected mounts replaces that stable container in place while preserving its build, dependency, and benchmark volumes. Lifecycle operations are serialized per checkout and platform so concurrent build, test, benchmark, and shell invocations cannot create competing containers.
+
+The first invocation after this lifecycle change removes inactive legacy containers for the exact checkout and platform. It never migrates containers for another worktree, platform, or temporary benchmark checkout, and it refuses to replace a container with an active Docker exec session. Legacy volumes are deliberately preserved; inspect them with `docker volume ls` and remove them manually after confirming they are no longer needed.
+
+`status` reports the requested and installed configuration fingerprints, replacement need, stable mounts, and eligible legacy containers. `stop` preserves the container and volumes. `remove` deletes only the stable container and preserves its build, dependency, and benchmark caches; the next build recreates and starts it.
 
 The defaults follow the host Docker daemon's architecture and use `swift:6.3.3`. Override them when an explicit architecture or toolchain is required:
 
@@ -37,4 +41,4 @@ SOLIDPDF_LINUX_PLATFORM=linux/amd64 Scripts/linux-build
 SOLIDPDF_LINUX_SWIFT_IMAGE=swift:6.3.3-jammy Scripts/linux-test
 ```
 
-Each checkout, Swift image, and target platform receives a distinct container and set of volumes, so worktrees and cross-architecture builds do not share incompatible products or baselines. Container creation also installs the FreeType and Fontconfig development packages required by `SolidPostScriptFreeType`, plus qpdf, MuPDF, and Poppler for generated-PDF interoperability checks.
+Each checkout and target platform receives distinct stable container and volume names, so worktrees and cross-architecture builds do not share incompatible products or baselines. Swift-image and script updates reuse those volumes after replacing the container. The writable `Package.resolved` mount is refreshed whenever the checkout copy changes. Container creation also installs the FreeType and Fontconfig development packages required by `SolidPostScriptFreeType`, plus qpdf, MuPDF, and Poppler for generated-PDF interoperability checks.

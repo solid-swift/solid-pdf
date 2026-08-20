@@ -7,6 +7,8 @@ readonly SCRIPT_DIRECTORY
 REPOSITORY_ROOT="$(cd "${SCRIPT_DIRECTORY}/.." && pwd -P)"
 readonly REPOSITORY_ROOT
 readonly SWIFT_IMAGE="${SOLIDPDF_LINUX_SWIFT_IMAGE:-swift:6.3.3}"
+readonly SCRIPT_SCHEMA_VERSION="${SOLIDPDF_LINUX_SCRIPT_SCHEMA_VERSION:-6}"
+readonly DEPENDENCY_GENERATION="${SOLIDPDF_LINUX_DEPENDENCY_GENERATION:-6}"
 
 function fail() {
   echo "linux-container: $*" >&2
@@ -38,20 +40,68 @@ function normalized_identifier() {
   echo "$1" | tr '/:.' '---' | tr -cd '[:alnum:]-'
 }
 
+function checksum() {
+  printf '%s' "$1" | cksum | awk '{print $1}'
+}
+
 require_docker
 
 LINUX_PLATFORM="${SOLIDPDF_LINUX_PLATFORM:-$(default_platform)}"
 readonly LINUX_PLATFORM
-WORKSPACE_IDENTIFIER="$(printf '%s' "${REPOSITORY_ROOT}" | cksum | awk '{print $1}')"
+PLATFORM_IDENTIFIER="$(normalized_identifier "${LINUX_PLATFORM}")"
+readonly PLATFORM_IDENTIFIER
+WORKSPACE_IDENTIFIER="$(checksum "${REPOSITORY_ROOT}")"
 readonly WORKSPACE_IDENTIFIER
-CONFIGURATION_IDENTIFIER="$(normalized_identifier "${SWIFT_IMAGE}-${LINUX_PLATFORM}-fonts-pdf-v5")"
-readonly CONFIGURATION_IDENTIFIER
-readonly CONTAINER_NAME="solidpdf-${CONFIGURATION_IDENTIFIER}-${WORKSPACE_IDENTIFIER}"
+readonly CONTAINER_NAME="solidpdf-linux-${PLATFORM_IDENTIFIER}-${WORKSPACE_IDENTIFIER}"
 readonly BUILD_VOLUME="${CONTAINER_NAME}-build"
 readonly CACHE_VOLUME="${CONTAINER_NAME}-cache"
 readonly BENCHMARK_VOLUME="${CONTAINER_NAME}-benchmarks"
-readonly PACKAGE_STATE_DIRECTORY="${REPOSITORY_ROOT}/.cache/linux-container/${CONFIGURATION_IDENTIFIER}"
+readonly PACKAGE_STATE_DIRECTORY="${REPOSITORY_ROOT}/.cache/linux-container/${PLATFORM_IDENTIFIER}"
 readonly RESOLVED_FILE="${PACKAGE_STATE_DIRECTORY}/Package.resolved"
+readonly LOCK_DIRECTORY="${REPOSITORY_ROOT}/.cache/linux-container/.lifecycle-${PLATFORM_IDENTIFIER}.lock"
+readonly DEPENDENCY_SENTINEL="/var/lib/solidpdf-system-dependencies-v${DEPENDENCY_GENERATION}"
+readonly CONFIGURATION_FINGERPRINT="$(checksum "${SWIFT_IMAGE}|${LINUX_PLATFORM}|${DEPENDENCY_GENERATION}|${SCRIPT_SCHEMA_VERSION}")"
+readonly MOUNT_FINGERPRINT="$(checksum "${REPOSITORY_ROOT}|${RESOLVED_FILE}|${BUILD_VOLUME}|${CACHE_VOLUME}|${BENCHMARK_VOLUME}")"
+
+LOCK_HELD=0
+
+function release_lifecycle_lock() {
+  if [[ ${LOCK_HELD} -eq 1 ]]; then
+    rm -f "${LOCK_DIRECTORY}/pid"
+    rmdir "${LOCK_DIRECTORY}" 2>/dev/null || true
+    LOCK_HELD=0
+  fi
+}
+
+function acquire_lifecycle_lock() {
+  mkdir -p "$(dirname "${LOCK_DIRECTORY}")"
+  local attempt owner_pid
+  for ((attempt = 0; attempt < 600; attempt += 1)); do
+    if mkdir "${LOCK_DIRECTORY}" 2>/dev/null; then
+      printf '%s\n' "$$" >"${LOCK_DIRECTORY}/pid"
+      LOCK_HELD=1
+      trap release_lifecycle_lock EXIT INT TERM
+      return
+    fi
+    owner_pid="$(cat "${LOCK_DIRECTORY}/pid" 2>/dev/null || true)"
+    if [[ -n "${owner_pid}" ]] && ! kill -0 "${owner_pid}" 2>/dev/null; then
+      rm -f "${LOCK_DIRECTORY}/pid"
+      rmdir "${LOCK_DIRECTORY}" 2>/dev/null || true
+      continue
+    fi
+    sleep 0.1
+  done
+  fail "timed out waiting for lifecycle lock ${LOCK_DIRECTORY}"
+}
+
+function with_lifecycle_lock() {
+  acquire_lifecycle_lock
+  "$@"
+  local status=$?
+  release_lifecycle_lock
+  trap - EXIT INT TERM
+  return "${status}"
+}
 
 function container_exists() {
   docker container inspect "${CONTAINER_NAME}" >/dev/null 2>&1
@@ -61,16 +111,91 @@ function container_is_running() {
   [[ "$(docker container inspect --format '{{.State.Running}}' "${CONTAINER_NAME}")" == "true" ]]
 }
 
+function container_label() {
+  local container_name=$1
+  local label_name=$2
+  docker container inspect --format "{{index .Config.Labels \"${label_name}\"}}" "${container_name}" 2>/dev/null || true
+}
+
+function active_exec_count() {
+  docker container inspect --format '{{len .ExecIDs}}' "$1" 2>/dev/null || echo 0
+}
+
+function container_mounts_match() {
+  [[ "$(container_label "${CONTAINER_NAME}" "com.solidpdf.mount-fingerprint")" == "${MOUNT_FINGERPRINT}" ]] || return 1
+
+  local mounts
+  mounts="$(docker container inspect --format '{{range .Mounts}}{{if eq .Type "bind"}}bind|{{.Source}}|{{.Destination}}|{{.RW}}{{else}}volume|{{.Name}}|{{.Destination}}|{{.RW}}{{end}}{{println}}{{end}}' "${CONTAINER_NAME}")"
+  grep -Fq "bind|${REPOSITORY_ROOT}|/workspace|false" <<<"${mounts}" &&
+    grep -Fq "bind|${RESOLVED_FILE}|/workspace/Package.resolved|true" <<<"${mounts}" &&
+    grep -Fq "volume|${BUILD_VOLUME}|/build|true" <<<"${mounts}" &&
+    grep -Fq "volume|${CACHE_VOLUME}|/root/.cache|true" <<<"${mounts}" &&
+    grep -Fq "volume|${BENCHMARK_VOLUME}|/workspace/.benchmarkBaselines|true" <<<"${mounts}"
+}
+
+function container_matches_configuration() {
+  [[ "$(container_label "${CONTAINER_NAME}" "com.solidpdf.configuration-fingerprint")" == "${CONFIGURATION_FINGERPRINT}" ]] &&
+    container_mounts_match
+}
+
+function refresh_resolved_file() {
+  mkdir -p "${PACKAGE_STATE_DIRECTORY}"
+  if [[ ! -f "${RESOLVED_FILE}" ]] || ! cmp -s "${REPOSITORY_ROOT}/Package.resolved" "${RESOLVED_FILE}"; then
+    cp "${REPOSITORY_ROOT}/Package.resolved" "${RESOLVED_FILE}"
+  fi
+}
+
+function legacy_container_names() {
+  local candidate candidate_platform
+  while IFS= read -r candidate; do
+    [[ -n "${candidate}" && "${candidate}" != "${CONTAINER_NAME}" ]] || continue
+    candidate_platform="$(container_label "${candidate}" "com.solidpdf.platform")"
+    if [[ -n "${candidate_platform}" ]]; then
+      [[ "${candidate_platform}" == "${LINUX_PLATFORM}" ]] || continue
+    elif [[ "${candidate}" != *"-${PLATFORM_IDENTIFIER}-"* ]]; then
+      continue
+    fi
+    printf '%s\n' "${candidate}"
+  done < <(docker container ls --all \
+    --filter "label=com.solidpdf.role=swift-linux" \
+    --filter "label=com.solidpdf.workspace=${REPOSITORY_ROOT}" \
+    --format '{{.Names}}')
+}
+
+function remove_replaceable_container() {
+  local container_name=$1
+  local reason=$2
+  local exec_count
+  exec_count="$(active_exec_count "${container_name}")"
+  if [[ "${exec_count}" != "0" ]]; then
+    fail "cannot ${reason} ${container_name}: ${exec_count} Docker exec session(s) are active"
+  fi
+  echo "Removing ${container_name} (${reason}); persistent volumes are preserved..." >&2
+  docker rm --force "${container_name}" >/dev/null
+}
+
+function migrate_legacy_containers() {
+  local legacy
+  while IFS= read -r legacy; do
+    [[ -n "${legacy}" ]] || continue
+    remove_replaceable_container "${legacy}" "legacy configuration"
+  done < <(legacy_container_names)
+}
+
 function create_container() {
   echo "Creating ${CONTAINER_NAME} from ${SWIFT_IMAGE} (${LINUX_PLATFORM})..." >&2
-  mkdir -p "${PACKAGE_STATE_DIRECTORY}"
-  cp "${REPOSITORY_ROOT}/Package.resolved" "${RESOLVED_FILE}"
   docker pull --platform "${LINUX_PLATFORM}" "${SWIFT_IMAGE}" >/dev/null
   docker create \
     --name "${CONTAINER_NAME}" \
     --platform "${LINUX_PLATFORM}" \
     --label "com.solidpdf.role=swift-linux" \
     --label "com.solidpdf.workspace=${REPOSITORY_ROOT}" \
+    --label "com.solidpdf.platform=${LINUX_PLATFORM}" \
+    --label "com.solidpdf.swift-image=${SWIFT_IMAGE}" \
+    --label "com.solidpdf.dependency-generation=${DEPENDENCY_GENERATION}" \
+    --label "com.solidpdf.script-schema=${SCRIPT_SCHEMA_VERSION}" \
+    --label "com.solidpdf.configuration-fingerprint=${CONFIGURATION_FINGERPRINT}" \
+    --label "com.solidpdf.mount-fingerprint=${MOUNT_FINGERPRINT}" \
     --mount "type=bind,source=${REPOSITORY_ROOT},target=/workspace,readonly" \
     --mount "type=bind,source=${RESOLVED_FILE},target=/workspace/Package.resolved" \
     --mount "type=volume,source=${BUILD_VOLUME},target=/build" \
@@ -81,7 +206,23 @@ function create_container() {
     sleep infinity >/dev/null
 }
 
-function ensure_container() {
+function install_dependencies() {
+  if ! docker exec "${CONTAINER_NAME}" test -f "${DEPENDENCY_SENTINEL}"; then
+    echo "Installing font and PDF validation packages..." >&2
+    docker exec "${CONTAINER_NAME}" apt-get update >/dev/null
+    docker exec "${CONTAINER_NAME}" apt-get install --yes \
+      pkg-config libfreetype-dev libfontconfig1-dev \
+      qpdf mupdf-tools poppler-utils >/dev/null
+    docker exec "${CONTAINER_NAME}" touch "${DEPENDENCY_SENTINEL}"
+  fi
+}
+
+function ensure_container_locked() {
+  refresh_resolved_file
+  migrate_legacy_containers
+  if container_exists && ! container_matches_configuration; then
+    remove_replaceable_container "${CONTAINER_NAME}" "configuration or mounts changed"
+  fi
   if ! container_exists; then
     create_container
   fi
@@ -89,29 +230,68 @@ function ensure_container() {
     echo "Starting ${CONTAINER_NAME}..." >&2
     docker start "${CONTAINER_NAME}" >/dev/null
   fi
-  if ! docker exec "${CONTAINER_NAME}" test -f /var/lib/solidpdf-system-dependencies-v5; then
-    echo "Installing font and PDF validation packages..." >&2
-    docker exec "${CONTAINER_NAME}" apt-get update >/dev/null
-    docker exec "${CONTAINER_NAME}" apt-get install --yes \
-      pkg-config libfreetype-dev libfontconfig1-dev \
-      qpdf mupdf-tools poppler-utils >/dev/null
-    docker exec "${CONTAINER_NAME}" touch /var/lib/solidpdf-system-dependencies-v5
+  install_dependencies
+}
+
+function ensure_container() {
+  with_lifecycle_lock ensure_container_locked
+}
+
+function replacement_reason() {
+  if ! container_exists; then
+    echo "not created"
+  elif container_matches_configuration; then
+    echo "none"
+  else
+    echo "configuration or mounts changed"
   fi
 }
 
 function print_status() {
-  echo "Container: ${CONTAINER_NAME}"
-  echo "Image:     ${SWIFT_IMAGE}"
-  echo "Platform:  ${LINUX_PLATFORM}"
-  echo "Workspace: ${REPOSITORY_ROOT} (read-only at /workspace)"
-  echo "Build:     ${BUILD_VOLUME} (at /build)"
-  echo "Cache:     ${CACHE_VOLUME} (at /root/.cache)"
-  echo "Benchmarks: ${BENCHMARK_VOLUME} (at /workspace/.benchmarkBaselines)"
-  echo "Resolution: ${RESOLVED_FILE} (at /workspace/Package.resolved)"
+  refresh_resolved_file
+  echo "Container:   ${CONTAINER_NAME}"
+  echo "Image:       ${SWIFT_IMAGE}"
+  echo "Platform:    ${LINUX_PLATFORM}"
+  echo "Workspace:   ${REPOSITORY_ROOT} (read-only at /workspace)"
+  echo "Build:       ${BUILD_VOLUME} (at /build)"
+  echo "Cache:       ${CACHE_VOLUME} (at /root/.cache)"
+  echo "Benchmarks:  ${BENCHMARK_VOLUME} (at /workspace/.benchmarkBaselines)"
+  echo "Resolution:  ${RESOLVED_FILE} (at /workspace/Package.resolved)"
+  echo "Requested:   ${CONFIGURATION_FINGERPRINT}"
   if container_exists; then
-    echo "State:     $(docker container inspect --format '{{.State.Status}}' "${CONTAINER_NAME}")"
+    echo "Installed:   $(container_label "${CONTAINER_NAME}" "com.solidpdf.configuration-fingerprint")"
+    echo "State:       $(docker container inspect --format '{{.State.Status}}' "${CONTAINER_NAME}")"
   else
-    echo "State:     not created"
+    echo "Installed:   none"
+    echo "State:       not created"
+  fi
+  echo "Replacement: $(replacement_reason)"
+  local legacy legacy_list=()
+  while IFS= read -r legacy; do
+    [[ -n "${legacy}" ]] && legacy_list+=("${legacy}")
+  done < <(legacy_container_names)
+  if [[ ${#legacy_list[@]} -eq 0 ]]; then
+    echo "Legacy:      none"
+  else
+    echo "Legacy:      ${legacy_list[*]}"
+  fi
+}
+
+function stop_container_locked() {
+  if container_exists && container_is_running; then
+    docker stop "${CONTAINER_NAME}" >/dev/null
+    echo "Stopped ${CONTAINER_NAME}."
+  else
+    echo "${CONTAINER_NAME} is not running."
+  fi
+}
+
+function remove_container_locked() {
+  if container_exists; then
+    remove_replaceable_container "${CONTAINER_NAME}" "requested removal"
+    echo "Removed ${CONTAINER_NAME}; persistent volumes were preserved."
+  else
+    echo "${CONTAINER_NAME} has not been created."
   fi
 }
 
@@ -120,10 +300,10 @@ function print_usage() {
 Usage: Scripts/linux-container <command> [arguments]
 
 Commands:
-  ensure          Create and start the development container if necessary.
+  ensure          Create, replace when needed, and start the development container.
   exec COMMAND    Run a command in the development container.
   shell           Open an interactive Bash shell in the development container.
-  status          Show the resolved configuration and current container state.
+  status          Show configuration, replacement, mount, and legacy-container state.
   stop            Stop the development container without deleting its caches.
   remove          Remove the container while preserving its build/cache/benchmark volumes.
 EOF
@@ -152,25 +332,15 @@ case "${COMMAND}" in
     ;;
   status)
     [[ $# -eq 0 ]] || fail "status does not accept arguments"
-    print_status
+    with_lifecycle_lock print_status
     ;;
   stop)
     [[ $# -eq 0 ]] || fail "stop does not accept arguments"
-    if container_exists && container_is_running; then
-      docker stop "${CONTAINER_NAME}" >/dev/null
-      echo "Stopped ${CONTAINER_NAME}."
-    else
-      echo "${CONTAINER_NAME} is not running."
-    fi
+    with_lifecycle_lock stop_container_locked
     ;;
   remove)
     [[ $# -eq 0 ]] || fail "remove does not accept arguments"
-    if container_exists; then
-      docker rm --force "${CONTAINER_NAME}" >/dev/null
-      echo "Removed ${CONTAINER_NAME}; persistent volumes were preserved."
-    else
-      echo "${CONTAINER_NAME} has not been created."
-    fi
+    with_lifecycle_lock remove_container_locked
     ;;
   -h | --help | help)
     print_usage

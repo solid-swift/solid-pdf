@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly STATE_ROOT="${FAKE_DOCKER_STATE:?FAKE_DOCKER_STATE is required}"
+mkdir -p "${STATE_ROOT}/containers"
+touch "${STATE_ROOT}/log"
+
+function container_directory() {
+  echo "${STATE_ROOT}/containers/$1"
+}
+
+function require_container() {
+  local directory
+  directory="$(container_directory "$1")"
+  [[ -d "${directory}" ]] || exit 1
+  echo "${directory}"
+}
+
+function label_value() {
+  local directory=$1
+  local key=$2
+  awk -F= -v key="${key}" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "${directory}/labels" 2>/dev/null || true
+}
+
+function create_container() {
+  local name= image= argument label mount
+  local labels=() mounts=()
+  while [[ $# -gt 0 ]]; do
+    argument=$1
+    shift
+    case "${argument}" in
+      --name)
+        name=$1
+        shift
+        ;;
+      --platform | --workdir)
+        shift
+        ;;
+      --label)
+        labels+=("$1")
+        shift
+        ;;
+      --mount)
+        mounts+=("$1")
+        shift
+        ;;
+      --*)
+        ;;
+      *)
+        image=${argument}
+        break
+        ;;
+    esac
+  done
+  [[ -n "${name}" && -n "${image}" ]]
+  local directory
+  directory="$(container_directory "${name}")"
+  [[ ! -e "${directory}" ]] || exit 1
+  if [[ -n "${FAKE_DOCKER_CREATE_DELAY:-}" ]]; then
+    sleep "${FAKE_DOCKER_CREATE_DELAY}"
+  fi
+  mkdir -p "${directory}/files"
+  : >"${directory}/labels"
+  for label in "${labels[@]}"; do
+    printf '%s\n' "${label}" >>"${directory}/labels"
+  done
+  : >"${directory}/mounts"
+  for mount in "${mounts[@]:-}"; do
+    [[ -n "${mount}" ]] && printf '%s\n' "${mount}" >>"${directory}/mounts"
+  done
+  printf '%s\n' "false" >"${directory}/running"
+  printf '%s\n' "0" >"${directory}/exec-count"
+  printf '%s\n' "${image}" >"${directory}/image"
+  printf '%s\n' "created" >>"${STATE_ROOT}/log"
+}
+
+function inspect_container() {
+  local format= name
+  if [[ "${1:-}" == "--format" ]]; then
+    format=$2
+    name=$3
+  else
+    name=$1
+  fi
+  local directory
+  directory="$(require_container "${name}")"
+  if [[ -z "${format}" ]]; then
+    return 0
+  fi
+  case "${format}" in
+    '{{.State.Running}}')
+      cat "${directory}/running"
+      ;;
+    '{{.State.Status}}')
+      if [[ "$(cat "${directory}/running")" == "true" ]]; then echo running; else echo created; fi
+      ;;
+    '{{len .ExecIDs}}')
+      cat "${directory}/exec-count"
+      ;;
+    *'.Mounts'*)
+      local specification type source destination readonly name_value
+      while IFS= read -r specification; do
+        [[ -n "${specification}" ]] || continue
+        type= source= destination= readonly=false name_value=
+        IFS=',' read -ra fields <<<"${specification}"
+        for field in "${fields[@]}"; do
+          case "${field}" in
+            type=*) type=${field#type=} ;;
+            source=*) source=${field#source=} ;;
+            target=*) destination=${field#target=} ;;
+            readonly) readonly=true ;;
+          esac
+        done
+        if [[ "${type}" == "volume" ]]; then
+          name_value=${source}
+          source=
+        fi
+        if [[ "${type}" == "bind" ]]; then
+          echo "bind|${source}|${destination}|$([[ "${readonly}" == "true" ]] && echo false || echo true)"
+        else
+          echo "volume|${name_value}|${destination}|true"
+        fi
+      done <"${directory}/mounts"
+      ;;
+    '{{index .Config.Labels '* | '{{index .Config.Labels '*'}}')
+      local key=${format#*\"}
+      key=${key%%\"*}
+      label_value "${directory}" "${key}"
+      ;;
+    *)
+      exit 1
+      ;;
+  esac
+}
+
+function list_containers() {
+  local role= workspace= format= argument
+  while [[ $# -gt 0 ]]; do
+    argument=$1
+    shift
+    case "${argument}" in
+      --all)
+        ;;
+      --filter)
+        case "$1" in
+          label=com.solidpdf.role=*) role=${1#label=com.solidpdf.role=} ;;
+          label=com.solidpdf.workspace=*) workspace=${1#label=com.solidpdf.workspace=} ;;
+        esac
+        shift
+        ;;
+      --format)
+        format=$1
+        shift
+        ;;
+    esac
+  done
+  [[ "${format}" == '{{.Names}}' ]]
+  local directory name
+  for directory in "${STATE_ROOT}"/containers/*; do
+    [[ -d "${directory}" ]] || continue
+    name=${directory##*/}
+    [[ -z "${role}" || "$(label_value "${directory}" com.solidpdf.role)" == "${role}" ]] || continue
+    [[ -z "${workspace}" || "$(label_value "${directory}" com.solidpdf.workspace)" == "${workspace}" ]] || continue
+    echo "${name}"
+  done
+}
+
+function execute_in_container() {
+  while [[ "${1:-}" == --* ]]; do
+    case "$1" in
+      --workdir)
+        shift 2
+        ;;
+      --interactive | --tty)
+        shift
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+  local name=$1
+  shift
+  local directory
+  directory="$(require_container "${name}")"
+  case "${1:-}" in
+    test)
+      [[ "${2:-}" == -f && -f "${directory}/files/${3#/}" ]]
+      ;;
+    touch)
+      mkdir -p "$(dirname "${directory}/files/${2#/}")"
+      touch "${directory}/files/${2#/}"
+      ;;
+    apt-get)
+      printf 'apt-get %s\n' "$*" >>"${STATE_ROOT}/log"
+      ;;
+    false)
+      return 23
+      ;;
+    *)
+      printf 'exec %s\n' "$*" >>"${STATE_ROOT}/log"
+      ;;
+  esac
+}
+
+readonly COMMAND=${1:-}
+shift || true
+case "${COMMAND}" in
+  info)
+    if [[ "${1:-}" == --format ]]; then echo arm64; fi
+    ;;
+  pull)
+    ;;
+  create)
+    create_container "$@"
+    ;;
+  start)
+    directory="$(require_container "$1")"
+    echo true >"${directory}/running"
+    ;;
+  stop)
+    directory="$(require_container "$1")"
+    echo false >"${directory}/running"
+    ;;
+  rm)
+    [[ "${1:-}" == --force ]] && shift
+    directory="$(require_container "$1")"
+    rm -rf "${directory}"
+    printf 'removed %s\n' "$1" >>"${STATE_ROOT}/log"
+    ;;
+  exec)
+    execute_in_container "$@"
+    ;;
+  container)
+    subcommand=$1
+    shift
+    case "${subcommand}" in
+      inspect) inspect_container "$@" ;;
+      ls) list_containers "$@" ;;
+      *) exit 2 ;;
+    esac
+    ;;
+  *)
+    exit 2
+    ;;
+esac
