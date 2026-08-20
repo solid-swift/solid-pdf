@@ -113,7 +113,7 @@ extension Context {
     if oldState.device.kind == .page {
       let transmit = try await callEndPage(reason: 2)
       if transmit {
-        try transmitCurrentPage(.show)
+        try transmitCurrentPage(.show, trigger: .deviceDeactivation)
       }
       oldState.device.discardPageTrappingZones()
       do {
@@ -156,11 +156,18 @@ extension Context {
     }
   }
 
-  func transmitCurrentPage(_ operation: GraphicsOperation.Page) throws {
+  func transmitCurrentPage(
+    _ operation: GraphicsOperation.Page,
+    trigger: GraphicsPageTransmissionTrigger
+  ) throws {
     let state = graphicsState
     let event = GraphicsEvent(operation: .page(operation), before: state.snapshot, after: state.snapshot)
+    let copies = try effectiveCopyCount()
+    let transmission = state.device.transmission(trigger: trigger, copies: copies)
     do {
-      try graphicsEventConsumer?.transmitPage(event, copies: effectiveCopyCount())
+      try graphicsEventConsumer?.transmitPage(event, transmission: transmission)
+      state.device.commitTransmission(copies: copies)
+      graphicsDeviceDescriptor = state.device.descriptor
     } catch let error as Error {
       throw error
     } catch {
@@ -171,7 +178,7 @@ extension Context {
   func showCurrentPage() async throws {
     guard graphicsState.device.kind == .page else { return }
     let transmit = try await callEndPage(reason: 0)
-    if transmit { try transmitCurrentPage(.show) }
+    if transmit { try transmitCurrentPage(.show, trigger: .showPage) }
     graphicsState.device.incrementPageNumber()
     graphicsState.device.restoreDefaultTrappingZones()
     try await initializeGraphicsState(emitOperation: false)
@@ -180,8 +187,8 @@ extension Context {
 
   func copyCurrentPage() async throws {
     guard graphicsState.device.kind == .page else { return }
-    let transmit = try await callEndPage(reason: 0)
-    if transmit { try transmitCurrentPage(.copy) }
+    let transmit = try await callEndPage(reason: 1)
+    if transmit { try transmitCurrentPage(.copy, trigger: .copyPage) }
     graphicsState.device.restoreDefaultTrappingZones()
     try await callBeginPage()
   }
@@ -189,7 +196,7 @@ extension Context {
   func finishCurrentPageDevice() async throws {
     guard graphicsState.device.kind == .page else { return }
     if try await callEndPage(reason: 2) {
-      try transmitCurrentPage(.show)
+      try transmitCurrentPage(.show, trigger: .deviceDeactivation)
     }
     graphicsState.device.discardPageTrappingZones()
     do {
@@ -218,7 +225,9 @@ extension Context {
       return
     }
 
-    if try await callEndPage(reason: 2) { try transmitCurrentPage(.show) }
+    if try await callEndPage(reason: 2) {
+      try transmitCurrentPage(.show, trigger: .deviceDeactivation)
+    }
     do {
       try graphicsEventConsumer?.deactivateDevice(current.device.snapshot)
     } catch {

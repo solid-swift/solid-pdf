@@ -123,9 +123,15 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
     } else {
       selectedPageSize
     }
+    let placement = negotiatedPlacement(
+      request,
+      physical: profile.physicalCapabilities,
+      unsatisfied: &unsatisfied
+    )
     var descriptor = try makeDescriptor(pageSize: physicalPageSize, resolution: selectedResolution)
     descriptor = descriptor.replacing(
-      defaultMatrix: request.placement.mediaAdjustment.concatenated(with: descriptor.defaultMatrix)
+      defaultMatrix: placement.transform(for: physicalPageSize)
+        .concatenated(with: descriptor.defaultMatrix)
     )
     let maximumSeparations = maximumSeparations(for: descriptor)
     let colorants = negotiatedColorants(
@@ -170,7 +176,7 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
         mediaSelection: mediaSelection,
         outputDestinations: request.outputDestinations,
         outputType: request.outputType,
-        placement: request.placement,
+        placement: placement,
         delivery: delivery
       ),
       unsatisfiedParameters: unsatisfied
@@ -223,12 +229,73 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
       unsatisfied.insert("RollFedMedia")
       delivery = initialConfiguration.delivery
     }
-    if request.placement.isDuplex, !physical.supportsDuplex { unsatisfied.insert("Duplex") }
-    if request.placement.mirrorsPage, !physical.supportsMirrorPrint { unsatisfied.insert("MirrorPrint") }
-    if request.placement.producesNegative, !physical.supportsNegativePrint {
-      unsatisfied.insert("NegativePrint")
-    }
     return delivery
+  }
+
+  private func negotiatedPlacement(
+    _ request: GraphicsPageDeviceRequest,
+    physical: GraphicsPhysicalPageDeviceCapabilities,
+    unsatisfied: inout Set<String>
+  ) -> GraphicsPagePlacement {
+    let requested = request.placement
+    var orientation = requested.orientation
+    var leadingEdge = requested.leadingEdge
+    var imageShift = requested.imageShift
+    var pageOffset = requested.pageOffset
+    var margins = requested.margins
+    var mirrors = requested.mirrorsPage
+    var negative = requested.producesNegative
+    var duplex = requested.isDuplex
+    var tumbles = requested.tumbles
+    if !physical.supportedOrientations.contains(orientation) {
+      unsatisfied.insert("Orientation")
+      orientation = .defaultOrientation
+    }
+    if let edge = leadingEdge, !physical.supportedLeadingEdges.contains(edge) {
+      unsatisfied.insert("LeadingEdge")
+      leadingEdge = nil
+    }
+    if !physical.supportsMechanicalOffsets,
+      imageShift != GraphicsPoint(x: 0, y: 0)
+        || pageOffset != GraphicsPoint(x: 0, y: 0)
+        || margins != GraphicsPoint(x: 0, y: 0)
+    {
+      if imageShift != GraphicsPoint(x: 0, y: 0) { unsatisfied.insert("ImageShift") }
+      if pageOffset != GraphicsPoint(x: 0, y: 0) { unsatisfied.insert("PageOffset") }
+      if margins != GraphicsPoint(x: 0, y: 0) { unsatisfied.insert("Margins") }
+      imageShift = GraphicsPoint(x: 0, y: 0)
+      pageOffset = GraphicsPoint(x: 0, y: 0)
+      margins = GraphicsPoint(x: 0, y: 0)
+    }
+    if mirrors, !physical.supportsMirrorPrint {
+      unsatisfied.insert("MirrorPrint")
+      mirrors = false
+    }
+    if negative, !physical.supportsNegativePrint {
+      unsatisfied.insert("NegativePrint")
+      negative = false
+    }
+    if duplex, !physical.supportsDuplex {
+      unsatisfied.insert("Duplex")
+      duplex = false
+      tumbles = false
+    } else if tumbles, !physical.supportsTumble {
+      unsatisfied.insert("Tumble")
+      tumbles = false
+    }
+    return GraphicsPagePlacement(
+      orientation: orientation,
+      side: requested.side,
+      leadingEdge: leadingEdge,
+      imageShift: imageShift,
+      pageOffset: pageOffset,
+      mediaAdjustment: requested.mediaAdjustment,
+      margins: margins,
+      mirrorsPage: mirrors,
+      producesNegative: negative,
+      isDuplex: duplex,
+      tumbles: tumbles
+    )
   }
 
   private func makeDescriptor(

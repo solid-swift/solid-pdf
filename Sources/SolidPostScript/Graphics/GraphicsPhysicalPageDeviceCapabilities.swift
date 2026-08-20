@@ -22,6 +22,14 @@ public struct GraphicsPhysicalPageDeviceCapabilities: Sendable, Hashable {
   public let supportsCrossDeviceCollation: Bool
   /// Whether roll-media advance and cut actions are supported.
   public let supportsRollMedia: Bool
+  /// Page orientations accepted by the device.
+  public let supportedOrientations: Set<GraphicsPageOrientation>
+  /// Leading-edge values accepted by the device.
+  public let supportedLeadingEdges: Set<GraphicsLeadingEdge>
+  /// Whether short-edge tumbling is supported during duplex output.
+  public let supportsTumble: Bool
+  /// Whether page offsets, image shifts, and mechanical margins are supported.
+  public let supportsMechanicalOffsets: Bool
 
   /// Creates physical page-device capabilities.
   public init(
@@ -34,7 +42,11 @@ public struct GraphicsPhysicalPageDeviceCapabilities: Sendable, Hashable {
     supportsNegativePrint: Bool = false,
     supportsCollation: Bool = false,
     supportsCrossDeviceCollation: Bool = false,
-    supportsRollMedia: Bool = false
+    supportsRollMedia: Bool = false,
+    supportedOrientations: Set<GraphicsPageOrientation> = [.defaultOrientation],
+    supportedLeadingEdges: Set<GraphicsLeadingEdge> = [],
+    supportsTumble: Bool = false,
+    supportsMechanicalOffsets: Bool = false
   ) {
     self.supportsMediaSelection = supportsMediaSelection
     self.supportsDeferredSelection = supportsDeferredSelection
@@ -46,6 +58,10 @@ public struct GraphicsPhysicalPageDeviceCapabilities: Sendable, Hashable {
     self.supportsCollation = supportsCollation
     self.supportsCrossDeviceCollation = supportsCrossDeviceCollation
     self.supportsRollMedia = supportsRollMedia
+    self.supportedOrientations = supportedOrientations
+    self.supportedLeadingEdges = supportedLeadingEdges
+    self.supportsTumble = supportsTumble
+    self.supportsMechanicalOffsets = supportsMechanicalOffsets
   }
 
   /// Capabilities of a virtual page device.
@@ -62,6 +78,10 @@ public struct GraphicsPhysicalPageDeviceCapabilities: Sendable, Hashable {
     supportsNegativePrint: true,
     supportsCollation: true,
     supportsCrossDeviceCollation: true,
-    supportsRollMedia: true
+    supportsRollMedia: true,
+    supportedOrientations: Set(GraphicsPageOrientation.allCases),
+    supportedLeadingEdges: Set(GraphicsLeadingEdge.allCases),
+    supportsTumble: true,
+    supportsMechanicalOffsets: true
   )
 }

@@ -217,6 +217,56 @@ extension Operators {
       if let outputDevice = configuration.outputDevice {
         entries.append((.literalName("OutputDevice"), .literalName(outputDevice)))
       }
+      if context.graphicsPageDeviceSession?.capabilities.physical != .virtual {
+        entries.append((.literalName("RollFedMedia"), .boolean(configuration.delivery.isRollFed)))
+        entries.append((
+          .literalName("Orientation"),
+          .integer(Int32(configuration.placement.orientation.rawValue))
+        ))
+        entries.append((
+          .literalName("AdvanceMedia"),
+          .integer(Int32(configuration.delivery.advanceMedia.rawValue))
+        ))
+        entries.append((
+          .literalName("AdvanceDistance"),
+          Object.real(finite: configuration.delivery.advanceDistance) ?? .integer(0)
+        ))
+        entries.append((
+          .literalName("CutMedia"),
+          .integer(Int32(configuration.delivery.cutMedia.rawValue))
+        ))
+        entries.append((
+          .literalName("ImageShift"),
+          try numberArray(
+            [configuration.placement.imageShift.x, configuration.placement.imageShift.y],
+            vm: vm,
+            context: context
+          )
+        ))
+        entries.append((
+          .literalName("PageOffset"),
+          try numberArray(
+            [configuration.placement.pageOffset.x, configuration.placement.pageOffset.y],
+            vm: vm,
+            context: context
+          )
+        ))
+        entries.append((
+          .literalName("Margins"),
+          try numberArray(
+            [configuration.placement.margins.x, configuration.placement.margins.y],
+            vm: vm,
+            context: context
+          )
+        ))
+        entries.append((.literalName("MirrorPrint"), .boolean(configuration.placement.mirrorsPage)))
+        entries.append((
+          .literalName("NegativePrint"),
+          .boolean(configuration.placement.producesNegative)
+        ))
+        entries.append((.literalName("Duplex"), .boolean(configuration.placement.isDuplex)))
+        entries.append((.literalName("Tumble"), .boolean(configuration.placement.tumbles)))
+      }
       let dictionary = try context.makeDictionary(entries, access: .readOnly, vm: vm)
       context.operands.push(dictionary)
     }
@@ -328,6 +378,22 @@ extension Operators {
     var traySwitch = currentConfiguration.mediaRequest.traySwitch
     var mediaPosition = currentConfiguration.mediaRequest.position
     var deferredMediaSelection = currentConfiguration.mediaRequest.isDeferred
+    let basePlacement = changedOutputDevice ? GraphicsPagePlacement.simplex : currentConfiguration.placement
+    let baseDelivery = changedOutputDevice
+      ? GraphicsPageDeliveryConfiguration.virtual
+      : currentConfiguration.delivery
+    var orientation = basePlacement.orientation
+    var imageShift = basePlacement.imageShift
+    var pageOffset = basePlacement.pageOffset
+    var margins = basePlacement.margins
+    var mirrorPrint = basePlacement.mirrorsPage
+    var negativePrint = basePlacement.producesNegative
+    var duplex = basePlacement.isDuplex
+    var tumble = basePlacement.tumbles
+    var rollFedMedia = baseDelivery.isRollFed
+    var advanceMedia = baseDelivery.advanceMedia
+    var advanceDistance = baseDelivery.advanceDistance
+    var cutMedia = baseDelivery.cutMedia
 
     for (name, value) in entries {
       do {
@@ -413,6 +479,38 @@ extension Operators {
             continue
           }
           deferredMediaSelection = try value.value(as: BooleanValue.self).value
+        case "RollFedMedia":
+          rollFedMedia = try value.value(as: BooleanValue.self).value
+        case "Orientation":
+          let raw = try value.value(as: IntegerValue.self).value
+          guard let selected = GraphicsPageOrientation(rawValue: Int(raw)) else { throw Error.rangeCheck }
+          orientation = selected
+        case "AdvanceMedia":
+          let raw = try value.value(as: IntegerValue.self).value
+          guard let selected = GraphicsMediaActionMode(rawValue: Int(raw)) else { throw Error.rangeCheck }
+          advanceMedia = selected
+        case "AdvanceDistance":
+          let distance = try numeric(value)
+          guard distance.isFinite, distance >= 0 else { throw Error.rangeCheck }
+          advanceDistance = distance
+        case "CutMedia":
+          let raw = try value.value(as: IntegerValue.self).value
+          guard let selected = GraphicsMediaActionMode(rawValue: Int(raw)) else { throw Error.rangeCheck }
+          cutMedia = selected
+        case "ImageShift":
+          imageShift = try pageDevicePoint(value)
+        case "PageOffset":
+          pageOffset = try pageDevicePoint(value)
+        case "Margins":
+          margins = try pageDevicePoint(value)
+        case "MirrorPrint":
+          mirrorPrint = try value.value(as: BooleanValue.self).value
+        case "NegativePrint":
+          negativePrint = try value.value(as: BooleanValue.self).value
+        case "Duplex":
+          duplex = try value.value(as: BooleanValue.self).value
+        case "Tumble":
+          tumble = try value.value(as: BooleanValue.self).value
         case "HWResolution":
           let values = try pageDeviceNumericArray(value, count: 2)
           guard values.allSatisfy({ $0.isFinite && $0 > 0 }) else { throw Error.rangeCheck }
@@ -527,8 +625,31 @@ extension Operators {
           ? selectedProfile.outputDestinations
           : currentConfiguration.outputDestinations,
         outputType: changedOutputDevice ? nil : currentConfiguration.outputType,
-        placement: changedOutputDevice ? .simplex : currentConfiguration.placement,
-        delivery: changedOutputDevice ? .virtual : currentConfiguration.delivery
+        placement: GraphicsPagePlacement(
+          orientation: orientation,
+          side: changedOutputDevice ? .recto : currentConfiguration.placement.side,
+          leadingEdge: leadingEdge,
+          imageShift: imageShift,
+          pageOffset: pageOffset,
+          margins: margins,
+          mirrorsPage: mirrorPrint,
+          producesNegative: negativePrint,
+          isDuplex: duplex,
+          tumbles: tumble
+        ),
+        delivery: GraphicsPageDeliveryConfiguration(
+          destination: changedOutputDevice ? nil : currentConfiguration.delivery.destination,
+          deferredOutputType: changedOutputDevice
+            ? nil
+            : currentConfiguration.delivery.deferredOutputType,
+          collates: changedOutputDevice ? false : currentConfiguration.delivery.collates,
+          outputFace: changedOutputDevice ? .faceDown : currentConfiguration.delivery.outputFace,
+          jog: changedOutputDevice ? .never : currentConfiguration.delivery.jog,
+          isRollFed: rollFedMedia,
+          advanceMedia: advanceMedia,
+          advanceDistance: advanceDistance,
+          cutMedia: cutMedia
+        )
       ),
       parameters: PostScriptPageDeviceParameters(
         install: install,
@@ -864,6 +985,12 @@ extension Operators {
     }
     guard values.count == count else { throw Error.rangeCheck }
     return try values.map(numeric)
+  }
+
+  private static func pageDevicePoint(_ object: Object) throws -> GraphicsPoint {
+    let values = try pageDeviceNumericArray(object, count: 2)
+    guard values.allSatisfy(\.isFinite) else { throw Error.rangeCheck }
+    return GraphicsPoint(x: values[0], y: values[1])
   }
 
   private static func pageDeviceNameArray(_ object: Object) throws -> [String] {

@@ -97,6 +97,73 @@ struct PageDeviceTests {
     #expect(result.configuration.outputDeviceIdentifier == secondaryID)
     #expect(result.configuration.mediaSelection == .selected(secondaryMedia.sources[9]!))
   }
+
+  @Test func printProviderNegotiatesPlacementAndRollDelivery() throws {
+    let provider = StandardGraphicsPageDeviceProvider(physicalCapabilities: .printSpool)
+    let session = try provider.makeSession(for: .letter)
+    let placement = GraphicsPagePlacement(
+      orientation: .counterclockwise90,
+      imageShift: GraphicsPoint(x: 4, y: 6),
+      pageOffset: GraphicsPoint(x: 10, y: 20),
+      margins: GraphicsPoint(x: 2, y: 3),
+      mirrorsPage: true,
+      producesNegative: true,
+      isDuplex: true,
+      tumbles: true
+    )
+    let delivery = GraphicsPageDeliveryConfiguration(
+      isRollFed: true,
+      advanceMedia: .pageTransmission,
+      advanceDistance: 12,
+      cutMedia: .deviceDeactivation
+    )
+    let result = try session.negotiate(GraphicsPageDeviceRequest(
+      pageSize: session.initialConfiguration.pageSize,
+      resolution: GraphicsSize(width: 72, height: 72),
+      imagingBoundingBox: nil,
+      numberOfCopies: 1,
+      placement: placement,
+      delivery: delivery
+    ))
+
+    #expect(result.unsatisfiedParameters.isEmpty)
+    #expect(result.configuration.placement == placement)
+    #expect(result.configuration.delivery == delivery)
+    #expect(result.configuration.descriptor.defaultMatrix == placement.transform(
+      for: session.initialConfiguration.pageSize
+    ))
+  }
+
+  @Test func duplexProgressAdvancesOnlyAfterSuccessfulDeliveredSides() {
+    let placement = GraphicsPagePlacement(
+      imageShift: GraphicsPoint(x: 5, y: 0),
+      isDuplex: true
+    )
+    let configuration = GraphicsPageDeviceConfiguration(
+      identifier: GraphicsDeviceIdentifier(),
+      pageSize: GraphicsSize(width: 100, height: 200),
+      imagingBoundingBox: nil,
+      numberOfCopies: 1,
+      name: "Print",
+      descriptor: GraphicsDeviceDescriptor(
+        mediaBounds: GraphicsRect(x: 0, y: 0, width: 100, height: 200),
+        imageableBounds: GraphicsRect(x: 0, y: 0, width: 100, height: 200),
+        horizontalResolution: 72,
+        verticalResolution: 72,
+        defaultMatrix: placement.transform(for: GraphicsSize(width: 100, height: 200))
+      ),
+      placement: placement
+    )
+    let record = PostScriptDeviceRecord(configuration: configuration)
+
+    record.commitTransmission(copies: 0)
+    #expect(record.configuration?.placement.side == .recto)
+    record.commitTransmission(copies: 1)
+    #expect(record.configuration?.placement.side == .verso)
+    #expect(record.configuration?.descriptor.defaultMatrix.tx == -5)
+    record.commitTransmission(copies: 1)
+    #expect(record.configuration?.placement.side == .recto)
+  }
   @Test func operatorsAreRegistered() async throws {
     let values = try await Interpreter.results(
       content: "/setpagedevice where /currentpagedevice where /nulldevice where"
@@ -355,15 +422,18 @@ struct PageDeviceTests {
   @Test func copyPageDoesNotIncrementTheShowPageCount() async throws {
     let result = try await Interpreter.render(
       content: """
-        /lastBegin -1 def
-        << /BeginPage { /lastBegin exch def } >> setpagedevice
-        copypage lastBegin
+        /lastBegin -1 def /lastReason -1 def
+        << /BeginPage { /lastBegin exch def }
+           /EndPage { /lastReason exch def pop lastReason 2 ne }
+        >> setpagedevice
+        copypage lastBegin lastReason
       """,
       to: RecordingGraphicsTarget()
     )
     let values = try await result.context.results()
 
     #expect(result.output.pages.count == 1)
-    #expect(try values[0].value(as: IntegerValue.self).value == 0)
+    #expect(try values[1].value(as: IntegerValue.self).value == 0)
+    #expect(try values[0].value(as: IntegerValue.self).value == 1)
   }
 }
