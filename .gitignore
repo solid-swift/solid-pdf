@@ -15,4 +15,6 @@ DerivedData/
 /.cache
 /.benchmarkBaselines
 *.trace
+.fuzz-corpus/
+.fuzz-artifacts/
 .claude

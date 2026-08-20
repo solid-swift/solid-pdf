@@ -42,7 +42,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/solid-swift/solid-foundation.git",
       "state" : {
-        "revision" : "b9faad05b471afd5bfe3ce4512e10addca96ea3c"
+        "revision" : "c372253a7bcca19d51c5dcc8328825a1c03d3bf5"
       }
     },
     {

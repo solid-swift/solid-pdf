@@ -30,7 +30,7 @@ let package = Package(
   dependencies: [
     .package(
       url: "https://github.com/solid-swift/solid-foundation.git",
-      revision: "b9faad05b471afd5bfe3ce4512e10addca96ea3c"
+      revision: "c372253a7bcca19d51c5dcc8328825a1c03d3bf5"
     ),
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.0"),
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
@@ -383,6 +383,32 @@ if benchmarkEnabled {
       dependencies: ["SolidFont", "SolidFontBenchmarkSupport"],
       path: "Tests/SolidFontBenchmarkSupportTests",
       plugins: lintPlugins
+    ),
+  ]
+}
+
+// Deterministic sanitizer fuzzing
+let fuzzingEnableEnvironment = ProcessInfo.processInfo.environment["FUZZING_ENABLE"]?.lowercased()
+let fuzzingEnabled =
+  if let fuzzingEnableEnvironment,
+    fuzzingEnableEnvironment == "1"
+      || fuzzingEnableEnvironment == "true"
+      || fuzzingEnableEnvironment == "t"
+  {
+    true
+  } else {
+    false
+  }
+
+if fuzzingEnabled {
+  package.targets += [
+    .executableTarget(
+      name: "SolidPostScriptFilterFuzz",
+      dependencies: [
+        "SolidPostScript",
+        .product(name: "SolidFuzzSupport", package: "solid-foundation"),
+      ],
+      path: "Fuzzing/SolidPostScriptFilterFuzz"
     ),
   ]
 }

@@ -150,6 +150,8 @@ final class EncodingFilterFile: ContextualFile, VMManagedFileGraph, Sendable {
 
   private struct State: Sendable {
     var closed = false
+    var closing = false
+    var deferredFinalOutput = Data()
   }
 
   let name: String
@@ -187,8 +189,12 @@ final class EncodingFilterFile: ContextualFile, VMManagedFileGraph, Sendable {
     let result = try translateCodecError { try codec.process(input: data) }
     try validate(result, inputCount: data.count)
     if result.progress == .finished {
-      try target.finishWithoutContext(result.output)
-      state.withLock { $0.closed = true }
+      if name == "DCTEncode" {
+        state.withLock { $0.deferredFinalOutput.append(result.output) }
+      } else {
+        try target.finishWithoutContext(result.output)
+        state.withLock { $0.closed = true }
+      }
     } else {
       try target.writeWithoutContext(result.output)
     }
@@ -200,30 +206,68 @@ final class EncodingFilterFile: ContextualFile, VMManagedFileGraph, Sendable {
     let result = try translateCodecError { try codec.process(input: data) }
     try validate(result, inputCount: data.count)
     if result.progress == .finished {
-      try await target.finish(result.output, context: context)
-      state.withLock { $0.closed = true }
+      if name == "DCTEncode" {
+        state.withLock { $0.deferredFinalOutput.append(result.output) }
+      } else {
+        try await target.finish(result.output, context: context)
+        state.withLock { $0.closed = true }
+      }
     } else {
       try await target.write(result.output, context: context)
     }
   }
 
   func close() throws {
-    let wasOpen = state.withLock { state -> Bool in
-      guard !state.closed else { return false }
-      state.closed = true
+    let shouldFinish = state.withLock { state -> Bool in
+      guard !state.closed, !state.closing else { return false }
+      state.closing = true
       return true
     }
-    if wasOpen {
-      try target.closeWithoutContext()
+    guard shouldFinish else { return }
+    do {
+      var output = try translateCodecError { try codec.finish() ?? Data() }
+      output.insert(contentsOf: state.withLock { $0.deferredFinalOutput }, at: 0)
+      try target.finishWithoutContext(output)
+      state.withLock {
+        $0.deferredFinalOutput.removeAll()
+        $0.closed = true
+        $0.closing = false
+      }
+    } catch {
+      state.withLock {
+        $0.deferredFinalOutput.removeAll()
+        $0.closed = true
+        $0.closing = false
+      }
+      throw error
     }
   }
 
   func close(context: isolated Context) async throws {
-    guard state.withLock({ !$0.closed }) else { return }
-    try await target.initialize(context: context)
-    let output = try translateCodecError { try codec.finish() ?? Data() }
-    try await target.finish(output, context: context)
-    state.withLock { $0.closed = true }
+    let shouldFinish = state.withLock { state -> Bool in
+      guard !state.closed, !state.closing else { return false }
+      state.closing = true
+      return true
+    }
+    guard shouldFinish else { return }
+    do {
+      try await target.initialize(context: context)
+      var output = try translateCodecError { try codec.finish() ?? Data() }
+      output.insert(contentsOf: state.withLock { $0.deferredFinalOutput }, at: 0)
+      try await target.finish(output, context: context)
+      state.withLock {
+        $0.deferredFinalOutput.removeAll()
+        $0.closed = true
+        $0.closing = false
+      }
+    } catch {
+      state.withLock {
+        $0.deferredFinalOutput.removeAll()
+        $0.closed = true
+        $0.closing = false
+      }
+      throw error
+    }
   }
 
   var offset: Int { get throws { throw Error.ioError } }
@@ -236,6 +280,7 @@ final class EncodingFilterFile: ContextualFile, VMManagedFileGraph, Sendable {
 
   func flush() throws {
     guard !isClosed else { throw Error.ioError }
+    if name == "DCTEncode", state.withLock({ !$0.deferredFinalOutput.isEmpty }) { return }
     guard !target.requiresContext else { throw Error.ioError }
     let output = try translateCodecError { try codec.flush() }
     try target.writeWithoutContext(output)
@@ -243,6 +288,7 @@ final class EncodingFilterFile: ContextualFile, VMManagedFileGraph, Sendable {
 
   func flush(context: isolated Context) async throws {
     try checkOpen()
+    if name == "DCTEncode", state.withLock({ !$0.deferredFinalOutput.isEmpty }) { return }
     try await target.initialize(context: context)
     let output = try translateCodecError { try codec.flush() }
     try await target.write(output, context: context)
