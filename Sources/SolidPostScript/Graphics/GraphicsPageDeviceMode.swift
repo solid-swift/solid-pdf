@@ -4,6 +4,8 @@ import Foundation
 public enum GraphicsPageDeviceMode: Sendable, Hashable {
   /// Accept bounded page sizes and resolutions dynamically.
   case adaptive
+  /// Accept bounded page-size changes while retaining the target's initial resolution.
+  case adaptivePageSize
   /// Expose only the target's initial geometry.
   case fixed
 }

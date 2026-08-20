@@ -43,6 +43,72 @@ public enum Interpreter {
     try await render(content: content, to: target, environment: InterpreterEnvironment())
   }
 
+  package static func renderEncapsulated<Target: GraphicsTarget>(
+    file: File?,
+    bounds: GraphicsRect,
+    strict: Bool,
+    to target: Target,
+    environment: InterpreterEnvironment
+  ) async throws -> GraphicsRenderResult<Target.Output> {
+    let source: Object? = file.map { .file($0, access: .readOnly, vm: .local, kind: .executable) }
+    let colorSession = try target.colorEngine.makeSession(for: target.deviceDescriptor)
+    let deviceRenderingSession = try target.deviceRenderingEngine.makeSession(for: target.deviceDescriptor)
+    let fontSession = try target.fontEngine.makeSession(for: target.deviceDescriptor)
+    let trappingSession = try target.trappingEngine.makeSession(for: target.deviceDescriptor)
+    let pageDeviceSession = try target.pageDeviceProvider.makeSession(for: target.deviceDescriptor)
+    let renderer = try target.makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession,
+      fontSession: fontSession,
+      trappingSession: trappingSession
+    )
+    let context = Context(environment: environment)
+    do {
+      let output = try await context.renderEncapsulated(
+        source: source,
+        bounds: bounds,
+        strict: strict,
+        pageDeviceSession: pageDeviceSession,
+        renderer: renderer
+      )
+      return GraphicsRenderResult(context: context, output: output)
+    } catch let stop as ErrorStop {
+      throw stop.error
+    } catch let undispatched as UndispatchedError {
+      throw undispatched.error
+    }
+  }
+
+  package static func renderStandardInput<Target: GraphicsTarget>(
+    to target: Target,
+    environment: InterpreterEnvironment
+  ) async throws -> GraphicsRenderResult<Target.Output> {
+    let colorSession = try target.colorEngine.makeSession(for: target.deviceDescriptor)
+    let deviceRenderingSession = try target.deviceRenderingEngine.makeSession(for: target.deviceDescriptor)
+    let fontSession = try target.fontEngine.makeSession(for: target.deviceDescriptor)
+    let trappingSession = try target.trappingEngine.makeSession(for: target.deviceDescriptor)
+    let pageDeviceSession = try target.pageDeviceProvider.makeSession(for: target.deviceDescriptor)
+    let renderer = try target.makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession,
+      fontSession: fontSession,
+      trappingSession: trappingSession
+    )
+    let context = Context(environment: environment)
+    do {
+      let output = try await context.render(
+        source: nil,
+        pageDeviceSession: pageDeviceSession,
+        renderer: renderer
+      )
+      return GraphicsRenderResult(context: context, output: output)
+    } catch let stop as ErrorStop {
+      throw stop.error
+    } catch let undispatched as UndispatchedError {
+      throw undispatched.error
+    }
+  }
+
   /// Renders PostScript content to a typed graphics target in `environment`.
   public static func render<Target: GraphicsTarget>(
     content: String,

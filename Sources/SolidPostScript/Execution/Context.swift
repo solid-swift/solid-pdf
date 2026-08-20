@@ -331,7 +331,7 @@ public actor Context {
   }
 
   func render<Renderer: GraphicsRenderer, PageDeviceSession: GraphicsPageDeviceSession>(
-    source: Object,
+    source: Object?,
     pageDeviceSession: sending PageDeviceSession,
     renderer: sending Renderer
   ) async throws -> sending Renderer.Output {
@@ -345,7 +345,7 @@ public actor Context {
       try renderer.activateDevice(graphicsState.device.snapshot)
       try await executeStart()
       try await prepareIdiomResources()
-      try await pushAndRun(source: source)
+      try await pushAndRun(source: try renderSource(source))
       try await finishCurrentPageDevice()
       let output = try renderer.finish()
       graphicsEventConsumer = nil
@@ -358,6 +358,104 @@ public actor Context {
       throw error
     }
   }
+
+  package func renderEncapsulated<Renderer: GraphicsRenderer, PageDeviceSession: GraphicsPageDeviceSession>(
+    source: Object?,
+    bounds: GraphicsRect,
+    strict: Bool,
+    pageDeviceSession: sending PageDeviceSession,
+    renderer: sending Renderer
+  ) async throws -> sending Renderer.Output {
+    precondition(graphicsEventConsumer == nil, "A PostScript context cannot run overlapping renders")
+    try resetGraphics(for: pageDeviceSession.initialConfiguration)
+    graphicsPageDeviceSession = pageDeviceSession
+    try ensurePageDevice()
+    try installCurrentOutputDeviceResource()
+    graphicsEventConsumer = renderer
+    var encapsulationSnapshot: Snapshot?
+    var savedOperands: OperandStack?
+    var savedDictionaries: DictionaryStack?
+    var savedGraphicsState: GraphicsCanonicalState?
+    var savedGraphicsStack: [GraphicsStackFrame]?
+    do {
+      try renderer.activateDevice(graphicsState.device.snapshot)
+      try await executeStart()
+      try await prepareIdiomResources()
+      let snapshot = try snapshot(scope: .job)
+      encapsulationSnapshot = snapshot
+      let operandDepth = operands.depth
+      savedOperands = operands
+      savedDictionaries = dictionaries
+      savedGraphicsState = graphicsState
+      savedGraphicsStack = graphicsStack
+      let emptyProcedure = try Object.array([], access: .unlimited, vm: .local, kind: .executable)
+      let dictionary = try Object.dictionary(
+        [.literalName("showpage"): emptyProcedure],
+        access: .unlimited,
+        vm: .local,
+        kind: .literal
+      )
+      try adopt(dictionary)
+      try dictionaries.push(dictionary)
+      encapsulatedPaintDepth += 1
+      graphicsState.initializeGraphics(for: graphicsDeviceDescriptor)
+      let lowerLeft = GraphicsPoint(x: bounds.x, y: bounds.y)
+      let lowerRight = GraphicsPoint(x: bounds.maxX, y: bounds.y)
+      let upperRight = GraphicsPoint(x: bounds.maxX, y: bounds.maxY)
+      let upperLeft = GraphicsPoint(x: bounds.x, y: bounds.maxY)
+      let boundingPath = GraphicsPath(elements: [
+        .move(to: lowerLeft),
+        .line(to: lowerRight),
+        .line(to: upperRight),
+        .line(to: upperLeft),
+        .close,
+      ]).transformed(by: graphicsState.matrix)
+      let boundingRegion = try GraphicsPathGeometry.region(
+        for: boundingPath,
+        rule: .winding,
+        flatness: graphicsState.flatness
+      )
+      graphicsState.clip = try graphicsState.clip.appending(.init(path: boundingPath, rule: .winding))
+      graphicsState.resolvedClip = try GraphicsPathGeometry.intersect(graphicsState.resolvedClip, boundingRegion)
+      graphicsState.clearPath()
+      try await pushAndRun(source: try renderSource(source))
+      guard !strict || operands.depth == operandDepth else { throw Error.typeCheck }
+      let pageState = graphicsState.snapshot
+      let event = GraphicsEvent(operation: .page(.show), before: pageState, after: pageState)
+      try renderer.transmitPage(event, copies: 1)
+      encapsulatedPaintDepth -= 1
+      operands = savedOperands!
+      dictionaries = savedDictionaries!
+      graphicsState = savedGraphicsState!
+      graphicsStack = savedGraphicsStack!
+      try await snapshot.restore(to: self)
+      try renderer.deactivateDevice(graphicsState.device.snapshot)
+      let output = try renderer.finish()
+      graphicsEventConsumer = nil
+      graphicsPageDeviceSession = nil
+      return output
+    } catch {
+      encapsulatedPaintDepth = max(0, encapsulatedPaintDepth - 1)
+      if let savedOperands { operands = savedOperands }
+      if let savedDictionaries { dictionaries = savedDictionaries }
+      if let savedGraphicsState { graphicsState = savedGraphicsState }
+      if let savedGraphicsStack { graphicsStack = savedGraphicsStack }
+      if let encapsulationSnapshot { try? await encapsulationSnapshot.restore(to: self) }
+      renderer.abort()
+      graphicsEventConsumer = nil
+      graphicsPageDeviceSession = nil
+      throw error
+    }
+  }
+
+  private func renderSource(_ source: Object?) throws -> Object {
+    if let source { return source }
+    try establishStandardFiles()
+    guard var standardInput = standardFiles["stdin"] else { throw Error.undefinedFilename }
+    standardInput.kind = .executable
+    return standardInput
+  }
+
 
   func executeStart() async throws {
     try await withUserTimeAccounting {

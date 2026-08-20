@@ -74,6 +74,10 @@ public final class StandardGraphicsPageDeviceSession: GraphicsPageDeviceSession,
     case .adaptive:
       selectedPageSize = request.pageSize
       selectedResolution = request.resolution
+    case .adaptivePageSize:
+      selectedPageSize = request.pageSize
+      selectedResolution = initialResolution
+      if request.resolution != initialResolution { unsatisfied.insert("HWResolution") }
     case .fixed:
       selectedPageSize = initialPageSize
       selectedResolution = initialResolution

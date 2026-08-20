@@ -48,13 +48,15 @@ where
     )?
     private var cachedGraphicsClip: GraphicsClip?
     private var cachedRasterClip: RasterClip?
+    private let background: RasterColor
 
     fileprivate init(
       pixelWidth: Int,
       pixelHeight: Int,
       descriptor: GraphicsDeviceDescriptor,
       colorSession: ColorEngine.Session,
-      deviceRenderingSession: NativeGraphicsDeviceRenderingSession
+      deviceRenderingSession: NativeGraphicsDeviceRenderingSession,
+      background: RasterColor
     ) throws {
       try Self.validate(pixelWidth: pixelWidth, pixelHeight: pixelHeight, descriptor: descriptor)
       self.pixelWidth = pixelWidth
@@ -62,6 +64,7 @@ where
       self.descriptor = descriptor
       self.colorSession = colorSession
       self.deviceRenderingSession = deviceRenderingSession
+      self.background = background
       rasterMatrix = GraphicsMatrix(
         a: 1,
         b: 0,
@@ -234,6 +237,12 @@ where
       return output
     }
 
+    package func drainTransmittedPages() -> [RasterImage] {
+      let output = pages
+      pages.removeAll(keepingCapacity: true)
+      return output
+    }
+
     /// Abandons the render and all transmitted output.
     public func abort() {
       guard lifecycle == .active else { return }
@@ -279,9 +288,13 @@ where
       else { throw SolidPostScript.Error.configurationError }
     }
 
-    private static func makePage(pixelWidth: Int, pixelHeight: Int) throws -> RasterCanvas {
+    private static func makePage(
+      pixelWidth: Int,
+      pixelHeight: Int,
+      background: RasterColor
+    ) throws -> RasterCanvas {
       do {
-        return try RasterCanvas(width: pixelWidth, height: pixelHeight)
+        return try RasterCanvas(width: pixelWidth, height: pixelHeight, background: background)
       } catch {
         throw SolidPostScript.Error.ioError
       }
@@ -877,7 +890,7 @@ where
       let mediaPath = GraphicsPath.rectangle(descriptor.mediaBounds).transformed(by: rasterMatrix).rasterPath
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(clip))
-        try canvas.fill(mediaPath, rule: .winding, paint: .solid(.white))
+        try canvas.fill(mediaPath, rule: .winding, paint: .solid(background))
       }
     }
 
@@ -958,7 +971,7 @@ where
       if let current = canvas.take() {
         return consume current
       }
-      return try Self.makePage(pixelWidth: pixelWidth, pixelHeight: pixelHeight)
+      return try Self.makePage(pixelWidth: pixelWidth, pixelHeight: pixelHeight, background: background)
     }
 
     private func rasterClip(_ clip: GraphicsClip) throws(RasterError) -> RasterClip {
@@ -1004,6 +1017,8 @@ where
   public let deviceRenderingEngine = NativeGraphicsDeviceRenderingEngine()
   /// The virtual page-device provider used by this target.
   public let pageDeviceProvider: StandardGraphicsPageDeviceProvider
+  /// The page color used for new and erased surfaces.
+  public let background: RasterColor
 
   /// Creates a bitmap target using an explicit PostScript device descriptor.
   public init(
@@ -1011,12 +1026,14 @@ where
     pixelHeight: Int,
     deviceDescriptor: GraphicsDeviceDescriptor,
     colorEngine: ColorEngine,
+    background: RasterColor = .white,
     pageDeviceMode: GraphicsPageDeviceMode = .adaptive
   ) {
     self.pixelWidth = pixelWidth
     self.pixelHeight = pixelHeight
     self.deviceDescriptor = deviceDescriptor
     self.colorEngine = colorEngine
+    self.background = background
     self.pageDeviceProvider = StandardGraphicsPageDeviceProvider(mode: pageDeviceMode)
   }
 
@@ -1048,7 +1065,8 @@ where
       pixelHeight: pixelHeight,
       descriptor: deviceDescriptor,
       colorSession: colorSession,
-      deviceRenderingSession: deviceRenderingSession
+      deviceRenderingSession: deviceRenderingSession,
+      background: background
     )
   }
 }
@@ -1068,6 +1086,7 @@ extension ColorManagedRasterImageTarget where ColorEngine == NativeGraphicsColor
     pixelHeight: Int,
     resolution: Double = 72,
     imageableBounds: GraphicsRect? = nil,
+    background: RasterColor = .white,
     pageDeviceMode: GraphicsPageDeviceMode = .adaptive
   ) {
     let media = GraphicsRect(x: 0, y: 0, width: Double(pixelWidth), height: Double(pixelHeight))
@@ -1090,6 +1109,7 @@ extension ColorManagedRasterImageTarget where ColorEngine == NativeGraphicsColor
       pixelHeight: pixelHeight,
       deviceDescriptor: descriptor,
       colorEngine: NativeGraphicsColorEngine(),
+      background: background,
       pageDeviceMode: pageDeviceMode
     )
   }
@@ -1099,6 +1119,7 @@ extension ColorManagedRasterImageTarget where ColorEngine == NativeGraphicsColor
     pixelWidth: Int,
     pixelHeight: Int,
     deviceDescriptor: GraphicsDeviceDescriptor,
+    background: RasterColor = .white,
     pageDeviceMode: GraphicsPageDeviceMode = .adaptive
   ) {
     self.init(
@@ -1108,6 +1129,7 @@ extension ColorManagedRasterImageTarget where ColorEngine == NativeGraphicsColor
       colorEngine: NativeGraphicsColorEngine(
         destinationProfile: deviceDescriptor.colorDevice.destinationProfile
       ),
+      background: background,
       pageDeviceMode: pageDeviceMode
     )
   }
