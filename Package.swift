@@ -12,6 +12,7 @@ let package = Package(
     .watchOS("26"),
   ],
   products: [
+    .library(name: "SolidPDF", targets: ["SolidPDF"]),
     .library(name: "SolidColor", targets: ["SolidColor"]),
     .library(name: "SolidFont", targets: ["SolidFont"]),
     .library(name: "SolidRaster", targets: ["SolidRaster"]),
@@ -34,6 +35,18 @@ let package = Package(
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
   ],
   targets: [
+    .target(
+      name: "SolidPDF",
+      dependencies: [
+        .product(name: "SolidIO", package: "solid-foundation"),
+      ],
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidPDFTests",
+      dependencies: ["SolidPDF"],
+      plugins: lintPlugins
+    ),
     .target(
       name: "SolidColor",
       plugins: lintPlugins
