@@ -104,4 +104,128 @@ import Testing
     #expect(AdobeGlyphList.unicodeScalars(for: "f_i") == ["f".unicodeScalars.first!, "i".unicodeScalars.first!])
     #expect(AdobeGlyphList.unicodeScalars(for: "u1F600") == [Unicode.Scalar(0x1F600)!])
   }
+
+  @Test func subsetsTrueTypeGlyphsAndCompositeClosure() throws {
+    let data = makeTrueTypeFixture()
+    let descriptor = try FontDescriptor(postScriptName: "SyntheticTT", unitsPerEm: 1_000)
+    let asset = try FontAsset(descriptor: descriptor, format: .sfnt, data: data)
+    let subset = try FontSubsetter.subset(
+      asset,
+      request: FontSubsetRequest(glyphIndexes: [2], preservesHints: false)
+    )
+
+    #expect(subset.format == .trueType)
+    #expect(subset.glyphMapping == [0: 0, 1: 1, 2: 2])
+    let collection = try SFNTCollection(data: subset.data)
+    let maxpData = try collection.faces[0].data(for: 0x6D61_7870, in: subset.data)
+    let maxp = try #require(maxpData)
+    #expect(maxp[4] == 0 && maxp[5] == 3)
+    let cmap = try SFNTCharacterMap(data: subset.data)
+    #expect(cmap.mappings[0x41] == 1)
+    #expect(cmap.mappings[0x42] == 2)
+  }
+}
+
+private func makeTrueTypeFixture() -> Data {
+  var head = Data(repeating: 0, count: 54)
+  head.testReplaceU32(0x0001_0000, at: 0)
+  head.testReplaceU32(0x5F0F_3CF5, at: 12)
+  head.testReplaceU16(1_000, at: 18)
+  head.testReplaceU16(1, at: 50)
+  var maxp = Data(repeating: 0, count: 6)
+  maxp.testReplaceU32(0x0001_0000, at: 0)
+  maxp.testReplaceU16(4, at: 4)
+  var hhea = Data(repeating: 0, count: 36)
+  hhea.testReplaceU32(0x0001_0000, at: 0)
+  hhea.testReplaceU16(800, at: 4)
+  hhea.testReplaceU16(UInt16(bitPattern: -200), at: 6)
+  hhea.testReplaceU16(4, at: 34)
+  var hmtx = Data()
+  for advance: UInt16 in [500, 600, 700, 800] {
+    hmtx.testAppendU16(advance)
+    hmtx.testAppendU16(0)
+  }
+  var simple = Data(repeating: 0, count: 12)
+  simple.testReplaceU16(0, at: 0)
+  simple.testReplaceU16(0, at: 10)
+  var composite = Data(repeating: 0, count: 18)
+  composite.testReplaceU16(0xFFFF, at: 0)
+  composite.testReplaceU16(1, at: 10)
+  composite.testReplaceU16(1, at: 12)
+  var glyf = Data()
+  glyf.append(simple)
+  glyf.append(composite)
+  var loca = Data()
+  for offset: UInt32 in [0, 0, 12, 30, 30] { loca.testAppendU32(offset) }
+  let cmap = makeCMapFixture()
+  var post = Data(repeating: 0, count: 32)
+  post.testReplaceU32(0x0003_0000, at: 0)
+  return makeSFNTFixture([
+    0x636D_6170: cmap, 0x676C_7966: glyf, 0x6865_6164: head,
+    0x6868_6561: hhea, 0x686D_7478: hmtx, 0x6C6F_6361: loca,
+    0x6D61_7870: maxp, 0x706F_7374: post,
+  ])
+}
+
+private func makeCMapFixture() -> Data {
+  var subtable = Data()
+  subtable.testAppendU16(12)
+  subtable.testAppendU16(0)
+  subtable.testAppendU32(28)
+  subtable.testAppendU32(0)
+  subtable.testAppendU32(1)
+  subtable.testAppendU32(0x41)
+  subtable.testAppendU32(0x42)
+  subtable.testAppendU32(1)
+  var result = Data()
+  result.testAppendU16(0)
+  result.testAppendU16(1)
+  result.testAppendU16(3)
+  result.testAppendU16(10)
+  result.testAppendU32(12)
+  result.append(subtable)
+  return result
+}
+
+private func makeSFNTFixture(_ tables: [UInt32: Data]) -> Data {
+  let ordered = tables.sorted { $0.key < $1.key }
+  var result = Data(repeating: 0, count: 12 + ordered.count * 16)
+  result.testReplaceU32(0x0001_0000, at: 0)
+  result.testReplaceU16(UInt16(ordered.count), at: 4)
+  for (index, table) in ordered.enumerated() {
+    while !result.count.isMultiple(of: 4) { result.append(0) }
+    let offset = result.count
+    result.append(table.value)
+    let record = 12 + index * 16
+    result.testReplaceU32(table.key, at: record)
+    result.testReplaceU32(UInt32(offset), at: record + 8)
+    result.testReplaceU32(UInt32(table.value.count), at: record + 12)
+  }
+  return result
+}
+
+private extension Data {
+  mutating func testAppendU16(_ value: UInt16) {
+    append(UInt8(truncatingIfNeeded: value >> 8))
+    append(UInt8(truncatingIfNeeded: value))
+  }
+
+  mutating func testAppendU32(_ value: UInt32) {
+    append(UInt8(truncatingIfNeeded: value >> 24))
+    append(UInt8(truncatingIfNeeded: value >> 16))
+    append(UInt8(truncatingIfNeeded: value >> 8))
+    append(UInt8(truncatingIfNeeded: value))
+  }
+
+  mutating func testReplaceU16(_ value: UInt16, at offset: Int) {
+    self[offset] = UInt8(truncatingIfNeeded: value >> 8)
+    self[offset + 1] = UInt8(truncatingIfNeeded: value)
+  }
+
+  mutating func testReplaceU32(_ value: UInt32, at offset: Int) {
+    self[offset] = UInt8(truncatingIfNeeded: value >> 24)
+    self[offset + 1] = UInt8(truncatingIfNeeded: value >> 16)
+    self[offset + 2] = UInt8(truncatingIfNeeded: value >> 8)
+    self[offset + 3] = UInt8(truncatingIfNeeded: value)
+  }
 }

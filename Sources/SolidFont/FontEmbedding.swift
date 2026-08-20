@@ -123,7 +123,19 @@ public enum FontSubsetter {
         limits: limits
       )
     case .sfnt:
-      throw FontError.unsupportedFormat
+      let permissions = try permissions(for: asset)
+      guard permissions.allowsEmbedding, !permissions.bitmapOnly else {
+        throw FontError.unsupportedFormat
+      }
+      return try SFNTFontSubsetter.subset(
+        data: data,
+        faceIndex: asset.faceIndex,
+        descriptor: asset.descriptor,
+        request: request,
+        forcesCompleteFace: !permissions.allowsSubsetting,
+        prefix: prefix,
+        limits: limits
+      )
     case .type1:
       return try Type1FontSubsetter.subset(
         data: data,
