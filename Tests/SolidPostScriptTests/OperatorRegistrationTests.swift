@@ -17,6 +17,10 @@ struct OperatorRegistrationTests {
       try systemDictionary.objectValue(forKey: "currentfile", as: Operators.CurrentFile.self)
         == Operators.CurrentFile.instance
     )
+    #expect(
+      try systemDictionary.objectValue(forKey: "eexec", as: Operators.EExec.self)
+        == Operators.EExec.instance
+    )
     for name in ["defineresource", "undefineresource", "findresource", "resourcestatus", "resourceforall"] {
       #expect(try systemDictionary.object(forKey: .literalName(name)).value is Operators.ResourceOperator)
     }

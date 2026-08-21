@@ -22,6 +22,16 @@ import Testing
     #expect(try FontCharStringDecoder.decryptType1(Data([1, 2]), lenIV: -1) == Data([1, 2]))
   }
 
+  @Test func decryptsPublishedType1CharStringCiphertext() throws {
+    let ciphertext = try #require(Data(
+      hexadecimal: "10BF31704FAB5B1F03F9B68B1F39A66521B1841F1481697F8E12B7F7DDD6E3D7248D965B1CD45E2114"
+    ))
+    let expected = try #require(Data(
+      hexadecimal: "BDF9B40D8BEF038BEF01F8ECEF018B16F95006EF07FCEC06F88807F8EC06EF07FD5006090E"
+    ))
+    #expect(try FontCharStringDecoder.decryptType1(ciphertext) == expected)
+  }
+
   @Test func type2ArithmeticAndSubroutineOperandsRemainAvailable() throws {
     let arithmetic = try FontCharStringDecoder.decode(
       Data([141, 142, 12, 10, 143, 12, 24, 22, 14]),
@@ -46,5 +56,19 @@ import Testing
       FontCharStringComponent(characterCode: 65, offset: FontPoint(x: 0, y: 0)),
       FontCharStringComponent(characterCode: 66, offset: FontPoint(x: 10, y: 20)),
     ])
+  }
+}
+
+private extension Data {
+  init?(hexadecimal: String) {
+    guard hexadecimal.count.isMultiple(of: 2) else { return nil }
+    self.init(capacity: hexadecimal.count / 2)
+    var index = hexadecimal.startIndex
+    while index < hexadecimal.endIndex {
+      let end = hexadecimal.index(index, offsetBy: 2)
+      guard let byte = UInt8(hexadecimal[index..<end], radix: 16) else { return nil }
+      append(byte)
+      index = end
+    }
   }
 }

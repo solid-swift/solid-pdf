@@ -109,6 +109,18 @@ struct DictionaryStack {
     try storage[storage.index(storage.endIndex, offsetBy: -1)].value(as: DictionaryValue.self)
   }
 
+  func systemDictionaryObject() throws -> Object {
+    let object = storage[storage.index(storage.endIndex, offsetBy: -1)]
+    _ = try object.value(as: DictionaryValue.self)
+    return object
+  }
+
+  func preflightPush() throws {
+    guard depth < maximumDepth else {
+      throw Error.dictionaryStackOverflow
+    }
+  }
+
   func peek() -> Object? {
     storage.peek()
   }
@@ -136,9 +148,7 @@ struct DictionaryStack {
   mutating func push(_ element: Object) throws {
 
     _ = try element.value(as: DictionaryValue.self)
-    guard depth < maximumDepth else {
-      throw Error.dictionaryStackOverflow
-    }
+    try preflightPush()
 
     storage.push(element)
   }

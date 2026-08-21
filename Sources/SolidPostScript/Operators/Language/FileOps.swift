@@ -31,6 +31,7 @@ extension Operators {
     SetPosition.instance,
     CurrentFile.instance,
     Run.instance,
+    EExec.instance,
   ]
 
   /// Implements the PostScript `file` operator.
@@ -503,6 +504,49 @@ extension Operators {
       try await OpenFile.instance.execute(context: context)
       let fileObject = try context.operands.pop()
       try await context.executeRun(.init(value: fileObject.value, kind: .executable))
+    }
+  }
+
+  /// Implements the PostScript `eexec` operator.
+  public enum EExec: OperatorValue {
+    case instance
+
+    /// The names that register this operator in the system dictionary.
+    public static let systemDictionaryNames: [Object] = ["eexec"]
+
+    /// Executes this value in the supplied interpreter context.
+    public func execute(context: isolated Context) async throws {
+      let source = try context.operands.pop()
+      let vm: VM
+      switch source.value {
+      case let file as FileValue:
+        try file.access.check(.read)
+        guard file.mode != .write else { throw Error.invalidFileAccess }
+        vm = file.vm
+      case let string as StringValue:
+        try string.access.check(.read)
+        vm = string.vm
+      default:
+        throw Error.typeCheck
+      }
+
+      try context.dictionaries.preflightPush()
+      try context.preflightAllocation(bytes: 32, vm: vm)
+      let file = try EExecFile(source: source)
+      let allocation = try context.register(file: file, vm: vm)
+      let object = Object.file(file, access: .readOnly, vm: vm, allocation: allocation, kind: .executable)
+
+      do {
+        try context.beginEExecScope(for: file)
+        try await context.executeAny(object)
+        if !file.isClosed {
+          try await context.closeLogicalFile(file)
+        }
+      } catch {
+        try? await context.closeLogicalFile(file)
+        context.closeEExecScope(for: file)
+        throw error
+      }
     }
   }
 

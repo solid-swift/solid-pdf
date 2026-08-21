@@ -13,7 +13,7 @@ every semantic combination in the PLRM.
 
 | Surface | Inventoried result |
 | --- | --- |
-| `systemdict` operators and compatibility aliases | 326 implemented; `eexec` nonconforming |
+| `systemdict` operators and compatibility aliases | All 327 implemented |
 | LanguageLevel 3 ProcSet operators | 33 implemented across five ProcSets |
 | Resource categories | 36 advertised, including the environment-selected `CIDFontType` category and `Generic` |
 | Standard filters | 17 implemented and advertised as implicit Filter resources |
@@ -47,13 +47,7 @@ The postponed filter tranche is complete at the portable runtime boundary:
 
 ## Remaining conformance stages
 
-### 1. Complete Type 1 encrypted execution
-
-`eexec` is the only ordinary PLRM operator currently absent. Portable Type 1 parsing exists in `SolidFont`, but the
-language operator must still implement hexadecimal/binary detection, Type 1 decryption, filtered execution with
-`systemdict` on the dictionary stack, current-file resumption, and exact close/error behavior.
-
-### 2. Complete implicit resource advertisement
+### 1. Complete implicit resource advertisement
 
 The underlying semantics exist for the standard color spaces and type 1 color rendering, but the corresponding
 implicit resources are not reported by `resourcestatus` or `resourceforall`. `FMapType` also advertises and implements
@@ -64,7 +58,7 @@ types 2 through 9 while the PLRM requires types 1 through 9. This stage should a
 - `ColorRenderingType` instance 1.
 - FMapType 1 mapping semantics and its implicit resource.
 
-### 3. Make accounting parameters authoritative
+### 2. Make accounting parameters authoritative
 
 The Appendix C keys exist, but `FactoryDefaults` lacks its persistent reset lifecycle and several display/source/cache
 values are placeholders rather than live measurements. `MaxDisplayList`, `MaxSourceList`,
@@ -72,7 +66,7 @@ values are placeholders rather than live measurements. `MaxDisplayList`, `MaxSou
 PLRM. These should be connected to the existing display-list, image-stream, and font-program owners rather than
 maintaining parallel counters.
 
-### 4. Run an independent exhaustive semantic audit
+### 3. Run an independent exhaustive semantic audit
 
 Registration coverage now prevents surface drift, but it cannot prove every error precedence, callback boundary,
 save/restore interaction, external-resource load, or provider capability matrix. The next audit should consume the

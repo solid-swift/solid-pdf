@@ -35,12 +35,10 @@ public enum FontCharStringDecoder {
   public static func decryptType1(_ data: Data, lenIV: Int = 4) throws -> Data {
     guard lenIV >= -1 else { throw FontError.range }
     if lenIV == -1 { return data }
-    var state: UInt16 = 4_330
+    var cipher = Type1CipherState(seed: Type1CipherState.charStringSeed)
     var decoded = Data(capacity: data.count)
     for byte in data {
-      let plain = byte ^ UInt8(truncatingIfNeeded: state >> 8)
-      state = UInt16(truncatingIfNeeded: (UInt32(byte) + UInt32(state)) * 52_845 + 22_719)
-      decoded.append(plain)
+      decoded.append(cipher.decrypt(byte))
     }
     guard decoded.count >= lenIV else { throw FontError.invalidData }
     return Data(decoded.dropFirst(lenIV))

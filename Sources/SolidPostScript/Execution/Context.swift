@@ -87,6 +87,7 @@ public actor Context {
   private var standardFiles: [String: Object] = [:]
   var fileReadAhead: [ObjectIdentifier: FileReadAhead] = [:]
   var filePendingEndOfFile: [ObjectIdentifier: any File] = [:]
+  var eexecScopes: [EExecExecutionScope] = []
   var graphicsDeviceDescriptor: GraphicsDeviceDescriptor = .letter
   var graphicsPageDeviceSession: (any GraphicsPageDeviceSession)?
   var graphicsEventConsumer: (any GraphicsEventConsumer)?
@@ -627,7 +628,7 @@ public actor Context {
         )
         continue
       } catch let failure as PostScriptParameterFailure {
-        let command = execution.peek()?.source ?? .null
+        let command = executionErrorCommand()
         try await initiate(failure: failure, command: command, savedOperands: savedOperands)
         continue
       } catch let error as Error {
@@ -635,7 +636,7 @@ public actor Context {
           throw error
         }
 
-        let command = execution.peek()?.source ?? .null
+        let command = executionErrorCommand()
         try await initiate(error: error, command: command, savedOperands: savedOperands)
         continue
       }
@@ -685,6 +686,14 @@ public actor Context {
     case .string(let description):
       .string(description, access: .unlimited, vm: allocationMode, kind: .literal)
     }
+  }
+
+  private func executionErrorCommand() -> Object {
+    let source = execution.peek()?.source ?? .null
+    guard !eexecScopes.isEmpty || (source.value as? FileValue)?.file is EExecFile else {
+      return source
+    }
+    return Object(value: Operators.EExec.instance)
   }
 
   private func initiate(
