@@ -7,7 +7,10 @@ import Testing
     let data = Data([
       139, 248, 236, 13,
       139, 139, 21,
-      248, 136, 139, 139, 249, 80, 252, 136, 139, 139, 253, 80, 5,
+      248, 136, 139, 5,
+      139, 249, 80, 5,
+      252, 136, 139, 5,
+      139, 253, 80, 5,
       9, 14,
     ])
     let result = try FontCharStringDecoder.decode(data, dialect: .type1)
@@ -56,6 +59,135 @@ import Testing
       FontCharStringComponent(characterCode: 65, offset: FontPoint(x: 0, y: 0)),
       FontCharStringComponent(characterCode: 66, offset: FontPoint(x: 10, y: 20)),
     ])
+  }
+
+  @Test func acceptsType1LegacyHintsAndDotSections() throws {
+    let result = try FontCharStringDecoder.decode(
+      Data([
+        12, 0,
+        139, 140, 141, 142, 143, 144, 12, 1,
+        139, 140, 141, 142, 143, 144, 12, 2,
+        149, 159, 21, 12, 0, 14,
+      ]),
+      dialect: .type1
+    )
+    #expect(result.outline.elements == [.move(FontPoint(x: 10, y: 20))])
+  }
+
+  @Test func decodesType1FlexOtherSubroutinesIntoTwoCurves() throws {
+    let result = try FontCharStringDecoder.decode(
+      Data([
+        139, 139, 21,
+        139, 140, 12, 16,
+        189, 139, 21, 139, 141, 12, 16,
+        99, 139, 21, 139, 141, 12, 16,
+        149, 149, 21, 139, 141, 12, 16,
+        169, 139, 21, 139, 141, 12, 16,
+        169, 139, 21, 139, 141, 12, 16,
+        149, 129, 21, 139, 141, 12, 16,
+        149, 139, 21, 139, 141, 12, 16,
+        149, 239, 139, 142, 139, 12, 16,
+        12, 17, 12, 17, 12, 33, 14,
+      ]),
+      dialect: .type1
+    )
+    #expect(result.outline.elements == [
+      .move(FontPoint(x: 0, y: 0)),
+      .cubic(
+        control1: FontPoint(x: 10, y: 0),
+        control2: FontPoint(x: 20, y: 10),
+        end: FontPoint(x: 50, y: 10)
+      ),
+      .cubic(
+        control1: FontPoint(x: 80, y: 10),
+        control2: FontPoint(x: 90, y: 0),
+        end: FontPoint(x: 100, y: 0)
+      ),
+    ])
+  }
+
+  @Test func preservesMultipleMasterOtherSubroutineResultOrdering() throws {
+    let result = try FontCharStringDecoder.decode(
+      Data([149, 159, 143, 147, 143, 154, 12, 16, 12, 17, 12, 17, 21, 14]),
+      dialect: .type1,
+      multipleMasterWeights: [0.25]
+    )
+    #expect(result.outline.elements == [.move(FontPoint(x: 11, y: 22))])
+  }
+
+  @Test func type1HintReplacementAndUnknownOtherSubroutinesPreserveResults() throws {
+    let hintReplacement = try FontCharStringDecoder.decode(
+      Data([143, 140, 142, 12, 16, 12, 17, 10, 139, 22, 14]),
+      dialect: .type1,
+      localSubroutines: [Data([11]), Data([11]), Data([11]), Data([11]), Data([139, 159, 1, 11])]
+    )
+    #expect(hintReplacement.outline.elements == [.move(FontPoint(x: 0, y: 0))])
+
+    let unknown = try FontCharStringDecoder.decode(
+      Data([149, 159, 141, 143, 12, 16, 12, 17, 12, 17, 21, 14]),
+      dialect: .type1
+    )
+    #expect(unknown.outline.elements == [.move(FontPoint(x: 10, y: 20))])
+  }
+
+  @Test func type2IfElseUsesSpecificationOperandOrder() throws {
+    let first = try FontCharStringDecoder.decode(
+      Data([149, 159, 140, 141, 12, 22, 22, 14]),
+      dialect: .type2
+    )
+    #expect(first.outline.elements == [.move(FontPoint(x: 10, y: 0))])
+
+    let second = try FontCharStringDecoder.decode(
+      Data([149, 159, 142, 141, 12, 22, 22, 14]),
+      dialect: .type2
+    )
+    #expect(second.outline.elements == [.move(FontPoint(x: 20, y: 0))])
+  }
+
+  @Test func type2HFlex1RestoresTheStartingYCoordinate() throws {
+    let result = try FontCharStringDecoder.decode(
+      Data([149, 141, 159, 142, 169, 179, 189, 143, 199, 12, 36, 14]),
+      dialect: .type2
+    )
+    #expect(result.outline.elements == [
+      .cubic(
+        control1: FontPoint(x: 10, y: 2),
+        control2: FontPoint(x: 30, y: 5),
+        end: FontPoint(x: 60, y: 5)
+      ),
+      .cubic(
+        control1: FontPoint(x: 100, y: 5),
+        control2: FontPoint(x: 150, y: 9),
+        end: FontPoint(x: 210, y: 0)
+      ),
+    ])
+  }
+
+  @Test func type2AcceptsDeprecatedDotSectionAndCompositeEndChar() throws {
+    let result = try FontCharStringDecoder.decode(
+      Data([189, 12, 0, 149, 159, 204, 205, 14]),
+      dialect: .type2,
+      nominalWidth: 500
+    )
+    #expect(result.advance == FontPoint(x: 550, y: 0))
+    #expect(result.components == [
+      FontCharStringComponent(characterCode: 65, offset: FontPoint(x: 0, y: 0)),
+      FontCharStringComponent(characterCode: 66, offset: FontPoint(x: 10, y: 20)),
+    ])
+  }
+
+  @Test func enforcesOutlineAndTerminationLimits() throws {
+    let limits = try FontParsingLimits(maximumOutlineElements: 1)
+    #expect(throws: FontError.limitExceeded) {
+      _ = try FontCharStringDecoder.decode(
+        Data([139, 22, 140, 139, 5, 14]),
+        dialect: .type2,
+        limits: limits
+      )
+    }
+    #expect(throws: FontError.invalidData) {
+      _ = try FontCharStringDecoder.decode(Data([139, 22]), dialect: .type2)
+    }
   }
 }
 

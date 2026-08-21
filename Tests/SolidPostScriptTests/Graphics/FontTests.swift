@@ -161,7 +161,7 @@ import Testing
         /Private 2 dict dup begin /lenIV -1 def end def
         /CharStrings 2 dict dup begin
           /.notdef <8BF8EC0D0E> def
-          /A <8BF8EC0D8B8B15F8888B8BF950FC888B8BFDB005090E> def
+          /A <8BF8EC0D8B8B15F8888B058BF95005FC888B058BFDB005090E> def
         end def
         /Metrics 1 dict dup begin /A [10 700] def end def
       end definefont pop
@@ -180,7 +180,7 @@ import Testing
         /Private 2 dict dup begin /lenIV -1 def end def
         /CharStrings 2 dict dup begin
           /.notdef <8BF8EC0D0E> def
-          /A <8BF8EC0D8B8B15F8888B8BF950FC888B8BFDB005090E> def
+          /A <8BF8EC0D8B8B15F8888B058BF95005FC888B058BFDB005090E> def
         end def
         /CDevProc {
           pop pop pop pop pop pop pop pop pop pop pop

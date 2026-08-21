@@ -58,6 +58,8 @@ public enum FontCharStringDecoder {
     guard data.count <= limits.maximumDataBytes,
       localSubroutines.count <= limits.maximumObjects,
       globalSubroutines.count <= limits.maximumObjects,
+      dialect != .type2 || localSubroutines.count <= 65_536,
+      dialect != .type2 || globalSubroutines.count <= 65_536,
       multipleMasterWeights.allSatisfy({ $0.isFinite })
     else { throw FontError.limitExceeded }
     var decoder = Decoder(
@@ -69,7 +71,7 @@ public enum FontCharStringDecoder {
       multipleMasterWeights: multipleMasterWeights,
       limits: limits
     )
-    try decoder.run(data, depth: 0)
+    guard try decoder.run(data, depth: 0) else { throw FontError.invalidData }
     return DecodedFontCharString(
       outline: FontOutline(elements: decoder.elements),
       advance: FontPoint(x: decoder.width, y: decoder.verticalWidth),
@@ -96,6 +98,7 @@ private struct Decoder {
   var stemCount = 0
   var transient = Array(repeating: 0.0, count: 32)
   var otherSubroutineResults: [Double] = []
+  var type1FlexPoints: [FontPoint]?
   var randomState: UInt32 = 0x7384_1957
 
   init(
@@ -117,9 +120,10 @@ private struct Decoder {
     self.width = defaultWidth
   }
 
-  mutating func run(_ data: Data, depth: Int) throws {
+  mutating func run(_ data: Data, depth: Int) throws -> Bool {
     guard depth <= limits.maximumSubroutineDepth,
-      elements.count <= limits.maximumOutlineElements
+      elements.count <= limits.maximumOutlineElements,
+      dialect != .type2 || data.count <= 65_535
     else { throw FontError.limitExceeded }
     var index = data.startIndex
     while index < data.endIndex {
@@ -127,7 +131,7 @@ private struct Decoder {
       index += 1
       if byte >= 32 || byte == 28 || byte == 255 {
         stack.append(try number(byte, data: data, index: &index))
-        guard stack.count <= limits.maximumOperandStack else { throw FontError.limitExceeded }
+        try validateOperandStackLimit()
         continue
       }
       if byte == 12 {
@@ -139,7 +143,7 @@ private struct Decoder {
       }
       if byte == 11 {
         guard depth > 0 else { throw FontError.invalidData }
-        return
+        return false
       }
       if dialect == .type2, byte == 19 || byte == 20 {
         try consumeStems()
@@ -148,25 +152,32 @@ private struct Decoder {
         index += maskBytes
         continue
       }
-      try operation(byte, depth: depth)
-      if byte == 14 { return }
+      if try operation(byte, depth: depth) { return true }
     }
+    throw FontError.invalidData
   }
 
-  mutating func operation(_ operation: UInt8, depth: Int) throws {
+  mutating func operation(_ operation: UInt8, depth: Int) throws -> Bool {
     switch operation {
-    case 1, 3, 18, 23:
+    case 1, 3:
+      if dialect == .type1 { _ = try exact(2) } else { try consumeStems() }
+    case 18, 23:
+      guard dialect == .type2 else { throw FontError.unsupportedFormat }
       try consumeStems()
     case 4:
       try takeWidthIfNeeded(expected: 1)
-      try move(dx: 0, dy: try pop())
+      let values = try exact(1)
+      try move(dx: 0, dy: values[0])
     case 5:
       let values = takeAll()
-      guard values.count.isMultiple(of: 2) else { throw FontError.invalidData }
+      guard dialect == .type2 ? values.count.isMultiple(of: 2) : values.count == 2 else {
+        throw FontError.invalidData
+      }
       for index in stride(from: 0, to: values.count, by: 2) {
         try line(dx: values[index], dy: values[index + 1])
       }
     case 6, 7:
+      if dialect == .type1, stack.count != 1 { throw FontError.invalidData }
       var horizontal = operation == 6
       for value in takeAll() {
         try line(dx: horizontal ? value : 0, dy: horizontal ? 0 : value)
@@ -174,32 +185,39 @@ private struct Decoder {
       }
     case 8:
       let values = takeAll()
-      guard values.count.isMultiple(of: 6) else { throw FontError.invalidData }
+      guard dialect == .type2 ? values.count.isMultiple(of: 6) : values.count == 6 else {
+        throw FontError.invalidData
+      }
       for index in stride(from: 0, to: values.count, by: 6) {
         try curve(Array(values[index..<index + 6]))
       }
     case 9:
-      if dialect == .type1 { elements.append(.close); stack.removeAll() } else { throw FontError.invalidData }
+      guard dialect == .type1, stack.isEmpty else { throw FontError.invalidData }
+      try appendElement(.close)
     case 10:
       let operand = try integer(try pop())
       let index = dialect == .type2 ? operand + subroutineBias(localSubroutines.count) : operand
       guard localSubroutines.indices.contains(index) else { throw FontError.invalidData }
-      try run(localSubroutines[index], depth: depth + 1)
+      if try run(localSubroutines[index], depth: depth + 1) { return true }
     case 13 where dialect == .type1:
       let values = try exact(2)
       point = FontPoint(x: values[0], y: 0)
       width = values[1]
       widthSeen = true
     case 14:
-      if dialect == .type2 { try takeWidthIfNeeded(expected: 0) }
-      stack.removeAll()
+      if dialect == .type2 {
+        try finishType2()
+      } else if !stack.isEmpty || type1FlexPoints != nil {
+        throw FontError.invalidData
+      }
     case 21:
       try takeWidthIfNeeded(expected: 2)
       let values = try exact(2)
       try move(dx: values[0], dy: values[1])
     case 22:
       try takeWidthIfNeeded(expected: 1)
-      try move(dx: try pop(), dy: 0)
+      let values = try exact(1)
+      try move(dx: values[0], dy: 0)
     case 24 where dialect == .type2:
       let values = takeAll()
       guard values.count >= 8, (values.count - 2).isMultiple(of: 6) else { throw FontError.invalidData }
@@ -230,16 +248,28 @@ private struct Decoder {
     case 29 where dialect == .type2:
       let operand = try integer(try pop()) + subroutineBias(globalSubroutines.count)
       guard globalSubroutines.indices.contains(operand) else { throw FontError.invalidData }
-      try run(globalSubroutines[operand], depth: depth + 1)
+      if try run(globalSubroutines[operand], depth: depth + 1) { return true }
     case 30, 31:
-      try alternatingCurves(startsVertical: operation == 30)
+      if dialect == .type1 {
+        let values = try exact(4)
+        try curve(operation == 30
+          ? [0, values[0], values[1], values[2], values[3], 0]
+          : [values[0], 0, values[1], values[2], 0, values[3]])
+      } else {
+        try alternatingCurves(startsVertical: operation == 30)
+      }
     default:
       throw FontError.unsupportedFormat
     }
+    return operation == 14
   }
 
   mutating func escapedOperator(_ operation: UInt8) throws {
     switch (dialect, operation) {
+    case (_, 0):
+      break
+    case (.type1, 1), (.type1, 2):
+      _ = try exact(6)
     case (.type1, 6):
       let values = try exact(5)
       let base = try byte(values[3])
@@ -298,11 +328,11 @@ private struct Decoder {
       guard transient.indices.contains(index) else { throw FontError.invalidData }
       stack.append(transient[index])
     case (.type2, 22):
-      let second = try pop()
-      let first = try pop()
-      let comparison = try pop()
-      let comparisonBase = try pop()
-      stack.append(comparisonBase <= comparison ? first : second)
+      let v2 = try pop()
+      let v1 = try pop()
+      let s2 = try pop()
+      let s1 = try pop()
+      stack.append(v1 <= v2 ? s1 : s2)
     case (.type2, 23):
       randomState = randomState &* 1_664_525 &+ 1_013_904_223
       stack.append((Double(randomState) + 1) / (Double(UInt32.max) + 2))
@@ -345,7 +375,8 @@ private struct Decoder {
       try curve(Array(v[0..<6])); try curve(Array(v[6..<12]))
     case (.type2, 36):
       let v = try exact(9)
-      try curve(Array(v[0..<6])); try curve([v[6], v[7], v[8], 0, 0, 0])
+      try curve([v[0], v[1], v[2], v[3], v[4], 0])
+      try curve([v[5], 0, v[6], v[7], v[8], -(v[1] + v[3] + v[7])])
     case (.type2, 37):
       let v = try exact(11)
       let dx = v[0] + v[2] + v[4] + v[6] + v[8]
@@ -355,7 +386,7 @@ private struct Decoder {
     default:
       throw FontError.unsupportedFormat
     }
-    guard stack.count <= limits.maximumOperandStack else { throw FontError.limitExceeded }
+    try validateOperandStackLimit()
   }
 
   mutating func callOtherSubroutine() throws {
@@ -365,26 +396,52 @@ private struct Decoder {
     let arguments = Array(stack.suffix(argumentCount))
     stack.removeLast(argumentCount)
     switch subroutine {
-    case 0...3:
-      // Adobe flex protocol. The actual curve points remain on the Type 1
-      // charstring stack and are emitted by the following setcurrentpoint.
+    case 0:
+      guard arguments.count == 3, let points = type1FlexPoints, points.count == 7 else {
+        throw FontError.invalidData
+      }
+      try appendType1Flex(points)
+      type1FlexPoints = nil
+      point = FontPoint(x: arguments[1], y: arguments[2])
+      otherSubroutineResults = [point.x, point.y].reversed()
+    case 1:
+      guard arguments.isEmpty, type1FlexPoints == nil else { throw FontError.invalidData }
+      type1FlexPoints = []
+    case 2:
+      guard arguments.isEmpty, var points = type1FlexPoints, points.count < 7 else {
+        throw FontError.invalidData
+      }
+      points.append(point)
+      type1FlexPoints = points
+    case 3:
+      guard arguments.count == 1 else { throw FontError.invalidData }
       otherSubroutineResults = arguments.reversed()
     case 14...18:
-      guard !multipleMasterWeights.isEmpty, arguments.count.isMultiple(of: multipleMasterWeights.count + 1) else {
+      let resultCount = switch subroutine {
+      case 14: 1
+      case 15: 2
+      case 16: 3
+      case 17: 4
+      default: 6
+      }
+      let masterCount = multipleMasterWeights.count + 1
+      guard !multipleMasterWeights.isEmpty, arguments.count == resultCount * masterCount else {
         throw FontError.invalidData
       }
       var results: [Double] = []
-      let width = multipleMasterWeights.count + 1
-      for start in stride(from: 0, to: arguments.count, by: width) {
-        var value = arguments[start]
+      results.reserveCapacity(resultCount)
+      for resultIndex in 0..<resultCount {
+        var value = arguments[resultIndex]
+        let deltaStart = resultCount + resultIndex * multipleMasterWeights.count
         for index in multipleMasterWeights.indices {
-          value += arguments[start + index + 1] * multipleMasterWeights[index]
+          value += arguments[deltaStart + index] * multipleMasterWeights[index]
         }
+        guard value.isFinite else { throw FontError.invalidData }
         results.append(value)
       }
       otherSubroutineResults = results.reversed()
     default:
-      throw FontError.unsupportedFormat
+      otherSubroutineResults = arguments.reversed()
     }
   }
 
@@ -401,7 +458,9 @@ private struct Decoder {
       width = nominalWidth + stack.removeFirst(); widthSeen = true
     }
     guard stack.count.isMultiple(of: 2) else { throw FontError.invalidData }
-    stemCount += stack.count / 2
+    let additional = stack.count / 2
+    guard stemCount <= 96 - additional else { throw FontError.limitExceeded }
+    stemCount += additional
     stack.removeAll()
   }
 
@@ -413,13 +472,43 @@ private struct Decoder {
 
   mutating func move(dx: Double, dy: Double) throws {
     point = FontPoint(x: point.x + dx, y: point.y + dy)
-    elements.append(.move(point))
+    if type1FlexPoints == nil { try appendElement(.move(point)) }
     stack.removeAll()
+  }
+
+  mutating func appendType1Flex(_ points: [FontPoint]) throws {
+    guard points.count == 7 else { throw FontError.invalidData }
+    guard elements.count <= limits.maximumOutlineElements - 2 else { throw FontError.limitExceeded }
+    elements.append(.cubic(control1: points[1], control2: points[2], end: points[3]))
+    elements.append(.cubic(control1: points[4], control2: points[5], end: points[6]))
+  }
+
+  mutating func appendElement(_ element: FontOutline.Element) throws {
+    guard elements.count < limits.maximumOutlineElements else { throw FontError.limitExceeded }
+    elements.append(element)
+  }
+
+  mutating func finishType2() throws {
+    if !widthSeen {
+      if stack.count == 1 || stack.count == 5 {
+        width = nominalWidth + stack.removeFirst()
+      }
+      widthSeen = true
+    }
+    if stack.isEmpty { return }
+    let values = try exact(4)
+    components = [
+      FontCharStringComponent(characterCode: try byte(values[2]), offset: FontPoint(x: 0, y: 0)),
+      FontCharStringComponent(
+        characterCode: try byte(values[3]),
+        offset: FontPoint(x: values[0], y: values[1])
+      ),
+    ]
   }
 
   mutating func line(dx: Double, dy: Double) throws {
     point = FontPoint(x: point.x + dx, y: point.y + dy)
-    elements.append(.line(point))
+    try appendElement(.line(point))
   }
 
   mutating func curve(_ v: [Double]) throws {
@@ -427,7 +516,7 @@ private struct Decoder {
     let first = FontPoint(x: point.x + v[0], y: point.y + v[1])
     let second = FontPoint(x: first.x + v[2], y: first.y + v[3])
     point = FontPoint(x: second.x + v[4], y: second.y + v[5])
-    elements.append(.cubic(control1: first, control2: second, end: point))
+    try appendElement(.cubic(control1: first, control2: second, end: point))
   }
 
   mutating func alternatingCurves(startsVertical: Bool) throws {
@@ -474,6 +563,13 @@ private struct Decoder {
     return value
   }
   mutating func takeAll() -> [Double] { defer { stack.removeAll(keepingCapacity: true) }; return stack }
+
+  func validateOperandStackLimit() throws {
+    let dialectLimit = dialect == .type1 ? 24 : 48
+    guard stack.count <= min(limits.maximumOperandStack, dialectLimit) else {
+      throw FontError.limitExceeded
+    }
+  }
 
   func subroutineBias(_ count: Int) -> Int { count < 1_240 ? 107 : count < 33_900 ? 1_131 : 32_768 }
 
