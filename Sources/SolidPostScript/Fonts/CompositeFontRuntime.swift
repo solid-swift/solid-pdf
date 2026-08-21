@@ -3,6 +3,7 @@ import Foundation
 extension Operators {
   struct MappedCharacter {
     let sourceCode: UInt8
+    let sourceBytes: Data
     let selector: GraphicsGlyphSelector
     let font: FontDefinition
     let effectiveMatrix: GraphicsMatrix
@@ -27,6 +28,7 @@ extension Operators {
       return try bytes.map { byte in
         MappedCharacter(
           sourceCode: byte,
+          sourceBytes: Data([byte]),
           selector: try glyphSelector(byte, font: font),
           font: font,
           effectiveMatrix: font.matrix
@@ -47,12 +49,21 @@ extension Operators {
       let descendant = try fontDefinition(descendantObject, context: context)
       if descendant.type == 0 {
         guard case .code(let code) = mapping.selector else { throw Error.invalidFont }
-        result.append(contentsOf: try mapCharacters(
+        let descendants = try mapCharacters(
           code,
           font: descendant,
           depth: depth + 1,
           context: context
-        ))
+        )
+        result.append(contentsOf: descendants.map {
+          MappedCharacter(
+            sourceCode: mapping.sourceCode,
+            sourceBytes: mapping.sourceBytes,
+            selector: $0.selector,
+            font: $0.font,
+            effectiveMatrix: $0.effectiveMatrix.concatenated(with: font.matrix)
+          )
+        })
         continue
       }
       let selector: GraphicsGlyphSelector
@@ -66,6 +77,7 @@ extension Operators {
       }
       result.append(MappedCharacter(
         sourceCode: mapping.sourceCode,
+        sourceBytes: mapping.sourceBytes,
         selector: selector,
         font: descendant,
         effectiveMatrix: descendant.matrix.concatenated(with: font.matrix)
@@ -82,6 +94,7 @@ extension Operators {
 
   private struct CompositeMapping {
     let sourceCode: UInt8
+    let sourceBytes: Data
     let font: Int32
     let selector: CompositeSelector
   }
@@ -93,13 +106,23 @@ extension Operators {
     case 2:
       guard bytes.count.isMultiple(of: 2) else { throw Error.rangeCheck }
       return stride(from: 0, to: bytes.count, by: 2).map {
-        CompositeMapping(sourceCode: bytes[$0 + 1], font: Int32(bytes[$0]), selector: .code(Data([bytes[$0 + 1]])))
+        CompositeMapping(
+          sourceCode: bytes[$0 + 1],
+          sourceBytes: Data(bytes[$0...($0 + 1)]),
+          font: Int32(bytes[$0]),
+          selector: .code(Data([bytes[$0 + 1]]))
+        )
       }
     case 3, 7:
       return try decodeEscape(bytes, font: font, doubleEscape: type == 7)
     case 4:
       return bytes.map {
-        CompositeMapping(sourceCode: $0, font: Int32($0 >> 7), selector: .code(Data([$0 & 0x7f])))
+        CompositeMapping(
+          sourceCode: $0,
+          sourceBytes: Data([$0]),
+          font: Int32($0 >> 7),
+          selector: .code(Data([$0 & 0x7f]))
+        )
       }
     case 5:
       guard bytes.count.isMultiple(of: 2) else { throw Error.rangeCheck }
@@ -107,6 +130,7 @@ extension Operators {
         let value = UInt16(bytes[index]) << 8 | UInt16(bytes[index + 1])
         return CompositeMapping(
           sourceCode: bytes[index + 1],
+          sourceBytes: Data(bytes[index...(index + 1)]),
           font: Int32(value >> 7),
           selector: .code(Data([UInt8(value & 0x7f)]))
         )
@@ -131,20 +155,31 @@ extension Operators {
     var selected: Int32 = 0
     var index = 0
     var result: [CompositeMapping] = []
+    var prefix = Data()
     while index < bytes.count {
       let byte = bytes[index]
       index += 1
       if byte == escape {
+        prefix.append(byte)
         guard index < bytes.count else { throw Error.rangeCheck }
         selected = Int32(bytes[index])
+        prefix.append(bytes[index])
         index += 1
         if doubleEscape, selected == Int32(escape) {
           guard index < bytes.count else { throw Error.rangeCheck }
           selected = Int32(bytes[index]) + 256
+          prefix.append(bytes[index])
           index += 1
         }
       } else {
-        result.append(CompositeMapping(sourceCode: byte, font: selected, selector: .code(Data([byte]))))
+        prefix.append(byte)
+        result.append(CompositeMapping(
+          sourceCode: byte,
+          sourceBytes: prefix,
+          font: selected,
+          selector: .code(Data([byte]))
+        ))
+        prefix.removeAll(keepingCapacity: true)
       }
     }
     return result
@@ -155,10 +190,20 @@ extension Operators {
     let shiftIn = try byteEntry("ShiftIn", default: 15, dictionary: font.dictionary)
     var selected: Int32 = 0
     var result: [CompositeMapping] = []
+    var prefix = Data()
     for byte in bytes {
+      prefix.append(byte)
       if byte == shiftOut { selected = 1 }
       else if byte == shiftIn { selected = 0 }
-      else { result.append(CompositeMapping(sourceCode: byte, font: selected, selector: .code(Data([byte])))) }
+      else {
+        result.append(CompositeMapping(
+          sourceCode: byte,
+          sourceBytes: prefix,
+          font: selected,
+          selector: .code(Data([byte]))
+        ))
+        prefix.removeAll(keepingCapacity: true)
+      }
     }
     return result
   }
@@ -184,6 +229,7 @@ extension Operators {
       let lower = font == 0 ? 0 : bounds[Int(font) - 1]
       return CompositeMapping(
         sourceCode: bytes[start + length - 1],
+        sourceBytes: Data(bytes[start..<(start + length)]),
         font: font,
         selector: .code(codeData(value - lower, minimumLength: 1))
       )
@@ -220,6 +266,7 @@ extension Operators {
       } else { throw Error.invalidFont }
       result.append(CompositeMapping(
         sourceCode: code.last ?? 0,
+        sourceBytes: code,
         font: selected,
         selector: selector
       ))

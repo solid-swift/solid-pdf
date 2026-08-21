@@ -167,8 +167,10 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["rootfont"]
 
     func execute(context: isolated Context) async throws {
-      if let root = context.textRootFontSource {
-        context.operands.push(root)
+      if let scope = context.fontExecutionScopes.last,
+        context.graphicsState.fontSource == scope.selectedFontSource
+      {
+        context.operands.push(scope.rootFontSource)
       } else {
         try await CurrentFont.instance.execute(context: context)
       }

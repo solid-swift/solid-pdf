@@ -14,7 +14,8 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       guard context.uncoloredPatternExecutionDepth == 0,
-        context.imageDataSourceCallbackDepth == 0
+        context.imageDataSourceCallbackDepth == 0,
+        context.activeGlyphBuild?.metricsMode != .cacheDevice
       else { throw Error.undefined }
       let specification: ImageSpecification
       if let dictionary = try? context.operands.peek().value(as: DictionaryValue.self) {
@@ -66,7 +67,8 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       guard context.uncoloredPatternExecutionDepth == 0,
-        context.imageDataSourceCallbackDepth == 0
+        context.imageDataSourceCallbackDepth == 0,
+        context.activeGlyphBuild?.metricsMode != .cacheDevice
       else { throw Error.undefined }
       let componentCount = Int(try context.operands.pop().value(as: IntegerValue.self).value)
       guard let colorSpace = GraphicsImageColorSpace(rawValue: componentCount) else { throw Error.rangeCheck }

@@ -26,6 +26,8 @@ public struct FontDescriptor: Sendable, Hashable {
   public let unitsPerEm: UInt32
   /// Selected variation coordinates.
   public let variations: [FontVariationCoordinate]
+  /// Whether glyph outlines may be exposed through language-level path inspection.
+  public let outlineAccess: FontOutlineAccess
 
   /// Creates a font descriptor.
   public init(
@@ -33,7 +35,8 @@ public struct FontDescriptor: Sendable, Hashable {
     familyName: String? = nil,
     styleName: String? = nil,
     unitsPerEm: UInt32 = 1_000,
-    variations: [FontVariationCoordinate] = []
+    variations: [FontVariationCoordinate] = [],
+    outlineAccess: FontOutlineAccess = .extractable
   ) throws {
     guard !postScriptName.isEmpty, unitsPerEm > 0 else { throw FontError.invalidData }
     self.postScriptName = postScriptName
@@ -41,5 +44,6 @@ public struct FontDescriptor: Sendable, Hashable {
     self.styleName = styleName
     self.unitsPerEm = unitsPerEm
     self.variations = variations
+    self.outlineAccess = outlineAccess
   }
 }

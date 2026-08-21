@@ -335,6 +335,101 @@ import Testing
     #expect(abs(try values[0].value(as: RealValue.self).value - 70) < 1e-9)
   }
 
+  @Test func displacementShowOperatorsOverrideTheNormalAdvance() async throws {
+    let context = try await Interpreter.execute(content: Self.type3Font + """
+      /F findfont 100 scalefont setfont
+      0 0 moveto (A) [10] xshow currentpoint
+      0 0 moveto (A) [20] yshow currentpoint
+      0 0 moveto (A) [30 40] xyshow currentpoint
+      """)
+    let values = try await context.results()
+    let numbers = try values.prefix(6).map(Operators.numeric)
+    #expect(numbers == [40, 30, 20, 0, 0, 10])
+  }
+
+  @Test func glyphshowAcceptsNamesForBaseFontsAndIntegersForCIDFonts() async throws {
+    let context = try await Interpreter.execute(content: Self.type3Font + """
+      /F findfont 100 scalefont setfont 0 0 moveto /A glyphshow currentpoint pop
+      /CID 20 dict dup begin
+        /CIDFontType 1 def /FontType 10 def /CIDFontName /CID def
+        /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> def
+        /CIDCount 2 def /FontMatrix [.001 0 0 .001 0 0] def /FontBBox [0 0 500 700] def
+        /BuildGlyph { exch pop 1 eq { 500 0 setcharwidth } { 0 0 setcharwidth } ifelse } bind def
+      end /CIDFont defineresource pop
+      /CID /CIDFont findresource 100 scalefont setfont 0 0 moveto 1 glyphshow currentpoint pop
+      { 2 glyphshow } stopped $error /errorname get /rangecheck eq
+      """)
+    let values = try await context.results()
+    #expect(try values[0].value(as: BooleanValue.self).value)
+    #expect(try values[1].value(as: BooleanValue.self).value)
+    let numbers = values.compactMap { try? Operators.numeric($0) }
+    #expect(numbers.contains(50))
+    #expect(numbers.contains(60))
+  }
+
+  @Test func executableCharStringsRunInAProtectedGlyphScope() async throws {
+    let context = try await Interpreter.execute(content: """
+      /F 16 dict dup begin
+        /FontType 1 def /FontMatrix [.001 0 0 .001 0 0] def
+        /FontBBox [0 0 600 700] def /Encoding StandardEncoding def
+        /CharStrings 2 dict dup begin
+          /.notdef { pop 0 0 setcharwidth } bind def
+          /A {
+            /received exch store
+            currentfont /FontName get /inside exch store
+            600 0 setcharwidth
+          } bind def
+        end def
+      end definefont pop
+      /received null def /inside null def
+      /F findfont 100 scalefont setfont 0 0 moveto (A) show
+      received 65 eq inside /F eq currentpoint pop 60 eq
+      """)
+    let values = try await context.results()
+    #expect(values.count == 3)
+    for value in values { #expect(try value.value(as: BooleanValue.self).value) }
+  }
+
+  @Test func cacheDeviceOperatorsRequireAnActiveGlyphAndRestrictColorAndImages() async throws {
+    let context = try await Interpreter.execute(content: """
+      { 0 0 setcharwidth } stopped $error /errorname get /undefined eq
+      { 0 0 0 0 1 1 setcachedevice } stopped $error /errorname get /undefined eq
+      /F 16 dict dup begin
+        /FontType 3 def /FontMatrix [.001 0 0 .001 0 0] def
+        /FontBBox [0 0 1 1] def /Encoding StandardEncoding def
+        /BuildGlyph {
+          pop pop 1 0 0 0 1 1 setcachedevice
+          { 1 setgray } stopped /colorRejected exch store
+          1 1 true [1 0 0 1 0 0] { <00> } imagemask
+        } bind def
+      end definefont pop
+      /colorRejected false def
+      /F findfont 10 scalefont setfont 0 0 moveto (A) show colorRejected
+      """)
+    let values = try await context.results()
+    let booleans = values.compactMap { ($0.value as? BooleanValue)?.value }
+    #expect(booleans.count == 5)
+    #expect(booleans.allSatisfy { $0 })
+  }
+
+  @Test func charpathBooleanControlsStrokeExpansion() async throws {
+    let context = try await Interpreter.execute(content: """
+      /F 16 dict dup begin
+        /FontType 3 def /FontMatrix [1 0 0 1 0 0] def
+        /FontBBox [-5 -5 15 5] def /Encoding StandardEncoding def
+        /BuildGlyph { pop pop 10 0 setcharwidth 2 setlinewidth 0 0 moveto 10 0 lineto stroke } bind def
+      end definefont pop
+      /F findfont setfont 0 0 moveto (A) false charpath pathbbox
+      newpath 0 0 moveto (A) true charpath pathbbox
+      """)
+    let values = try await context.results()
+    let numbers = try values.map { try $0.value(as: RealValue.self).value }
+    #expect(numbers[0] > 0)
+    #expect(numbers[2] < 0)
+    #expect(numbers[4] == 0)
+    #expect(numbers[6] == 0)
+  }
+
   @Test func embeddedType42UsesACapableProviderAndAdvertisesItsTypes() async throws {
     let environment = InterpreterEnvironment(fontProviders: [EmbeddedSFNTProvider()])
     let context = try await Interpreter.execute(content: """

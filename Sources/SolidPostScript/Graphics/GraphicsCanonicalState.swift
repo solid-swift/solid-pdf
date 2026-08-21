@@ -36,6 +36,7 @@ struct GraphicsCanonicalState: Sendable {
   var strokeAdjustment: Bool
   var smoothness: Double
   var pathBoundingBox: GraphicsRect?
+  var pathContainsProtectedOutline: Bool
   var resolvedClip: RasterRegion
   var clipStack: [GraphicsClipStackEntry]
 
@@ -75,6 +76,7 @@ struct GraphicsCanonicalState: Sendable {
       strokeAdjustment: descriptor.defaultStrokeAdjustment,
       smoothness: descriptor.defaultSmoothness,
       pathBoundingBox: nil,
+      pathContainsProtectedOutline: false,
       resolvedClip: (try? .rectangle(descriptor.imageableBounds.rasterRect)) ?? RasterRegion(),
       clipStack: []
     )
@@ -107,6 +109,7 @@ struct GraphicsCanonicalState: Sendable {
   mutating func clearPath() {
     path.removeAll()
     pathBoundingBox = nil
+    pathContainsProtectedOutline = false
   }
 
   mutating func appendPath(_ element: GraphicsPath.Element) throws {

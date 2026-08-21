@@ -32,6 +32,7 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       let includeCache: BooleanValue = try context.operands.popAs()
+      guard !context.graphicsState.pathContainsProtectedOutline else { throw Error.invalidAccess }
       guard let inverse = context.graphicsState.matrix.inverted else { throw Error.undefinedResult }
       let path = context.graphicsState.path
       let bounds = try userBounds(state: context.graphicsState, inverse: inverse)

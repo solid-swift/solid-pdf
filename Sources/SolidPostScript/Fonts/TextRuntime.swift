@@ -2,9 +2,23 @@ import Foundation
 import SolidFont
 
 struct GlyphBuildState {
+  enum MetricsMode {
+    case width
+    case cacheDevice
+  }
+
   var metrics: GraphicsGlyphMetrics?
   var cacheBounds: GraphicsRect?
   var cacheable = false
+  var metricsMode: MetricsMode?
+}
+
+struct FontExecutionScope {
+  let rootFontSource: Object
+  let selectedFontSource: Object
+  let selector: GraphicsGlyphSelector
+  let callbackByte: UInt8?
+  let sourceBytes: Data
 }
 
 extension Context {
@@ -28,6 +42,26 @@ extension Context {
     )
     let cache = environment.fontManager.glyphCache
     let itemLimit = Int(userParameters.integer("MaxFontItem"))
+
+    let dictionaryProcedure = try Operators.dictionaryGlyphProcedure(selector: selector, font: font)
+    if let procedure = dictionaryProcedure {
+      let realizationKey = FontGlyphRealizationCacheKey(
+        program: programKey,
+        transform: FontGlyphTransformKey(transform),
+        device: graphicsDeviceDescriptor,
+        paint: graphicsState.paint
+      )
+      if let cached = cache.realization(for: realizationKey) { return cached }
+      let (glyph, cacheable) = try await buildProcedureGlyph(
+        procedure,
+        selector: selector,
+        characterCode: characterCode,
+        font: font,
+        transform: transform
+      )
+      if cacheable { cache.insertRealization(glyph, for: realizationKey, maximumItemBytes: itemLimit) }
+      return glyph
+    }
 
     if font.type == 3 || font.type == 10 {
       let realizationKey = FontGlyphRealizationCacheKey(
@@ -97,19 +131,84 @@ extension Context {
     let savedStack = graphicsStack
     let savedConsumer = graphicsEventConsumer
     let savedBuild = activeGlyphBuild
+    let savedFont = graphicsState.fontSource
     let collector = GraphicsDisplayListCollector()
     graphicsState.matrix = transform
     graphicsState.clearPath()
     graphicsEventConsumer = collector
     activeGlyphBuild = GlyphBuildState()
+    graphicsState.fontSource = font.object
+    fontExecutionScopes.append(FontExecutionScope(
+      rootFontSource: fontExecutionScopes.last?.rootFontSource ?? savedFont ?? font.object,
+      selectedFontSource: font.object,
+      selector: selector,
+      callbackByte: characterCode,
+      sourceBytes: characterCode.map { Data([$0]) } ?? Data()
+    ))
     defer {
       graphicsState = savedState
       graphicsStack = savedStack
       graphicsEventConsumer = savedConsumer
       activeGlyphBuild = savedBuild
+      graphicsState.fontSource = savedFont
+      _ = fontExecutionScopes.popLast()
     }
     do {
       try await execute(proc: procedure, ops: arguments)
+      guard let metrics = activeGlyphBuild?.metrics else { throw Error.invalidFont }
+      let build = activeGlyphBuild
+      return (GraphicsGlyphDescription(
+        selector: selector,
+        metrics: metrics,
+        program: collector.effects.isEmpty ? .empty : .displayList(GraphicsDisplayList(effects: collector.effects))
+      ), build?.cacheable == true)
+    } catch {
+      collector.abort()
+      throw error
+    }
+  }
+
+  private func buildProcedureGlyph(
+    _ procedure: Object,
+    selector: GraphicsGlyphSelector,
+    characterCode: UInt8?,
+    font: Operators.FontDefinition,
+    transform: GraphicsMatrix
+  ) async throws -> (GraphicsGlyphDescription, cacheable: Bool) {
+    try procedure.checkProcedure()
+    let savedState = graphicsState
+    let savedStack = graphicsStack
+    let savedDictionaries = dictionaries
+    let savedConsumer = graphicsEventConsumer
+    let savedBuild = activeGlyphBuild
+    let collector = GraphicsDisplayListCollector()
+    graphicsState.matrix = transform
+    graphicsState.fontSource = font.object
+    graphicsState.clearPath()
+    graphicsEventConsumer = collector
+    activeGlyphBuild = GlyphBuildState()
+    fontExecutionScopes.append(FontExecutionScope(
+      rootFontSource: fontExecutionScopes.last?.rootFontSource ?? savedState.fontSource ?? font.object,
+      selectedFontSource: font.object,
+      selector: selector,
+      callbackByte: characterCode,
+      sourceBytes: characterCode.map { Data([$0]) } ?? Data()
+    ))
+    defer {
+      graphicsState = savedState
+      graphicsStack = savedStack
+      dictionaries = savedDictionaries
+      graphicsEventConsumer = savedConsumer
+      activeGlyphBuild = savedBuild
+      _ = fontExecutionScopes.popLast()
+    }
+    do {
+      try dictionaries.preflightPush()
+      try dictionaries.push(try dictionaries.systemDictionaryObject())
+      try dictionaries.preflightPush()
+      try dictionaries.push(font.object)
+      let argument = characterCode.map { Object.integer(Int32($0)) } ?? selector.cDevObject
+      try await execute(proc: procedure, ops: [argument])
       guard let metrics = activeGlyphBuild?.metrics else { throw Error.invalidFont }
       let build = activeGlyphBuild
       return (GraphicsGlyphDescription(

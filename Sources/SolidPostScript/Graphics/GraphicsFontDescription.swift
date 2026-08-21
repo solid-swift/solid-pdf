@@ -29,6 +29,8 @@ public struct GraphicsFontDescription: Sendable, Hashable {
   public let writingMode: Int
   /// A portable binary asset when one is available.
   public let asset: FontAsset?
+  /// Whether glyph outlines may be exposed through PostScript path inspection.
+  public let outlineAccess: FontOutlineAccess
 
   /// Creates a portable font description.
   public init(
@@ -37,7 +39,8 @@ public struct GraphicsFontDescription: Sendable, Hashable {
     postScriptName: String? = nil,
     matrix: GraphicsMatrix = .identity,
     writingMode: Int = 0,
-    asset: FontAsset? = nil
+    asset: FontAsset? = nil,
+    outlineAccess: FontOutlineAccess = .extractable
   ) {
     self.identifier = identifier
     self.resourceName = resourceName
@@ -45,6 +48,7 @@ public struct GraphicsFontDescription: Sendable, Hashable {
     self.matrix = matrix
     self.writingMode = writingMode
     self.asset = asset
+    self.outlineAccess = outlineAccess
   }
 
   /// The invalid font installed in a new graphics state.

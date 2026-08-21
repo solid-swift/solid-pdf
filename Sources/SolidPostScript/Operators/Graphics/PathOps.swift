@@ -211,6 +211,7 @@ extension Operators {
     func execute(context: isolated Context) async throws {
       let procedures = try context.operands.pop(count: 4)
       try procedures.forEach { try $0.checkProcedure() }
+      guard !context.graphicsState.pathContainsProtectedOutline else { throw Error.invalidAccess }
       guard let inverse = context.graphicsState.matrix.inverted else { throw Error.undefinedResult }
       let path = context.graphicsState.path
       try await context.executeLoop(named: "pathforall") {
@@ -283,6 +284,7 @@ extension Operators {
       try context.applyGraphicsOperation(.path(.clippingPath)) {
         $0.path = path
         $0.pathBoundingBox = nil
+        $0.pathContainsProtectedOutline = false
       }
     }
   }

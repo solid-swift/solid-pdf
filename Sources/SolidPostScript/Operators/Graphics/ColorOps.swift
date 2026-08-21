@@ -315,7 +315,9 @@ extension Operators {
   }
 
   static func requireColorOperationAllowed(_ context: isolated Context) throws {
-    guard context.uncoloredPatternExecutionDepth == 0 else { throw Error.undefined }
+    guard context.uncoloredPatternExecutionDepth == 0,
+      context.activeGlyphBuild?.metricsMode != .cacheDevice
+    else { throw Error.undefined }
   }
 
   static func visibleDevicePaint(in state: GraphicsCanonicalState) -> GraphicsPaint? {

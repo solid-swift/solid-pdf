@@ -51,6 +51,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     var halftoneSource: VMStoredObject?
     var fontSource: VMStoredObject?
     var overprint: Bool
+    var pathContainsProtectedOutline: Bool
     var screenLease: ScreenLease?
 
     init(_ state: GraphicsCanonicalState) {
@@ -70,6 +71,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       self.halftoneSource = state.halftoneSource.map(VMStoredObject.init)
       self.fontSource = state.fontSource.map(VMStoredObject.init)
       self.overprint = state.overprint
+      self.pathContainsProtectedOutline = state.pathContainsProtectedOutline
       self.screenLease = state.screenLease
     }
 
@@ -104,6 +106,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         strokeAdjustment: snapshot.strokeAdjustment,
         smoothness: snapshot.smoothness,
         pathBoundingBox: snapshot.pathBoundingBox,
+        pathContainsProtectedOutline: pathContainsProtectedOutline,
         resolvedClip: resolvedClip,
         clipStack: clipStack
       )

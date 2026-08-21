@@ -81,7 +81,8 @@ extension Operators {
       postScriptName: identifierValue?.providerFace?.asset.descriptor.postScriptName ?? fontName,
       matrix: matrix,
       writingMode: Int(try dictionary.objectValue(forKeyIfExists: "WMode", as: IntegerValue.self)?.value ?? 0),
-      asset: identifierValue?.providerFace?.asset
+      asset: identifierValue?.providerFace?.asset,
+      outlineAccess: identifierValue?.providerFace?.asset.descriptor.outlineAccess ?? .extractable
     )
     return FontDefinition(
       object: object,
@@ -289,6 +290,27 @@ extension Operators {
     font: FontDefinition
   ) throws -> GraphicsGlyphDescription {
     try decodeDictionaryGlyph(selector: selector, font: font, compositeDepth: 0)
+  }
+
+  static func dictionaryGlyphProcedure(
+    selector: GraphicsGlyphSelector,
+    font: FontDefinition
+  ) throws -> Object? {
+    guard font.type == 1 || font.type == 2 || font.type == 9 else { return nil }
+    let charStrings = try font.dictionary.objectValue(forKey: "CharStrings", as: DictionaryValue.self)
+    try charStrings.access.check(.read)
+    let keys: [Object]
+    switch selector {
+    case .name(let name): keys = [.literalName(name), .literalName(".notdef")]
+    case .cid(let cid) where cid <= UInt32(Int32.max): keys = [.integer(Int32(cid)), .integer(0)]
+    default: return nil
+    }
+    for key in keys {
+      guard let entry = try charStrings.object(forKeyIfExists: key) else { continue }
+      if entry.isProcedure { return entry }
+      return Optional<Object>.none
+    }
+    return nil
   }
 
   private static func decodeDictionaryGlyph(
