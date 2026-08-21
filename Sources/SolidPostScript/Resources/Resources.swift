@@ -44,7 +44,7 @@ public enum Resources {
     "Emulator": ImplicitResourceCategory(category: "Emulator", instanceType: .name),
     "IODevice": IODeviceResources.instance,
     "ColorRenderingType": IntegerImplicitResources(category: "ColorRenderingType", values: [1]),
-    "FMapType": IntegerImplicitResources(category: "FMapType", values: Set(2...9)),
+    "FMapType": IntegerImplicitResources(category: "FMapType", values: Operators.standardFMapTypes),
     "FontType": ImplicitResourceCategory(category: "FontType", instanceType: .integer),
     "FormType": IntegerImplicitResources(category: "FormType", values: [1]),
     "HalftoneType": IntegerImplicitResources(category: "HalftoneType", values: [1, 2, 3, 4, 5, 6, 10, 16]),

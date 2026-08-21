@@ -35,10 +35,13 @@ import Testing
     #expect(try results[1].value(as: IntegerValue.self).value == 3)
   }
 
-  @Test func standardFMapTypeResourcesExcludeTheUndefinedTypeOne() async throws {
-    let results = try await Interpreter.results(content: "1 /FMapType resourcestatus 2 /FMapType resourcestatus")
-    #expect(try results[0].value(as: BooleanValue.self).value)
-    #expect(try results[3].value(as: BooleanValue.self).value == false)
+  @Test func standardFMapTypeResourcesAreExactlyTypesTwoThroughNine() throws {
+    let provider = IntegerImplicitResources(category: "FMapType", values: Operators.standardFMapTypes)
+    let values = try provider.enumerateResources(matching: "*").map {
+      try $0.value(as: IntegerValue.self).value
+    }
+
+    #expect(values == Array(2...9))
   }
 
   private func minimalCompactFont() -> Data {

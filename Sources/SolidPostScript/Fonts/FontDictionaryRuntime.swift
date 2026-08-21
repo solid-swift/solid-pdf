@@ -38,15 +38,14 @@ extension Operators {
     }
     if fontType == 0 {
       let mapType = try dictionary.objectValue(forKey: "FMapType", as: IntegerValue.self).value
-      guard (2...9).contains(mapType) else { throw Error.invalidFont }
+      guard standardFMapTypes.contains(mapType) else { throw Error.invalidFont }
       let encoding = try dictionary.objectValue(forKey: "Encoding", as: ArrayValue.self)
       let descendants = try dictionary.objectValue(forKey: "FDepVector", as: ArrayValue.self)
       try encoding.access.check(.read)
       try descendants.access.check(.read)
       guard encoding.count > 0, descendants.count > 0 else { throw Error.invalidFont }
       for entry in try encoding.objects(in: encoding.range, for: .read) {
-        let index = try entry.value(as: IntegerValue.self).value
-        guard index >= 0, UInt(index) < descendants.count else { throw Error.invalidFont }
+        _ = try entry.value(as: IntegerValue.self)
       }
       for descendant in try descendants.objects(in: descendants.range, for: .read) {
         _ = try descendant.value(as: DictionaryValue.self)

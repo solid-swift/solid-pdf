@@ -88,6 +88,7 @@ extension Operators {
 
   private static func decodeCompositeBytes(_ bytes: Data, font: FontDefinition) throws -> [CompositeMapping] {
     let type = try font.dictionary.objectValue(forKey: "FMapType", as: IntegerValue.self).value
+    guard standardFMapTypes.contains(type) else { throw Error.invalidFont }
     switch type {
     case 2:
       guard bytes.count.isMultiple(of: 2) else { throw Error.rangeCheck }
@@ -117,7 +118,7 @@ extension Operators {
     case 9:
       return try decodeCMap(bytes, font: font)
     default:
-      throw Error.invalidFont
+      preconditionFailure("The standard FMapType set and decoder cases must remain synchronized")
     }
   }
 
@@ -167,8 +168,10 @@ extension Operators {
     let data = try vector.characters(in: vector.range)
     guard let first = data.first else { throw Error.invalidFont }
     let length = Int(first) + 1
-    guard length <= MemoryLayout<Int32>.size, (data.count - 1).isMultiple(of: length), bytes.count.isMultiple(of: length)
-    else { throw Error.invalidFont }
+    guard length <= MemoryLayout<Int32>.size, (data.count - 1).isMultiple(of: length) else {
+      throw Error.invalidFont
+    }
+    guard bytes.count.isMultiple(of: length) else { throw Error.rangeCheck }
     var bounds: [Int] = []
     var base = 0
     for start in stride(from: 1, to: data.count, by: length) {
