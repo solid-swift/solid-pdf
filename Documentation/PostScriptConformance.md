@@ -5,9 +5,10 @@
 `PLRMConformanceInventoryTests` so newly added operators, resource categories, filters, interpreter parameters, and
 errors cannot remain undocumented.
 
-This report is an implementation inventory, not an Adobe certification. An `implemented` classification means that
-the language surface is registered and has focused coverage. It does not replace independent conformance testing of
-every semantic combination in the PLRM.
+This report is an implementation inventory and semantic audit ledger, not an Adobe certification. The surface
+inventory proves that advertised names are registered. The `languageLevelRequirements` ledger separately records
+audited behaviors, their implementation points, and the focused tests that exercise them. Neither claim replaces
+independent validation with external conformance programs and device-provider combinations.
 
 ## Current inventory
 
@@ -27,6 +28,21 @@ every semantic combination in the PLRM.
 The machine-readable inventory separately identifies product-conditional behavior. In particular, `exitserver` and
 the executive bindings depend on the selected execution environment; sfnt-backed FontType 42 and CIDFontType 2 are
 advertised only with a capable font provider.
+
+## Semantic audit status
+
+The first exhaustive PLRM semantic audit is complete. Its 18 findings are represented by focused vectors covering:
+
+- text positioning, composite-font callback identity, name and CID `glyphshow`, Type 3 cache-device rules,
+  `charpath`, and protected outline access;
+- current-path construction, clipping, graphics restoration, saved page-device activation, `copypage`, and
+  device-rendered `erasepage`;
+- the valid Type 1 and Type 2 charstring operator sets, including flex and deprecated composite forms; and
+- language-visible composite color queries plus degenerate sampled and stitching function domains.
+
+The audit also found 34 registered operators that lacked a direct test mention. `PLRMSemanticOperatorTests` now runs
+one executable semantic vector for every one of those operators, and the JSON ledger records the exact set. A runtime
+registration check alone can no longer be mistaken for semantic evidence.
 
 ## Portable filter status
 
@@ -48,12 +64,11 @@ The postponed filter tranche is complete at the portable runtime boundary:
 
 ## Remaining conformance stages
 
-### 1. Run an independent exhaustive semantic audit
+### 1. Run independent external conformance validation
 
-Registration coverage now prevents surface drift, but it cannot prove every error precedence, callback boundary,
-save/restore interaction, external-resource load, or provider capability matrix. The next audit should consume the
-JSON ledger category by category, add missing semantic vectors, and create focused implementation tranches only after
-the complete read-only report is finished.
+The internal category-by-category audit is closed. The next validation stage should run published PostScript
+conformance programs, external resource-provider combinations, and physical device matrices against the same ledger.
+New discrepancies should be recorded as evidence-bearing semantic requirements before implementation changes begin.
 
 Appendix C accounting is authoritative: display/source/image reservations are shared across contexts in an
 environment, provider outlines use their own bounded LRU, and lowering live limits blocks growth or evicts cacheable

@@ -96,9 +96,19 @@ struct PLRMConformanceInventoryTests {
   @Test
   func inventoryClassificationsAndEvidenceAreWellFormed() throws {
     let inventory = try Inventory.load()
+    #expect(inventory.schemaVersion == 2)
     #expect(Set(inventory.classifications) == ["implemented", "intentionally-unavailable", "postponed", "nonconforming"])
     #expect(inventory.standardFiles.map(\.name) == ["%stdin", "%stdout", "%stderr", "%lineedit", "%statementedit"])
     #expect(inventory.standardFiles.allSatisfy { $0.status == "implemented" })
+    #expect(inventory.operators.nonconforming.isEmpty)
+    #expect(inventory.resources.nonconforming.isEmpty)
+    #expect(inventory.parameters.systemNonconforming.isEmpty)
+    #expect(inventory.errors.nonconforming.isEmpty)
+    #expect(inventory.languageLevelRequirements.allSatisfy { $0.status == "implemented" })
+    #expect(
+      inventory.languageLevelRequirements.map(\.name).count
+        == Set(inventory.languageLevelRequirements.map(\.name)).count
+    )
 
     var evidence = [
       inventory.authority.source,
@@ -111,11 +121,23 @@ struct PLRMConformanceInventoryTests {
     ]
     evidence.append(contentsOf: inventory.resources.evidence.registration)
     evidence.append(contentsOf: inventory.errors.evidence)
-    evidence.append(contentsOf: inventory.languageLevelRequirements.map(\.evidence))
+    evidence.append(contentsOf: inventory.languageLevelRequirements.flatMap(\.registration))
+    evidence.append(contentsOf: inventory.languageLevelRequirements.flatMap(\.tests))
     evidence.append(contentsOf: inventory.standardFiles.map(\.evidence))
 
     for path in evidence {
       #expect(FileManager.default.fileExists(atPath: Inventory.repositoryRoot.appending(path: path).path))
+    }
+  }
+
+  @Test
+  func semanticLedgerCoversEveryOperatorMissingFromTheOriginalAuditVectors() throws {
+    let inventory = try Inventory.load()
+    let operators = Set(inventory.languageLevelRequirements.flatMap(\.operators))
+
+    #expect(operators == Self.auditedSemanticOperators)
+    for requirement in inventory.languageLevelRequirements where !requirement.operators.isEmpty {
+      #expect(requirement.tests.contains("Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"))
     }
   }
 
@@ -139,6 +161,15 @@ struct PLRMConformanceInventoryTests {
     )
     return try Set(values.objects(in: values.range).map(Self.name))
   }
+
+  private static let auditedSemanticOperators: Set<String> = [
+    "arcn", "ashow", "awidthshow", "concatmatrix", "currentblackgeneration",
+    "currentcolorscreen", "currentcolortransfer", "currenthsbcolor", "currentundercolorremoval",
+    "defaultmatrix", "eoclip", "erasepage", "findencoding", "glyphshow", "grestoreall",
+    "identmatrix", "inueofill", "invertmatrix", "rcurveto", "rectstroke", "rootfont", "rotate",
+    "selectfont", "setcachedevice2", "setcacheparams", "setcolortransfer", "sethsbcolor", "setmatrix",
+    "setvmthreshold", "ueofill", "widthshow", "xshow", "xyshow", "yshow",
+  ]
 }
 
 private struct Inventory: Decodable {
@@ -225,13 +256,36 @@ private struct Inventory: Decodable {
   struct Errors: Decodable {
     let standardImplemented: [String]
     let extensionsImplemented: [String]
+    let nonconforming: [NamedReason]
     let evidence: [String]
   }
 
   struct Requirement: Decodable {
-    let evidence: String
+    let name: String
+    let status: String
+    let operators: [String]
+    let registration: [String]
+    let tests: [String]
+
+    private enum CodingKeys: String, CodingKey {
+      case name
+      case status
+      case operators
+      case registration
+      case tests
+    }
+
+    init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      name = try container.decode(String.self, forKey: .name)
+      status = try container.decode(String.self, forKey: .status)
+      operators = try container.decodeIfPresent([String].self, forKey: .operators) ?? []
+      registration = try container.decode([String].self, forKey: .registration)
+      tests = try container.decode([String].self, forKey: .tests)
+    }
   }
 
+  let schemaVersion: Int
   let authority: Authority
   let classifications: [String]
   let operators: Operators

@@ -316,11 +316,12 @@ extension Operators {
         context.activeGlyphBuild?.metrics == nil
       else { throw Error.undefined }
       try setGlyphMetrics(values, context: context)
+      let cacheBounds = context.activeGlyphBuild?.cacheBounds
       context.activeGlyphBuild?.metrics = GraphicsGlyphMetrics(
         horizontalAdvance: GraphicsPoint(x: values[0], y: values[1]),
         verticalAdvance: GraphicsPoint(x: values[6], y: values[7]),
         verticalOrigin: GraphicsPoint(x: values[8], y: values[9]),
-        bounds: context.activeGlyphBuild?.cacheBounds
+        bounds: cacheBounds
       )
     }
   }
