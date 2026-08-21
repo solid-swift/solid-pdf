@@ -31,6 +31,16 @@ public struct GraphicsFontDescription: Sendable, Hashable {
   public let asset: FontAsset?
   /// Whether glyph outlines may be exposed through PostScript path inspection.
   public let outlineAccess: FontOutlineAccess
+  /// The language-visible font technology.
+  public let technology: GraphicsFontTechnology
+  /// The PostScript FontType value, when known.
+  public let fontType: Int?
+  /// The PostScript PaintType value.
+  public let paintType: Int
+  /// The design-space stroke width used by PaintType 2 fonts.
+  public let strokeWidth: Double
+  /// The identity of this immutable language-visible font instance.
+  public let resourceIdentifier: GraphicsResourceIdentifier
 
   /// Creates a portable font description.
   public init(
@@ -40,7 +50,12 @@ public struct GraphicsFontDescription: Sendable, Hashable {
     matrix: GraphicsMatrix = .identity,
     writingMode: Int = 0,
     asset: FontAsset? = nil,
-    outlineAccess: FontOutlineAccess = .extractable
+    outlineAccess: FontOutlineAccess = .extractable,
+    technology: GraphicsFontTechnology = .unknown,
+    fontType: Int? = nil,
+    paintType: Int = 0,
+    strokeWidth: Double = 0,
+    resourceIdentifier: GraphicsResourceIdentifier = .anonymous
   ) {
     self.identifier = identifier
     self.resourceName = resourceName
@@ -49,6 +64,11 @@ public struct GraphicsFontDescription: Sendable, Hashable {
     self.writingMode = writingMode
     self.asset = asset
     self.outlineAccess = outlineAccess
+    self.technology = technology
+    self.fontType = fontType
+    self.paintType = paintType
+    self.strokeWidth = strokeWidth
+    self.resourceIdentifier = resourceIdentifier
   }
 
   /// The invalid font installed in a new graphics state.

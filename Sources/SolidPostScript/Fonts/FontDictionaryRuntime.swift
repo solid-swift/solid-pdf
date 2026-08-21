@@ -75,6 +75,8 @@ extension Operators {
       ?? dictionary.objectValue(forKeyIfExists: "CIDFontName", as: NameValue.self)?.value
     let identifier = identifierValue?.identifier
       ?? GraphicsFontIdentifier("CID:\(dictionary.allocation.identity.hashValue)")
+    let paintType = Int(try dictionary.objectValue(forKeyIfExists: "PaintType", as: IntegerValue.self)?.value ?? 0)
+    let strokeWidth = try dictionary.object(forKeyIfExists: "StrokeWidth").map(numeric) ?? 0
     let description = GraphicsFontDescription(
       identifier: identifier,
       resourceName: fontName,
@@ -82,7 +84,12 @@ extension Operators {
       matrix: matrix,
       writingMode: Int(try dictionary.objectValue(forKeyIfExists: "WMode", as: IntegerValue.self)?.value ?? 0),
       asset: identifierValue?.providerFace?.asset,
-      outlineAccess: identifierValue?.providerFace?.asset.descriptor.outlineAccess ?? .extractable
+      outlineAccess: identifierValue?.providerFace?.asset.descriptor.outlineAccess ?? .extractable,
+      technology: fontTechnology(type),
+      fontType: Int(type),
+      paintType: paintType,
+      strokeWidth: strokeWidth,
+      resourceIdentifier: GraphicsResourceIdentifier(rawValue: "font:\(identifier.value)")
     )
     return FontDefinition(
       object: object,
@@ -93,6 +100,22 @@ extension Operators {
       matrix: matrix,
       description: description
     )
+  }
+
+  private static func fontTechnology(_ fontType: Int32) -> GraphicsFontTechnology {
+    switch fontType {
+    case 0: .composite
+    case 1: .type1
+    case 2: .compactFontFormat
+    case 3: .type3
+    case 9: .cidType0
+    case 10: .cidType1
+    case 11: .cidType2
+    case 14: .chameleon
+    case 32: .bitmap
+    case 42: .trueType
+    default: .unknown
+    }
   }
 
   static func initializeFont(

@@ -1,3 +1,4 @@
+import Foundation
 import SolidFont
 import Testing
 
@@ -61,11 +62,23 @@ import Testing
     }
     #expect(run.glyphs.count == 1)
     #expect(run.glyphs[0].advance.x == 60)
+    #expect(run.sourceBytes == Data([65]))
+    #expect(run.glyphs[0].sourceRange == 0..<1)
+    #expect(run.glyphs[0].sourceBytes == Data([65]))
+    #expect(run.glyphs[0].unicodeScalars == Array("A".unicodeScalars))
+    #expect(run.glyphs[0].unicodeProvenance == .postScriptEncoding)
+    #expect(run.rootFont.technology == .type3)
+    #expect(run.rootFont.fontType == 3)
+    #expect(run.rootFont.paintType == 0)
+    #expect(!run.rootFont.resourceIdentifier.isAnonymous)
+    #expect(run.glyphs[0].font?.identifier == run.rootFont.identifier)
+    #expect(!run.glyphs[0].glyph.resourceIdentifier.isAnonymous)
     guard case .displayList(let list) = run.glyphs[0].glyph.program else {
       Issue.record("Expected a captured Type 3 display list")
       return
     }
     #expect(!list.effects.isEmpty)
+    #expect(!list.resourceIdentifier.isAnonymous)
   }
 
   @Test func cshowMapsWithoutPaintingOrRequiringACurrentPoint() async throws {

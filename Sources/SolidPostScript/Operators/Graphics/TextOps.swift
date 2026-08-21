@@ -1,4 +1,5 @@
 import Foundation
+import SolidFont
 
 extension Operators {
   private enum GlyphAdvanceAdjustment {
@@ -353,6 +354,10 @@ extension Operators {
       mappings = try mapCharacters(Data(bytes), root: root, context: context)
     }
     if let displacements, displacements.count != mappings.count { throw Error.rangeCheck }
+    let runSourceBytes = mappings.count == 1 && mappings[0].sourceBytes != Data(bytes)
+      ? mappings[0].sourceBytes
+      : Data(bytes)
+    var sourceOffset = 0
     for (index, mapping) in mappings.enumerated() {
       let adjustment: GlyphAdvanceAdjustment = if let displacements {
         .overriding(displacements[index])
@@ -363,8 +368,12 @@ extension Operators {
         mapping,
         root: root,
         adjustment: adjustment,
+        runSourceBytes: runSourceBytes,
+        sourceRange: sourceOffset..<(sourceOffset + mapping.sourceBytes.count),
+        unicodeProvenance: root.type == 0 ? .postScriptCMap : .postScriptEncoding,
         context: context
       )
+      sourceOffset += mapping.sourceBytes.count
       try await afterGlyph?(mapping.sourceCode, advance)
     }
   }
@@ -388,6 +397,9 @@ extension Operators {
       ),
       root: font,
       adjustment: .additive(extraAdvance),
+      runSourceBytes: characterCode.map { Data([$0]) },
+      sourceRange: characterCode.map { _ in 0..<1 },
+      unicodeProvenance: selector.glyphName == nil ? nil : .glyphName,
       context: context
     )
   }
@@ -396,6 +408,9 @@ extension Operators {
     _ mapping: MappedCharacter,
     root: FontDefinition,
     adjustment: GlyphAdvanceAdjustment,
+    runSourceBytes: Data?,
+    sourceRange: Range<Int>?,
+    unicodeProvenance: GraphicsUnicodeProvenance?,
     context: isolated Context
   ) async throws -> GraphicsPoint {
     guard let origin = context.graphicsState.path.currentPoint else { throw Error.noCurrentPoint }
@@ -421,15 +436,19 @@ extension Operators {
     }
     let deviceAdvance = context.graphicsState.matrix.transformDistance(advance)
     let end = GraphicsPoint(x: origin.x + deviceAdvance.x, y: origin.y + deviceAdvance.y)
+    let unicodeScalars = mapping.selector.glyphName.flatMap { AdobeGlyphList.unicodeScalars(for: $0) }
     let placement = GraphicsGlyphPlacement(
       glyph: glyph,
       origin: origin,
       transform: transform,
       advance: advance,
       font: mapping.font.description,
-      sourceBytes: mapping.sourceBytes
+      sourceBytes: mapping.sourceBytes,
+      unicodeScalars: unicodeScalars,
+      sourceRange: sourceRange,
+      unicodeProvenance: unicodeScalars == nil ? nil : unicodeProvenance
     )
-    let run = GraphicsGlyphRun(rootFont: root.description, glyphs: [placement])
+    let run = GraphicsGlyphRun(rootFont: root.description, glyphs: [placement], sourceBytes: runSourceBytes)
     try context.applyGraphicsOperation(.paint(.text(run))) { try $0.appendPath(.move(to: end)) }
     return advance
   }
@@ -547,4 +566,13 @@ extension Operators {
 
 private extension GraphicsPoint {
   static let zero = Self(x: 0, y: 0)
+}
+
+private extension GraphicsGlyphSelector {
+  var glyphName: String? {
+    switch self {
+    case .name(let name): name
+    case .character, .index, .cid: nil
+    }
+  }
 }

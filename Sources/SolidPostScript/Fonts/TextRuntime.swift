@@ -91,17 +91,28 @@ extension Context {
       } else {
         let portableSelector = try selector.fontSelector
         let resolved = try await withUserTimeSuspended { try await provider.glyph(portableSelector, in: face) }
-        decoded = resolved.map { GraphicsGlyphDescription($0, selector: selector) } ?? .missing(selector)
+        decoded = identified(resolved.map { GraphicsGlyphDescription($0, selector: selector) } ?? .missing(selector))
         outlineCache.insert(decoded, for: programKey, maximumItemBytes: itemLimit)
       }
     } else if let cached = cache.program(for: programKey) {
       decoded = cached
     } else {
-      decoded = try Operators.decodeDictionaryGlyph(selector: selector, font: font)
+      decoded = identified(try Operators.decodeDictionaryGlyph(selector: selector, font: font))
       cache.insertProgram(decoded, for: programKey, maximumItemBytes: itemLimit)
     }
 
     return try await applyMetricOverrides(to: decoded, selector: selector, font: font)
+  }
+
+  private func identified(_ glyph: GraphicsGlyphDescription) -> GraphicsGlyphDescription {
+    guard glyph.resourceIdentifier.isAnonymous else { return glyph }
+    return GraphicsGlyphDescription(
+      selector: glyph.selector,
+      metrics: glyph.metrics,
+      program: glyph.program,
+      resolvedGlyphIndex: glyph.resolvedGlyphIndex,
+      resourceIdentifier: environment.graphicsResourceIdentities.next()
+    )
   }
 
   private func buildType3Glyph(
@@ -160,7 +171,11 @@ extension Context {
       return (GraphicsGlyphDescription(
         selector: selector,
         metrics: metrics,
-        program: collector.effects.isEmpty ? .empty : .displayList(GraphicsDisplayList(effects: collector.effects))
+        program: collector.effects.isEmpty ? .empty : .displayList(GraphicsDisplayList(
+          effects: collector.effects,
+          resourceIdentifier: environment.graphicsResourceIdentities.next()
+        )),
+        resourceIdentifier: environment.graphicsResourceIdentities.next()
       ), build?.cacheable == true)
     } catch {
       collector.abort()
@@ -214,7 +229,11 @@ extension Context {
       return (GraphicsGlyphDescription(
         selector: selector,
         metrics: metrics,
-        program: collector.effects.isEmpty ? .empty : .displayList(GraphicsDisplayList(effects: collector.effects))
+        program: collector.effects.isEmpty ? .empty : .displayList(GraphicsDisplayList(
+          effects: collector.effects,
+          resourceIdentifier: environment.graphicsResourceIdentities.next()
+        )),
+        resourceIdentifier: environment.graphicsResourceIdentities.next()
       ), build?.cacheable == true)
     } catch {
       collector.abort()
@@ -306,7 +325,8 @@ extension Context {
       selector: selector,
       metrics: metrics,
       program: program,
-      resolvedGlyphIndex: glyph.resolvedGlyphIndex
+      resolvedGlyphIndex: glyph.resolvedGlyphIndex,
+      resourceIdentifier: glyph.resourceIdentifier
     )
   }
 
@@ -413,7 +433,8 @@ extension GraphicsGlyphDescription {
         }
       ),
       program: program,
-      resolvedGlyphIndex: glyph.resolvedGlyphIndex
+      resolvedGlyphIndex: glyph.resolvedGlyphIndex,
+      resourceIdentifier: .anonymous
     )
   }
 

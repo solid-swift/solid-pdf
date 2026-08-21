@@ -62,18 +62,22 @@ public struct GraphicsGlyphDescription: Sendable, Hashable {
   public let program: GraphicsGlyphProgram
   /// The exact glyph index selected in the portable font asset, when known.
   public let resolvedGlyphIndex: UInt32?
+  /// The identity of the decoded portable glyph program.
+  public let resourceIdentifier: GraphicsResourceIdentifier
 
   /// Creates a resolved glyph description.
   public init(
     selector: GraphicsGlyphSelector,
     metrics: GraphicsGlyphMetrics,
     program: GraphicsGlyphProgram,
-    resolvedGlyphIndex: UInt32? = nil
+    resolvedGlyphIndex: UInt32? = nil,
+    resourceIdentifier: GraphicsResourceIdentifier = .anonymous
   ) {
     self.selector = selector
     self.metrics = metrics
     self.program = program
     self.resolvedGlyphIndex = resolvedGlyphIndex
+    self.resourceIdentifier = resourceIdentifier
   }
 }
 
@@ -93,6 +97,10 @@ public struct GraphicsGlyphPlacement: Sendable, Hashable {
   public let sourceBytes: Data?
   /// Known Unicode provenance for document extraction metadata.
   public let unicodeScalars: [Unicode.Scalar]?
+  /// The range of bytes in the containing run that selected this glyph.
+  public let sourceRange: Range<Int>?
+  /// The authority that established `unicodeScalars`.
+  public let unicodeProvenance: GraphicsUnicodeProvenance?
 
   /// Creates a glyph placement.
   public init(
@@ -102,7 +110,9 @@ public struct GraphicsGlyphPlacement: Sendable, Hashable {
     advance: GraphicsPoint,
     font: GraphicsFontDescription? = nil,
     sourceBytes: Data? = nil,
-    unicodeScalars: [Unicode.Scalar]? = nil
+    unicodeScalars: [Unicode.Scalar]? = nil,
+    sourceRange: Range<Int>? = nil,
+    unicodeProvenance: GraphicsUnicodeProvenance? = nil
   ) {
     self.glyph = glyph
     self.font = font
@@ -111,6 +121,8 @@ public struct GraphicsGlyphPlacement: Sendable, Hashable {
     self.advance = advance
     self.sourceBytes = sourceBytes
     self.unicodeScalars = unicodeScalars
+    self.sourceRange = sourceRange
+    self.unicodeProvenance = unicodeProvenance
   }
 }
 
@@ -120,10 +132,17 @@ public struct GraphicsGlyphRun: Sendable, Hashable {
   public let rootFont: GraphicsFontDescription
   /// Ordered glyph placements, possibly from descendant fonts.
   public let glyphs: [GraphicsGlyphPlacement]
+  /// The complete source bytes consumed by this run, when it originated from a string.
+  public let sourceBytes: Data?
 
   /// Creates a glyph run.
-  public init(rootFont: GraphicsFontDescription, glyphs: [GraphicsGlyphPlacement]) {
+  public init(
+    rootFont: GraphicsFontDescription,
+    glyphs: [GraphicsGlyphPlacement],
+    sourceBytes: Data? = nil
+  ) {
     self.rootFont = rootFont
     self.glyphs = glyphs
+    self.sourceBytes = sourceBytes
   }
 }
