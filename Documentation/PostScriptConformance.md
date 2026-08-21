@@ -17,6 +17,7 @@ every semantic combination in the PLRM.
 | LanguageLevel 3 ProcSet operators | 33 implemented across five ProcSets |
 | Resource categories | 36 advertised, including the environment-selected `CIDFontType` category and `Generic` |
 | Standard filters | 17 implemented and advertised as implicit Filter resources |
+| Standard implicit color resources | 11 `ColorSpaceFamily` instances and `ColorRenderingType` 1 advertised |
 | User parameters | All 17 Appendix C parameters registered |
 | System parameters | All 34 Appendix C parameters registered; nine accounting/lifecycle semantics remain nonconforming |
 | Supported page-device parameters | 46, negotiated by provider capabilities and `Policies` |
@@ -47,18 +48,7 @@ The postponed filter tranche is complete at the portable runtime boundary:
 
 ## Remaining conformance stages
 
-### 1. Complete implicit resource advertisement
-
-The underlying semantics exist for the standard color spaces and type 1 color rendering, but the corresponding
-implicit resources are not reported by `resourcestatus` or `resourceforall`. `FMapType` also advertises and implements
-types 2 through 9 while the PLRM requires types 1 through 9. This stage should add:
-
-- `ColorSpaceFamily` instances for DeviceGray, DeviceRGB, DeviceCMYK, CIEBasedA/ABC/DEF/DEFG, Indexed, Separation,
-  DeviceN, and Pattern.
-- `ColorRenderingType` instance 1.
-- FMapType 1 mapping semantics and its implicit resource.
-
-### 2. Make accounting parameters authoritative
+### 1. Make accounting parameters authoritative
 
 The Appendix C keys exist, but `FactoryDefaults` lacks its persistent reset lifecycle and several display/source/cache
 values are placeholders rather than live measurements. `MaxDisplayList`, `MaxSourceList`,
@@ -66,7 +56,7 @@ values are placeholders rather than live measurements. `MaxDisplayList`, `MaxSou
 PLRM. These should be connected to the existing display-list, image-stream, and font-program owners rather than
 maintaining parallel counters.
 
-### 3. Run an independent exhaustive semantic audit
+### 2. Run an independent exhaustive semantic audit
 
 Registration coverage now prevents surface drift, but it cannot prove every error precedence, callback boundary,
 save/restore interaction, external-resource load, or provider capability matrix. The next audit should consume the
@@ -83,3 +73,11 @@ the complete read-only report is finished.
 
 No filter remains classified as postponed. Product-specific emulators, proprietary resources, and device capabilities
 are reported as unavailable rather than advertised and approximated.
+
+## Composite-font mapping note
+
+`FMapType` advertises exactly types 2 through 9. PLRM Table 5.9 defines those eight mappings, and Adobe's
+[LanguageLevel 3 supplement](https://ftp.icm.edu.pl/packages/lprng/RESOURCES/ADOBE/PS2017.Supplement.pdf) likewise
+lists types 2 through 9. The isolated statement in PLRM section 3.9 that describes types 1 through 9 conflicts with
+both normative lists and is treated as an editorial error. Type 1 therefore remains unavailable: its resource lookup
+produces `undefinedresource`, and a Type 0 font that declares it produces `invalidfont`.

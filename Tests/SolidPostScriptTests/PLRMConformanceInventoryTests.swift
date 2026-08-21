@@ -46,21 +46,25 @@ struct PLRMConformanceInventoryTests {
   }
 
   @Test
-  func inventoryMatchesAdvertisedResourceCategoriesAndInstances() throws {
+  func inventoryMatchesAdvertisedResourceCategoriesAndInstances() async throws {
     let inventory = try Inventory.load()
     let environment = InterpreterEnvironment()
     var actualCategories = Set(try environment.resourceCategories.keys.map(Self.name))
     actualCategories.insert("Generic")
 
     #expect(actualCategories == Set(inventory.resources.categories))
-    #expect(Set(Operators.Filter.availableNames) == Set(inventory.resources.namedImplemented["Filter", default: []]))
-
     for (category, instances) in inventory.resources.implicitImplemented {
       let resourceCategory = try environment.resourceCategory(for: .literalName(category))
       let provider = try #require(resourceCategory)
-      for instance in instances {
-        #expect(try provider.statusOfResource(forKey: .integer(instance)) != nil)
+      let actual = try provider.enumerateResources(matching: "*").map {
+        try $0.value(as: IntegerValue.self).value
       }
+      #expect(actual == instances.sorted(), "Unexpected implicit /\(category) resources")
+    }
+
+    for (category, instances) in inventory.resources.namedImplemented {
+      let actual = try await Self.resourceNames(in: category, environment: environment)
+      #expect(actual == Set(instances), "Unexpected named /\(category) resources")
     }
 
     for gap in inventory.resources.nonconforming {
@@ -116,6 +120,23 @@ struct PLRMConformanceInventoryTests {
 
   private static func name(_ object: Object) throws -> String {
     try object.value(as: NameValue.self).value
+  }
+
+  private static func resourceNames(
+    in category: String,
+    environment: InterpreterEnvironment
+  ) async throws -> Set<String> {
+    let values: ArrayValue = try await Interpreter.result(
+      content:
+        """
+        /names 100 array def /count 0 def
+        (*) { names count 3 -1 roll cvn put /count count 1 add store }
+        100 string /\(category) resourceforall
+        names 0 count getinterval
+        """,
+      environment: environment
+    )
+    return try Set(values.objects(in: values.range).map(Self.name))
   }
 }
 

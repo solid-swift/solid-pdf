@@ -70,6 +70,7 @@
     ],
     "implicitImplemented": {
       "CIDFontType": [0,1,4],
+      "ColorRenderingType": [1],
       "FMapType": [2,3,4,5,6,7,8,9],
       "FontType": [0,1,2,3,9,10,32],
       "FormType": [1],
@@ -85,6 +86,7 @@
       {"category":"FontType","instances":[11,42],"condition":"The selected font provider can open sfnt data."}
     ],
     "namedImplemented": {
+      "ColorSpaceFamily": ["CIEBasedA","CIEBasedABC","CIEBasedDEF","CIEBasedDEFG","DeviceCMYK","DeviceGray","DeviceN","DeviceRGB","Indexed","Pattern","Separation"],
       "Encoding": ["ISOLatin1Encoding","StandardEncoding"],
       "Filter": ["ASCII85Decode","ASCII85Encode","ASCIIHexDecode","ASCIIHexEncode","CCITTFaxDecode","CCITTFaxEncode","DCTDecode","DCTEncode","FlateDecode","FlateEncode","LZWDecode","LZWEncode","NullEncode","ReusableStreamDecode","RunLengthDecode","RunLengthEncode","SubFileDecode"],
       "ProcSet": ["BitmapFontInit","CIDInit","ColorRendering","FontSetInit","Trapping"]
@@ -94,14 +96,10 @@
       {"category":"HalftoneType","instances":[9,100],"reason":"Proprietary halftone types are product-dependent."}
     ],
     "postponed": [],
-    "nonconforming": [
-      {"category":"ColorRenderingType","instances":[1],"reason":"The semantic implementation exists, but the implicit resource is not advertised."},
-      {"category":"ColorSpaceFamily","instances":["CIEBasedA","CIEBasedABC","CIEBasedDEF","CIEBasedDEFG","DeviceCMYK","DeviceGray","DeviceN","DeviceRGB","Indexed","Pattern","Separation"],"reason":"The color spaces are implemented, but their implicit resources are not advertised."},
-      {"category":"FMapType","instances":[1],"reason":"LanguageLevel 3 requires mapping types 1 through 9; type 1 is not advertised or decoded."}
-    ],
+    "nonconforming": [],
     "evidence": {
       "registration": ["Sources/SolidPostScript/Resources/Resources.swift","Sources/SolidPostScript/InterpreterEnvironment.swift"],
-      "tests": ["Tests/SolidPostScriptTests/ResourceSystemTests.swift","Tests/SolidPostScriptTests/PLRMConformanceInventoryTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/ImplicitColorResourceTests.swift","Tests/SolidPostScriptTests/Graphics/CompositeFontTests.swift","Tests/SolidPostScriptTests/ResourceSystemTests.swift","Tests/SolidPostScriptTests/PLRMConformanceInventoryTests.swift"]
     }
   },
   "parameters": {
@@ -157,11 +155,11 @@
     {"name":"indexed-separation-and-devicen-base","status":"implemented","evidence":"Sources/SolidPostScript/Graphics/PostScriptColorSpace.swift"},
     {"name":"composite-page-overprint","status":"implemented","evidence":"Sources/SolidPostScriptRaster/RasterSeparationTarget.swift"},
     {"name":"glyphshow-integer-cid","status":"implemented","evidence":"Sources/SolidPostScript/Operators/Graphics/TextOps.swift"},
+    {"name":"composite-font-fmaptypes-2-through-9","status":"implemented","evidence":"Sources/SolidPostScript/Fonts/CompositeFontMapping.swift"},
     {"name":"type1-eexec-encrypted-execution","status":"implemented","evidence":"Sources/SolidPostScript/Files/EExecFile.swift"}
   ],
   "remainingStages": [
-    {"priority":1,"title":"Complete implicit resource advertisement","items":["ColorSpaceFamily instances","ColorRenderingType 1","FMapType 1 semantics and resource"]},
-    {"priority":2,"title":"Make interpreter accounting parameters authoritative","items":["Revision","live display/source/outline counters","combined cache and image-buffer limits","FactoryDefaults lifecycle"]},
-    {"priority":3,"title":"Independent exhaustive semantic audit","items":["operator edge cases not proven by registration coverage","resource external-loading combinations","provider-specific device parameter matrices"]}
+    {"priority":1,"title":"Make interpreter accounting parameters authoritative","items":["Revision","live display/source/outline counters","combined cache and image-buffer limits","FactoryDefaults lifecycle"]},
+    {"priority":2,"title":"Independent exhaustive semantic audit","items":["operator edge cases not proven by registration coverage","resource external-loading combinations","provider-specific device parameter matrices"]}
   ]
 }
