@@ -81,6 +81,7 @@ public actor Context {
   var echoEnabled = true
   let jobServerEnabled: Bool
   var jobLifecycle: JobLifecycle?
+  var environmentJobToken: UInt64?
   private var executivePendingInput = Data()
   private var snapshotSequence: UInt64 = 0
   private var openedFiles: [OpenedFile] = []
@@ -337,6 +338,12 @@ public actor Context {
     renderer: sending Renderer
   ) async throws -> sending Renderer.Output {
     precondition(graphicsEventConsumer == nil, "A PostScript context cannot run overlapping renders")
+    let environmentJobToken = environment.beginPersistentJob()
+    self.environmentJobToken = environmentJobToken
+    defer {
+      environment.finishPersistentJob(environmentJobToken)
+      self.environmentJobToken = nil
+    }
     try resetGraphics(for: pageDeviceSession.initialConfiguration)
     graphicsPageDeviceSession = pageDeviceSession
     try ensurePageDevice()
@@ -368,6 +375,12 @@ public actor Context {
     renderer: sending Renderer
   ) async throws -> sending Renderer.Output {
     precondition(graphicsEventConsumer == nil, "A PostScript context cannot run overlapping renders")
+    let environmentJobToken = environment.beginPersistentJob()
+    self.environmentJobToken = environmentJobToken
+    defer {
+      environment.finishPersistentJob(environmentJobToken)
+      self.environmentJobToken = nil
+    }
     try resetGraphics(for: pageDeviceSession.initialConfiguration)
     graphicsPageDeviceSession = pageDeviceSession
     try ensurePageDevice()
@@ -1274,6 +1287,9 @@ public actor Context {
       globalBoundary: globalBoundary,
       resourceTransactionIndex: resourceTransactionIndex
     )
+    if environmentJobToken == nil {
+      environmentJobToken = environment.beginPersistentJob()
+    }
     resetForJob()
     try establishStandardFiles()
   }
@@ -1287,6 +1303,11 @@ public actor Context {
 
   private func finishJobState() async throws -> Bool {
     guard let job = jobLifecycle else { return false }
+    let persistentToken = environmentJobToken
+    defer {
+      if let persistentToken { environment.finishPersistentJob(persistentToken) }
+      environmentJobToken = nil
+    }
     operands = OperandStack()
     execution = ExecutionStack()
     dictionaries.clear()
@@ -1684,9 +1705,9 @@ public actor Context {
       "languagelevel": .integer(targetLanguageLevel),
 
       // Product & version strings
-      "product": .string("SolidPostScript", access: .readOnly, vm: .global, kind: .literal),
-      "version": .string("1", access: .readOnly, vm: .global, kind: .literal),
-      "revision": 0,
+      "product": .string(PostScriptProduct.name, access: .readOnly, vm: .global, kind: .literal),
+      "version": .string(PostScriptProduct.version, access: .readOnly, vm: .global, kind: .literal),
+      "revision": .integer(PostScriptProduct.revision),
 
       // Deterministic and privacy-preserving.
       "serialnumber": 0,

@@ -105,17 +105,7 @@
   "parameters": {
     "userImplemented": ["AccurateScreens","HalftoneMode","IdiomRecognition","JobName","MaxDictStack","MaxExecStack","MaxFontItem","MaxFormItem","MaxLocalVM","MaxOpStack","MaxPatternItem","MaxScreenItem","MaxSuperScreen","MaxUPathItem","MinFontCompress","VMReclaim","VMThreshold"],
     "systemImplemented": ["ByteOrder","BuildTime","CurDisplayList","CurFontCache","CurFormCache","CurOutlineCache","CurPatternCache","CurScreenStorage","CurSourceList","CurStoredScreenCache","CurUPathCache","FactoryDefaults","FontResourceDir","GenericResourceDir","GenericResourcePathSep","LicenseID","MaxDisplayAndSourceList","MaxDisplayList","MaxFontCache","MaxFormCache","MaxImageBuffer","MaxOutlineCache","MaxPatternCache","MaxScreenStorage","MaxSourceList","MaxStoredScreenCache","MaxUPathCache","PageCount","PrinterName","RealFormat","Revision","StartJobPassword","StartupMode","SystemParamsPassword"],
-    "systemNonconforming": [
-      {"name":"FactoryDefaults","reason":"The key is accepted, but persistent factory-reset behavior is not implemented."},
-      {"name":"CurDisplayList","reason":"Reported as a placeholder rather than live display-list storage."},
-      {"name":"CurOutlineCache","reason":"Reported as a placeholder rather than live outline-cache storage."},
-      {"name":"CurSourceList","reason":"Reported as a placeholder rather than live source-list storage."},
-      {"name":"MaxDisplayAndSourceList","reason":"Accepted but not enforced across display and source storage."},
-      {"name":"MaxDisplayList","reason":"Accepted but not enforced against display-list storage."},
-      {"name":"MaxImageBuffer","reason":"Accepted but not the authoritative image-buffer limit."},
-      {"name":"MaxOutlineCache","reason":"Accepted but not enforced against outline-cache storage."},
-      {"name":"MaxSourceList","reason":"Accepted but not enforced against source-list storage."}
-    ],
+    "systemNonconforming": [],
     "deviceProviderDefined": true,
     "pageDeviceImplemented": ["AdvanceDistance","AdvanceMedia","BeginPage","Collate","CutMedia","DeferredMediaSelection","Duplex","EndPage","HWResolution","ImageShift","ImagingBBox","InputAttributes","InsertSheet","Install","Jog","LeadingEdge","ManualFeed","Margins","MaxSeparations","MediaClass","MediaColor","MediaPosition","MediaType","MediaWeight","MirrorPrint","NegativePrint","NumCopies","Orientation","OutputAttributes","OutputDevice","OutputFaceUp","OutputType","PageDeviceName","PageOffset","PageSize","Policies","ProcessColorModel","RollFedMedia","SeparationColorNames","SeparationOrder","Separations","Trapping","TrappingDetails","TraySwitch","Tumble","UseCIEColor"],
     "postponed": [],
@@ -124,7 +114,7 @@
       "system": "Sources/SolidPostScript/Parameters/SystemParameterState.swift",
       "device": "Sources/SolidPostScript/Files/ParameterizedFileDevice.swift",
       "pageDevice": "Sources/SolidPostScript/Operators/Graphics/PageDeviceOps.swift",
-      "tests": ["Tests/SolidPostScriptTests/InterpreterParameterTests.swift","Tests/SolidPostScriptTests/Graphics/PageDeviceTests.swift","Tests/SolidPostScriptTests/PLRMConformanceInventoryTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/InterpreterParameterTests.swift","Tests/SolidPostScriptTests/SystemParameterPersistenceTests.swift","Tests/SolidPostScriptTests/Graphics/GraphicsStorageAccountingTests.swift","Tests/SolidPostScriptTests/Graphics/PageDeviceTests.swift","Tests/SolidPostScriptTests/PLRMConformanceInventoryTests.swift"]
     }
   },
   "standardFiles": [
@@ -159,7 +149,6 @@
     {"name":"type1-eexec-encrypted-execution","status":"implemented","evidence":"Sources/SolidPostScript/Files/EExecFile.swift"}
   ],
   "remainingStages": [
-    {"priority":1,"title":"Make interpreter accounting parameters authoritative","items":["Revision","live display/source/outline counters","combined cache and image-buffer limits","FactoryDefaults lifecycle"]},
-    {"priority":2,"title":"Independent exhaustive semantic audit","items":["operator edge cases not proven by registration coverage","resource external-loading combinations","provider-specific device parameter matrices"]}
+    {"priority":1,"title":"Independent exhaustive semantic audit","items":["operator edge cases not proven by registration coverage","resource external-loading combinations","provider-specific device parameter matrices"]}
   ]
 }

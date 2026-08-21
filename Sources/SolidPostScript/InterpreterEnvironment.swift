@@ -5,7 +5,15 @@ import Synchronization
 
 /// Shared system and device state for one PostScript interpreter environment.
 public final class InterpreterEnvironment: Sendable {
-  let state = Mutex(SystemParameterState())
+  private struct PersistentJobState: Sendable {
+    var nextToken: UInt64 = 0
+    var activeTokens: Set<UInt64> = []
+    var factoryDefaultsArmedBy: UInt64?
+  }
+
+  let state: Mutex<SystemParameterState>
+  private let persistenceGeneration: Mutex<UInt64?>
+  private let persistentJobs = Mutex(PersistentJobState())
   let globalVMAllocationSpace: VMAllocationSpace
   let nameTable: NameTable
   private let globalResources = Mutex(ResourceStore())
@@ -95,6 +103,9 @@ public final class InterpreterEnvironment: Sendable {
     fontProviders: [any FontResourceProvider] = [],
     monotonicInstantSource: any MonotonicInstantSource
   ) {
+    let persistent = Self.loadPersistentState(from: hostConfiguration.systemParameterStore)
+    self.state = Mutex(persistent.state)
+    self.persistenceGeneration = Mutex(persistent.generation)
     let globalVMAllocationSpace = VMAllocationSpace(vm: .global)
     self.globalVMAllocationSpace = globalVMAllocationSpace
     self.nameTable = NameTable(globalVM: globalVMAllocationSpace)
@@ -140,6 +151,34 @@ public final class InterpreterEnvironment: Sendable {
       categories["IODevice"] = IODeviceResources(fileDevices: self.fileDevices)
     }
     self.resourceCategories = categories
+    applyRuntimeParameterLimits()
+  }
+
+  private static func loadPersistentState(
+    from store: any PostScriptSystemParameterStore
+  ) -> (state: SystemParameterState, generation: UInt64?) {
+    guard let record = try? store.load() else { return (SystemParameterState(), nil) }
+    guard var loaded = SystemParameterPersistence.decode(record.opaquePayload) else {
+      return (SystemParameterState(), record.generation)
+    }
+    guard loaded.values["FactoryDefaults"] == .boolean(true) else {
+      return (loaded, record.generation)
+    }
+
+    let pageCount = loaded.values["PageCount"] ?? .integer(0)
+    loaded = SystemParameterState()
+    loaded.values["PageCount"] = pageCount
+    guard let payload = try? SystemParameterPersistence.encode(loaded) else {
+      return (loaded, record.generation)
+    }
+    let nextGeneration = record.generation.addingReportingOverflow(1)
+    guard !nextGeneration.overflow else { return (loaded, record.generation) }
+    let next = PostScriptSystemParameterRecord(
+      generation: nextGeneration.partialValue,
+      opaquePayload: payload
+    )
+    let replaced = (try? store.compareAndReplace(expectedGeneration: record.generation, with: next)) == true
+    return (loaded, replaced ? next.generation : record.generation)
   }
 
   func startupProgram() async throws -> Data? {
@@ -328,6 +367,7 @@ public final class InterpreterEnvironment: Sendable {
     let maximum = min(max(requested, 0), Int32(FontGlyphCache.maximumBytes))
     state.withLock { $0.values["MaxFontCache"] = .integer(maximum) }
     fontManager.glyphCache.setMaximumBytes(Int(maximum))
+    persistCurrentState()
   }
 
   func systemString(_ name: String) -> String? {
@@ -339,7 +379,8 @@ public final class InterpreterEnvironment: Sendable {
 
   func updateSystemParameters(
     from dictionary: DictionaryValue,
-    administrator: Bool = false
+    administrator: Bool = false,
+    jobToken: UInt64? = nil
   ) throws {
     try dictionary.access.check(.read)
     var entries: [String: (key: Object, value: Object)] = [:]
@@ -351,6 +392,7 @@ public final class InterpreterEnvironment: Sendable {
     }
 
     let factoryOnly = Set(entries.keys).subtracting(["Password"]) == ["FactoryDefaults"]
+    var factoryDefaultsUpdate: Bool?
     try state.withLock { state in
       if !factoryOnly, !administrator, !state.systemPassword.isEmpty {
         let passwordKey = Object.literalName("Password")
@@ -398,7 +440,7 @@ public final class InterpreterEnvironment: Sendable {
       }
 
       if case .string(let printerName) = valueUpdates["PrinterName"], printerName.isEmpty {
-        valueUpdates["PrinterName"] = .string(Data("SolidPostScript".utf8))
+        valueUpdates["PrinterName"] = .string(Data(PostScriptProduct.name.utf8))
       }
 
       let maxDisplay = updatedInteger("MaxDisplayList", updates: valueUpdates, current: state.values)
@@ -416,7 +458,20 @@ public final class InterpreterEnvironment: Sendable {
       state.userDefaults.merge(defaultUpdates)
       if let nextSystemPassword { state.systemPassword = nextSystemPassword }
       if let nextStartJobPassword { state.startJobPassword = nextStartJobPassword }
+      if case .boolean(let value) = valueUpdates["FactoryDefaults"] {
+        factoryDefaultsUpdate = value
+      }
     }
+    if let factoryDefaultsUpdate {
+      persistentJobs.withLock { jobs in
+        jobs.factoryDefaultsArmedBy = factoryDefaultsUpdate ? (jobToken ?? 0) : nil
+      }
+    }
+    applyRuntimeParameterLimits()
+    persistCurrentState()
+  }
+
+  private func applyRuntimeParameterLimits() {
     let maximum = state.withLock { state -> Int32 in
       guard case .integer(let value) = state.values["MaxUPathCache"] else { return 0 }
       return value
@@ -466,6 +521,67 @@ public final class InterpreterEnvironment: Sendable {
       combined: graphicsLimits.2,
       imageBuffer: graphicsLimits.3
     )
+  }
+
+  private func persistCurrentState() {
+    let snapshot = state.withLock { $0 }
+    guard let payload = try? SystemParameterPersistence.encode(snapshot) else { return }
+    for _ in 0..<3 {
+      let expected = persistenceGeneration.withLock { $0 }
+      let nextGeneration: UInt64
+      if let expected {
+        let incremented = expected.addingReportingOverflow(1)
+        guard !incremented.overflow else { return }
+        nextGeneration = incremented.partialValue
+      } else {
+        nextGeneration = 1
+      }
+      let replacement = PostScriptSystemParameterRecord(
+        generation: nextGeneration,
+        opaquePayload: payload
+      )
+      if (try? hostConfiguration.systemParameterStore.compareAndReplace(
+        expectedGeneration: expected,
+        with: replacement
+      )) == true {
+        persistenceGeneration.withLock { $0 = nextGeneration }
+        return
+      }
+      guard let latest = try? hostConfiguration.systemParameterStore.load() else { return }
+      persistenceGeneration.withLock { $0 = latest.generation }
+    }
+  }
+
+  func beginPersistentJob() -> UInt64 {
+    let result = persistentJobs.withLock { jobs -> (UInt64, Bool) in
+      jobs.nextToken &+= 1
+      let token = jobs.nextToken
+      jobs.activeTokens.insert(token)
+      let shouldDisarm = jobs.factoryDefaultsArmedBy != nil
+      if shouldDisarm { jobs.factoryDefaultsArmedBy = nil }
+      return (token, shouldDisarm)
+    }
+    if result.1 { disarmFactoryDefaults() }
+    return result.0
+  }
+
+  func finishPersistentJob(_ token: UInt64) {
+    let shouldDisarm = persistentJobs.withLock { jobs -> Bool in
+      jobs.activeTokens.remove(token)
+      guard let armedBy = jobs.factoryDefaultsArmedBy, armedBy != token else { return false }
+      jobs.factoryDefaultsArmedBy = nil
+      return true
+    }
+    if shouldDisarm { disarmFactoryDefaults() }
+  }
+
+  private func disarmFactoryDefaults() {
+    let changed = state.withLock { state -> Bool in
+      guard state.values["FactoryDefaults"] == .boolean(true) else { return false }
+      state.values["FactoryDefaults"] = .boolean(false)
+      return true
+    }
+    if changed { persistCurrentState() }
   }
 
 

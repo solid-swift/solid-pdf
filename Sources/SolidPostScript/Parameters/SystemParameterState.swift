@@ -95,9 +95,9 @@ struct SystemParameterState: Sendable {
       "MaxStoredScreenCache": .integer(Int32(ScreenManager.maximumCachedBytes)),
       "MaxUPathCache": .integer(Int32(UserPathCache.maximumBytes)),
       "PageCount": .integer(0),
-      "PrinterName": .string(Data("SolidPostScript".utf8)),
+      "PrinterName": .string(Data(PostScriptProduct.name.utf8)),
       "RealFormat": .string(Data("IEEE".utf8)),
-      "Revision": .integer(0),
+      "Revision": .integer(PostScriptProduct.revision),
       "StartupMode": .integer(0),
     ]
     self.userDefaults = UserParameterState()

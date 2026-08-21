@@ -19,7 +19,7 @@ every semantic combination in the PLRM.
 | Standard filters | 17 implemented and advertised as implicit Filter resources |
 | Standard implicit color resources | 11 `ColorSpaceFamily` instances and `ColorRenderingType` 1 advertised |
 | User parameters | All 17 Appendix C parameters registered |
-| System parameters | All 34 Appendix C parameters registered; nine accounting/lifecycle semantics remain nonconforming |
+| System parameters | All 34 Appendix C parameters registered with authoritative accounting and persistence |
 | Supported page-device parameters | 46, negotiated by provider capabilities and `Policies` |
 | Standard files | `%stdin`, `%stdout`, `%stderr`, `%lineedit`, and `%statementedit` implemented |
 | Standard errors | All 27 registered, plus `invalidcontext` and `invalidid` extensions |
@@ -48,20 +48,18 @@ The postponed filter tranche is complete at the portable runtime boundary:
 
 ## Remaining conformance stages
 
-### 1. Make accounting parameters authoritative
-
-The Appendix C keys exist, but `FactoryDefaults` lacks its persistent reset lifecycle and several display/source/cache
-values are placeholders rather than live measurements. `MaxDisplayList`, `MaxSourceList`,
-`MaxDisplayAndSourceList`, `MaxImageBuffer`, and `MaxOutlineCache` likewise do not yet govern the storage named by the
-PLRM. These should be connected to the existing display-list, image-stream, and font-program owners rather than
-maintaining parallel counters.
-
-### 2. Run an independent exhaustive semantic audit
+### 1. Run an independent exhaustive semantic audit
 
 Registration coverage now prevents surface drift, but it cannot prove every error precedence, callback boundary,
 save/restore interaction, external-resource load, or provider capability matrix. The next audit should consume the
 JSON ledger category by category, add missing semantic vectors, and create focused implementation tranches only after
 the complete read-only report is finished.
+
+Appendix C accounting is authoritative: display/source/image reservations are shared across contexts in an
+environment, provider outlines use their own bounded LRU, and lowering live limits blocks growth or evicts cacheable
+entries as applicable. Mutable installation parameters use a host-selected generation-checked store. `FactoryDefaults`
+is applied on the next environment power-on only when its setting job remained the last installation activity, while
+`PageCount` is preserved.
 
 ## Intentionally unavailable facilities
 

@@ -43,7 +43,7 @@ struct MigrationTests {
     #expect(version.valueString == "1")
     #expect(version.access == .readOnly)
     #expect(version.vm == .global)
-    #expect(revision.value == 0)
+    #expect(revision.value == 1)
     #expect(serialNumber.value == 0)
 
     await #expect(throws: Error.invalidAccess) {

@@ -60,6 +60,16 @@ struct UserParameterState: Equatable, Sendable {
         try .string(from: object, maximumLength: maximumLength)
       }
     }
+
+    func normalize(_ value: ParameterValue) -> ParameterValue? {
+      switch (self, value) {
+      case (.boolean, .boolean): value
+      case (.integer(let normalize), .integer(let integer)): .integer(normalize(integer))
+      case (.string(let maximumLength), .string(let data)):
+        .string(maximumLength.map { Data(data.prefix($0)) } ?? data)
+      default: nil
+      }
+    }
   }
 
   private(set) var values: [String: ParameterValue]

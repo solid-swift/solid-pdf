@@ -86,6 +86,7 @@ struct PLRMConformanceInventoryTests {
 
     #expect(Set(inventory.parameters.userImplemented) == Set(UserParameterState.definitions.keys))
     #expect(Set(inventory.parameters.systemImplemented) == Set(SystemParameterState.definitions.keys))
+    #expect(inventory.parameters.systemNonconforming.isEmpty)
     #expect(
       Set(inventory.errors.standardImplemented + inventory.errors.extensionsImplemented)
         == Set(Error.registeredPostScriptNames)
@@ -211,6 +212,7 @@ private struct Inventory: Decodable {
   struct Parameters: Decodable {
     let userImplemented: [String]
     let systemImplemented: [String]
+    let systemNonconforming: [NamedReason]
     let evidence: ParameterEvidence
   }
 
