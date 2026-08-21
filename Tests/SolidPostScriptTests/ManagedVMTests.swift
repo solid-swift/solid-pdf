@@ -418,7 +418,7 @@ private extension Context {
     try await Operators.CurrentDevParams.instance.execute(context: self)
   }
 
-  func exerciseSnapshotMutationAccounting() throws -> (
+  func exerciseSnapshotMutationAccounting() async throws -> (
     backingFootprint: Int,
     beforeMutation: Int,
     firstMutation: Int,
@@ -438,7 +438,7 @@ private extension Context {
     let afterFirstMutation = localVMAllocationSpace.chargedBytes
     try array.updateObject(.integer(2), at: 0)
     let afterSecondMutation = localVMAllocationSpace.chargedBytes
-    try snapshot.restore(to: self)
+    try await snapshot.restore(to: self)
 
     return (
       array.allocationFootprint,

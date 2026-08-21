@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly VERSION=10.07.1
+readonly EXPECTED_SHA256=1cdb766de8db8f1e589c817f09c5855ea5f65dfc8540e465a69ac14c18416025
+readonly ARCHIVE_NAME="ghostscript-${VERSION}.tar.xz"
+readonly DOWNLOAD_URL="https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10071/${ARCHIVE_NAME}"
+readonly CACHE_ROOT="${SOLIDPDF_CONFORMANCE_CACHE:-${XDG_CACHE_HOME:-${HOME}/.cache}/solidpdf/conformance}"
+
+function fail() {
+  echo "prepare-ghostscript-reference: $*" >&2
+  exit 1
+}
+
+function sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+function sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+if [[ -n "${SOLIDPDF_GHOSTSCRIPT_EXECUTABLE:-}" ]]; then
+  [[ -x "${SOLIDPDF_GHOSTSCRIPT_EXECUTABLE}" ]] || fail "override is not executable: ${SOLIDPDF_GHOSTSCRIPT_EXECUTABLE}"
+  "${SOLIDPDF_GHOSTSCRIPT_EXECUTABLE}" --version >/dev/null || fail "override does not execute successfully"
+  printf '%s\n' "${SOLIDPDF_GHOSTSCRIPT_EXECUTABLE}"
+  exit 0
+fi
+
+for command in curl tar make cc; do
+  command -v "${command}" >/dev/null 2>&1 || fail "required command is unavailable: ${command}"
+done
+
+readonly ARCHIVE="${SOLIDPDF_GHOSTSCRIPT_ARCHIVE:-${CACHE_ROOT}/downloads/${ARCHIVE_NAME}}"
+mkdir -p "$(dirname "${ARCHIVE}")" "${CACHE_ROOT}/builds"
+if [[ ! -f "${ARCHIVE}" ]]; then
+  partial="${ARCHIVE}.partial.$$"
+  trap 'rm -f "${partial:-}"' EXIT
+  curl --fail --location --retry 3 --output "${partial}" "${DOWNLOAD_URL}"
+  mv "${partial}" "${ARCHIVE}"
+fi
+[[ "$(sha256 "${ARCHIVE}")" == "${EXPECTED_SHA256}" ]] || fail "SHA-256 mismatch for ${ARCHIVE}"
+
+readonly EXAMPLES="${CACHE_ROOT}/references/ghostscript-${VERSION}-examples"
+if [[ ! -f "${EXAMPLES}/.complete" ]]; then
+  examples_parent="$(dirname "${EXAMPLES}")"
+  examples_work="${EXAMPLES}.building.$$"
+  mkdir -p "${examples_parent}" "${examples_work}"
+  (
+    trap 'rm -rf "${examples_work}"' EXIT
+    tar -xJf "${ARCHIVE}" -C "${examples_work}" "ghostscript-${VERSION}/examples"
+    mv "${examples_work}/ghostscript-${VERSION}/examples" "${EXAMPLES}"
+    touch "${EXAMPLES}/.complete"
+  )
+fi
+
+readonly PLATFORM="$(uname -s)-$(uname -m)"
+readonly TOOLCHAIN="$(cc --version 2>/dev/null | head -1)"
+readonly CONFIGURE_OPTIONS="--disable-contrib --disable-cups --disable-dbus --disable-fontconfig --disable-gtk --disable-openjpeg --without-x --without-tesseract --without-libidn --without-libpaper --without-libtiff --without-pdftoraster --without-ijs --without-jbig2dec --without-urf --without-so --without-cal --with-pcl=no --with-xps=no --with-pdf=no --with-gpdl=no --with-drivers=pbmraw,pgmraw,ppmraw,pam"
+readonly CONFIGURE_SHA256="$(tar -xJOf "${ARCHIVE}" "ghostscript-${VERSION}/configure" | sha256_stdin)"
+readonly BUILD_KEY="$(printf '%s' "${VERSION}|${PLATFORM}|${TOOLCHAIN}|${CONFIGURE_SHA256}|${CONFIGURE_OPTIONS}" | cksum | awk '{print $1}')"
+readonly PREFIX="${CACHE_ROOT}/builds/${VERSION}-${BUILD_KEY}"
+readonly EXECUTABLE="${PREFIX}/bin/gs"
+if [[ -x "${EXECUTABLE}" ]]; then
+  printf '%s\n' "${EXECUTABLE}"
+  exit 0
+fi
+
+readonly WORK="${CACHE_ROOT}/builds/.${VERSION}-${BUILD_KEY}.building.$$"
+trap 'rm -rf "${WORK:-}"' EXIT
+mkdir -p "${WORK}"
+tar -xJf "${ARCHIVE}" -C "${WORK}" --strip-components=1
+cd "${WORK}"
+./configure --prefix="${PREFIX}" ${CONFIGURE_OPTIONS} >&2
+make -j "${SOLIDPDF_GHOSTSCRIPT_JOBS:-2}" >&2
+make install >&2
+[[ -x "${EXECUTABLE}" ]] || fail "build did not install ${EXECUTABLE}"
+printf '%s\n' "${EXECUTABLE}"

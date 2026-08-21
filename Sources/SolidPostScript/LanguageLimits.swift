@@ -2,6 +2,12 @@ import Foundation
 
 enum LanguageLimits {
   static let maximumNameLength = 127
+  static let maximumPathElements = 100_000
+  static let maximumGraphicsStackDepth = 1_000
+  static let maximumClipStackDepth = 1_000
+  static let maximumClipConstraints = 10_000
+  static let maximumImageRowBytes = 20 * 1_024 * 1_024
+  static let maximumPageCopies = 65_536
 
   static func validateNameLength(_ length: Int) throws {
     guard length <= maximumNameLength else {

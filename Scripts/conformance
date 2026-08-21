@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIRECTORY
+REPOSITORY_ROOT="$(cd "${SCRIPT_DIRECTORY}/.." && pwd -P)"
+readonly REPOSITORY_ROOT
+readonly SUITE="${SOLIDPDF_CONFORMANCE_SUITE:-${REPOSITORY_ROOT}/Tests/Fixtures/PostScriptConformance/suite.json}"
+
+reference="${SOLIDPDF_GHOSTSCRIPT_EXECUTABLE:-}"
+if [[ "${SOLIDPDF_CONFORMANCE_REFERENCE:-1}" != "0" ]]; then
+  reference="$(${SCRIPT_DIRECTORY}/prepare-ghostscript-reference)"
+fi
+
+arguments=(run "${SUITE}" --output "${SOLIDPDF_CONFORMANCE_OUTPUT:-${REPOSITORY_ROOT}/.conformance-results}")
+if [[ -n "${reference}" ]]; then
+  arguments+=(--reference "${reference}")
+fi
+arguments+=("$@")
+exec env CONFORMANCE_ENABLE=1 swift run --package-path "${REPOSITORY_ROOT}" solid-ps-conformance "${arguments[@]}"

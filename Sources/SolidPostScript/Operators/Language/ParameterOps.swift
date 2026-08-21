@@ -63,7 +63,8 @@ extension Operators {
       let dictionary: DictionaryValue = try context.operands.popAs()
       try context.environment.updateSystemParameters(
         from: dictionary,
-        administrator: context.isSystemAdministratorJob
+        administrator: context.isSystemAdministratorJob,
+        jobToken: context.environmentJobToken
       )
     }
   }

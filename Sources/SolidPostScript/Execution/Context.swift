@@ -81,12 +81,27 @@ public actor Context {
   var echoEnabled = true
   let jobServerEnabled: Bool
   var jobLifecycle: JobLifecycle?
+  var environmentJobToken: UInt64?
   private var executivePendingInput = Data()
   private var snapshotSequence: UInt64 = 0
   private var openedFiles: [OpenedFile] = []
   private var standardFiles: [String: Object] = [:]
   var fileReadAhead: [ObjectIdentifier: FileReadAhead] = [:]
   var filePendingEndOfFile: [ObjectIdentifier: any File] = [:]
+  var eexecScopes: [EExecExecutionScope] = []
+  var graphicsDeviceDescriptor: GraphicsDeviceDescriptor = .letter
+  var graphicsPageDeviceSession: (any GraphicsPageDeviceSession)?
+  var graphicsEventConsumer: (any GraphicsEventConsumer)?
+  var graphicsState: GraphicsCanonicalState = .initial(for: .letter)
+  var activeEncapsulatedPaintAllocations: Set<ObjectIdentifier> = []
+  var encapsulatedPaintDepth = 0
+  var uncoloredPatternExecutionDepth = 0
+  var imageDataSourceCallbackDepth = 0
+  var activeImageDictionaries: [(dictionary: DictionaryValue, revision: UInt64)] = []
+  var activeGlyphBuild: GlyphBuildState?
+  var fontExecutionScopes: [FontExecutionScope] = []
+  var graphicsStack: [GraphicsStackFrame] = []
+  var pageDeviceCallbackStack: [PageDeviceCallback] = []
   private var executionBoundarySequence: UInt64 = 0
   private var executionTimingDepth = 0
   private var hostSuspensionDepth = 0
@@ -103,7 +118,10 @@ public actor Context {
     let dictionaries = NameInterningContext.$table.withValue(environment.nameTable) {
       Self.defaultDictionaries(
         interactiveExecutiveEnabled: environment.hostConfiguration.interactiveExecutiveEnabled,
-        jobServerEnabled: jobServerEnabled
+        jobServerEnabled: jobServerEnabled,
+        globalFontDirectory: environment.globalFontDirectory,
+        standardEncoding: environment.standardEncoding,
+        isoLatin1Encoding: environment.isoLatin1Encoding
       )
     }
     self.dictionaries = DictionaryStack(dictionaries)
@@ -131,7 +149,11 @@ public actor Context {
     let userParameters = environment.userParameters()
     self.userParameters = userParameters
     let dictionaries = NameInterningContext.$table.withValue(environment.nameTable) {
-      Self.defaultDictionaries()
+      Self.defaultDictionaries(
+        globalFontDirectory: environment.globalFontDirectory,
+        standardEncoding: environment.standardEncoding,
+        isoLatin1Encoding: environment.isoLatin1Encoding
+      )
     }
     self.dictionaries = DictionaryStack(dictionaries)
     neverThrow(try environment.nameTable.intern(dictionaries))
@@ -310,6 +332,145 @@ public actor Context {
     }
   }
 
+  func render<Renderer: GraphicsRenderer, PageDeviceSession: GraphicsPageDeviceSession>(
+    source: Object?,
+    pageDeviceSession: sending PageDeviceSession,
+    renderer: sending Renderer
+  ) async throws -> sending Renderer.Output {
+    precondition(graphicsEventConsumer == nil, "A PostScript context cannot run overlapping renders")
+    let environmentJobToken = environment.beginPersistentJob()
+    self.environmentJobToken = environmentJobToken
+    defer {
+      environment.finishPersistentJob(environmentJobToken)
+      self.environmentJobToken = nil
+    }
+    try resetGraphics(for: pageDeviceSession.initialConfiguration)
+    graphicsPageDeviceSession = pageDeviceSession
+    try ensurePageDevice()
+    try installCurrentOutputDeviceResource()
+    graphicsEventConsumer = renderer
+    do {
+      try renderer.activateDevice(graphicsState.device.snapshot)
+      try await executeStart()
+      try await prepareIdiomResources()
+      try await pushAndRun(source: try renderSource(source))
+      try await finishCurrentPageDevice()
+      let output = try renderer.finish()
+      graphicsEventConsumer = nil
+      graphicsPageDeviceSession = nil
+      return output
+    } catch {
+      renderer.abort()
+      graphicsEventConsumer = nil
+      graphicsPageDeviceSession = nil
+      throw error
+    }
+  }
+
+  package func renderEncapsulated<Renderer: GraphicsRenderer, PageDeviceSession: GraphicsPageDeviceSession>(
+    source: Object?,
+    bounds: GraphicsRect,
+    strict: Bool,
+    pageDeviceSession: sending PageDeviceSession,
+    renderer: sending Renderer
+  ) async throws -> sending Renderer.Output {
+    precondition(graphicsEventConsumer == nil, "A PostScript context cannot run overlapping renders")
+    let environmentJobToken = environment.beginPersistentJob()
+    self.environmentJobToken = environmentJobToken
+    defer {
+      environment.finishPersistentJob(environmentJobToken)
+      self.environmentJobToken = nil
+    }
+    try resetGraphics(for: pageDeviceSession.initialConfiguration)
+    graphicsPageDeviceSession = pageDeviceSession
+    try ensurePageDevice()
+    try installCurrentOutputDeviceResource()
+    graphicsEventConsumer = renderer
+    var encapsulationSnapshot: Snapshot?
+    var savedOperands: OperandStack?
+    var savedDictionaries: DictionaryStack?
+    var savedGraphicsState: GraphicsCanonicalState?
+    var savedGraphicsStack: [GraphicsStackFrame]?
+    do {
+      try renderer.activateDevice(graphicsState.device.snapshot)
+      try await executeStart()
+      try await prepareIdiomResources()
+      let snapshot = try snapshot(scope: .job)
+      encapsulationSnapshot = snapshot
+      let operandDepth = operands.depth
+      savedOperands = operands
+      savedDictionaries = dictionaries
+      savedGraphicsState = graphicsState
+      savedGraphicsStack = graphicsStack
+      let emptyProcedure = try Object.array([], access: .unlimited, vm: .local, kind: .executable)
+      let dictionary = try Object.dictionary(
+        [.literalName("showpage"): emptyProcedure],
+        access: .unlimited,
+        vm: .local,
+        kind: .literal
+      )
+      try adopt(dictionary)
+      try dictionaries.push(dictionary)
+      encapsulatedPaintDepth += 1
+      graphicsState.initializeGraphics(for: graphicsDeviceDescriptor)
+      let lowerLeft = GraphicsPoint(x: bounds.x, y: bounds.y)
+      let lowerRight = GraphicsPoint(x: bounds.maxX, y: bounds.y)
+      let upperRight = GraphicsPoint(x: bounds.maxX, y: bounds.maxY)
+      let upperLeft = GraphicsPoint(x: bounds.x, y: bounds.maxY)
+      let boundingPath = GraphicsPath(elements: [
+        .move(to: lowerLeft),
+        .line(to: lowerRight),
+        .line(to: upperRight),
+        .line(to: upperLeft),
+        .close,
+      ]).transformed(by: graphicsState.matrix)
+      let boundingRegion = try GraphicsPathGeometry.region(
+        for: boundingPath,
+        rule: .winding,
+        flatness: graphicsState.flatness
+      )
+      graphicsState.clip = try graphicsState.clip.appending(.init(path: boundingPath, rule: .winding))
+      graphicsState.resolvedClip = try GraphicsPathGeometry.intersect(graphicsState.resolvedClip, boundingRegion)
+      graphicsState.clearPath()
+      try await pushAndRun(source: try renderSource(source))
+      guard !strict || operands.depth == operandDepth else { throw Error.typeCheck }
+      let pageState = graphicsState.snapshot
+      let event = GraphicsEvent(operation: .page(.show), before: pageState, after: pageState)
+      try renderer.transmitPage(event, copies: 1)
+      encapsulatedPaintDepth -= 1
+      operands = savedOperands!
+      dictionaries = savedDictionaries!
+      graphicsState = savedGraphicsState!
+      graphicsStack = savedGraphicsStack!
+      try await snapshot.restore(to: self)
+      try renderer.deactivateDevice(graphicsState.device.snapshot)
+      let output = try renderer.finish()
+      graphicsEventConsumer = nil
+      graphicsPageDeviceSession = nil
+      return output
+    } catch {
+      encapsulatedPaintDepth = max(0, encapsulatedPaintDepth - 1)
+      if let savedOperands { operands = savedOperands }
+      if let savedDictionaries { dictionaries = savedDictionaries }
+      if let savedGraphicsState { graphicsState = savedGraphicsState }
+      if let savedGraphicsStack { graphicsStack = savedGraphicsStack }
+      if let encapsulationSnapshot { try? await encapsulationSnapshot.restore(to: self) }
+      renderer.abort()
+      graphicsEventConsumer = nil
+      graphicsPageDeviceSession = nil
+      throw error
+    }
+  }
+
+  private func renderSource(_ source: Object?) throws -> Object {
+    if let source { return source }
+    try establishStandardFiles()
+    guard var standardInput = standardFiles["stdin"] else { throw Error.undefinedFilename }
+    standardInput.kind = .executable
+    return standardInput
+  }
+
+
   func executeStart() async throws {
     try await withUserTimeAccounting {
       try establishStandardFiles()
@@ -345,6 +506,8 @@ public actor Context {
   func beginSessionJob() async throws {
     try await withUserTimeAccounting {
       try beginJob(persistent: false, authorization: .ordinary)
+      try ensurePageDevice()
+      try installCurrentOutputDeviceResource()
       try await prepareIdiomResources()
     }
   }
@@ -427,6 +590,7 @@ public actor Context {
     "errordict",
     "statusdict",
     "userdict",
+    "FontDirectory",
   ]
 
   internal func run(untilExecutionDepth targetDepth: Int) async throws {
@@ -477,7 +641,7 @@ public actor Context {
         )
         continue
       } catch let failure as PostScriptParameterFailure {
-        let command = execution.peek()?.source ?? .null
+        let command = executionErrorCommand()
         try await initiate(failure: failure, command: command, savedOperands: savedOperands)
         continue
       } catch let error as Error {
@@ -485,7 +649,7 @@ public actor Context {
           throw error
         }
 
-        let command = execution.peek()?.source ?? .null
+        let command = executionErrorCommand()
         try await initiate(error: error, command: command, savedOperands: savedOperands)
         continue
       }
@@ -535,6 +699,14 @@ public actor Context {
     case .string(let description):
       .string(description, access: .unlimited, vm: allocationMode, kind: .literal)
     }
+  }
+
+  private func executionErrorCommand() -> Object {
+    let source = execution.peek()?.source ?? .null
+    guard !eexecScopes.isEmpty || (source.value as? FileValue)?.file is EExecFile else {
+      return source
+    }
+    return Object(value: Operators.EExec.instance)
   }
 
   private func initiate(
@@ -968,6 +1140,26 @@ public actor Context {
       object.save(to: builder)
     }
 
+    graphicsState.dashSource?.save(to: builder)
+    graphicsState.colorSelection.retainedObjects.forEach { $0.save(to: builder) }
+    graphicsState.colorRenderingSource?.save(to: builder)
+    graphicsState.transferFunctionSources.forEach { $0?.save(to: builder) }
+    graphicsState.blackGenerationSource?.save(to: builder)
+    graphicsState.undercolorRemovalSource?.save(to: builder)
+    graphicsState.halftoneSource?.save(to: builder)
+    graphicsState.fontSource?.save(to: builder)
+    graphicsState.patternSource?.save(to: builder)
+    for frame in graphicsStack {
+      frame.state.dashSource?.save(to: builder)
+      frame.state.colorSelection.retainedObjects.forEach { $0.save(to: builder) }
+      frame.state.colorRenderingSource?.save(to: builder)
+      frame.state.transferFunctionSources.forEach { $0?.save(to: builder) }
+      frame.state.blackGenerationSource?.save(to: builder)
+      frame.state.undercolorRemovalSource?.save(to: builder)
+      frame.state.halftoneSource?.save(to: builder)
+      frame.state.fontSource?.save(to: builder)
+    }
+
     if scope == .job {
       for object in try environment.globalResourceObjects() {
         object.save(to: builder)
@@ -1095,6 +1287,9 @@ public actor Context {
       globalBoundary: globalBoundary,
       resourceTransactionIndex: resourceTransactionIndex
     )
+    if environmentJobToken == nil {
+      environmentJobToken = environment.beginPersistentJob()
+    }
     resetForJob()
     try establishStandardFiles()
   }
@@ -1108,15 +1303,20 @@ public actor Context {
 
   private func finishJobState() async throws -> Bool {
     guard let job = jobLifecycle else { return false }
+    let persistentToken = environmentJobToken
+    defer {
+      if let persistentToken { environment.finishPersistentJob(persistentToken) }
+      environmentJobToken = nil
+    }
     operands = OperandStack()
     execution = ExecutionStack()
     dictionaries.clear()
     await closeFilesForJob(allocatedAfter: job.localBoundary, globalBoundary: job.globalBoundary)
     if job.persistent, let pendingSave = languageSaves.first {
-      try pendingSave.restore(to: self)
+      try await pendingSave.restore(to: self)
     }
     if let snapshot = job.snapshot {
-      try snapshot.restore(to: self)
+      try await snapshot.restore(to: self)
     }
     guard job.resourceTransactionIndex < resourceLoadTransactions.count else {
       throw Error.invalidRestore
@@ -1402,12 +1602,35 @@ public actor Context {
 
   /// Performs the ``defaultDictionaries`` operation.
   nonisolated public static func defaultDictionaries() -> [Object] {
-    defaultDictionaries(interactiveExecutiveEnabled: true, jobServerEnabled: false)
+    defaultDictionaries(
+      interactiveExecutiveEnabled: true,
+      jobServerEnabled: false,
+      globalFontDirectory: nil,
+      standardEncoding: nil,
+      isoLatin1Encoding: nil
+    )
+  }
+
+  nonisolated static func defaultDictionaries(
+    globalFontDirectory: Object,
+    standardEncoding: Object,
+    isoLatin1Encoding: Object
+  ) -> [Object] {
+    defaultDictionaries(
+      interactiveExecutiveEnabled: true,
+      jobServerEnabled: false,
+      globalFontDirectory: globalFontDirectory,
+      standardEncoding: standardEncoding,
+      isoLatin1Encoding: isoLatin1Encoding
+    )
   }
 
   nonisolated static func defaultDictionaries(
     interactiveExecutiveEnabled: Bool,
-    jobServerEnabled: Bool
+    jobServerEnabled: Bool,
+    globalFontDirectory: Object?,
+    standardEncoding: Object?,
+    isoLatin1Encoding: Object?
   ) -> [Object] {
     let userDict = defaultUserDictionary(jobServerEnabled: jobServerEnabled)
     let globalDict = defaultGlobalDictionary()
@@ -1415,7 +1638,10 @@ public actor Context {
       userDict: userDict,
       globalDict: globalDict,
       interactiveExecutiveEnabled: interactiveExecutiveEnabled,
-      jobServerEnabled: jobServerEnabled
+      jobServerEnabled: jobServerEnabled,
+      globalFontDirectory: globalFontDirectory,
+      standardEncoding: standardEncoding,
+      isoLatin1Encoding: isoLatin1Encoding
     )
     return [userDict, globalDict, sysDict]
   }
@@ -1426,7 +1652,10 @@ public actor Context {
       userDict: userDict,
       globalDict: globalDict,
       interactiveExecutiveEnabled: true,
-      jobServerEnabled: false
+      jobServerEnabled: false,
+      globalFontDirectory: nil,
+      standardEncoding: nil,
+      isoLatin1Encoding: nil
     )
   }
 
@@ -1434,13 +1663,24 @@ public actor Context {
     userDict: Object,
     globalDict: Object,
     interactiveExecutiveEnabled: Bool,
-    jobServerEnabled: Bool
+    jobServerEnabled: Bool,
+    globalFontDirectory: Object?,
+    standardEncoding: Object?,
+    isoLatin1Encoding: Object?
   ) -> Object {
     let errorDictionary = defaultErrorDictionary()
     let errorState = defaultErrorState()
     let statusDictionary = neverThrow(
       try Object.dictionary([:], access: .unlimited, vm: .local, kind: .literal)
     )
+    let fontDirectory = neverThrow(
+      try Object.dictionary([:], access: .unlimited, vm: .local, kind: .literal)
+    )
+    let globalFontDirectory = globalFontDirectory ?? neverThrow(
+      try Object.dictionary([:], access: .unlimited, vm: .global, kind: .literal)
+    )
+    let standardEncoding = standardEncoding ?? neverThrow(try StandardEncodings.standard())
+    let isoLatin1Encoding = isoLatin1Encoding ?? neverThrow(try StandardEncodings.isoLatin1())
     var dict: [Object: Object] = [
 
       // Constants
@@ -1455,14 +1695,19 @@ public actor Context {
       "shareddict": globalDict,
       "userdict": userDict,
       "statusdict": statusDictionary,
+      "FontDirectory": fontDirectory,
+      "GlobalFontDirectory": globalFontDirectory,
+      "SharedFontDirectory": globalFontDirectory,
+      "StandardEncoding": standardEncoding,
+      "ISOLatin1Encoding": isoLatin1Encoding,
 
       // Aspirational target; unavailable language features remain undefined.
       "languagelevel": .integer(targetLanguageLevel),
 
       // Product & version strings
-      "product": .string("SolidPostScript", access: .readOnly, vm: .global, kind: .literal),
-      "version": .string("1", access: .readOnly, vm: .global, kind: .literal),
-      "revision": 0,
+      "product": .string(PostScriptProduct.name, access: .readOnly, vm: .global, kind: .literal),
+      "version": .string(PostScriptProduct.version, access: .readOnly, vm: .global, kind: .literal),
+      "revision": .integer(PostScriptProduct.revision),
 
       // Deterministic and privacy-preserving.
       "serialnumber": 0,
@@ -1541,7 +1786,8 @@ public actor Context {
   }
 
   nonisolated static func defaultUserDictionary(jobServerEnabled: Bool) -> Object {
-    let dict: [Object: Object] = jobServerEnabled ? ["quit": Operators.quitMaskProcedure] : [:]
+    var dict: [Object: Object] = ["#copies": 1]
+    if jobServerEnabled { dict["quit"] = Operators.quitMaskProcedure }
     return neverThrow(try .dictionary(dict, access: .unlimited, vm: .local, kind: .literal))
   }
 

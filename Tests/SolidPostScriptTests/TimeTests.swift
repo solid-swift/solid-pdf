@@ -247,7 +247,7 @@ struct TimeTests {
     let results = try await context.executeForTimeTesting(
       content: "advancetime usertime",
       source: usertimeSource,
-      duration: wrapDuration
+      duration: .milliseconds(Int64(Int32.max) + 1)
     )
 
     #expect(realtime.value == Int32.min)
@@ -259,24 +259,38 @@ private enum TimingFailure: Swift.Error {
   case expected
 }
 
+// Keep the test operator's timing value scalar across the Context actor boundary. Swift 6.3 on
+// Linux/ARM64 corrupts the upper word when the Int128-backed SolidTempo.Duration is stored there.
+private struct TestDuration: Sendable {
+  let nanoseconds: Int64
+
+  static func milliseconds(_ value: Int64) -> Self {
+    Self(nanoseconds: value * 1_000_000)
+  }
+
+  static func microseconds(_ value: Int64) -> Self {
+    Self(nanoseconds: value * 1_000)
+  }
+}
+
 private struct AdvanceTimeOperator: OperatorValue {
   static let systemDictionaryNames: [Object] = ["advancetime"]
 
   let source: ManualInstantSource
-  let duration: SolidTempo.Duration
+  let durationNanoseconds: Int64
 
   func execute(context: isolated Context) async throws {
-    try source.advance(by: duration)
+    try source.advance(by: .nanoseconds(durationNanoseconds))
   }
 
   func equals(_ other: any ObjectValue) -> Bool {
     guard let other = other as? Self else { return false }
-    return source === other.source && duration == other.duration
+    return source === other.source && durationNanoseconds == other.durationNanoseconds
   }
 
   func hash(into hasher: inout Hasher) {
     hasher.combine(ObjectIdentifier(source))
-    hasher.combine(duration)
+    hasher.combine(durationNanoseconds)
   }
 }
 
@@ -382,9 +396,9 @@ private extension Context {
   func executeForTimeTesting(
     content: String,
     source: ManualInstantSource,
-    duration: SolidTempo.Duration
+    duration: TestDuration
   ) async throws -> [Object] {
-    let advance = AdvanceTimeOperator(source: source, duration: duration)
+    let advance = AdvanceTimeOperator(source: source, durationNanoseconds: duration.nanoseconds)
     try dictionaries.userDictionary().updateObject(.init(value: advance), forKey: "advancetime")
     try await pushAndRun(
       source: .dataFile(

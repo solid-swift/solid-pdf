@@ -10,14 +10,14 @@ struct UserParameterState: Equatable, Sendable {
     "JobName": .string(maximumLength: 100),
     "MaxDictStack": .integer { max($0, 3) },
     "MaxExecStack": .nonnegativeInteger,
-    "MaxFontItem": .nonnegativeInteger,
-    "MaxFormItem": .nonnegativeInteger,
+    "MaxFontItem": .integer { min(max($0, 0), Int32(FontGlyphCache.maximumItemBytes)) },
+    "MaxFormItem": .integer { min(max($0, 0), Int32(FormCache.maximumItemBytes)) },
     "MaxLocalVM": .nonnegativeInteger,
     "MaxOpStack": .nonnegativeInteger,
-    "MaxPatternItem": .nonnegativeInteger,
-    "MaxScreenItem": .nonnegativeInteger,
-    "MaxSuperScreen": .nonnegativeInteger,
-    "MaxUPathItem": .nonnegativeInteger,
+    "MaxPatternItem": .integer { min(max($0, 0), Int32(PatternCache.maximumItemBytes)) },
+    "MaxScreenItem": .integer { min(max($0, 0), Int32(ScreenManager.maximumItemBytes)) },
+    "MaxSuperScreen": .integer { min(max($0, 0), 1016) },
+    "MaxUPathItem": .integer { min(max($0, 0), Int32(UserPathCache.maximumItemBytes)) },
     "MinFontCompress": .nonnegativeInteger,
     "VMReclaim": .integer { min(max($0, -2), 0) },
     "VMThreshold": .integer { $0 == -1 ? vmThresholdDefault : max($0, 0) },
@@ -30,14 +30,14 @@ struct UserParameterState: Equatable, Sendable {
     "JobName": .string(Data()),
     "MaxDictStack": .integer(.max),
     "MaxExecStack": .integer(.max),
-    "MaxFontItem": .integer(.max),
-    "MaxFormItem": .integer(.max),
+    "MaxFontItem": .integer(Int32(FontGlyphCache.maximumItemBytes)),
+    "MaxFormItem": .integer(Int32(FormCache.maximumItemBytes)),
     "MaxLocalVM": .integer(.max),
     "MaxOpStack": .integer(.max),
-    "MaxPatternItem": .integer(.max),
-    "MaxScreenItem": .integer(.max),
+    "MaxPatternItem": .integer(Int32(PatternCache.maximumItemBytes)),
+    "MaxScreenItem": .integer(Int32(ScreenManager.maximumItemBytes)),
     "MaxSuperScreen": .integer(0),
-    "MaxUPathItem": .integer(.max),
+    "MaxUPathItem": .integer(Int32(UserPathCache.maximumItemBytes)),
     "MinFontCompress": .integer(0),
     "VMReclaim": .integer(0),
     "VMThreshold": .integer(vmThresholdDefault),
@@ -58,6 +58,16 @@ struct UserParameterState: Equatable, Sendable {
         .integer(normalize(try ParameterValue.integer(from: object)))
       case .string(let maximumLength):
         try .string(from: object, maximumLength: maximumLength)
+      }
+    }
+
+    func normalize(_ value: ParameterValue) -> ParameterValue? {
+      switch (self, value) {
+      case (.boolean, .boolean): value
+      case (.integer(let normalize), .integer(let integer)): .integer(normalize(integer))
+      case (.string(let maximumLength), .string(let data)):
+        .string(maximumLength.map { Data(data.prefix($0)) } ?? data)
+      default: nil
       }
     }
   }

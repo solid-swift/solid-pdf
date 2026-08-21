@@ -24,6 +24,8 @@ public struct InterpreterHostConfiguration: Sendable {
   public let interactiveExecutiveEnabled: Bool
   /// The lifecycle observer.
   public let lifecycleObserver: any InterpreterLifecycleObserver
+  /// Persistent installation parameters shared across environment power cycles.
+  public let systemParameterStore: any PostScriptSystemParameterStore
 
   /// Creates a host configuration.
   ///
@@ -36,7 +38,8 @@ public struct InterpreterHostConfiguration: Sendable {
     jobAuthorizationProvider: (any JobAuthorizationProvider)? = nil,
     interactiveExecutiveProvider: (any InteractiveExecutiveProvider)? = nil,
     interactiveExecutiveEnabled: Bool = true,
-    lifecycleObserver: any InterpreterLifecycleObserver = NoInterpreterLifecycleObserver()
+    lifecycleObserver: any InterpreterLifecycleObserver = NoInterpreterLifecycleObserver(),
+    systemParameterStore: any PostScriptSystemParameterStore = ProcessLocalSystemParameterStore()
   ) {
     self.standardInput = standardInput
     self.standardOutput = standardOutput
@@ -46,5 +49,6 @@ public struct InterpreterHostConfiguration: Sendable {
     self.interactiveExecutiveProvider = interactiveExecutiveProvider
     self.interactiveExecutiveEnabled = interactiveExecutiveEnabled
     self.lifecycleObserver = lifecycleObserver
+    self.systemParameterStore = systemParameterStore
   }
 }

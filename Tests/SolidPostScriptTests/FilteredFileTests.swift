@@ -7,6 +7,7 @@
 
 import Foundation
 @testable import SolidPostScript
+import SolidImageIO
 import SolidIO
 import Testing
 
@@ -236,6 +237,45 @@ struct FilteredFileTests {
   }
 
   @Test
+  func decoderLeavesTrailingFileBytesAtTheSharedLogicalCursor() async throws {
+    let sourceURL = temporaryURL()
+    defer { try? FileManager.default.removeItem(at: sourceURL) }
+    try Data("61>tail".utf8).write(to: sourceURL)
+
+    let result: StringValue = try await Interpreter.result(
+      content: """
+        /source (\(sourceURL.path)) (r) file def
+        /decoded source /ASCIIHexDecode filter def
+        decoded read pop pop
+        decoded read pop
+        source 4 string readstring pop
+        """
+    )
+    #expect(result.string == "tail")
+  }
+
+  @Test
+  func flushfileConsumesOnlyThroughDecoderEndOfData() async throws {
+    let sourceURL = temporaryURL()
+    defer { try? FileManager.default.removeItem(at: sourceURL) }
+    try Data("6162>tail".utf8).write(to: sourceURL)
+
+    let results = try await Interpreter.results(
+      content: """
+        /source (\(sourceURL.path)) (r) file def
+        /decoded source /ASCIIHexDecode filter def
+        decoded bytesavailable
+        decoded flushfile
+        decoded status
+        source 4 string readstring pop
+        """
+    )
+    #expect(results.contains { ($0.value as? IntegerValue)?.value == 1 })
+    #expect(results.contains { ($0.value as? BooleanValue)?.value == false })
+    #expect(results.contains { ($0.value as? StringValue)?.string == "tail" })
+  }
+
+  @Test
   func ordinaryAndReusablePositioning() async throws {
     await #expect(throws: Error.ioError) {
       try await Interpreter.execute(
@@ -416,32 +456,41 @@ struct FilteredFileTests {
   }
 
   @Test
-  func dctEncoderClosesAtDeclaredSampleCount() async throws {
-#if canImport(ImageIO)
+  func dctEncoderDefersEndOfDataUntilClose() async throws {
     let results = try await Interpreter.results(
       content: """
         /target 1024 string def
         /encoded target << /Columns 1 /Rows 1 /Colors 1 >> /DCTEncode filter def
         encoded 0 write
-        encoded
-        { encoded 0 write } stopped
+        encoded status
+        target 0 get
+        { encoded 0 write } stopped /failed exch def pop pop
+        encoded closefile
+        encoded status
+        target 0 get target 1 get
+        failed
         """
     )
-    let stopped = try #require(results.first?.value as? BooleanValue)
-    let encoded = try #require(results.compactMap { $0.value as? FileValue }.first)
-    #expect(stopped.value == true)
-    #expect(encoded.file.isClosed)
-#else
-    await #expect(throws: Error.ioError) {
-      try await Interpreter.execute(
-        content: """
-          /target 1024 string def
-          /encoded target << /Columns 1 /Rows 1 /Colors 1 >> /DCTEncode filter def
-          encoded 0 write
-          """
-      )
-    }
-#endif
+    let booleans = results.compactMap { ($0.value as? BooleanValue)?.value }
+    let integers = results.compactMap { ($0.value as? IntegerValue)?.value }
+    #expect(booleans == [true, false, true])
+    #expect(integers == [216, 255, 0])
+  }
+
+  @Test
+  func synchronousEncodingCloseFinalizesCodecAndTargetOnce() throws {
+    let file = DataFile(data: Data(), mode: .write)
+    let target = try FilterTarget(
+      destination: .file(file, access: .unlimited, vm: .local, kind: .literal),
+      closeTarget: false
+    )
+    let encoded = EncodingFilterFile(name: "ASCIIHexEncode", codec: ASCIIHexEncoder(), target: target)
+    try encoded.write(contentsOf: Data("A".utf8))
+    try encoded.close()
+    try encoded.close()
+    #expect(encoded.isClosed)
+    try file.setOffset(0)
+    #expect(try file.read(max: 3) == Data("41>".utf8))
   }
 
   @Test

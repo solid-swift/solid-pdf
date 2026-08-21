@@ -13,5 +13,10 @@ DerivedData/
 *.xcscheme
 .idea
 /.cache
+/.benchmarkBaselines
+/.conformance-results
+/.conformance-discovery
 *.trace
+.fuzz-corpus/
+.fuzz-artifacts/
 .claude

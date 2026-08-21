@@ -31,18 +31,139 @@ public enum Interpreter {
 
   /// Executes a PostScript file in a new context belonging to `environment`.
   public static func execute(file: File, environment: InterpreterEnvironment) async throws -> Context {
-    let source: Object = .file(file, access: .readOnly, vm: .local, kind: .executable)
+    let result = try await render(file: file, to: NullGraphicsTarget(), environment: environment)
+    return result.context
+  }
+
+  /// Renders PostScript content to a typed graphics target in a new environment.
+  public static func render<Target: GraphicsTarget>(
+    content: String,
+    to target: Target
+  ) async throws -> GraphicsRenderResult<Target.Output> {
+    try await render(content: content, to: target, environment: InterpreterEnvironment())
+  }
+
+  package static func renderEncapsulated<Target: GraphicsTarget>(
+    file: File?,
+    bounds: GraphicsRect,
+    strict: Bool,
+    to target: Target,
+    environment: InterpreterEnvironment
+  ) async throws -> GraphicsRenderResult<Target.Output> {
+    let source: Object? = file.map { .file($0, access: .readOnly, vm: .local, kind: .executable) }
+    let colorSession = try target.colorEngine.makeSession(for: target.deviceDescriptor)
+    let deviceRenderingSession = try target.deviceRenderingEngine.makeSession(for: target.deviceDescriptor)
+    let fontSession = try target.fontEngine.makeSession(for: target.deviceDescriptor)
+    let trappingSession = try target.trappingEngine.makeSession(for: target.deviceDescriptor)
+    let pageDeviceSession = try target.pageDeviceProvider.makeSession(for: target.deviceDescriptor)
+    let renderer = try target.makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession,
+      fontSession: fontSession,
+      trappingSession: trappingSession
+    )
+    try renderer.installStorageAccounting(environment.graphicsStorageLedger.makeSession())
     let context = Context(environment: environment)
     do {
-      try await context.executeStart()
-      try await context.prepareIdiomResources()
-      try await context.pushAndRun(source: source)
+      let output = try await context.renderEncapsulated(
+        source: source,
+        bounds: bounds,
+        strict: strict,
+        pageDeviceSession: pageDeviceSession,
+        renderer: renderer
+      )
+      return GraphicsRenderResult(context: context, output: output)
     } catch let stop as ErrorStop {
       throw stop.error
     } catch let undispatched as UndispatchedError {
       throw undispatched.error
     }
-    return context
+  }
+
+  package static func renderStandardInput<Target: GraphicsTarget>(
+    to target: Target,
+    environment: InterpreterEnvironment
+  ) async throws -> GraphicsRenderResult<Target.Output> {
+    let colorSession = try target.colorEngine.makeSession(for: target.deviceDescriptor)
+    let deviceRenderingSession = try target.deviceRenderingEngine.makeSession(for: target.deviceDescriptor)
+    let fontSession = try target.fontEngine.makeSession(for: target.deviceDescriptor)
+    let trappingSession = try target.trappingEngine.makeSession(for: target.deviceDescriptor)
+    let pageDeviceSession = try target.pageDeviceProvider.makeSession(for: target.deviceDescriptor)
+    let renderer = try target.makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession,
+      fontSession: fontSession,
+      trappingSession: trappingSession
+    )
+    try renderer.installStorageAccounting(environment.graphicsStorageLedger.makeSession())
+    let context = Context(environment: environment)
+    do {
+      let output = try await context.render(
+        source: nil,
+        pageDeviceSession: pageDeviceSession,
+        renderer: renderer
+      )
+      return GraphicsRenderResult(context: context, output: output)
+    } catch let stop as ErrorStop {
+      throw stop.error
+    } catch let undispatched as UndispatchedError {
+      throw undispatched.error
+    }
+  }
+
+  /// Renders PostScript content to a typed graphics target in `environment`.
+  public static func render<Target: GraphicsTarget>(
+    content: String,
+    to target: Target,
+    environment: InterpreterEnvironment
+  ) async throws -> GraphicsRenderResult<Target.Output> {
+    try await render(
+      file: DataFile(data: content.data(using: .isoLatin1).neverNil(), mode: .read),
+      to: target,
+      environment: environment
+    )
+  }
+
+  /// Renders a PostScript file to a typed graphics target in a new environment.
+  public static func render<Target: GraphicsTarget>(
+    file: File,
+    to target: Target
+  ) async throws -> GraphicsRenderResult<Target.Output> {
+    try await render(file: file, to: target, environment: InterpreterEnvironment())
+  }
+
+  /// Renders a PostScript file to a typed graphics target in `environment`.
+  public static func render<Target: GraphicsTarget>(
+    file: File,
+    to target: Target,
+    environment: InterpreterEnvironment
+  ) async throws -> GraphicsRenderResult<Target.Output> {
+    let source: Object = .file(file, access: .readOnly, vm: .local, kind: .executable)
+    let colorSession = try target.colorEngine.makeSession(for: target.deviceDescriptor)
+    let deviceRenderingSession = try target.deviceRenderingEngine.makeSession(for: target.deviceDescriptor)
+    let fontSession = try target.fontEngine.makeSession(for: target.deviceDescriptor)
+    let trappingSession = try target.trappingEngine.makeSession(for: target.deviceDescriptor)
+    let pageDeviceSession = try target.pageDeviceProvider.makeSession(for: target.deviceDescriptor)
+    let renderer = try target.makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession,
+      fontSession: fontSession,
+      trappingSession: trappingSession
+    )
+    try renderer.installStorageAccounting(environment.graphicsStorageLedger.makeSession())
+    let context = Context(environment: environment)
+    do {
+      let output = try await context.render(
+        source: source,
+        pageDeviceSession: pageDeviceSession,
+        renderer: renderer
+      )
+      return GraphicsRenderResult(context: context, output: output)
+    } catch let stop as ErrorStop {
+      throw stop.error
+    } catch let undispatched as UndispatchedError {
+      throw undispatched.error
+    }
   }
 
   /// Performs the ``results`` operation.

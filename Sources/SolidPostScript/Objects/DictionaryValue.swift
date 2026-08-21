@@ -142,6 +142,7 @@ public struct DictionaryValue: CompositeValue, VMStoredCompositeValue {
   /// The ``vm`` value.
   public var vm: VM { ref.vm }
   var allocation: VMAllocation { ref.allocation }
+  var revision: UInt64 { ref.versionedRead { _ in () }.revision }
   var allocationFootprint: Int { Self.footprint(forCapacity: ref.uncheckedRead { $0.value.capacity }) }
 
   /// The ``count`` value.
@@ -183,6 +184,11 @@ public struct DictionaryValue: CompositeValue, VMStoredCompositeValue {
     return try ref.read { $0.value[VMStoredObject(key)]?.object }
   }
 
+  func objectUnchecked(forKey key: Object) throws -> Object? {
+    let key = try key.dictionaryKey
+    return ref.uncheckedRead { $0.value[VMStoredObject(key)]?.object }
+  }
+
   /// Performs the ``updateObject`` operation.
   @discardableResult
   public func updateObject(_ value: Object, forKey key: Object) throws -> Object? {
@@ -221,6 +227,13 @@ public struct DictionaryValue: CompositeValue, VMStoredCompositeValue {
     try key.checkStorage(in: ref.vm)
     try value.checkStorage(in: ref.vm)
     return try prepareMutation(entries: [key: value])
+  }
+
+  func prepareInterpreterUpdateObject(_ value: Object, forKey key: Object) throws -> PreparedMutation {
+    let key = try key.dictionaryKey
+    try key.checkStorage(in: ref.vm)
+    try value.checkStorage(in: ref.vm)
+    return try prepareMutation(entries: [key: value], requiresWriteAccess: false)
   }
 
   func prepareUpdateObjects(forKeysIn dict: DictionaryValue) throws -> PreparedMutation {
@@ -327,9 +340,9 @@ public struct DictionaryValue: CompositeValue, VMStoredCompositeValue {
     return normalized
   }
 
-  private func prepareMutation(entries: Storage) throws -> PreparedMutation {
+  private func prepareMutation(entries: Storage, requiresWriteAccess: Bool = true) throws -> PreparedMutation {
     let snapshot = try ref.versionedRead { destination in
-      try destination.access.check(.write)
+      if requiresWriteAccess { try destination.access.check(.write) }
       let addedEntryCount = entries.keys.count { destination.value[VMStoredObject($0)] == nil }
       let minimumCapacity = destination.value.count + addedEntryCount
       var projected = destination.value

@@ -1,0 +1,300 @@
+{
+  "schemaVersion": 3,
+  "authority": {
+    "title": "PostScript Language Reference, third edition",
+    "sections": ["3.8", "3.9", "3.10", "3.11", "4.4-4.10", "5", "6", "7", "8.1", "Appendix A", "Appendix C"],
+    "source": "Reference/PLRM.pdf"
+  },
+  "classifications": [
+    "implemented",
+    "intentionally-unavailable",
+    "postponed",
+    "nonconforming"
+  ],
+  "operators": {
+    "systemDictionaryImplemented": [
+      "]",
+      "[","<<","=","==",">>","abs","add","aload","anchorsearch","and","arc","arcn","arct","arcto","array","ashow","astore","atan","awidthshow","begin","bind","bitshift","bytesavailable","cachestatus","ceiling","charpath","clear","cleardictstack","cleartomark","clip","clippath","cliprestore","clipsave","closefile","closepath","colorimage","composefont","concat","concatmatrix","copy","copypage","cos","count","countdictstack","countexecstack","counttomark","cshow","currentblackgeneration","currentcacheparams","currentcmykcolor","currentcolor","currentcolorrendering","currentcolorscreen","currentcolorspace","currentcolortransfer","currentdash","currentdevparams","currentdict","currentfile","currentflat","currentfont","currentglobal","currentgray","currentgstate","currenthalftone","currenthsbcolor","currentlinecap","currentlinejoin","currentlinewidth","currentmatrix","currentmiterlimit","currentobjectformat","currentoverprint","currentpacking","currentpagedevice","currentpoint","currentrgbcolor","currentscreen","currentshared","currentsmoothness","currentstrokeadjust","currentsystemparams","currenttransfer","currentundercolorremoval","currentuserparams","curveto","cvi","cvlit","cvn","cvr","cvrs","cvs","cvx","def","defaultmatrix","definefont","defineresource","defineuserobject","deletefile","dict","dictstack","div","dtransform","dup","echo","eexec","end","eoclip","eofill","eq","erasepage","exch","exec","execform","execstack","execuserobject","executeonly","executive","exit","exitserver","exp","file","filenameforall","fileposition","fill","filter","findcolorrendering","findencoding","findfont","findresource","flattenpath","floor","flush","flushfile","for","forall","gcheck","ge","get","getinterval","glyphshow","grestore","grestoreall","gsave","gstate","gt","identmatrix","idiv","idtransform","if","ifelse","image","imagemask","index","ineofill","infill","initclip","initgraphics","initmatrix","instroke","inueofill","inufill","inustroke","invertmatrix","itransform","known","kshow","le","length","lineto","ln","load","log","loop","lt","makefont","makepattern","mark","matrix","maxlength","mod","moveto","mul","ne","neg","newpath","noaccess","not","nulldevice","or","packedarray","pathbbox","pathforall","pop","print","printobject","pstack","put","putinterval","quit","rand","rcheck","rcurveto","read","readhexstring","readline","readonly","readstring","realtime","rectclip","rectfill","rectstroke","renamefile","repeat","resetfile","resourceforall","resourcestatus","restore","reversepath","rlineto","rmoveto","roll","rootfont","rotate","round","rrand","run","save","scale","scalefont","scheck","search","selectfont","setbbox","setblackgeneration","setcachedevice","setcachedevice2","setcachelimit","setcacheparams","setcharwidth","setcmykcolor","setcolor","setcolorrendering","setcolorscreen","setcolorspace","setcolortransfer","setdash","setdevparams","setfileposition","setflat","setfont","setglobal","setgray","setgstate","sethalftone","sethsbcolor","setlinecap","setlinejoin","setlinewidth","setmatrix","setmiterlimit","setobjectformat","setoverprint","setpacking","setpagedevice","setpattern","setrgbcolor","setscreen","setshared","setsmoothness","setstrokeadjust","setsystemparams","settransfer","setucacheparams","setundercolorremoval","setuserparams","setvmthreshold","shfill","show","showpage","sin","sqrt","srand","stack","startjob","status","stop","stopped","store","string","stringwidth","stroke","strokepath","sub","token","transform","translate","truncate","type","uappend","ucache","ucachestatus","ueofill","ufill","undef","undefinefont","undefineresource","undefineuserobject","upath","usertime","ustroke","ustrokepath","vmreclaim","vmstatus","wcheck","where","widthshow","write","writehexstring","writeobject","writestring","xcheck","xor","xshow","xyshow","yshow"
+    ],
+    "systemDictionaryBindings": [
+      "$error","FontDirectory","GlobalFontDirectory","ISOLatin1Encoding","SharedFontDirectory","StandardEncoding","errordict","false","globaldict","handleerror","languagelevel","null","product","revision","serialnumber","shareddict","start","statusdict","systemdict","true","userdict","version"
+    ],
+    "conditionalSystemDictionary": ["exitserver","prompt","serverdict"],
+    "privateImplementation": [
+      ".addglyph",".beginbfchar",".beginbfrange",".begincidchar",".begincidrange",".begincmap",".begincodespacerange",".beginnotdefchar",".beginnotdefrange",".beginusematrix",".cidstartdata",".currenttrapparams",".endbfchar",".endbfrange",".endcidchar",".endcidrange",".endcmap",".endcodespacerange",".endnotdefchar",".endnotdefrange",".endusematrix",".fontsetstartdata",".removeallglyphs",".removeglyphs",".settrapparams",".settrapzone",".usecmap",".usefont"
+    ],
+    "procedureSets": [
+      {
+        "name": "BitmapFontInit",
+        "status": "implemented",
+        "operators": ["addglyph","removeall","removeglyphs"]
+      },
+      {
+        "name": "CIDInit",
+        "status": "implemented",
+        "operators": ["StartData","beginbfchar","beginbfrange","begincidchar","begincidrange","begincmap","begincodespacerange","beginnotdefchar","beginnotdefrange","beginrearrangedfont","beginusematrix","endbfchar","endbfrange","endcidchar","endcidrange","endcmap","endcodespacerange","endnotdefchar","endnotdefrange","endrearrangedfont","endusematrix","usecmap","usefont"]
+      },
+      {
+        "name": "ColorRendering",
+        "status": "implemented",
+        "operators": ["GetHalftoneName","GetPageDeviceName","GetSubstituteCRD"]
+      },
+      {
+        "name": "FontSetInit",
+        "status": "implemented",
+        "operators": ["StartData"]
+      },
+      {
+        "name": "Trapping",
+        "status": "implemented",
+        "operators": ["currenttrapparams","settrapparams","settrapzone"]
+      }
+    ],
+    "intentionallyUnavailable": [
+      {"name":"banddevice","reason":"Obsolete LanguageLevel 1 device setup; Appendix G says it should never be used."},
+      {"name":"framedevice","reason":"Obsolete LanguageLevel 1 device setup; Appendix G says it should never be used."},
+      {"name":"internaldict","reason":"Optional undocumented implementation dictionary; SolidPostScript exposes no unstable internal ABI."},
+      {"name":"renderbands","reason":"Obsolete LanguageLevel 1 device setup; Appendix G says it should never be used."}
+    ],
+    "postponed": [],
+    "nonconforming": [],
+    "evidence": {
+      "registration": "Sources/SolidPostScript/Operators/Operators.swift",
+      "systemDictionary": "Sources/SolidPostScript/Execution/Context.swift",
+      "tests": ["Tests/SolidPostScriptTests/EExecTests.swift","Tests/SolidPostScriptTests/OperatorRegistrationTests.swift","Tests/SolidPostScriptTests/PLRMConformanceInventoryTests.swift"]
+    }
+  },
+  "resources": {
+    "categories": [
+      "CIDFont","CIDFontType","CMap","Category","ColorRendering","ColorRenderingType","ColorSpace","ColorSpaceFamily","ControlLanguage","Emulator","Encoding","FMapType","Filter","Font","FontSet","FontType","Form","FormType","FunctionType","Generic","HWOptions","Halftone","HalftoneType","IODevice","IdiomSet","ImageType","InkParams","Localization","OutputDevice","PDL","Pattern","PatternType","ProcSet","ShadingType","TrapParams","TrappingType"
+    ],
+    "implicitImplemented": {
+      "CIDFontType": [0,1,4],
+      "ColorRenderingType": [1],
+      "FMapType": [2,3,4,5,6,7,8,9],
+      "FontType": [0,1,2,3,9,10,32],
+      "FormType": [1],
+      "FunctionType": [0,2,3],
+      "HalftoneType": [1,2,3,4,5,6,10,16],
+      "ImageType": [1,3,4],
+      "PatternType": [1,2],
+      "ShadingType": [1,2,3,4,5,6,7],
+      "TrappingType": [1001]
+    },
+    "conditionalImplemented": [
+      {"category":"CIDFontType","instances":[2],"condition":"The selected font provider can open sfnt data."},
+      {"category":"FontType","instances":[11,42],"condition":"The selected font provider can open sfnt data."}
+    ],
+    "namedImplemented": {
+      "ColorSpaceFamily": ["CIEBasedA","CIEBasedABC","CIEBasedDEF","CIEBasedDEFG","DeviceCMYK","DeviceGray","DeviceN","DeviceRGB","Indexed","Pattern","Separation"],
+      "Encoding": ["ISOLatin1Encoding","StandardEncoding"],
+      "Filter": ["ASCII85Decode","ASCII85Encode","ASCIIHexDecode","ASCIIHexEncode","CCITTFaxDecode","CCITTFaxEncode","DCTDecode","DCTEncode","FlateDecode","FlateEncode","LZWDecode","LZWEncode","NullEncode","ReusableStreamDecode","RunLengthDecode","RunLengthEncode","SubFileDecode"],
+      "ProcSet": ["BitmapFontInit","CIDInit","ColorRendering","FontSetInit","Trapping"]
+    },
+    "intentionallyUnavailable": [
+      {"category":"FontType","instances":[14],"reason":"Chameleon fonts require a provider that explicitly implements them."},
+      {"category":"HalftoneType","instances":[9,100],"reason":"Proprietary halftone types are product-dependent."}
+    ],
+    "postponed": [],
+    "nonconforming": [],
+    "evidence": {
+      "registration": ["Sources/SolidPostScript/Resources/Resources.swift","Sources/SolidPostScript/InterpreterEnvironment.swift"],
+      "tests": ["Tests/SolidPostScriptTests/ImplicitColorResourceTests.swift","Tests/SolidPostScriptTests/Graphics/CompositeFontTests.swift","Tests/SolidPostScriptTests/ResourceSystemTests.swift","Tests/SolidPostScriptTests/PLRMConformanceInventoryTests.swift"]
+    }
+  },
+  "parameters": {
+    "userImplemented": ["AccurateScreens","HalftoneMode","IdiomRecognition","JobName","MaxDictStack","MaxExecStack","MaxFontItem","MaxFormItem","MaxLocalVM","MaxOpStack","MaxPatternItem","MaxScreenItem","MaxSuperScreen","MaxUPathItem","MinFontCompress","VMReclaim","VMThreshold"],
+    "systemImplemented": ["ByteOrder","BuildTime","CurDisplayList","CurFontCache","CurFormCache","CurOutlineCache","CurPatternCache","CurScreenStorage","CurSourceList","CurStoredScreenCache","CurUPathCache","FactoryDefaults","FontResourceDir","GenericResourceDir","GenericResourcePathSep","LicenseID","MaxDisplayAndSourceList","MaxDisplayList","MaxFontCache","MaxFormCache","MaxImageBuffer","MaxOutlineCache","MaxPatternCache","MaxScreenStorage","MaxSourceList","MaxStoredScreenCache","MaxUPathCache","PageCount","PrinterName","RealFormat","Revision","StartJobPassword","StartupMode","SystemParamsPassword"],
+    "systemNonconforming": [],
+    "deviceProviderDefined": true,
+    "pageDeviceImplemented": ["AdvanceDistance","AdvanceMedia","BeginPage","Collate","CutMedia","DeferredMediaSelection","Duplex","EndPage","HWResolution","ImageShift","ImagingBBox","InputAttributes","InsertSheet","Install","Jog","LeadingEdge","ManualFeed","Margins","MaxSeparations","MediaClass","MediaColor","MediaPosition","MediaType","MediaWeight","MirrorPrint","NegativePrint","NumCopies","Orientation","OutputAttributes","OutputDevice","OutputFaceUp","OutputType","PageDeviceName","PageOffset","PageSize","Policies","ProcessColorModel","RollFedMedia","SeparationColorNames","SeparationOrder","Separations","Trapping","TrappingDetails","TraySwitch","Tumble","UseCIEColor"],
+    "postponed": [],
+    "evidence": {
+      "user": "Sources/SolidPostScript/Parameters/UserParameterState.swift",
+      "system": "Sources/SolidPostScript/Parameters/SystemParameterState.swift",
+      "device": "Sources/SolidPostScript/Files/ParameterizedFileDevice.swift",
+      "pageDevice": "Sources/SolidPostScript/Operators/Graphics/PageDeviceOps.swift",
+      "tests": ["Tests/SolidPostScriptTests/InterpreterParameterTests.swift","Tests/SolidPostScriptTests/SystemParameterPersistenceTests.swift","Tests/SolidPostScriptTests/Graphics/GraphicsStorageAccountingTests.swift","Tests/SolidPostScriptTests/Graphics/PageDeviceTests.swift","Tests/SolidPostScriptTests/PLRMConformanceInventoryTests.swift"]
+    }
+  },
+  "standardFiles": [
+    {"name":"%stdin","status":"implemented","evidence":"Tests/SolidPostScriptTests/HostLifecycleTests.swift"},
+    {"name":"%stdout","status":"implemented","evidence":"Tests/SolidPostScriptTests/HostLifecycleTests.swift"},
+    {"name":"%stderr","status":"implemented","evidence":"Tests/SolidPostScriptTests/HostLifecycleTests.swift"},
+    {"name":"%lineedit","status":"implemented","evidence":"Tests/SolidPostScriptTests/HostLifecycleTests.swift"},
+    {"name":"%statementedit","status":"implemented","evidence":"Tests/SolidPostScriptTests/HostLifecycleTests.swift"}
+  ],
+  "errors": {
+    "standardImplemented": ["VMerror","configurationerror","dictfull","dictstackoverflow","dictstackunderflow","execstackoverflow","interrupt","invalidaccess","invalidexit","invalidfileaccess","invalidfont","invalidrestore","ioerror","limitcheck","nocurrentpoint","rangecheck","stackoverflow","stackunderflow","syntaxerror","timeout","typecheck","undefined","undefinedfilename","undefinedresource","undefinedresult","unmatchedmark","unregistered"],
+    "extensionsImplemented": ["invalidcontext","invalidid"],
+    "postponed": [],
+    "nonconforming": [],
+    "evidence": ["Sources/SolidPostScript/Error.swift","Tests/SolidPostScriptTests/ErrorHandlingTests.swift","Tests/SolidPostScriptTests/PLRMConformanceInventoryTests.swift"]
+  },
+  "languageLevelRequirements": [
+    {
+      "name": "dictionary-and-name-scanner-semantics",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Scanner.swift"],
+      "tests": ["Tests/SolidPostScriptTests/ScannerTests.swift"],
+      "conformanceCases": ["language.objects", "language.scanner-ascii85"]
+    },
+    {
+      "name": "ascii85-string-syntax",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Scanner.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Ascii85Tests.swift"],
+      "conformanceCases": ["language.scanner-ascii85", "language.raw-currentfile"]
+    },
+    {
+      "name": "binary-object-encodings",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Binary"],
+      "tests": ["Tests/SolidPostScriptTests/BinaryEncodingTests.swift"],
+      "conformanceCases": ["language.scanner-ascii85", "language.raw-currentfile"]
+    },
+    {
+      "name": "packedarray-and-bind-semantics",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Objects/PackedArrayValue.swift", "Sources/SolidPostScript/Operators/Language/ProcedureOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/PackedArrayTests.swift", "Tests/SolidPostScriptTests/IdiomRecognitionTests.swift"],
+      "conformanceCases": ["language.procedures"]
+    },
+    {
+      "name": "error-initiation-and-stopped-semantics",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Execution/Context.swift", "Sources/SolidPostScript/Operators/Language/ErrorHandlingOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/ErrorHandlingTests.swift", "Tests/SolidPostScriptTests/ControlTests.swift"],
+      "conformanceCases": ["language.errors"]
+    },
+    {
+      "name": "filtered-file-cursor-and-close-semantics",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Operators/Language/FilterOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/FilteredFileTests.swift"],
+      "conformanceCases": ["language.scanner-ascii85", "language.raw-currentfile"]
+    },
+    {
+      "name": "type1-eexec-encrypted-execution",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Files/EExecFile.swift"],
+      "tests": ["Tests/SolidPostScriptTests/EExecTests.swift"],
+      "conformanceCases": ["language.vm-access", "language.raw-currentfile"]
+    },
+    {
+      "name": "composite-font-fmaptypes-2-through-9",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Fonts/CompositeFontMapping.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/CompositeFontTests.swift"],
+      "conformanceCases": ["language.resources"]
+    },
+    {
+      "name": "text-font-scope-glyph-selection-and-displacement",
+      "status": "implemented",
+      "operators": ["ashow", "awidthshow", "glyphshow", "rootfont", "selectfont", "widthshow", "xshow", "xyshow", "yshow"],
+      "registration": ["Sources/SolidPostScript/Fonts/TextRuntime.swift", "Sources/SolidPostScript/Operators/Graphics/TextOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["language.vm-access"]
+    },
+    {
+      "name": "type3-cache-device-and-charstrings-procedure-semantics",
+      "status": "implemented",
+      "operators": ["setcachedevice2"],
+      "registration": ["Sources/SolidPostScript/Fonts/TextRuntime.swift", "Sources/SolidPostScript/Operators/Graphics/TextOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["language.vm-access"]
+    },
+    {
+      "name": "charpath-outline-mode-and-protection",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Operators/Graphics/TextOps.swift", "Sources/SolidPostScript/Graphics/GraphicsCanonicalState.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift"],
+      "conformanceCases": ["graphics.recording"]
+    },
+    {
+      "name": "path-construction-clipping-and-empty-restore-semantics",
+      "status": "implemented",
+      "operators": ["arcn", "eoclip", "grestoreall", "rcurveto", "rectstroke"],
+      "registration": ["Sources/SolidPostScript/Graphics/GraphicsPath.swift", "Sources/SolidPostScript/Operators/Graphics/GraphicsStateOps.swift", "Sources/SolidPostScript/Operators/Graphics/PathOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/GraphicsSemanticsTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["graphics.recording", "graphics.permissive-raster-box"]
+    },
+    {
+      "name": "user-path-even-odd-semantics",
+      "status": "implemented",
+      "operators": ["inueofill", "ueofill"],
+      "registration": ["Sources/SolidPostScript/Operators/Graphics/UserPathOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/PathInsidenessTests.swift", "Tests/SolidPostScriptTests/Graphics/UserPathTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["graphics.recording"]
+    },
+    {
+      "name": "matrix-construction-query-and-inversion-semantics",
+      "status": "implemented",
+      "operators": ["concatmatrix", "defaultmatrix", "identmatrix", "invertmatrix", "rotate", "setmatrix"],
+      "registration": ["Sources/SolidPostScript/Operators/Graphics/MatrixOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["graphics.recording"]
+    },
+    {
+      "name": "font-encoding-resource-lookup",
+      "status": "implemented",
+      "operators": ["findencoding"],
+      "registration": ["Sources/SolidPostScript/Operators/Graphics/FontOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["language.resources"]
+    },
+    {
+      "name": "font-cache-and-vm-threshold-compatibility",
+      "status": "implemented",
+      "operators": ["setcacheparams", "setvmthreshold"],
+      "registration": ["Sources/SolidPostScript/Operators/Graphics/FontOps.swift", "Sources/SolidPostScript/Operators/Language/VMOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["language.vm-access"]
+    },
+    {
+      "name": "device-color-query-and-rendering-control-semantics",
+      "status": "implemented",
+      "operators": ["currentblackgeneration", "currentcolorscreen", "currentcolortransfer", "currenthsbcolor", "currentundercolorremoval", "setcolortransfer", "sethsbcolor"],
+      "registration": ["Sources/SolidPostScript/Operators/Graphics/ColorOps.swift", "Sources/SolidPostScript/Operators/Graphics/DeviceRenderingOps.swift", "Sources/SolidPostScript/Operators/Graphics/HalftoneOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/ColorSemanticsTests.swift", "Tests/SolidPostScriptTests/Graphics/HalftoneTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["graphics.color"]
+    },
+    {
+      "name": "indexed-separation-devicen-and-overprint-realization",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Graphics/PostScriptColorSpace.swift", "Sources/SolidPostScriptRaster/RasterSeparationTarget.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/ColorSemanticsTests.swift", "Tests/SolidPostScriptTests/Graphics/DeviceColorRemappingTests.swift"],
+      "conformanceCases": ["graphics.color"]
+    },
+    {
+      "name": "degenerate-domain-and-sampled-function-interpolation",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Graphics/PostScriptColorFunction.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/ShadingTests.swift"],
+      "conformanceCases": ["graphics.color"]
+    },
+    {
+      "name": "page-device-save-lifecycle-and-copypage-semantics",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Graphics/PageDeviceRuntime.swift", "Sources/SolidPostScript/Operators/Graphics/GraphicsStateOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/PageDeviceTests.swift", "Tests/SolidPostScriptTests/Graphics/GraphicsSemanticsTests.swift"],
+      "conformanceCases": ["device.page-lifecycle", "graphics.raster-blank"]
+    },
+    {
+      "name": "erasepage-device-rendering-semantics",
+      "status": "implemented",
+      "operators": ["erasepage"],
+      "registration": ["Sources/SolidPostScript/Operators/Graphics/PaintOps.swift", "Sources/SolidPostScriptRaster/RasterImageTarget.swift", "Sources/SolidPostScriptRaster/RasterSeparationTarget.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/GraphicsSemanticsTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["device.page-lifecycle"]
+    },
+    {
+      "name": "portable-type1-and-type2-charstring-semantics",
+      "status": "implemented",
+      "registration": ["Sources/SolidFont/FontCharStringDecoder.swift"],
+      "tests": ["Tests/SolidFontTests/FontCharStringDecoderTests.swift"],
+      "conformanceCases": ["language.vm-access"]
+    }
+  ],
+  "remainingStages": []
+}

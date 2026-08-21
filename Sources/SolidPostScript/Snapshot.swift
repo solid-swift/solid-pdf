@@ -46,6 +46,9 @@ public final class Snapshot: Sendable {
     var objectFormat: ObjectFormat
     var userParameters: UserParameterState
     var localResources: ResourceStore
+    var graphicsState: GraphicsCanonicalState
+    var graphicsStack: [GraphicsStackFrame]
+    let deviceTrappingStates: [(PostScriptDeviceRecord, PostScriptDeviceTrappingState)]
     let saveDepth: Int
     let sequence: UInt64
     let localBoundary: VMGenerationBoundary
@@ -67,6 +70,8 @@ public final class Snapshot: Sendable {
       objectFormat: ObjectFormat,
       userParameters: UserParameterState,
       localResources: ResourceStore,
+      graphicsState: GraphicsCanonicalState,
+      graphicsStack: [GraphicsStackFrame],
       saveDepth: Int,
       sequence: UInt64,
       localBoundary: VMGenerationBoundary,
@@ -78,6 +83,14 @@ public final class Snapshot: Sendable {
       self.objectFormat = objectFormat
       self.userParameters = userParameters
       self.localResources = localResources
+      self.graphicsState = graphicsState
+      self.graphicsStack = graphicsStack
+      var seen = Set<ObjectIdentifier>()
+      self.deviceTrappingStates = ([graphicsState] + graphicsStack.map(\.state)).compactMap { state in
+        let identity = ObjectIdentifier(state.device)
+        guard seen.insert(identity).inserted else { return nil }
+        return (state.device, state.device.savedTrappingState())
+      }
       self.saveDepth = saveDepth
       self.sequence = sequence
       self.localBoundary = localBoundary
@@ -135,6 +148,9 @@ public final class Snapshot: Sendable {
         objectFormat: objectFormat,
         userParameters: userParameters,
         localResources: localResources,
+        graphicsState: graphicsState,
+        graphicsStack: graphicsStack,
+        deviceTrappingStates: deviceTrappingStates,
         saveDepth: saveDepth,
         sequence: sequence,
         localBoundary: localBoundary,
@@ -155,6 +171,8 @@ public final class Snapshot: Sendable {
       objectFormat: context.objectFormat,
       userParameters: context.userParameters,
       localResources: context.localResources,
+      graphicsState: context.graphicsState,
+      graphicsStack: context.graphicsStack,
       saveDepth: context.saveDepth,
       sequence: context.takeSnapshotSequence(),
       localBoundary: context.localVMAllocationSpace.boundary(),
@@ -173,6 +191,9 @@ public final class Snapshot: Sendable {
   private let objectFormat: ObjectFormat
   private let userParameters: UserParameterState
   private let localResources: ResourceStore
+  private let graphicsState: GraphicsCanonicalState
+  private let graphicsStack: [GraphicsStackFrame]
+  private let deviceTrappingStates: [(PostScriptDeviceRecord, PostScriptDeviceTrappingState)]
   private let saveDepth: Int
   private let localBoundary: VMGenerationBoundary
   private let globalBoundary: VMGenerationBoundary?
@@ -188,6 +209,9 @@ public final class Snapshot: Sendable {
     objectFormat: ObjectFormat,
     userParameters: UserParameterState,
     localResources: ResourceStore,
+    graphicsState: GraphicsCanonicalState,
+    graphicsStack: [GraphicsStackFrame],
+    deviceTrappingStates: [(PostScriptDeviceRecord, PostScriptDeviceTrappingState)],
     saveDepth: Int,
     sequence: UInt64,
     localBoundary: VMGenerationBoundary,
@@ -196,7 +220,8 @@ public final class Snapshot: Sendable {
     self.timestamp = Date.now
     self.sequence = sequence
     self.state = Mutex(.ready(Payload(
-      retainedObjects: retainedObjects.map(VMStoredObject.init) + retainedStoredObjects,
+      retainedObjects: (retainedObjects + deviceTrappingStates.compactMap { $0.1.trapSetNameSource })
+        .map(VMStoredObject.init) + retainedStoredObjects,
       operations: operations
     )))
     self.packingMode = packingMode
@@ -204,6 +229,9 @@ public final class Snapshot: Sendable {
     self.objectFormat = objectFormat
     self.userParameters = userParameters
     self.localResources = localResources
+    self.graphicsState = graphicsState
+    self.graphicsStack = graphicsStack
+    self.deviceTrappingStates = deviceTrappingStates
     self.saveDepth = saveDepth
     self.localBoundary = localBoundary
     self.globalBoundary = globalBoundary
@@ -228,7 +256,7 @@ public final class Snapshot: Sendable {
     releaseAccounting()
   }
 
-  internal func restore(to context: isolated Context) throws {
+  internal func restore(to context: isolated Context) async throws {
 
     try check(context: context)
 
@@ -259,6 +287,11 @@ public final class Snapshot: Sendable {
       context.objectFormat = objectFormat
       context.userParameters = userParameters
       context.localResources = localResources
+      for (device, trapping) in deviceTrappingStates {
+        device.restoreTrappingState(trapping)
+      }
+      try await context.transitionGraphicsState(to: graphicsState)
+      context.graphicsStack = graphicsStack
       context.saveDepth = saveDepth
       context.applyUserParameterLimits()
       context.closeFiles(allocatedAfter: localBoundary, globalBoundary: globalBoundary)

@@ -1,0 +1,86 @@
+import Foundation
+
+/// The built-in virtual page-device provider used by standard graphics targets.
+public struct StandardGraphicsPageDeviceProvider: GraphicsPageDeviceProvider, Sendable {
+  /// The negotiation mode used for new sessions.
+  public let mode: GraphicsPageDeviceMode
+  /// The maximum pixel width of a page.
+  public let maximumPixelWidth: Int
+  /// The maximum pixel height of a page.
+  public let maximumPixelHeight: Int
+  /// The maximum number of RGBA8 bytes in one page.
+  public let maximumSurfaceBytes: Int
+  /// The page-device name reported to PostScript.
+  public let name: String
+  /// The process and named-colorant capabilities reported by new sessions.
+  public let colorantCapabilities: GraphicsColorantCapabilities
+  /// The trapping implementations supported by new sessions.
+  public let trappingCapabilities: GraphicsTrappingCapabilities
+  /// Whether new sessions accept Device-to-CIE color-space remapping.
+  public let supportsCIEColorRemapping: Bool
+  /// Physical media, placement, and delivery capabilities.
+  public let physicalCapabilities: GraphicsPhysicalPageDeviceCapabilities
+  /// The initial input-media catalog.
+  public let inputMedia: GraphicsMediaCatalog
+  /// The initial output-destination catalog.
+  public let outputDestinations: GraphicsOutputCatalog
+  /// The stable output-device identity.
+  public let outputDeviceIdentifier: GraphicsOutputDeviceIdentifier
+  /// Additional output-device profiles selectable during a render.
+  public let outputDeviceProfiles: [GraphicsOutputDeviceProfile]
+
+  /// Creates a standard page-device provider.
+  public init(
+    mode: GraphicsPageDeviceMode = .adaptive,
+    maximumPixelWidth: Int = 32_768,
+    maximumPixelHeight: Int = 32_768,
+    maximumSurfaceBytes: Int = 512 * 1_024 * 1_024,
+    name: String = "SolidVirtualPageDevice",
+    colorantCapabilities: GraphicsColorantCapabilities = .compositeRGB,
+    trappingCapabilities: GraphicsTrappingCapabilities = .unsupported,
+    supportsCIEColorRemapping: Bool = true,
+    physicalCapabilities: GraphicsPhysicalPageDeviceCapabilities = .virtual,
+    inputMedia: GraphicsMediaCatalog = .empty,
+    outputDestinations: GraphicsOutputCatalog = .empty,
+    outputDeviceIdentifier: GraphicsOutputDeviceIdentifier = .virtual,
+    outputDeviceProfiles: [GraphicsOutputDeviceProfile] = []
+  ) {
+    self.mode = mode
+    self.maximumPixelWidth = maximumPixelWidth
+    self.maximumPixelHeight = maximumPixelHeight
+    self.maximumSurfaceBytes = maximumSurfaceBytes
+    self.name = name
+    self.colorantCapabilities = colorantCapabilities
+    self.trappingCapabilities = trappingCapabilities
+    self.supportsCIEColorRemapping = supportsCIEColorRemapping
+    self.physicalCapabilities = physicalCapabilities
+    self.inputMedia = inputMedia
+    self.outputDestinations = outputDestinations
+    self.outputDeviceIdentifier = outputDeviceIdentifier
+    self.outputDeviceProfiles = outputDeviceProfiles
+  }
+
+  /// Creates a render-scoped standard session.
+  public func makeSession(
+    for descriptor: GraphicsDeviceDescriptor
+  ) throws -> sending StandardGraphicsPageDeviceSession {
+    try StandardGraphicsPageDeviceSession(
+      descriptor: descriptor,
+      capabilities: GraphicsPageDeviceCapabilities(
+        mode: mode,
+        maximumPixelWidth: maximumPixelWidth,
+        maximumPixelHeight: maximumPixelHeight,
+        maximumSurfaceBytes: maximumSurfaceBytes,
+        colorants: colorantCapabilities,
+        trapping: trappingCapabilities,
+        supportsCIEColorRemapping: supportsCIEColorRemapping,
+        physical: physicalCapabilities
+      ),
+      name: name,
+      inputMedia: inputMedia,
+      outputDestinations: outputDestinations,
+      outputDeviceIdentifier: outputDeviceIdentifier,
+      outputDeviceProfiles: outputDeviceProfiles
+    )
+  }
+}

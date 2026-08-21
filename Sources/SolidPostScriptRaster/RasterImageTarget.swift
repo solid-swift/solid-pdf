@@ -1,0 +1,1199 @@
+import Foundation
+import SolidFont
+import SolidPostScript
+import SolidRaster
+
+/// A portable PostScript raster target parameterized by a compatible color engine.
+public struct ColorManagedRasterImageTarget<ColorEngine: GraphicsColorEngine>: GraphicsTarget, Sendable
+where
+  ColorEngine.Session.ResolvedPaint == RasterPaint,
+  ColorEngine.Session.ImageConverter.ResolvedImage == RasterImage
+{
+  public typealias PageOutput = RasterImage
+  public typealias Output = [RasterImage]
+  public typealias DeviceRenderingEngine = NativeGraphicsDeviceRenderingEngine
+
+  /// A renderer dedicated to one native raster job.
+  public final class Renderer: GraphicsRenderer {
+    public typealias PageOutput = RasterImage
+    public typealias Output = [RasterImage]
+    public typealias ColorSession = ColorEngine.Session
+    public typealias DeviceRenderingSession = NativeGraphicsDeviceRenderingSession
+
+    /// Images transmitted by page operations so far.
+    public private(set) var pages: [RasterImage] = []
+
+    private enum Lifecycle {
+      case active
+      case finished
+      case aborted
+    }
+
+    private var pixelWidth: Int
+    private var pixelHeight: Int
+    private var descriptor: GraphicsDeviceDescriptor
+    private var logicalMediaBounds: GraphicsRect
+    private let colorSession: ColorEngine.Session
+    private let deviceRenderingSession: NativeGraphicsDeviceRenderingSession
+    private var rasterMatrix: GraphicsMatrix
+    private var activeDeviceIdentifier: GraphicsDeviceIdentifier?
+    private var renderingEnabled = true
+    private var canvas: RasterCanvas?
+    private var lifecycle = Lifecycle.active
+    private var activeImage: (
+      descriptor: GraphicsImageDescriptor,
+      state: GraphicsStateSnapshot,
+      converter: ColorEngine.Session.ImageConverter,
+      maskOpacities: [Float],
+      nextMaskRow: Int
+    )?
+    private var cachedGraphicsClip: GraphicsClip?
+    private var cachedRasterClip: RasterClip?
+    private let background: RasterColor
+    private let storage = GraphicsStorageTracker()
+
+    fileprivate init(
+      pixelWidth: Int,
+      pixelHeight: Int,
+      descriptor: GraphicsDeviceDescriptor,
+      colorSession: ColorEngine.Session,
+      deviceRenderingSession: NativeGraphicsDeviceRenderingSession,
+      background: RasterColor
+    ) throws {
+      try Self.validate(pixelWidth: pixelWidth, pixelHeight: pixelHeight, descriptor: descriptor)
+      self.pixelWidth = pixelWidth
+      self.pixelHeight = pixelHeight
+      self.descriptor = descriptor
+      logicalMediaBounds = descriptor.mediaBounds
+      self.colorSession = colorSession
+      self.deviceRenderingSession = deviceRenderingSession
+      self.background = background
+      rasterMatrix = GraphicsMatrix(
+        a: 1,
+        b: 0,
+        c: 0,
+        d: -1,
+        tx: -descriptor.mediaBounds.x,
+        ty: descriptor.mediaBounds.maxY
+      )
+      canvas = nil
+    }
+
+    /// Processes one validated graphics event.
+    public func process(_ event: GraphicsEvent) throws {
+      guard lifecycle == .active else { throw SolidPostScript.Error.ioError }
+      switch event.operation {
+      case .paint(.erasePage):
+        try erasePage(state: event.before)
+      case .paint(.fill(let rule)):
+        try fill(event.before.path, rule: rule, state: event.before)
+      case .paint(.stroke):
+        try stroke(event.before.path, matrix: event.before.matrix, state: event.before)
+      case .paint(.userPathFill(let rule)):
+        try fill(event.before.path, rule: rule, state: event.before)
+      case .paint(.userPathStroke):
+        try fill(event.before.path, rule: .winding, state: event.before)
+      case .paint(.fillRectangles(let paths)):
+        try fill(GraphicsPath(elements: paths.flatMap(\.elements)), rule: .winding, state: event.before)
+      case .paint(.strokeRectangles(let paths, let matrix)):
+        let effectiveMatrix = matrix?.concatenated(with: event.before.matrix) ?? event.before.matrix
+        try stroke(
+          GraphicsPath(elements: paths.flatMap(\.elements)),
+          matrix: effectiveMatrix,
+          state: event.before
+        )
+      case .paint(.shading(let shading)):
+        try paintShading(shading, clip: event.before.clip, state: event.before)
+      case .paint(.form(let form)):
+        try paintForm(form, depth: 0)
+      case .paint(.text(let run)):
+        try paintText(run, state: event.before, depth: 0)
+      case .page(.show), .page(.copy):
+        try transmitPage(event, copies: 1)
+      default:
+        break
+      }
+    }
+
+    /// Begins one sampled-image transfer.
+    public func beginImage(_ event: GraphicsEvent) throws {
+      guard lifecycle == .active,
+        activeImage == nil,
+        case .paint(.image(let descriptor)) = event.operation
+      else { throw SolidPostScript.Error.ioError }
+      try storage.beginImage()
+      do {
+        activeImage = (
+          descriptor,
+          event.before,
+          try colorSession.makeImageConverter(
+          for: descriptor,
+          deviceRendering: event.before.deviceRendering
+          ),
+          [],
+          0
+        )
+      } catch {
+        storage.abortImage()
+        throw error
+      }
+    }
+
+    /// Receives complete sampled-image rows in order.
+    public func writeImageRows(_ rows: GraphicsImageRows) throws {
+      guard let image = activeImage else { throw SolidPostScript.Error.ioError }
+      let components = rows.components.count.addingReportingOverflow(rows.sourceComponents?.count ?? 0)
+      guard !components.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+      let bytes = components.partialValue.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+      guard !bytes.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+      try storage.appendImageBytes(bytes.partialValue)
+      try image.converter.write(rows)
+    }
+
+    /// Receives complete sampled-image mask rows in order.
+    public func writeImageMaskRows(_ rows: GraphicsImageMaskRows) throws {
+      guard var image = activeImage,
+        let (width, height) = maskDimensions(for: image.descriptor),
+        width > 0,
+        height > 0,
+        rows.rowCount > 0,
+        rows.startRow == image.nextMaskRow,
+        rows.rowCount <= height - image.nextMaskRow,
+        rows.rowCount <= Int.max / width,
+        rows.opacities.count == rows.rowCount * width
+      else { throw SolidPostScript.Error.ioError }
+      let bytes = rows.opacities.count.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+      guard !bytes.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+      try storage.appendImageBytes(bytes.partialValue)
+      image.maskOpacities.append(contentsOf: rows.opacities)
+      image.nextMaskRow += rows.rowCount
+      activeImage = image
+    }
+
+    /// Validates and paints the active sampled image.
+    public func endImage() throws {
+      guard let image = activeImage, lifecycle == .active else { throw SolidPostScript.Error.ioError }
+      activeImage = nil
+      defer { storage.abortImage() }
+      let resolved = try image.converter.finish()
+      guard renderingEnabled else { return }
+      try draw(
+        resolved,
+        descriptor: image.descriptor,
+        state: image.state,
+        mask: try rasterMask(
+          descriptor: image.descriptor,
+          opacities: image.maskOpacities
+        )
+      )
+    }
+
+    /// Abandons the active sampled image.
+    public func abortImage() {
+      activeImage?.converter.abort()
+      activeImage = nil
+      storage.abortImage()
+    }
+
+    /// Installs the environment's Appendix C retained-storage accounting session.
+    public func installStorageAccounting(_ session: GraphicsStorageAccountingSession) {
+      storage.install(session)
+    }
+
+    /// Activates page geometry negotiated by the render's page-device session.
+    public func activateDevice(_ device: GraphicsDeviceSnapshot) throws {
+      guard lifecycle == .active else { throw SolidPostScript.Error.ioError }
+      if device.kind == .null {
+        renderingEnabled = false
+        return
+      }
+      renderingEnabled = true
+      guard activeDeviceIdentifier != device.identifier else { return }
+      let width = Int(device.descriptor.mediaBounds.width.rounded())
+      let height = Int(device.descriptor.mediaBounds.height.rounded())
+      try Self.validate(pixelWidth: width, pixelHeight: height, descriptor: device.descriptor)
+      activeDeviceIdentifier = device.identifier
+      pixelWidth = width
+      pixelHeight = height
+      descriptor = device.descriptor
+      logicalMediaBounds = device.descriptor.mediaBounds
+      rasterMatrix = Self.makeRasterMatrix(device.descriptor)
+      canvas = nil
+      cachedGraphicsClip = nil
+      cachedRasterClip = nil
+    }
+
+    /// Discards the page raster owned by a deactivated device.
+    public func deactivateDevice(_ device: GraphicsDeviceSnapshot) {
+      if activeDeviceIdentifier == device.identifier {
+        canvas = nil
+        activeDeviceIdentifier = nil
+      }
+    }
+
+    /// Transmits immutable copies of the current page and starts a fresh raster.
+    public func transmitPage(_ event: GraphicsEvent, copies: Int) throws {
+      guard lifecycle == .active, copies >= 0 else { throw SolidPostScript.Error.ioError }
+      guard renderingEnabled else { return }
+      if copies == 0 {
+        canvas = nil
+        return
+      }
+      let current = try takeCanvas()
+      do {
+        let image = try current.finish()
+        canvas = nil
+        pages.append(contentsOf: repeatElement(image, count: copies))
+      } catch {
+        canvas = nil
+        throw SolidPostScript.Error.ioError
+      }
+    }
+
+    /// Completes the render and discards its untransmitted page.
+    public func finish() throws -> sending [RasterImage] {
+      guard lifecycle == .active else { throw SolidPostScript.Error.ioError }
+      lifecycle = .finished
+      activeImage?.converter.abort()
+      activeImage = nil
+      storage.abortImage()
+      canvas = nil
+      let output = pages
+      pages.removeAll()
+      return output
+    }
+
+    package func drainTransmittedPages() -> [RasterImage] {
+      let output = pages
+      pages.removeAll(keepingCapacity: true)
+      return output
+    }
+
+    package func renderCapturedPage(
+      _ effects: [GraphicsEffect],
+      sourceDevice: GraphicsDeviceDescriptor,
+      scale: Double
+    ) throws -> RasterImage {
+      guard lifecycle == .active, scale.isFinite, scale > 0, canvas == nil else {
+        throw SolidPostScript.Error.ioError
+      }
+      logicalMediaBounds = sourceDevice.mediaBounds
+      rasterMatrix = GraphicsMatrix(
+        a: scale,
+        b: 0,
+        c: 0,
+        d: -scale,
+        tx: -sourceDevice.mediaBounds.x * scale,
+        ty: sourceDevice.mediaBounds.maxY * scale
+      )
+      cachedGraphicsClip = nil
+      cachedRasterClip = nil
+      for effect in effects { try replayFormEffect(effect, depth: 0) }
+      let current = try takeCanvas()
+      canvas = nil
+      return try current.finish()
+    }
+
+    /// Abandons the render and all transmitted output.
+    public func abort() {
+      guard lifecycle == .active else { return }
+      lifecycle = .aborted
+      activeImage?.converter.abort()
+      activeImage = nil
+      storage.abortImage()
+      canvas = nil
+      pages.removeAll()
+    }
+
+    private static func validate(
+      pixelWidth: Int,
+      pixelHeight: Int,
+      descriptor: GraphicsDeviceDescriptor
+    ) throws {
+      let media = descriptor.mediaBounds
+      let imageable = descriptor.imageableBounds
+      let matrix = descriptor.defaultMatrix
+      guard pixelWidth > 0,
+        pixelHeight > 0,
+        pixelWidth <= Int.max / 4,
+        pixelHeight <= Int.max / (pixelWidth * 4),
+        pixelHeight <= RasterLimits.default.maximumSurfaceBytes / (pixelWidth * 4),
+        media.x.isFinite,
+        media.y.isFinite,
+        media.width == Double(pixelWidth),
+        media.height == Double(pixelHeight),
+        imageable.x.isFinite,
+        imageable.y.isFinite,
+        imageable.width.isFinite,
+        imageable.height.isFinite,
+        imageable.width >= 0,
+        imageable.height >= 0,
+        imageable.x >= media.x,
+        imageable.y >= media.y,
+        imageable.maxX <= media.maxX,
+        imageable.maxY <= media.maxY,
+        descriptor.horizontalResolution.isFinite,
+        descriptor.verticalResolution.isFinite,
+        descriptor.horizontalResolution > 0,
+        descriptor.verticalResolution > 0,
+        [matrix.a, matrix.b, matrix.c, matrix.d, matrix.tx, matrix.ty].allSatisfy(\.isFinite)
+      else { throw SolidPostScript.Error.configurationError }
+    }
+
+    private static func makePage(
+      pixelWidth: Int,
+      pixelHeight: Int,
+      background: RasterColor
+    ) throws -> RasterCanvas {
+      do {
+        return try RasterCanvas(width: pixelWidth, height: pixelHeight, background: background)
+      } catch {
+        throw SolidPostScript.Error.ioError
+      }
+    }
+
+    private static func makeRasterMatrix(_ descriptor: GraphicsDeviceDescriptor) -> GraphicsMatrix {
+      GraphicsMatrix(
+        a: 1,
+        b: 0,
+        c: 0,
+        d: -1,
+        tx: -descriptor.mediaBounds.x,
+        ty: descriptor.mediaBounds.maxY
+      )
+    }
+
+    private func withCanvas(_ body: (inout RasterCanvas) throws -> Void) throws {
+      guard lifecycle == .active else {
+        throw SolidPostScript.Error.ioError
+      }
+      guard renderingEnabled else { return }
+      var current = try takeCanvas()
+      do {
+        try body(&current)
+        canvas = consume current
+      } catch {
+        canvas = consume current
+        if error is RasterError { throw SolidPostScript.Error.ioError }
+        throw error
+      }
+    }
+
+    private func fill(_ path: GraphicsPath, rule: GraphicsFillRule, state: GraphicsStateSnapshot) throws {
+      if case .pattern(let pattern) = state.paint {
+        try paintPattern(pattern, through: path, rule: rule, clip: state.clip, state: state, depth: 0)
+        return
+      }
+      let transformed = path.transformed(by: rasterMatrix).rasterPath
+      let deviceProgram = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
+      try withCanvas { canvas in
+        try canvas.setClip(try rasterClip(state.clip))
+        try canvas.fill(
+          transformed,
+          rule: rule.raster,
+          paint: try colorSession.resolve(state.paint, deviceRendering: state.deviceRendering),
+          deviceRendering: deviceProgram
+        )
+      }
+    }
+
+    private func stroke(
+      _ path: GraphicsPath,
+      matrix: GraphicsMatrix,
+      state: GraphicsStateSnapshot
+    ) throws {
+      if case .pattern = state.paint {
+        let outline = try GraphicsPathGeometry.strokeOutline(path: path, state: state, matrix: matrix)
+        try fill(outline, rule: .winding, state: state)
+        return
+      }
+      if state.strokeAdjustment {
+        let outline = try GraphicsPathGeometry.strokeOutline(path: path, state: state, matrix: matrix)
+        try fill(outline, rule: .winding, state: state)
+        return
+      }
+      guard let inverse = matrix.inverted else { return }
+      let strokeTransform = matrix.concatenated(with: rasterMatrix).raster
+      let style = RasterStrokeStyle(
+        width: state.lineWidth,
+        cap: state.lineCap.raster,
+        join: state.lineJoin.raster,
+        miterLimit: state.miterLimit,
+        dash: state.dash.pattern,
+        dashPhase: state.dash.phase
+      )
+      let deviceProgram = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
+      try withCanvas { canvas in
+        try canvas.setClip(try rasterClip(state.clip))
+        try canvas.stroke(
+          path.transformed(by: inverse).rasterPath,
+          style: style,
+          paint: try colorSession.resolve(state.paint, deviceRendering: state.deviceRendering),
+          transform: strokeTransform,
+          deviceRendering: deviceProgram
+        )
+      }
+    }
+
+    private func paintPattern(
+      _ paint: GraphicsPatternPaint,
+      through path: GraphicsPath,
+      rule: GraphicsFillRule,
+      clip: GraphicsClip,
+      state: GraphicsStateSnapshot,
+      depth: Int
+    ) throws {
+      guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      switch paint {
+      case .empty:
+        return
+      case .shading(let shading):
+        let combinedClip = GraphicsClip(
+          imageableBounds: clip.imageableBounds,
+          constraints: clip.constraints + [GraphicsClipConstraint(path: path, rule: rule)]
+        )
+        try paintShading(shading, clip: combinedClip, state: state)
+      case .tiling(let pattern, let underlying):
+        let translations = try tileTranslations(for: pattern)
+        guard translations.count <= 1_000_000 else { throw SolidPostScript.Error.ioError }
+        for translation in translations {
+          for effect in pattern.displayList.effects {
+            try replay(
+              effect,
+              translatedBy: translation,
+              underlying: underlying,
+              through: path,
+              rule: rule,
+              clip: clip,
+              depth: depth + 1
+            )
+          }
+        }
+      }
+    }
+
+    private func paintForm(_ form: GraphicsForm, depth: Int) throws {
+      guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      for effect in form.displayList.effects {
+        try replayFormEffect(effect, depth: depth + 1)
+      }
+    }
+
+    private func replayFormEffect(_ effect: GraphicsEffect, depth: Int) throws {
+      switch effect {
+      case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
+        try fill(path, rule: rule, state: state)
+      case .stroke(let path, let state):
+        try stroke(path, matrix: state.matrix, state: state)
+      case .userPathStroke(let outline, let state):
+        try fill(outline, rule: .winding, state: state)
+      case .erase(let state):
+        try erasePage(state: state)
+      case .fillRectangles(let paths, let state):
+        try fill(GraphicsPath(elements: paths.flatMap(\.elements)), rule: .winding, state: state)
+      case .strokeRectangles(let paths, let matrix, let state):
+        let effectiveMatrix = matrix?.concatenated(with: state.matrix) ?? state.matrix
+        try stroke(GraphicsPath(elements: paths.flatMap(\.elements)), matrix: effectiveMatrix, state: state)
+      case .image(let image, let state):
+        let converter = try colorSession.makeImageConverter(
+          for: image.descriptor,
+          deviceRendering: state.deviceRendering
+        )
+        do {
+          try converter.write(GraphicsImageRows(
+            startRow: 0,
+            rowCount: image.completedRowCount,
+            components: image.components,
+            sourceComponents: image.sourceComponents
+          ))
+          try draw(
+            converter.finish(),
+            descriptor: image.descriptor,
+            state: state,
+            mask: try rasterMask(descriptor: image.descriptor, opacities: image.mask?.opacities ?? [])
+          )
+        } catch {
+          converter.abort()
+          throw error
+        }
+      case .shading(let shading, let state):
+        try paintShading(shading, clip: state.clip, state: state)
+      case .form(let nested, _):
+        try paintForm(nested, depth: depth)
+      case .text(let run, let state):
+        try paintText(run, state: state, depth: depth)
+      }
+    }
+
+    private func replay(
+      _ effect: GraphicsEffect,
+      translatedBy translation: GraphicsMatrix,
+      underlying: GraphicsPaint?,
+      through paintedPath: GraphicsPath,
+      rule paintedRule: GraphicsFillRule,
+      clip: GraphicsClip,
+      depth: Int
+    ) throws {
+      if case .image(let image, let imageState) = effect {
+        let translatedConstraints = imageState.clip.constraints.map {
+          GraphicsClipConstraint(path: $0.path.transformed(by: translation), rule: $0.rule)
+        }
+        let combinedClip = GraphicsClip(
+          imageableBounds: clip.imageableBounds,
+          constraints: clip.constraints
+            + [GraphicsClipConstraint(path: paintedPath, rule: paintedRule)]
+            + translatedConstraints
+        )
+        let kind: GraphicsImageKind
+        switch image.descriptor.kind {
+        case .color(let space):
+          kind = .color(space)
+        case .mask(let paint):
+          kind = .mask(underlying ?? paint)
+        }
+        let descriptor = GraphicsImageDescriptor(
+          width: image.descriptor.width,
+          height: image.descriptor.height,
+          kind: kind,
+          sourceType: image.descriptor.sourceType,
+          sourceColorSpace: image.descriptor.sourceColorSpace,
+          sourceBitsPerComponent: image.descriptor.sourceBitsPerComponent,
+          sourceComponentCount: image.descriptor.sourceComponentCount,
+          decode: image.descriptor.decode,
+          colorRealization: image.descriptor.colorRealization,
+          imageToDevice: image.descriptor.imageToDevice.concatenated(with: translation),
+          interpolate: image.descriptor.interpolate,
+          mask: image.descriptor.mask?.transformed(by: translation),
+          resourceIdentifier: image.descriptor.resourceIdentifier
+        )
+        let converter = try colorSession.makeImageConverter(
+          for: descriptor,
+          deviceRendering: imageState.deviceRendering
+        )
+        do {
+          try converter.write(GraphicsImageRows(
+            startRow: 0,
+            rowCount: image.completedRowCount,
+            components: image.components,
+            sourceComponents: image.sourceComponents,
+            rawSamples: image.rawSamples
+          ))
+          var state = imageState
+          state = GraphicsStateSnapshot(
+            matrix: state.matrix,
+            path: state.path,
+            clip: combinedClip,
+            paint: state.paint,
+            colorSpace: state.colorSpace,
+            colorComponents: state.colorComponents,
+            overprint: state.overprint,
+            lineWidth: state.lineWidth,
+            lineCap: state.lineCap,
+            lineJoin: state.lineJoin,
+            miterLimit: state.miterLimit,
+            dash: state.dash,
+            flatness: state.flatness,
+            strokeAdjustment: state.strokeAdjustment,
+            smoothness: state.smoothness,
+            pathBoundingBox: state.pathBoundingBox,
+            device: state.device,
+            deviceRendering: state.deviceRendering
+          )
+          try draw(
+            converter.finish(),
+            descriptor: descriptor,
+            state: state,
+            mask: try rasterMask(
+              descriptor: descriptor,
+              opacities: image.mask?.opacities ?? []
+            )
+          )
+        } catch {
+          converter.abort()
+          throw error
+        }
+        return
+      }
+      if case .text(let run, let textState) = effect {
+        for placement in run.glyphs {
+          switch placement.glyph.program {
+          case .outline(let path):
+            try replay(
+              .fill(path: path.transformed(by: placement.transform), rule: .winding, state: textState),
+              translatedBy: translation,
+              underlying: underlying,
+              through: paintedPath,
+              rule: paintedRule,
+              clip: clip,
+              depth: depth + 1
+            )
+          case .displayList(let list):
+            for nested in list.effects {
+              try replay(
+                nested,
+                translatedBy: translation,
+                underlying: underlying,
+                through: paintedPath,
+                rule: paintedRule,
+                clip: clip,
+                depth: depth + 1
+              )
+            }
+          case .bitmap, .empty, .missing:
+            break
+          }
+        }
+        return
+      }
+      let effectPath: GraphicsPath
+      let effectRule: GraphicsFillRule
+      let effectState: GraphicsStateSnapshot
+      switch effect {
+      case .form(let form, _):
+        guard depth < 16 else { throw SolidPostScript.Error.ioError }
+        for nested in form.displayList.effects {
+          try replay(
+            nested,
+            translatedBy: translation,
+            underlying: underlying,
+            through: paintedPath,
+            rule: paintedRule,
+            clip: clip,
+            depth: depth + 1
+          )
+        }
+        return
+      case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
+        effectPath = path.transformed(by: translation)
+        effectRule = rule
+        effectState = state
+      case .stroke(let path, let state):
+        effectPath = try GraphicsPathGeometry.strokeOutline(path: path, state: state).transformed(by: translation)
+        effectRule = .winding
+        effectState = state
+      case .userPathStroke(let outline, let state):
+        effectPath = outline.transformed(by: translation)
+        effectRule = .winding
+        effectState = state
+      case .fillRectangles(let paths, let state):
+        effectPath = GraphicsPath(elements: paths.flatMap(\.elements)).transformed(by: translation)
+        effectRule = .winding
+        effectState = state
+      case .strokeRectangles(let paths, let matrix, let state):
+        let combined = GraphicsPath(elements: paths.flatMap(\.elements))
+        let effectiveMatrix = matrix?.concatenated(with: state.matrix) ?? state.matrix
+        effectPath = try GraphicsPathGeometry.strokeOutline(
+          path: combined,
+          state: state,
+          matrix: effectiveMatrix
+        ).transformed(by: translation)
+        effectRule = .winding
+        effectState = state
+      case .erase(let state):
+        effectPath = GraphicsPath.rectangle(logicalMediaBounds).transformed(by: translation)
+        effectRule = .winding
+        effectState = state
+      case .image:
+        preconditionFailure("Image effects are handled before vector effects")
+      case .shading(let shading, let shadingState):
+        let translatedConstraints = shadingState.clip.constraints.map {
+          GraphicsClipConstraint(path: $0.path.transformed(by: translation), rule: $0.rule)
+        }
+        let translatedMesh = GraphicsShading(
+          type: shading.type,
+          colorSpace: shading.colorSpace,
+          colorRealization: shading.colorRealization,
+          background: shading.background,
+          bounds: shading.bounds,
+          clipPath: shading.clipPath?.transformed(by: translation),
+          antialias: shading.antialias,
+          geometry: shading.geometry,
+          mesh: GraphicsShadingMesh(triangles: shading.mesh.triangles.map { triangle in
+            GraphicsShadingTriangle(
+              first: .init(position: translation.transform(triangle.first.position), paint: triangle.first.paint),
+              second: .init(position: translation.transform(triangle.second.position), paint: triangle.second.paint),
+              third: .init(position: translation.transform(triangle.third.position), paint: triangle.third.paint)
+            )
+          }),
+          resourceIdentifier: shading.resourceIdentifier
+        )
+        try paintShading(
+          translatedMesh,
+          clip: GraphicsClip(
+            imageableBounds: clip.imageableBounds,
+            constraints: clip.constraints
+              + [GraphicsClipConstraint(path: paintedPath, rule: paintedRule)]
+              + translatedConstraints
+          ),
+          state: shadingState
+        )
+        return
+      case .text:
+        preconditionFailure("Text effects are handled before vector replay")
+      }
+
+      let translatedConstraints = effectState.clip.constraints.map {
+        GraphicsClipConstraint(path: $0.path.transformed(by: translation), rule: $0.rule)
+      }
+      let combinedClip = GraphicsClip(
+        imageableBounds: clip.imageableBounds,
+        constraints: clip.constraints
+          + [GraphicsClipConstraint(path: paintedPath, rule: paintedRule)]
+          + translatedConstraints
+      )
+      let effectPaint = underlying ?? effectState.paint
+      if case .pattern(let nested) = effectPaint {
+        try paintPattern(
+          nested,
+          through: effectPath,
+          rule: effectRule,
+          clip: combinedClip,
+          state: effectState,
+          depth: depth
+        )
+        return
+      }
+      let transformed = effectPath.transformed(by: rasterMatrix).rasterPath
+      let deviceProgram = try deviceRenderingSession.resolve(effectState.deviceRendering, for: descriptor)
+      try withCanvas { canvas in
+        try canvas.setClip(try rasterClip(combinedClip))
+        try canvas.fill(
+          transformed,
+          rule: effectRule.raster,
+          paint: try colorSession.resolve(effectPaint, deviceRendering: effectState.deviceRendering),
+          deviceRendering: deviceProgram
+        )
+      }
+    }
+
+    private func paintText(_ run: GraphicsGlyphRun, state: GraphicsStateSnapshot, depth: Int) throws {
+      guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      for placement in run.glyphs {
+        switch placement.glyph.program {
+        case .outline(let path):
+          try fill(path.transformed(by: placement.transform), rule: .winding, state: state)
+        case .displayList(let list):
+          for effect in list.effects { try replayFormEffect(effect, depth: depth + 1) }
+        case .bitmap(let bitmap):
+          try paintGlyphBitmap(bitmap, placement: placement, state: state)
+        case .empty, .missing:
+          break
+        }
+      }
+    }
+
+    private func paintGlyphBitmap(
+      _ bitmap: FontGlyphBitmap,
+      placement: GraphicsGlyphPlacement,
+      state: GraphicsStateSnapshot
+    ) throws {
+      guard bitmap.width > 0, bitmap.height > 0 else { return }
+      guard case .solid(let color) = try colorSession.resolve(
+        state.paint,
+        deviceRendering: state.deviceRendering
+      ) else { return }
+      let red = UInt8((min(1, max(0, color.red)) * 255).rounded())
+      let green = UInt8((min(1, max(0, color.green)) * 255).rounded())
+      let blue = UInt8((min(1, max(0, color.blue)) * 255).rounded())
+      let alpha = UInt8((min(1, max(0, color.alpha)) * 255).rounded())
+      var pixels = Data(count: bitmap.width * bitmap.height * 4)
+      for offset in stride(from: 0, to: pixels.count, by: 4) {
+        pixels[offset] = red; pixels[offset + 1] = green; pixels[offset + 2] = blue; pixels[offset + 3] = alpha
+      }
+      let image = try RasterImage(
+        width: bitmap.width,
+        height: bitmap.height,
+        bytesPerRow: bitmap.width * 4,
+        pixelFormat: .rgba8Unorm,
+        data: pixels
+      )
+      let mask = try RasterMask(
+        width: bitmap.width,
+        height: bitmap.height,
+        bytesPerRow: bitmap.bytesPerRow,
+        data: bitmap.coverage
+      )
+      let translation = GraphicsMatrix(
+        a: 1, b: 0, c: 0, d: 1,
+        tx: placement.origin.x + Double(bitmap.originX),
+        ty: placement.origin.y - Double(bitmap.originY)
+      ).concatenated(with: rasterMatrix)
+      let deviceProgram = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
+      try withCanvas { canvas in
+        try canvas.setClip(try rasterClip(state.clip))
+        try canvas.draw(
+          image,
+          transform: translation.raster,
+          mask: mask,
+          maskTransform: translation.raster,
+          deviceRendering: deviceProgram
+        )
+      }
+    }
+
+    private func paintShading(
+      _ shading: GraphicsShading,
+      clip: GraphicsClip,
+      state: GraphicsStateSnapshot
+    ) throws {
+      let effectiveClip = GraphicsClip(
+        imageableBounds: clip.imageableBounds,
+        constraints: clip.constraints + (shading.clipPath.map {
+          [GraphicsClipConstraint(path: $0, rule: .winding)]
+        } ?? [])
+      )
+      let paints = shading.mesh.triangles.flatMap {
+        [$0.first.paint, $0.second.paint, $0.third.paint]
+      }
+      let resolved = try colorSession.resolve(paints, deviceRendering: state.deviceRendering)
+      let deviceProgram = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
+      var offset = 0
+      let triangles = try shading.mesh.triangles.map { triangle -> RasterGradientTriangle in
+        defer { offset += 3 }
+        guard case .solid(let firstColor) = resolved[offset],
+          case .solid(let secondColor) = resolved[offset + 1],
+          case .solid(let thirdColor) = resolved[offset + 2]
+        else { throw SolidPostScript.Error.ioError }
+        return RasterGradientTriangle(
+          first: .init(
+            position: rasterMatrix.transform(triangle.first.position).raster,
+            color: firstColor
+          ),
+          second: .init(
+            position: rasterMatrix.transform(triangle.second.position).raster,
+            color: secondColor
+          ),
+          third: .init(
+            position: rasterMatrix.transform(triangle.third.position).raster,
+            color: thirdColor
+          )
+        )
+      }
+      try withCanvas { canvas in
+        try canvas.setClip(try rasterClip(effectiveClip))
+        if let background = shading.background {
+          try canvas.fill(
+            GraphicsPath.rectangle(logicalMediaBounds).transformed(by: rasterMatrix).rasterPath,
+            rule: .winding,
+            paint: try colorSession.resolve(background, deviceRendering: state.deviceRendering),
+            deviceRendering: deviceProgram
+          )
+        }
+        try canvas.paint(RasterGradientMesh(triangles: triangles), deviceRendering: deviceProgram)
+      }
+    }
+
+    private func tileTranslations(for pattern: GraphicsTilingPattern) throws -> [GraphicsMatrix] {
+      let origin = pattern.matrix.transform(GraphicsPoint(x: 0, y: 0))
+      let requestedXStep = pattern.matrix.transformDistance(GraphicsPoint(x: pattern.xStep, y: 0))
+      let requestedYStep = pattern.matrix.transformDistance(GraphicsPoint(x: 0, y: pattern.yStep))
+      let xStep = pattern.tilingType == 2 ? requestedXStep : adjustedLatticeStep(requestedXStep)
+      let yStep = pattern.tilingType == 2 ? requestedYStep : adjustedLatticeStep(requestedYStep)
+      let lattice = GraphicsMatrix(
+        a: xStep.x,
+        b: xStep.y,
+        c: yStep.x,
+        d: yStep.y,
+        tx: origin.x,
+        ty: origin.y
+      )
+      guard let inverse = lattice.inverted else { throw SolidPostScript.Error.ioError }
+      let media = logicalMediaBounds
+      let coordinates = [
+        GraphicsPoint(x: media.x, y: media.y),
+        GraphicsPoint(x: media.maxX, y: media.y),
+        GraphicsPoint(x: media.maxX, y: media.maxY),
+        GraphicsPoint(x: media.x, y: media.maxY),
+      ].map(inverse.transform)
+      let minimumX = Int((coordinates.map(\.x).min()! - 1).rounded(.down))
+      let maximumX = Int((coordinates.map(\.x).max()! + 1).rounded(.up))
+      let minimumY = Int((coordinates.map(\.y).min()! - 1).rounded(.down))
+      let maximumY = Int((coordinates.map(\.y).max()! + 1).rounded(.up))
+      let columns = maximumX - minimumX + 1
+      let rows = maximumY - minimumY + 1
+      guard columns > 0, rows > 0, rows <= 1_000_000 / columns else {
+        throw SolidPostScript.Error.ioError
+      }
+      var result: [GraphicsMatrix] = []
+      result.reserveCapacity(columns * rows)
+      for row in minimumY...maximumY {
+        for column in minimumX...maximumX {
+          let tx = Double(column) * xStep.x + Double(row) * yStep.x
+          let ty = Double(column) * xStep.y + Double(row) * yStep.y
+          result.append(GraphicsMatrix(
+            a: 1,
+            b: 0,
+            c: 0,
+            d: 1,
+            tx: pattern.tilingType == 2 ? tx.rounded() : tx,
+            ty: pattern.tilingType == 2 ? ty.rounded() : ty
+          ))
+        }
+      }
+      return result
+    }
+
+    private func adjustedLatticeStep(_ value: GraphicsPoint) -> GraphicsPoint {
+      var x = value.x.rounded()
+      var y = value.y.rounded()
+      if x == 0, y == 0 {
+        if abs(value.x) >= abs(value.y) {
+          x = value.x.sign == .minus ? -1 : 1
+        } else {
+          y = value.y.sign == .minus ? -1 : 1
+        }
+      }
+      return GraphicsPoint(x: x, y: y)
+    }
+
+    private func erasePage(state: GraphicsStateSnapshot) throws {
+      let clip = GraphicsClip(imageableBounds: logicalMediaBounds)
+      let mediaPath = GraphicsPath.rectangle(logicalMediaBounds).transformed(by: rasterMatrix).rasterPath
+      let program = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
+      let paint = try colorSession.resolve(state.paint, deviceRendering: state.deviceRendering)
+      try withCanvas { canvas in
+        try canvas.setClip(try rasterClip(clip))
+        try canvas.fill(mediaPath, rule: .winding, paint: paint, deviceRendering: program)
+      }
+    }
+
+    private func draw(
+      _ image: RasterImage,
+      descriptor: GraphicsImageDescriptor,
+      state: GraphicsStateSnapshot,
+      mask: RasterMask? = nil
+    ) throws {
+      let renderedHeight = image.height
+      guard descriptor.width > 0,
+        renderedHeight > 0,
+        renderedHeight <= descriptor.height,
+        image.width == descriptor.width
+      else { return }
+      let deviceProgram = try deviceRenderingSession.resolve(state.deviceRendering, for: self.descriptor)
+      try withCanvas { canvas in
+        try canvas.setClip(try rasterClip(state.clip))
+        if let mask, case .explicit(_, _, let maskToDevice, let maskInterpolate) = descriptor.mask {
+          try canvas.draw(
+            image,
+            transform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
+            interpolation: descriptor.interpolate ? .linear : .nearest,
+            mask: mask,
+            maskTransform: maskToDevice.concatenated(with: rasterMatrix).raster,
+            maskInterpolation: maskInterpolate ? .linear : .nearest,
+            deviceRendering: deviceProgram
+          )
+        } else if let mask {
+          try canvas.draw(
+            image,
+            transform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
+            interpolation: descriptor.interpolate ? .linear : .nearest,
+            mask: mask,
+            maskTransform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
+            maskInterpolation: descriptor.interpolate ? .linear : .nearest,
+            deviceRendering: deviceProgram
+          )
+        } else {
+          try canvas.draw(
+            image,
+            transform: descriptor.imageToDevice.concatenated(with: rasterMatrix).raster,
+            interpolation: descriptor.interpolate ? .linear : .nearest,
+            deviceRendering: deviceProgram
+          )
+        }
+      }
+    }
+
+    private func maskDimensions(for descriptor: GraphicsImageDescriptor) -> (width: Int, height: Int)? {
+      switch descriptor.mask {
+      case .explicit(let width, let height, _, _): (width, height)
+      case .colorKey: (descriptor.width, descriptor.height)
+      case nil: nil
+      }
+    }
+
+    private func rasterMask(descriptor: GraphicsImageDescriptor, opacities: [Float]) throws -> RasterMask? {
+      guard let (width, height) = maskDimensions(for: descriptor) else { return nil }
+      guard width > 0,
+        height > 0,
+        width <= Int.max / height,
+        width * height <= RasterLimits.default.maximumSurfaceBytes,
+        opacities.count <= width * height
+      else { throw SolidPostScript.Error.ioError }
+      var bytes = Data(repeating: 0, count: width * height)
+      for index in opacities.indices {
+        bytes[index] = UInt8((min(1, max(0, opacities[index])) * 255).rounded())
+      }
+      do {
+        return try RasterMask(width: width, height: height, bytesPerRow: width, data: bytes)
+      } catch {
+        throw SolidPostScript.Error.ioError
+      }
+    }
+
+    private func takeCanvas() throws -> RasterCanvas {
+      if let current = canvas.take() {
+        return consume current
+      }
+      return try Self.makePage(pixelWidth: pixelWidth, pixelHeight: pixelHeight, background: background)
+    }
+
+    private func rasterClip(_ clip: GraphicsClip) throws(RasterError) -> RasterClip {
+      if clip == cachedGraphicsClip, let cachedRasterClip {
+        return cachedRasterClip
+      }
+      let converted = RasterClip(
+        imageableBounds: transformedBounds(clip.imageableBounds, by: rasterMatrix).raster,
+        constraints: clip.constraints.map {
+          RasterClipConstraint(
+            path: $0.path.transformed(by: rasterMatrix).rasterPath,
+            rule: $0.rule.raster
+          )
+        }
+      )
+      cachedGraphicsClip = clip
+      cachedRasterClip = converted
+      return converted
+    }
+
+    private func transformedBounds(_ rect: GraphicsRect, by matrix: GraphicsMatrix) -> GraphicsRect {
+      let first = matrix.transform(GraphicsPoint(x: rect.x, y: rect.y))
+      let second = matrix.transform(GraphicsPoint(x: rect.maxX, y: rect.y))
+      let third = matrix.transform(GraphicsPoint(x: rect.maxX, y: rect.maxY))
+      let fourth = matrix.transform(GraphicsPoint(x: rect.x, y: rect.maxY))
+      let minimumX = min(first.x, second.x, third.x, fourth.x)
+      let maximumX = max(first.x, second.x, third.x, fourth.x)
+      let minimumY = min(first.y, second.y, third.y, fourth.y)
+      let maximumY = max(first.y, second.y, third.y, fourth.y)
+      return GraphicsRect(x: minimumX, y: minimumY, width: maximumX - minimumX, height: maximumY - minimumY)
+    }
+  }
+
+  /// Device geometry used for each page.
+  public let deviceDescriptor: GraphicsDeviceDescriptor
+  /// Page width in pixels.
+  public let pixelWidth: Int
+  /// Page height in pixels.
+  public let pixelHeight: Int
+  /// The color engine used by this target.
+  public let colorEngine: ColorEngine
+  /// The native transfer and halftone engine used by this target.
+  public let deviceRenderingEngine = NativeGraphicsDeviceRenderingEngine()
+  /// The virtual page-device provider used by this target.
+  public let pageDeviceProvider: StandardGraphicsPageDeviceProvider
+  /// The page color used for new and erased surfaces.
+  public let background: RasterColor
+
+  /// Creates a bitmap target using an explicit PostScript device descriptor.
+  public init(
+    pixelWidth: Int,
+    pixelHeight: Int,
+    deviceDescriptor: GraphicsDeviceDescriptor,
+    colorEngine: ColorEngine,
+    background: RasterColor = .white,
+    pageDeviceMode: GraphicsPageDeviceMode = .adaptive
+  ) {
+    self.pixelWidth = pixelWidth
+    self.pixelHeight = pixelHeight
+    self.deviceDescriptor = deviceDescriptor
+    self.colorEngine = colorEngine
+    self.background = background
+    self.pageDeviceProvider = StandardGraphicsPageDeviceProvider(mode: pageDeviceMode)
+  }
+
+  /// Creates a renderer dedicated to one render.
+  public func makeRenderer() throws -> sending Renderer {
+    try makeRenderer(
+      colorSession: colorEngine.makeSession(for: deviceDescriptor),
+      deviceRenderingSession: deviceRenderingEngine.makeSession(for: deviceDescriptor)
+    )
+  }
+
+  /// Creates a renderer with color conversion state prepared for this render.
+  public func makeRenderer(
+    colorSession: sending ColorEngine.Session
+  ) throws -> sending Renderer {
+    try makeRenderer(
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingEngine.makeSession(for: deviceDescriptor)
+    )
+  }
+
+  /// Creates a renderer with color and device-rendering state prepared for this render.
+  public func makeRenderer(
+    colorSession: sending ColorEngine.Session,
+    deviceRenderingSession: sending NativeGraphicsDeviceRenderingSession
+  ) throws -> sending Renderer {
+    try Renderer(
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight,
+      descriptor: deviceDescriptor,
+      colorSession: colorSession,
+      deviceRenderingSession: deviceRenderingSession,
+      background: background
+    )
+  }
+}
+
+/// The native Swift color-managed raster target used by default.
+public typealias RasterImageTarget = ColorManagedRasterImageTarget<NativeGraphicsColorEngine>
+
+extension ColorManagedRasterImageTarget where ColorEngine == NativeGraphicsColorEngine {
+  /// Creates the installation-default Letter target at 72 dots per inch.
+  public init() {
+    self.init(pixelWidth: 612, pixelHeight: 792)
+  }
+
+  /// Creates a bitmap target with explicit pixel geometry and resolution.
+  public init(
+    pixelWidth: Int,
+    pixelHeight: Int,
+    resolution: Double = 72,
+    imageableBounds: GraphicsRect? = nil,
+    background: RasterColor = .white,
+    pageDeviceMode: GraphicsPageDeviceMode = .adaptive
+  ) {
+    let media = GraphicsRect(x: 0, y: 0, width: Double(pixelWidth), height: Double(pixelHeight))
+    let descriptor = GraphicsDeviceDescriptor(
+      mediaBounds: media,
+      imageableBounds: imageableBounds ?? media,
+      horizontalResolution: resolution,
+      verticalResolution: resolution,
+      defaultMatrix: GraphicsMatrix(
+        a: resolution / 72,
+        b: 0,
+        c: 0,
+        d: resolution / 72,
+        tx: 0,
+        ty: 0
+      )
+    )
+    self.init(
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight,
+      deviceDescriptor: descriptor,
+      colorEngine: NativeGraphicsColorEngine(),
+      background: background,
+      pageDeviceMode: pageDeviceMode
+    )
+  }
+
+  /// Creates a bitmap target using an explicit PostScript device descriptor.
+  public init(
+    pixelWidth: Int,
+    pixelHeight: Int,
+    deviceDescriptor: GraphicsDeviceDescriptor,
+    background: RasterColor = .white,
+    pageDeviceMode: GraphicsPageDeviceMode = .adaptive
+  ) {
+    self.init(
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight,
+      deviceDescriptor: deviceDescriptor,
+      colorEngine: NativeGraphicsColorEngine(
+        destinationProfile: deviceDescriptor.colorDevice.destinationProfile
+      ),
+      background: background,
+      pageDeviceMode: pageDeviceMode
+    )
+  }
+}

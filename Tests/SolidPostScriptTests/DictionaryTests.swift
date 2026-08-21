@@ -172,7 +172,7 @@ struct DictionaryTests {
     let bool3 = try requireValue(ops3[0].value as? BooleanValue, "Expected BooleanValue")
     expectEqual(bool3.value, true)
     let dict2 = try requireValue(ops3[1].value as? DictionaryValue, "Expected DictionaryValue")
-    expectEqual(dict2.count, 1)
+    expectEqual(dict2.count, 2)
     expectEqual(try dict2.objectValue(forKeyIfExists: "c", as: IntegerValue.self)?.value, 789)
   }
 

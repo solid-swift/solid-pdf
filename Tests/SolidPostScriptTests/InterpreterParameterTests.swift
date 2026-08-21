@@ -149,9 +149,36 @@ struct InterpreterParameterTests {
         """,
       environment: environment
     )
-    #expect(try normalized[0].value(as: IntegerValue.self).value == .max)
+    #expect(try normalized[0].value(as: IntegerValue.self).value == 0)
     #expect(try normalized[1].value(as: IntegerValue.self).value == 30)
     #expect(try normalized[2].value(as: StringValue.self).nameString == "SolidPostScript")
+  }
+
+  @Test
+  func graphicsAndOutlineLimitsClampToInstallationMaxima() async throws {
+    let values = try await Interpreter.results(
+      content:
+        """
+        << /MaxDisplayList 2147483647
+           /MaxSourceList 2147483647
+           /MaxDisplayAndSourceList 1
+           /MaxImageBuffer 2147483647
+           /MaxOutlineCache 2147483647 >> setsystemparams
+        currentsystemparams /MaxDisplayList get
+        currentsystemparams /MaxSourceList get
+        currentsystemparams /MaxDisplayAndSourceList get
+        currentsystemparams /MaxImageBuffer get
+        currentsystemparams /MaxOutlineCache get
+        currentsystemparams /CurOutlineCache get
+        """
+    )
+    let integers = try values.map { try $0.value(as: IntegerValue.self).value }
+    #expect(integers[0] == 0)
+    #expect(integers[1] == Int32(FontOutlineCache.maximumBytes))
+    #expect(integers[2] == Int32(GraphicsStorageLedger.maximumImageBufferBytes))
+    #expect(integers[3] == Int32(GraphicsStorageLedger.maximumCombinedBytes))
+    #expect(integers[4] == Int32(GraphicsStorageLedger.maximumSourceBytes))
+    #expect(integers[5] == Int32(GraphicsStorageLedger.maximumDisplayBytes))
   }
 
   @Test

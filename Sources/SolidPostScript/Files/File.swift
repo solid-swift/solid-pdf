@@ -160,6 +160,16 @@ protocol VMManagedFileGraph: File {
   func identifyRetainedEdges(source: VMAllocation)
 }
 
+protocol FileSourceIdentityProviding: File {
+  var ultimateSourceIdentity: ObjectIdentifier { get }
+}
+
+extension File {
+  var ultimateSourceIdentity: ObjectIdentifier {
+    (self as? any FileSourceIdentityProviding)?.ultimateSourceIdentity ?? ObjectIdentifier(self)
+  }
+}
+
 extension ContextualFile {
 
   func readByte(context: isolated Context) async throws -> UInt8? { try readByte() }

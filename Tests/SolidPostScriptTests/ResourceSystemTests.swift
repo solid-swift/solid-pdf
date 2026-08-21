@@ -4,6 +4,19 @@ import Testing
 
 @Suite
 struct ResourceSystemTests {
+  @Test func publishesPatternFunctionAndShadingTypeInstances() async throws {
+    let values: [IntegerValue] = try await Interpreter.result(
+      content: "0 /FunctionType findresource 2 /FunctionType findresource 3 /FunctionType findresource 1 /PatternType findresource 2 /PatternType findresource 7 /ShadingType findresource",
+      count: 6
+    )
+    #expect(values.map(\.value) == [7, 2, 1, 3, 2, 0])
+
+    let unavailable: BooleanValue = try await Interpreter.result(
+      content: "4 /FunctionType resourcestatus"
+    )
+    #expect(!unavailable.value)
+  }
+
   @Test
   func publishesEveryStandardCategoryWithItsPLRMType() async throws {
     let expected: [String: ObjectType] = [
@@ -576,8 +589,8 @@ private extension Context {
     try await pushAndRun(source: .file(file, access: .readOnly, vm: .local, kind: .executable))
   }
 
-  func restoreResourceSnapshot(_ snapshot: Snapshot) throws {
-    try snapshot.restore(to: self)
+  func restoreResourceSnapshot(_ snapshot: Snapshot) async throws {
+    try await snapshot.restore(to: self)
   }
 
   func peekOperandAfterExecuting(_ content: String) async throws -> StringValue {

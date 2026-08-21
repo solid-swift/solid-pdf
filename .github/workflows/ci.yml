@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "23 7 * * 1"
+  workflow_dispatch:
 
 jobs:
   test-macos:
@@ -23,11 +26,14 @@ jobs:
         with:
           swift-version: ${{ steps.swift-version.outputs.version }}
 
-      - name: Build
-        run: swift build --enable-code-coverage
+      - name: Lint and build
+        run: ENABLE_LINT=1 swift build --enable-code-coverage
 
       - name: Test
         run: swift test --enable-code-coverage --xunit-output .build/test-results.xml
+
+      - name: Check public API compatibility
+        run: Scripts/check-graphics-api check
 
       - name: Compile with sanitizers
         run: swift build --sanitize thread --sanitize undefined
@@ -57,11 +63,17 @@ jobs:
           swift-version: ${{ steps.swift-version.outputs.version }}
           skip-verify-signature: true
 
-      - name: Build
-        run: swift build --enable-code-coverage
+      - name: Install font backend prerequisites
+        run: sudo apt-get update && sudo apt-get install --yes pkg-config libfreetype-dev libfontconfig1-dev
+
+      - name: Lint and build
+        run: ENABLE_LINT=1 swift build --enable-code-coverage
 
       - name: Test
         run: swift test --enable-code-coverage --xunit-output .build/test-results.xml
+
+      - name: Check public API compatibility
+        run: Scripts/check-graphics-api check
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -69,4 +81,49 @@ jobs:
         with:
           name: test-results-linux
           path: .build/test-results*.xml
+          retention-days: 30
+
+  conformance-linux:
+    name: PostScript conformance (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read Swift version
+        id: swift-version
+        run: echo "version=$(cat .swift-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v3
+        with:
+          swift-version: ${{ steps.swift-version.outputs.version }}
+          skip-verify-signature: true
+
+      - name: Cache Ghostscript reference
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/solidpdf/conformance
+          key: ghostscript-10.07.1-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Install reference and font backend prerequisites
+        run: >-
+          sudo apt-get update && sudo apt-get install --yes build-essential curl xz-utils pkg-config
+          libfreetype-dev libfontconfig1-dev
+
+      - name: Run owned differential suite
+        run: Scripts/conformance
+
+      - name: Run external Ghostscript-example discovery corpus
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: Scripts/conformance-discovery --limit 25
+
+      - name: Upload conformance artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: postscript-conformance-linux
+          path: |
+            .conformance-results
+            .conformance-discovery
           retention-days: 30

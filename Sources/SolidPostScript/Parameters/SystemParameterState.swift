@@ -24,17 +24,31 @@ struct SystemParameterState: Sendable {
     "GenericResourceDir": .readWrite(.string(maximumLength: nil)),
     "GenericResourcePathSep": .readWrite(.string(maximumLength: nil)),
     "LicenseID": .readOnly,
-    "MaxDisplayAndSourceList": .readWrite(.nonnegativeInteger),
-    "MaxDisplayList": .readWrite(.nonnegativeInteger),
-    "MaxFontCache": .readWrite(.nonnegativeInteger),
-    "MaxFormCache": .readWrite(.nonnegativeInteger),
-    "MaxImageBuffer": .readWrite(.nonnegativeInteger),
-    "MaxOutlineCache": .readWrite(.nonnegativeInteger),
-    "MaxPatternCache": .readWrite(.nonnegativeInteger),
-    "MaxScreenStorage": .readWrite(.nonnegativeInteger),
-    "MaxSourceList": .readWrite(.nonnegativeInteger),
-    "MaxStoredScreenCache": .readWrite(.integer { $0 < 0 ? .max : $0 }),
-    "MaxUPathCache": .readWrite(.nonnegativeInteger),
+    "MaxDisplayAndSourceList": .readWrite(.integer {
+      min(max($0, 0), Int32(GraphicsStorageLedger.maximumCombinedBytes))
+    }),
+    "MaxDisplayList": .readWrite(.integer {
+      min(max($0, 0), Int32(GraphicsStorageLedger.maximumDisplayBytes))
+    }),
+    "MaxFontCache": .readWrite(.integer { min(max($0, 0), Int32(FontGlyphCache.maximumBytes)) }),
+    "MaxFormCache": .readWrite(.integer { min(max($0, 0), Int32(FormCache.maximumBytes)) }),
+    "MaxImageBuffer": .readWrite(.integer {
+      min(max($0, 0), Int32(GraphicsStorageLedger.maximumImageBufferBytes))
+    }),
+    "MaxOutlineCache": .readWrite(.integer {
+      min(max($0, 0), Int32(FontOutlineCache.maximumBytes))
+    }),
+    "MaxPatternCache": .readWrite(.integer { min(max($0, 0), Int32(PatternCache.maximumBytes)) }),
+    "MaxScreenStorage": .readWrite(.integer {
+      min(max($0, 0), Int32(ScreenManager.maximumActiveBytes))
+    }),
+    "MaxSourceList": .readWrite(.integer {
+      min(max($0, 0), Int32(GraphicsStorageLedger.maximumSourceBytes))
+    }),
+    "MaxStoredScreenCache": .readWrite(.integer {
+      min(max($0, 0), Int32(ScreenManager.maximumCachedBytes))
+    }),
+    "MaxUPathCache": .readWrite(.integer { min(max($0, 0), Int32(UserPathCache.maximumBytes)) }),
     "PageCount": .readOnly,
     "PrinterName": .readWrite(.string(maximumLength: nil)),
     "RealFormat": .readOnly,
@@ -69,21 +83,21 @@ struct SystemParameterState: Sendable {
       "GenericResourceDir": .string(Data("%null".utf8)),
       "GenericResourcePathSep": .string(Data("/".utf8)),
       "LicenseID": .string(Data()),
-      "MaxDisplayAndSourceList": .integer(.max),
-      "MaxDisplayList": .integer(.max),
-      "MaxFontCache": .integer(.max),
-      "MaxFormCache": .integer(.max),
-      "MaxImageBuffer": .integer(.max),
-      "MaxOutlineCache": .integer(.max),
-      "MaxPatternCache": .integer(.max),
-      "MaxScreenStorage": .integer(.max),
-      "MaxSourceList": .integer(.max),
-      "MaxStoredScreenCache": .integer(.max),
-      "MaxUPathCache": .integer(.max),
+      "MaxDisplayAndSourceList": .integer(Int32(GraphicsStorageLedger.maximumCombinedBytes)),
+      "MaxDisplayList": .integer(Int32(GraphicsStorageLedger.maximumDisplayBytes)),
+      "MaxFontCache": .integer(Int32(FontGlyphCache.maximumBytes)),
+      "MaxFormCache": .integer(Int32(FormCache.maximumBytes)),
+      "MaxImageBuffer": .integer(Int32(GraphicsStorageLedger.maximumImageBufferBytes)),
+      "MaxOutlineCache": .integer(Int32(FontOutlineCache.maximumBytes)),
+      "MaxPatternCache": .integer(Int32(PatternCache.maximumBytes)),
+      "MaxScreenStorage": .integer(Int32(ScreenManager.maximumActiveBytes)),
+      "MaxSourceList": .integer(Int32(GraphicsStorageLedger.maximumSourceBytes)),
+      "MaxStoredScreenCache": .integer(Int32(ScreenManager.maximumCachedBytes)),
+      "MaxUPathCache": .integer(Int32(UserPathCache.maximumBytes)),
       "PageCount": .integer(0),
-      "PrinterName": .string(Data("SolidPostScript".utf8)),
+      "PrinterName": .string(Data(PostScriptProduct.name.utf8)),
       "RealFormat": .string(Data("IEEE".utf8)),
-      "Revision": .integer(0),
+      "Revision": .integer(PostScriptProduct.revision),
       "StartupMode": .integer(0),
     ]
     self.userDefaults = UserParameterState()

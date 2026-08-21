@@ -91,6 +91,7 @@ public struct ArrayValue: CollectionValue, VMStoredCompositeValue {
   /// The ``vm`` value.
   public var vm: VM { ref.vm }
   var allocation: VMAllocation { ref.allocation }
+  var revision: UInt64 { ref.versionedRead { _ in () }.revision }
   var allocationFootprint: Int { Self.footprint(for: ref.uncheckedRead { $0.value.count }) }
 
   /// The ``count`` value.

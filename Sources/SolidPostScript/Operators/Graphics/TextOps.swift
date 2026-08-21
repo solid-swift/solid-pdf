@@ -1,0 +1,578 @@
+import Foundation
+import SolidFont
+
+extension Operators {
+  private enum GlyphAdvanceAdjustment {
+    case additive(GraphicsPoint)
+    case overriding(GraphicsPoint)
+  }
+
+  static let textOps: [OperatorValue] = [
+    Show.instance, AShow.instance, WidthShow.instance, AWidthShow.instance,
+    XShow.instance, YShow.instance, XYShow.instance, GlyphShow.instance,
+    StringWidth.instance, CharPath.instance, CShow.instance, KShow.instance,
+    SetCacheDevice.instance, SetCacheDevice2.instance, SetCharWidth.instance,
+  ]
+
+  enum Show: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["show"]
+    func execute(context: isolated Context) async throws {
+      try await showString(context.operands.pop(), context: context)
+    }
+  }
+
+  enum AShow: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["ashow"]
+    func execute(context: isolated Context) async throws {
+      let (string, ay, ax) = try context.operands.pop3()
+      let addition = GraphicsPoint(x: try numeric(ax), y: try numeric(ay))
+      try await showString(string, perGlyph: { _ in addition }, context: context)
+    }
+  }
+
+  enum WidthShow: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["widthshow"]
+    func execute(context: isolated Context) async throws {
+      let (string, character, cy, cx) = try context.operands.pop4()
+      let code = try character.value(as: IntegerValue.self).value
+      guard (0...255).contains(code) else { throw Error.rangeCheck }
+      let addition = GraphicsPoint(x: try numeric(cx), y: try numeric(cy))
+      try await showString(string, perGlyph: { $0 == UInt8(code) ? addition : .zero }, context: context)
+    }
+  }
+
+  enum AWidthShow: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["awidthshow"]
+    func execute(context: isolated Context) async throws {
+      let values = try context.operands.pop(count: 6)
+      let string = values[0]
+      let ay = try numeric(values[1])
+      let ax = try numeric(values[2])
+      let code = try values[3].value(as: IntegerValue.self).value
+      let cy = try numeric(values[4])
+      let cx = try numeric(values[5])
+      guard (0...255).contains(code) else { throw Error.rangeCheck }
+      try await showString(string, perGlyph: { character in
+        var result = GraphicsPoint(x: ax, y: ay)
+        if character == UInt8(code) { result = GraphicsPoint(x: result.x + cx, y: result.y + cy) }
+        return result
+      }, context: context)
+    }
+  }
+
+  enum XShow: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["xshow"]
+    func execute(context: isolated Context) async throws {
+      let (displacements, string) = try context.operands.pop2()
+      let values = try displacementValues(displacements)
+      try await showString(string, displacements: values.map { GraphicsPoint(x: $0, y: 0) }, context: context)
+    }
+  }
+
+  enum YShow: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["yshow"]
+    func execute(context: isolated Context) async throws {
+      let (displacements, string) = try context.operands.pop2()
+      let values = try displacementValues(displacements)
+      try await showString(string, displacements: values.map { GraphicsPoint(x: 0, y: $0) }, context: context)
+    }
+  }
+
+  enum XYShow: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["xyshow"]
+    func execute(context: isolated Context) async throws {
+      let (displacements, string) = try context.operands.pop2()
+      let values = try displacementValues(displacements)
+      guard values.count.isMultiple(of: 2) else { throw Error.rangeCheck }
+      let points = stride(from: 0, to: values.count, by: 2).map {
+        GraphicsPoint(x: values[$0], y: values[$0 + 1])
+      }
+      try await showString(string, displacements: points, context: context)
+    }
+  }
+
+  enum GlyphShow: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["glyphshow"]
+    func execute(context: isolated Context) async throws {
+      let operand = try context.operands.pop()
+      let font = try currentFontDefinition(context: context)
+      if let name = operand.value as? NameValue {
+        guard font.type != 0,
+          try font.dictionary.object(forKeyIfExists: "CIDFontType") == nil
+        else { throw Error.invalidFont }
+        try await showGlyph(.name(name.value), characterCode: nil, context: context)
+      } else if let integer = operand.value as? IntegerValue {
+        guard try font.dictionary.object(forKeyIfExists: "CIDFontType") != nil else {
+          throw Error.invalidFont
+        }
+        let count = try font.dictionary.objectValue(forKey: "CIDCount", as: IntegerValue.self).value
+        guard integer.value >= 0, integer.value < count else { throw Error.rangeCheck }
+        try await showGlyph(.cid(UInt32(integer.value)), characterCode: nil, context: context)
+      } else {
+        throw Error.typeCheck
+      }
+    }
+  }
+
+  enum StringWidth: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["stringwidth"]
+    func execute(context: isolated Context) async throws {
+      let string = try context.operands.pop().value(as: StringValue.self)
+      let bytes = try string.characters(in: string.range)
+      let root = try currentFontDefinition(context: context)
+      let mappings = try mapCharacters(bytes, root: root, context: context)
+      var width = GraphicsPoint.zero
+      for mapping in mappings {
+        let transform = glyphTransform(
+          fontMatrix: mapping.effectiveMatrix,
+          ctm: context.graphicsState.matrix,
+          origin: .zero
+        )
+        let glyph = try await context.resolveGlyph(
+          selector: mapping.selector,
+          characterCode: mapping.sourceCode,
+          font: mapping.font,
+          transform: transform
+        )
+        let advance = mapping.effectiveMatrix.transformDistance(
+          advanceMetrics(glyph.metrics, writingMode: root.description.writingMode)
+        )
+        width = GraphicsPoint(x: width.x + advance.x, y: width.y + advance.y)
+      }
+      context.operands.push(try .real(width.y), try .real(width.x))
+    }
+  }
+
+  enum CharPath: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["charpath"]
+    func execute(context: isolated Context) async throws {
+      let strokeToOutline = try context.operands.popAs(BooleanValue.self).value
+      let string = try context.operands.pop().value(as: StringValue.self)
+      let bytes = try string.characters(in: string.range)
+      guard let start = context.graphicsState.path.currentPoint else { throw Error.noCurrentPoint }
+      let root = try currentFontDefinition(context: context)
+      let mappings = try mapCharacters(bytes, root: root, context: context)
+      var current = start
+      var additions: [GraphicsPath.Element] = []
+      var containsProtectedOutline = false
+      for mapping in mappings {
+        containsProtectedOutline = containsProtectedOutline || mapping.font.description.outlineAccess == .protected
+        let transform = glyphTransform(
+          fontMatrix: mapping.effectiveMatrix,
+          ctm: context.graphicsState.matrix,
+          origin: current
+        )
+        let glyph = try await context.resolveGlyph(
+          selector: mapping.selector,
+          characterCode: mapping.sourceCode,
+          font: mapping.font,
+          transform: transform
+        )
+        if case .outline(let outline) = glyph.program {
+          additions.append(contentsOf: outline.transformed(by: transform).elements)
+        } else if case .displayList(let list) = glyph.program {
+          additions.append(contentsOf: try characterPath(list, strokeToOutline: strokeToOutline).elements)
+        }
+        let advance = context.graphicsState.matrix.transformDistance(
+          mapping.effectiveMatrix.transformDistance(
+            advanceMetrics(glyph.metrics, writingMode: root.description.writingMode)
+          )
+        )
+        current = GraphicsPoint(x: current.x + advance.x, y: current.y + advance.y)
+      }
+      additions.append(.move(to: current))
+      try context.applyGraphicsOperation(.path(.textOutline)) { state in
+        for element in additions { try state.appendPath(element) }
+        state.pathContainsProtectedOutline = state.pathContainsProtectedOutline || containsProtectedOutline
+      }
+    }
+  }
+
+  enum CShow: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["cshow"]
+    func execute(context: isolated Context) async throws {
+      let (string, procedure) = try context.operands.pop2()
+      try procedure.checkProcedure()
+      let value = try string.value(as: StringValue.self)
+      let bytes = try value.characters(in: value.range)
+      let rootObject = context.graphicsState.fontSource
+      let root = try currentFontDefinition(context: context)
+      let mappings = try mapCharacters(bytes, root: root, context: context)
+      defer { context.graphicsState.fontSource = rootObject }
+      for mapping in mappings {
+        context.graphicsState.fontSource = mapping.font.object
+        context.fontExecutionScopes.append(FontExecutionScope(
+          rootFontSource: rootObject ?? mapping.font.object,
+          selectedFontSource: mapping.font.object,
+          selector: mapping.selector,
+          callbackByte: mapping.sourceCode,
+          sourceBytes: mapping.sourceBytes
+        ))
+        do {
+          let transform = glyphTransform(
+            fontMatrix: mapping.effectiveMatrix,
+            ctm: context.graphicsState.matrix,
+            origin: .zero
+          )
+          let glyph = try await context.resolveGlyph(
+            selector: mapping.selector,
+            characterCode: mapping.sourceCode,
+            font: mapping.font,
+            transform: transform
+          )
+          let advance = mapping.effectiveMatrix.transformDistance(
+            advanceMetrics(glyph.metrics, writingMode: root.description.writingMode)
+          )
+          try await context.execute(
+            proc: procedure,
+            ops: [try .real(advance.y), try .real(advance.x), .integer(Int32(mapping.sourceCode))]
+          )
+          _ = context.fontExecutionScopes.popLast()
+        } catch {
+          _ = context.fontExecutionScopes.popLast()
+          throw error
+        }
+        context.graphicsState.fontSource = rootObject
+      }
+    }
+  }
+
+  enum KShow: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["kshow"]
+    func execute(context: isolated Context) async throws {
+      let (string, procedure) = try context.operands.pop2()
+      try procedure.checkProcedure()
+      let value = try string.value(as: StringValue.self)
+      let bytes = Array(try value.characters(in: value.range))
+      guard !bytes.isEmpty else { return }
+      let font = try currentFontDefinition(context: context)
+      guard font.type != 0 else { throw Error.invalidFont }
+      for index in bytes.indices {
+        _ = try await showGlyph(
+          try glyphSelector(bytes[index], font: currentFontDefinition(context: context)),
+          characterCode: bytes[index],
+          context: context
+        )
+        guard index + 1 < bytes.count else { continue }
+        let savedFont = context.graphicsState.fontSource
+        do {
+          try await context.execute(
+            proc: procedure,
+            ops: [.integer(Int32(bytes[index + 1])), .integer(Int32(bytes[index]))]
+          )
+          context.graphicsState.fontSource = savedFont
+        } catch {
+          context.graphicsState.fontSource = savedFont
+          throw error
+        }
+      }
+    }
+  }
+
+  enum SetCharWidth: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["setcharwidth"]
+    func execute(context: isolated Context) async throws {
+      let (wy, wx) = try context.operands.pop2()
+      guard context.activeGlyphBuild != nil,
+        context.activeGlyphBuild?.metrics == nil
+      else { throw Error.undefined }
+      context.activeGlyphBuild?.metrics = GraphicsGlyphMetrics(
+        horizontalAdvance: GraphicsPoint(x: try numeric(wx), y: try numeric(wy))
+      )
+      context.activeGlyphBuild?.metricsMode = .width
+    }
+  }
+
+  enum SetCacheDevice: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["setcachedevice"]
+    func execute(context: isolated Context) async throws {
+      let values = try context.operands.pop(count: 6).reversed().map(numeric)
+      guard context.activeGlyphBuild != nil,
+        context.activeGlyphBuild?.metrics == nil
+      else { throw Error.undefined }
+      try setGlyphMetrics(values, context: context)
+    }
+  }
+
+  enum SetCacheDevice2: OperatorValue {
+    case instance
+    static let systemDictionaryNames: [Object] = ["setcachedevice2"]
+    func execute(context: isolated Context) async throws {
+      let values = try context.operands.pop(count: 10).reversed().map(numeric)
+      guard context.activeGlyphBuild != nil,
+        context.activeGlyphBuild?.metrics == nil
+      else { throw Error.undefined }
+      try setGlyphMetrics(values, context: context)
+      let cacheBounds = context.activeGlyphBuild?.cacheBounds
+      context.activeGlyphBuild?.metrics = GraphicsGlyphMetrics(
+        horizontalAdvance: GraphicsPoint(x: values[0], y: values[1]),
+        verticalAdvance: GraphicsPoint(x: values[6], y: values[7]),
+        verticalOrigin: GraphicsPoint(x: values[8], y: values[9]),
+        bounds: cacheBounds
+      )
+    }
+  }
+
+  private static func showString(
+    _ object: Object,
+    perGlyph: (UInt8) -> GraphicsPoint = { _ in .zero },
+    displacements: [GraphicsPoint]? = nil,
+    afterGlyph: ((UInt8, GraphicsPoint) async throws -> Void)? = nil,
+    context: isolated Context
+  ) async throws {
+    let string = try object.value(as: StringValue.self)
+    let bytes = Array(try string.characters(in: string.range))
+    let root = try currentFontDefinition(context: context)
+    let mappings: [MappedCharacter]
+    if let scope = context.fontExecutionScopes.last,
+      context.graphicsState.fontSource == scope.selectedFontSource,
+      case .cid = scope.selector
+    {
+      guard bytes.count == 1, bytes.first == scope.callbackByte else { throw Error.rangeCheck }
+      mappings = [MappedCharacter(
+        sourceCode: scope.callbackByte ?? 0,
+        sourceBytes: scope.sourceBytes,
+        selector: scope.selector,
+        font: root,
+        effectiveMatrix: root.matrix
+      )]
+    } else {
+      mappings = try mapCharacters(Data(bytes), root: root, context: context)
+    }
+    if let displacements, displacements.count != mappings.count { throw Error.rangeCheck }
+    let runSourceBytes = mappings.count == 1 && mappings[0].sourceBytes != Data(bytes)
+      ? mappings[0].sourceBytes
+      : Data(bytes)
+    var sourceOffset = 0
+    for (index, mapping) in mappings.enumerated() {
+      let adjustment: GlyphAdvanceAdjustment = if let displacements {
+        .overriding(displacements[index])
+      } else {
+        .additive(perGlyph(mapping.sourceCode))
+      }
+      let advance = try await showMappedGlyph(
+        mapping,
+        root: root,
+        adjustment: adjustment,
+        runSourceBytes: runSourceBytes,
+        sourceRange: sourceOffset..<(sourceOffset + mapping.sourceBytes.count),
+        unicodeProvenance: root.type == 0 ? .postScriptCMap : .postScriptEncoding,
+        context: context
+      )
+      sourceOffset += mapping.sourceBytes.count
+      try await afterGlyph?(mapping.sourceCode, advance)
+    }
+  }
+
+  @discardableResult
+  private static func showGlyph(
+    _ selector: GraphicsGlyphSelector,
+    characterCode: UInt8?,
+    extraAdvance: GraphicsPoint = .zero,
+    context: isolated Context
+  ) async throws -> GraphicsPoint {
+    let font = try currentFontDefinition(context: context)
+    guard font.type != 0 else { throw Error.invalidFont }
+    return try await showMappedGlyph(
+      MappedCharacter(
+        sourceCode: characterCode ?? 0,
+        sourceBytes: characterCode.map { Data([$0]) } ?? Data(),
+        selector: selector,
+        font: font,
+        effectiveMatrix: font.matrix
+      ),
+      root: font,
+      adjustment: .additive(extraAdvance),
+      runSourceBytes: characterCode.map { Data([$0]) },
+      sourceRange: characterCode.map { _ in 0..<1 },
+      unicodeProvenance: selector.glyphName == nil ? nil : .glyphName,
+      context: context
+    )
+  }
+
+  private static func showMappedGlyph(
+    _ mapping: MappedCharacter,
+    root: FontDefinition,
+    adjustment: GlyphAdvanceAdjustment,
+    runSourceBytes: Data?,
+    sourceRange: Range<Int>?,
+    unicodeProvenance: GraphicsUnicodeProvenance?,
+    context: isolated Context
+  ) async throws -> GraphicsPoint {
+    guard let origin = context.graphicsState.path.currentPoint else { throw Error.noCurrentPoint }
+    let transform = glyphTransform(
+      fontMatrix: mapping.effectiveMatrix,
+      ctm: context.graphicsState.matrix,
+      origin: origin
+    )
+    let glyph = try await context.resolveGlyph(
+      selector: mapping.selector,
+      characterCode: mapping.sourceCode,
+      font: mapping.font,
+      transform: transform
+    )
+    var advance = mapping.effectiveMatrix.transformDistance(
+      advanceMetrics(glyph.metrics, writingMode: root.description.writingMode)
+    )
+    switch adjustment {
+    case .additive(let extra):
+      advance = GraphicsPoint(x: advance.x + extra.x, y: advance.y + extra.y)
+    case .overriding(let replacement):
+      advance = replacement
+    }
+    let deviceAdvance = context.graphicsState.matrix.transformDistance(advance)
+    let end = GraphicsPoint(x: origin.x + deviceAdvance.x, y: origin.y + deviceAdvance.y)
+    let unicodeScalars = mapping.selector.glyphName.flatMap { AdobeGlyphList.unicodeScalars(for: $0) }
+    let placement = GraphicsGlyphPlacement(
+      glyph: glyph,
+      origin: origin,
+      transform: transform,
+      advance: advance,
+      font: mapping.font.description,
+      sourceBytes: mapping.sourceBytes,
+      unicodeScalars: unicodeScalars,
+      sourceRange: sourceRange,
+      unicodeProvenance: unicodeScalars == nil ? nil : unicodeProvenance
+    )
+    let run = GraphicsGlyphRun(rootFont: root.description, glyphs: [placement], sourceBytes: runSourceBytes)
+    try context.applyGraphicsOperation(.paint(.text(run))) { try $0.appendPath(.move(to: end)) }
+    return advance
+  }
+
+  private static func currentFontDefinition(context: isolated Context) throws -> FontDefinition {
+    guard let object = context.graphicsState.fontSource else { throw Error.invalidFont }
+    return try fontDefinition(object, context: context)
+  }
+
+  static func glyphSelector(_ byte: UInt8, font: FontDefinition) throws -> GraphicsGlyphSelector {
+    let encoding = try font.dictionary.objectValue(forKey: "Encoding", as: ArrayValue.self)
+    let name = try encoding.object(at: UInt(byte), for: .read).value(as: NameValue.self).value
+    return .name(name)
+  }
+
+  private static func glyphTransform(
+    fontMatrix: GraphicsMatrix,
+    ctm: GraphicsMatrix,
+    origin: GraphicsPoint
+  ) -> GraphicsMatrix {
+    let combined = fontMatrix.concatenated(with: ctm)
+    return GraphicsMatrix(
+      a: combined.a,
+      b: combined.b,
+      c: combined.c,
+      d: combined.d,
+      tx: origin.x + combined.tx - ctm.tx,
+      ty: origin.y + combined.ty - ctm.ty
+    )
+  }
+
+  private static func advanceMetrics(_ metrics: GraphicsGlyphMetrics, writingMode: Int) -> GraphicsPoint {
+    writingMode == 1 ? metrics.verticalAdvance ?? metrics.horizontalAdvance : metrics.horizontalAdvance
+  }
+
+  private static func displacementValues(_ object: Object) throws -> [Double] {
+    if let string = object.value as? StringValue {
+      return try EncodedNumberString.decode(string.characters(in: string.range)).map(numeric)
+    }
+    return try arrayObjects(object).map(numeric)
+  }
+
+  private static func characterPath(
+    _ list: GraphicsDisplayList,
+    strokeToOutline: Bool,
+    depth: Int = 0
+  ) throws -> GraphicsPath {
+    guard depth < 16 else { throw Error.limitCheck }
+    var elements: [GraphicsPath.Element] = []
+    for effect in list.effects {
+      switch effect {
+      case .fill(let path, _, _), .userPathFill(let path, _, _):
+        elements.append(contentsOf: path.elements)
+      case .stroke(let path, let state):
+        if strokeToOutline {
+          elements.append(contentsOf: try GraphicsPathGeometry.strokeOutline(path: path, state: state).elements)
+        } else {
+          elements.append(contentsOf: path.elements)
+        }
+      case .userPathStroke(let outline, _):
+        elements.append(contentsOf: outline.elements)
+      case .fillRectangles(let paths, _):
+        for path in paths { elements.append(contentsOf: path.elements) }
+      case .strokeRectangles(let paths, let matrix, let state):
+        for path in paths {
+          elements.append(contentsOf: try GraphicsPathGeometry.strokeOutline(
+            path: path, state: state, matrix: matrix
+          ).elements)
+        }
+      case .form(let form, _):
+        elements.append(contentsOf: try characterPath(
+          form.displayList,
+          strokeToOutline: strokeToOutline,
+          depth: depth + 1
+        ).elements)
+      case .text(let run, _):
+        for placement in run.glyphs {
+          switch placement.glyph.program {
+          case .outline(let path):
+            elements.append(contentsOf: path.transformed(by: placement.transform).elements)
+          case .displayList(let nested):
+            elements.append(contentsOf: try characterPath(
+              nested,
+              strokeToOutline: strokeToOutline,
+              depth: depth + 1
+            ).elements)
+          case .bitmap, .empty, .missing:
+            break
+          }
+        }
+      case .erase, .image, .shading:
+        break
+      }
+    }
+    return GraphicsPath(elements: elements)
+  }
+
+  private static func setGlyphMetrics(_ values: [Double], context: isolated Context) throws {
+    guard values.count >= 6,
+      values.allSatisfy(\.isFinite),
+      values[2] <= values[4], values[3] <= values[5]
+    else { throw Error.rangeCheck }
+    let bounds = GraphicsRect(
+      x: values[2], y: values[3], width: values[4] - values[2], height: values[5] - values[3]
+    )
+    context.activeGlyphBuild?.metrics = GraphicsGlyphMetrics(
+      horizontalAdvance: GraphicsPoint(x: values[0], y: values[1]),
+      bounds: bounds
+    )
+    context.activeGlyphBuild?.cacheBounds = bounds
+    context.activeGlyphBuild?.cacheable = true
+    context.activeGlyphBuild?.metricsMode = .cacheDevice
+  }
+}
+
+private extension GraphicsPoint {
+  static let zero = Self(x: 0, y: 0)
+}
+
+private extension GraphicsGlyphSelector {
+  var glyphName: String? {
+    switch self {
+    case .name(let name): name
+    case .character, .index, .cid: nil
+    }
+  }
+}

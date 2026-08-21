@@ -1,0 +1,943 @@
+{
+  "ABIRoot": {
+    "kind": "Root",
+    "name": "SolidPostScriptCoreText",
+    "printedName": "SolidPostScriptCoreText",
+    "children": [
+      {
+        "kind": "Import",
+        "name": "CoreGraphics",
+        "printedName": "CoreGraphics",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      },
+      {
+        "kind": "Import",
+        "name": "CoreText",
+        "printedName": "CoreText",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      },
+      {
+        "kind": "Import",
+        "name": "Foundation",
+        "printedName": "Foundation",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      },
+      {
+        "kind": "Import",
+        "name": "SolidFont",
+        "printedName": "SolidFont",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      },
+      {
+        "kind": "Import",
+        "name": "SolidPostScript",
+        "printedName": "SolidPostScript",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftOnoneSupport",
+        "printedName": "SwiftOnoneSupport",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      },
+      {
+        "kind": "Import",
+        "name": "_Concurrency",
+        "printedName": "_Concurrency",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      },
+      {
+        "kind": "Import",
+        "name": "_StringProcessing",
+        "printedName": "_StringProcessing",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      },
+      {
+        "kind": "Import",
+        "name": "_SwiftConcurrencyShims",
+        "printedName": "_SwiftConcurrencyShims",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "CoreTextFontProvider",
+        "printedName": "CoreTextFontProvider",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "identifier",
+            "printedName": "identifier",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:23SolidPostScriptCoreText0dE12FontProviderV10identifierSSvp",
+            "mangledName": "$s23SolidPostScriptCoreText0dE12FontProviderV10identifierSSvp",
+            "moduleName": "SolidPostScriptCoreText",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:23SolidPostScriptCoreText0dE12FontProviderV10identifierSSvg",
+                "mangledName": "$s23SolidPostScriptCoreText0dE12FontProviderV10identifierSSvg",
+                "moduleName": "SolidPostScriptCoreText",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreTextFontProvider",
+                "printedName": "SolidPostScriptCoreText.CoreTextFontProvider",
+                "usr": "s:23SolidPostScriptCoreText0dE12FontProviderV"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:23SolidPostScriptCoreText0dE12FontProviderVACycfc",
+            "mangledName": "$s23SolidPostScriptCoreText0dE12FontProviderVACycfc",
+            "moduleName": "SolidPostScriptCoreText",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Var",
+            "name": "supportedAssetFormats",
+            "printedName": "supportedAssetFormats",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Set",
+                "printedName": "Swift.Set<SolidFont.FontAsset.Format>",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Format",
+                    "printedName": "SolidFont.FontAsset.Format",
+                    "usr": "s:9SolidFont0B5AssetV6FormatO"
+                  }
+                ],
+                "usr": "s:Sh"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:23SolidPostScriptCoreText0dE12FontProviderV21supportedAssetFormatsShy0aF00fI0V6FormatOGvp",
+            "mangledName": "$s23SolidPostScriptCoreText0dE12FontProviderV21supportedAssetFormatsShy0aF00fI0V6FormatOGvp",
+            "moduleName": "SolidPostScriptCoreText",
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Set",
+                    "printedName": "Swift.Set<SolidFont.FontAsset.Format>",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Format",
+                        "printedName": "SolidFont.FontAsset.Format",
+                        "usr": "s:9SolidFont0B5AssetV6FormatO"
+                      }
+                    ],
+                    "usr": "s:Sh"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:23SolidPostScriptCoreText0dE12FontProviderV21supportedAssetFormatsShy0aF00fI0V6FormatOGvg",
+                "mangledName": "$s23SolidPostScriptCoreText0dE12FontProviderV21supportedAssetFormatsShy0aF00fI0V6FormatOGvg",
+                "moduleName": "SolidPostScriptCoreText",
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Function",
+            "name": "availableFontNames",
+            "printedName": "availableFontNames()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[Swift.String]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:23SolidPostScriptCoreText0dE12FontProviderV09availableF5NamesSaySSGyYaKF",
+            "mangledName": "$s23SolidPostScriptCoreText0dE12FontProviderV09availableF5NamesSaySSGyYaKF",
+            "moduleName": "SolidPostScriptCoreText",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "resolve",
+            "printedName": "resolve(_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.FontProviderFace?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "FontProviderFace",
+                    "printedName": "SolidPostScript.FontProviderFace",
+                    "usr": "s:15SolidPostScript16FontProviderFaceV"
+                  }
+                ],
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FontResourceQuery",
+                "printedName": "SolidPostScript.FontResourceQuery",
+                "usr": "s:15SolidPostScript17FontResourceQueryV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:23SolidPostScriptCoreText0dE12FontProviderV7resolvey0abC00fG4FaceVSgAE0F13ResourceQueryVYaKF",
+            "mangledName": "$s23SolidPostScriptCoreText0dE12FontProviderV7resolvey0abC00fG4FaceVSgAE0F13ResourceQueryVYaKF",
+            "moduleName": "SolidPostScriptCoreText",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "glyph",
+            "printedName": "glyph(_:in:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidFont.FontGlyph?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "FontGlyph",
+                    "printedName": "SolidFont.FontGlyph",
+                    "usr": "s:9SolidFont0B5GlyphV"
+                  }
+                ],
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FontGlyphSelector",
+                "printedName": "SolidFont.FontGlyphSelector",
+                "usr": "s:9SolidFont0B13GlyphSelectorO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FontProviderFace",
+                "printedName": "SolidPostScript.FontProviderFace",
+                "usr": "s:15SolidPostScript16FontProviderFaceV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:23SolidPostScriptCoreText0dE12FontProviderV5glyph_2in0aF00F5GlyphVSgAF0fJ8SelectorO_0abC00fG4FaceVtYaKF",
+            "mangledName": "$s23SolidPostScriptCoreText0dE12FontProviderV5glyph_2in0aF00F5GlyphVSgAF0fJ8SelectorO_0abC00fG4FaceVtYaKF",
+            "moduleName": "SolidPostScriptCoreText",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "open",
+            "printedName": "open(_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.FontProviderFace?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "FontProviderFace",
+                    "printedName": "SolidPostScript.FontProviderFace",
+                    "usr": "s:15SolidPostScript16FontProviderFaceV"
+                  }
+                ],
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FontAsset",
+                "printedName": "SolidFont.FontAsset",
+                "usr": "s:9SolidFont0B5AssetV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:23SolidPostScriptCoreText0dE12FontProviderV4openy0abC00fG4FaceVSg0aF00F5AssetVYaKF",
+            "mangledName": "$s23SolidPostScriptCoreText0dE12FontProviderV4openy0abC00fG4FaceVSg0aF00F5AssetVYaKF",
+            "moduleName": "SolidPostScriptCoreText",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:23SolidPostScriptCoreText0dE12FontProviderV",
+        "mangledName": "$s23SolidPostScriptCoreText0dE12FontProviderV",
+        "moduleName": "SolidPostScriptCoreText",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "FontResourceProvider",
+            "printedName": "FontResourceProvider",
+            "usr": "s:15SolidPostScript20FontResourceProviderP",
+            "mangledName": "$s15SolidPostScript20FontResourceProviderP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "CoreTextPreparedGlyph",
+        "printedName": "CoreTextPreparedGlyph",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "glyph",
+            "printedName": "glyph",
+            "children": [
+              {
+                "kind": "TypeNameAlias",
+                "name": "CGGlyph",
+                "printedName": "CoreGraphics.CGGlyph",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "CGFontIndex",
+                    "printedName": "CoreGraphics.CGFontIndex",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UInt16",
+                        "printedName": "Swift.UInt16",
+                        "usr": "s:s6UInt16V"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:23SolidPostScriptCoreText0dE13PreparedGlyphV5glyphs6UInt16Vvp",
+            "mangledName": "$s23SolidPostScriptCoreText0dE13PreparedGlyphV5glyphs6UInt16Vvp",
+            "moduleName": "SolidPostScriptCoreText",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "CGGlyph",
+                    "printedName": "CoreGraphics.CGGlyph",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "CGFontIndex",
+                        "printedName": "CoreGraphics.CGFontIndex",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "UInt16",
+                            "printedName": "Swift.UInt16",
+                            "usr": "s:s6UInt16V"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:23SolidPostScriptCoreText0dE13PreparedGlyphV5glyphs6UInt16Vvg",
+                "mangledName": "$s23SolidPostScriptCoreText0dE13PreparedGlyphV5glyphs6UInt16Vvg",
+                "moduleName": "SolidPostScriptCoreText",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "fallback",
+            "printedName": "fallback",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsGlyphDescription",
+                "printedName": "SolidPostScript.GraphicsGlyphDescription",
+                "usr": "s:15SolidPostScript24GraphicsGlyphDescriptionV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:23SolidPostScriptCoreText0dE13PreparedGlyphV8fallback0abC008GraphicsG11DescriptionVvp",
+            "mangledName": "$s23SolidPostScriptCoreText0dE13PreparedGlyphV8fallback0abC008GraphicsG11DescriptionVvp",
+            "moduleName": "SolidPostScriptCoreText",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsGlyphDescription",
+                    "printedName": "SolidPostScript.GraphicsGlyphDescription",
+                    "usr": "s:15SolidPostScript24GraphicsGlyphDescriptionV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:23SolidPostScriptCoreText0dE13PreparedGlyphV8fallback0abC008GraphicsG11DescriptionVvg",
+                "mangledName": "$s23SolidPostScriptCoreText0dE13PreparedGlyphV8fallback0abC008GraphicsG11DescriptionVvg",
+                "moduleName": "SolidPostScriptCoreText",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:23SolidPostScriptCoreText0dE13PreparedGlyphV",
+        "mangledName": "$s23SolidPostScriptCoreText0dE13PreparedGlyphV",
+        "moduleName": "SolidPostScriptCoreText",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "CoreTextGraphicsFontEngine",
+        "printedName": "CoreTextGraphicsFontEngine",
+        "children": [
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreTextGraphicsFontEngine",
+                "printedName": "SolidPostScriptCoreText.CoreTextGraphicsFontEngine",
+                "usr": "s:23SolidPostScriptCoreText0dE18GraphicsFontEngineV"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:23SolidPostScriptCoreText0dE18GraphicsFontEngineVACycfc",
+            "mangledName": "$s23SolidPostScriptCoreText0dE18GraphicsFontEngineVACycfc",
+            "moduleName": "SolidPostScriptCoreText",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "makeSession",
+            "printedName": "makeSession(for:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreTextGraphicsFontSession",
+                "printedName": "SolidPostScriptCoreText.CoreTextGraphicsFontSession",
+                "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDeviceDescriptor",
+                "printedName": "SolidPostScript.GraphicsDeviceDescriptor",
+                "usr": "s:15SolidPostScript24GraphicsDeviceDescriptorV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:23SolidPostScriptCoreText0dE18GraphicsFontEngineV11makeSession3forAA0defgJ0C0abC00F16DeviceDescriptorV_tF",
+            "mangledName": "$s23SolidPostScriptCoreText0dE18GraphicsFontEngineV11makeSession3forAA0defgJ0C0abC00F16DeviceDescriptorV_tF",
+            "moduleName": "SolidPostScriptCoreText",
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "Session",
+            "printedName": "Session",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreTextGraphicsFontSession",
+                "printedName": "SolidPostScriptCoreText.CoreTextGraphicsFontSession",
+                "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionC"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:23SolidPostScriptCoreText0dE18GraphicsFontEngineV7Sessiona",
+            "mangledName": "$s23SolidPostScriptCoreText0dE18GraphicsFontEngineV7Sessiona",
+            "moduleName": "SolidPostScriptCoreText",
+            "implicit": true
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:23SolidPostScriptCoreText0dE18GraphicsFontEngineV",
+        "mangledName": "$s23SolidPostScriptCoreText0dE18GraphicsFontEngineV",
+        "moduleName": "SolidPostScriptCoreText",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "GraphicsFontEngine",
+            "printedName": "GraphicsFontEngine",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "Session",
+                "printedName": "Session",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CoreTextGraphicsFontSession",
+                    "printedName": "SolidPostScriptCoreText.CoreTextGraphicsFontSession",
+                    "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionC"
+                  }
+                ]
+              }
+            ],
+            "usr": "s:15SolidPostScript18GraphicsFontEngineP",
+            "mangledName": "$s15SolidPostScript18GraphicsFontEngineP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "CoreTextGraphicsFontSession",
+        "printedName": "CoreTextGraphicsFontSession",
+        "children": [
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreTextGraphicsFontSession",
+                "printedName": "SolidPostScriptCoreText.CoreTextGraphicsFontSession",
+                "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionC"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionCACycfc",
+            "mangledName": "$s23SolidPostScriptCoreText0dE19GraphicsFontSessionCACycfc",
+            "moduleName": "SolidPostScriptCoreText",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "prepare",
+            "printedName": "prepare(_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "CoreText.CTFont?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CTFont",
+                    "printedName": "CoreText.CTFont",
+                    "usr": "c:@T@CTFontRef"
+                  }
+                ],
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsFontDescription",
+                "printedName": "SolidPostScript.GraphicsFontDescription",
+                "usr": "s:15SolidPostScript23GraphicsFontDescriptionV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionC7prepareySo9CTFontRefaSg0abC00fG11DescriptionVKF",
+            "mangledName": "$s23SolidPostScriptCoreText0dE19GraphicsFontSessionC7prepareySo9CTFontRefaSg0abC00fG11DescriptionVKF",
+            "moduleName": "SolidPostScriptCoreText",
+            "declAttributes": [
+              "Final"
+            ],
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "prepare",
+            "printedName": "prepare(_:in:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScriptCoreText.CoreTextPreparedGlyph?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CoreTextPreparedGlyph",
+                    "printedName": "SolidPostScriptCoreText.CoreTextPreparedGlyph",
+                    "usr": "s:23SolidPostScriptCoreText0dE13PreparedGlyphV"
+                  }
+                ],
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsGlyphDescription",
+                "printedName": "SolidPostScript.GraphicsGlyphDescription",
+                "usr": "s:15SolidPostScript24GraphicsGlyphDescriptionV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "CTFont",
+                "printedName": "CoreText.CTFont",
+                "paramValueOwnership": "Shared",
+                "usr": "c:@T@CTFontRef"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionC7prepare_2inAA0dE13PreparedGlyphVSg0abC00fL11DescriptionV_So9CTFontRefatKF",
+            "mangledName": "$s23SolidPostScriptCoreText0dE19GraphicsFontSessionC7prepare_2inAA0dE13PreparedGlyphVSg0abC00fL11DescriptionV_So9CTFontRefatKF",
+            "moduleName": "SolidPostScriptCoreText",
+            "declAttributes": [
+              "Final"
+            ],
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "PreparedFont",
+            "printedName": "PreparedFont",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CTFont",
+                "printedName": "CoreText.CTFont",
+                "usr": "c:@T@CTFontRef"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionC08PreparedG0a",
+            "mangledName": "$s23SolidPostScriptCoreText0dE19GraphicsFontSessionC08PreparedG0a",
+            "moduleName": "SolidPostScriptCoreText",
+            "implicit": true
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "PreparedGlyph",
+            "printedName": "PreparedGlyph",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreTextPreparedGlyph",
+                "printedName": "SolidPostScriptCoreText.CoreTextPreparedGlyph",
+                "usr": "s:23SolidPostScriptCoreText0dE13PreparedGlyphV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionC13PreparedGlypha",
+            "mangledName": "$s23SolidPostScriptCoreText0dE19GraphicsFontSessionC13PreparedGlypha",
+            "moduleName": "SolidPostScriptCoreText",
+            "implicit": true
+          }
+        ],
+        "declKind": "Class",
+        "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionC",
+        "mangledName": "$s23SolidPostScriptCoreText0dE19GraphicsFontSessionC",
+        "moduleName": "SolidPostScriptCoreText",
+        "declAttributes": [
+          "Final"
+        ],
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "GraphicsFontSession",
+            "printedName": "GraphicsFontSession",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "PreparedFont",
+                "printedName": "PreparedFont",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CTFont",
+                    "printedName": "CoreText.CTFont",
+                    "usr": "c:@T@CTFontRef"
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "PreparedGlyph",
+                "printedName": "PreparedGlyph",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CoreTextPreparedGlyph",
+                    "printedName": "SolidPostScriptCoreText.CoreTextPreparedGlyph",
+                    "usr": "s:23SolidPostScriptCoreText0dE13PreparedGlyphV"
+                  }
+                ]
+              }
+            ],
+            "usr": "s:15SolidPostScript19GraphicsFontSessionP",
+            "mangledName": "$s15SolidPostScript19GraphicsFontSessionP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "InterpreterEnvironment",
+        "printedName": "InterpreterEnvironment",
+        "children": [
+          {
+            "kind": "Function",
+            "name": "coreText",
+            "printedName": "coreText(hostConfiguration:fileDevices:resourceCategories:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "InterpreterEnvironment",
+                "printedName": "SolidPostScript.InterpreterEnvironment",
+                "usr": "s:15SolidPostScript22InterpreterEnvironmentC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "InterpreterHostConfiguration",
+                "printedName": "SolidPostScript.InterpreterHostConfiguration",
+                "hasDefaultArg": true,
+                "usr": "s:15SolidPostScript28InterpreterHostConfigurationV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FileDevices",
+                "printedName": "SolidPostScript.FileDevices",
+                "hasDefaultArg": true,
+                "usr": "s:15SolidPostScript11FileDevicesC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Dictionary",
+                "printedName": "[SolidPostScript.Object : any SolidPostScript.ResourceCategory]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Object",
+                    "printedName": "SolidPostScript.Object",
+                    "usr": "s:15SolidPostScript6ObjectV"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "ResourceCategory",
+                    "printedName": "any SolidPostScript.ResourceCategory",
+                    "usr": "s:15SolidPostScript16ResourceCategoryP"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:SD"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript22InterpreterEnvironmentC0abC8CoreTextE04coreG017hostConfiguration11fileDevices18resourceCategoriesAcA0d4HostJ0V_AA04FileL0CSDyAA6ObjectVAA16ResourceCategory_pGtFZ",
+            "mangledName": "$s15SolidPostScript22InterpreterEnvironmentC0abC8CoreTextE04coreG017hostConfiguration11fileDevices18resourceCategoriesAcA0d4HostJ0V_AA04FileL0CSDyAA6ObjectVAA16ResourceCategory_pGtFZ",
+            "moduleName": "SolidPostScriptCoreText",
+            "static": true,
+            "declAttributes": [
+              "Final"
+            ],
+            "isFromExtension": true,
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Class",
+        "usr": "s:15SolidPostScript22InterpreterEnvironmentC",
+        "mangledName": "$s15SolidPostScript22InterpreterEnvironmentC",
+        "moduleName": "SolidPostScript",
+        "declAttributes": [
+          "Final"
+        ],
+        "isExternal": true,
+        "hasMissingDesignatedInitializers": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      }
+    ],
+    "json_format_version": 8
+  }
+}

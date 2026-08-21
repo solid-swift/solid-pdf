@@ -1,0 +1,2639 @@
+{
+  "ABIRoot": {
+    "kind": "Root",
+    "name": "SolidPostScriptCoreGraphics",
+    "printedName": "SolidPostScriptCoreGraphics",
+    "children": [
+      {
+        "kind": "Import",
+        "name": "CoreGraphics",
+        "printedName": "CoreGraphics",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreGraphics"
+      },
+      {
+        "kind": "Import",
+        "name": "CoreText",
+        "printedName": "CoreText",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreGraphics"
+      },
+      {
+        "kind": "Import",
+        "name": "Foundation",
+        "printedName": "Foundation",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreGraphics"
+      },
+      {
+        "kind": "Import",
+        "name": "SolidPostScript",
+        "printedName": "SolidPostScript",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreGraphics"
+      },
+      {
+        "kind": "Import",
+        "name": "SolidPostScriptCoreText",
+        "printedName": "SolidPostScriptCoreText",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreGraphics"
+      },
+      {
+        "kind": "Import",
+        "name": "SolidRaster",
+        "printedName": "SolidRaster",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreGraphics"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftOnoneSupport",
+        "printedName": "SwiftOnoneSupport",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreGraphics"
+      },
+      {
+        "kind": "Import",
+        "name": "_Concurrency",
+        "printedName": "_Concurrency",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreGraphics"
+      },
+      {
+        "kind": "Import",
+        "name": "_StringProcessing",
+        "printedName": "_StringProcessing",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreGraphics"
+      },
+      {
+        "kind": "Import",
+        "name": "_SwiftConcurrencyShims",
+        "printedName": "_SwiftConcurrencyShims",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreGraphics"
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "CoreGraphicsColorEngine",
+        "printedName": "CoreGraphicsColorEngine",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "destinationColorSpace",
+            "printedName": "destinationColorSpace",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CGColorSpace",
+                "printedName": "CoreGraphics.CGColorSpace",
+                "usr": "c:@T@CGColorSpaceRef"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE11ColorEngineV011destinationF5SpaceSo07CGColorI3Refavp",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE11ColorEngineV011destinationF5SpaceSo07CGColorI3Refavp",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CGColorSpace",
+                    "printedName": "CoreGraphics.CGColorSpace",
+                    "usr": "c:@T@CGColorSpaceRef"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE11ColorEngineV011destinationF5SpaceSo07CGColorI3Refavg",
+                "mangledName": "$s27SolidPostScriptCoreGraphics0dE11ColorEngineV011destinationF5SpaceSo07CGColorI3Refavg",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(destinationColorSpace:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsColorEngine",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsColorEngine",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE11ColorEngineV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "CGColorSpace",
+                "printedName": "CoreGraphics.CGColorSpace",
+                "hasDefaultArg": true,
+                "usr": "c:@T@CGColorSpaceRef"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE11ColorEngineV011destinationF5SpaceACSo07CGColorI3Refa_tcfc",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE11ColorEngineV011destinationF5SpaceACSo07CGColorI3Refa_tcfc",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "makeSession",
+            "printedName": "makeSession(for:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsColorSession",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsColorSession",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDeviceDescriptor",
+                "printedName": "SolidPostScript.GraphicsDeviceDescriptor",
+                "usr": "s:15SolidPostScript24GraphicsDeviceDescriptorV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE11ColorEngineV11makeSession3forAA0defI0C0abC00E16DeviceDescriptorV_tKF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE11ColorEngineV11makeSession3forAA0defI0C0abC00E16DeviceDescriptorV_tKF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "Session",
+            "printedName": "Session",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsColorSession",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsColorSession",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE11ColorEngineV7Sessiona",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE11ColorEngineV7Sessiona",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "implicit": true
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:27SolidPostScriptCoreGraphics0dE11ColorEngineV",
+        "mangledName": "$s27SolidPostScriptCoreGraphics0dE11ColorEngineV",
+        "moduleName": "SolidPostScriptCoreGraphics",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "GraphicsColorEngine",
+            "printedName": "GraphicsColorEngine",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "Session",
+                "printedName": "Session",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CoreGraphicsColorSession",
+                    "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsColorSession",
+                    "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC"
+                  }
+                ]
+              }
+            ],
+            "usr": "s:15SolidPostScript19GraphicsColorEngineP",
+            "mangledName": "$s15SolidPostScript19GraphicsColorEngineP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "CoreGraphicsCompatibleColorSession",
+        "printedName": "CoreGraphicsCompatibleColorSession",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "destinationColorSpace",
+            "printedName": "destinationColorSpace",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CGColorSpace",
+                "printedName": "CoreGraphics.CGColorSpace",
+                "usr": "c:@T@CGColorSpaceRef"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE22CompatibleColorSessionP011destinationG5SpaceSo07CGColorJ3Refavp",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE22CompatibleColorSessionP011destinationG5SpaceSo07CGColorJ3Refavp",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "protocolReq": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CGColorSpace",
+                    "printedName": "CoreGraphics.CGColorSpace",
+                    "usr": "c:@T@CGColorSpaceRef"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE22CompatibleColorSessionP011destinationG5SpaceSo07CGColorJ3Refavg",
+                "mangledName": "$s27SolidPostScriptCoreGraphics0dE22CompatibleColorSessionP011destinationG5SpaceSo07CGColorJ3Refavg",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<Self where Self : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "protocolReq": true,
+                "reqNewWitnessTableEntry": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Protocol",
+        "usr": "s:27SolidPostScriptCoreGraphics0dE22CompatibleColorSessionP",
+        "mangledName": "$s27SolidPostScriptCoreGraphics0dE22CompatibleColorSessionP",
+        "moduleName": "SolidPostScriptCoreGraphics",
+        "genericSig": "<Self : SolidPostScript.GraphicsColorSession, Self.ResolvedPaint == CoreGraphics.CGColor, Self.ImageConverter.ResolvedImage == CoreGraphics.CGImage>",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "GraphicsColorSession",
+            "printedName": "GraphicsColorSession",
+            "usr": "s:15SolidPostScript20GraphicsColorSessionP",
+            "mangledName": "$s15SolidPostScript20GraphicsColorSessionP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "CoreGraphicsColorSession",
+        "printedName": "CoreGraphicsColorSession",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "destinationColorSpace",
+            "printedName": "destinationColorSpace",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CGColorSpace",
+                "printedName": "CoreGraphics.CGColorSpace",
+                "usr": "c:@T@CGColorSpaceRef"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC011destinationF5SpaceSo07CGColorI3Refavp",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE12ColorSessionC011destinationF5SpaceSo07CGColorI3Refavp",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "Final",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CGColorSpace",
+                    "printedName": "CoreGraphics.CGColorSpace",
+                    "usr": "c:@T@CGColorSpaceRef"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC011destinationF5SpaceSo07CGColorI3Refavg",
+                "mangledName": "$s27SolidPostScriptCoreGraphics0dE12ColorSessionC011destinationF5SpaceSo07CGColorI3Refavg",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Final",
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(destinationColorSpace:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsColorSession",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsColorSession",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "CGColorSpace",
+                "printedName": "CoreGraphics.CGColorSpace",
+                "usr": "c:@T@CGColorSpaceRef"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC011destinationF5SpaceACSo07CGColorI3Refa_tcfc",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE12ColorSessionC011destinationF5SpaceACSo07CGColorI3Refa_tcfc",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "resolve",
+            "printedName": "resolve(_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CGColor",
+                "printedName": "CoreGraphics.CGColor",
+                "usr": "c:@T@CGColorRef"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsPaint",
+                "printedName": "SolidPostScript.GraphicsPaint",
+                "usr": "s:15SolidPostScript13GraphicsPaintO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC7resolveySo10CGColorRefa0abC00E5PaintOKF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE12ColorSessionC7resolveySo10CGColorRefa0abC00E5PaintOKF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "Final"
+            ],
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "resolve",
+            "printedName": "resolve(_:deviceRendering:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CGColor",
+                "printedName": "CoreGraphics.CGColor",
+                "usr": "c:@T@CGColorRef"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsPaint",
+                "printedName": "SolidPostScript.GraphicsPaint",
+                "usr": "s:15SolidPostScript13GraphicsPaintO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDeviceRenderingSnapshot",
+                "printedName": "SolidPostScript.GraphicsDeviceRenderingSnapshot",
+                "usr": "s:15SolidPostScript31GraphicsDeviceRenderingSnapshotV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC7resolve_15deviceRenderingSo10CGColorRefa0abC00E5PaintO_AH0e6DeviceJ8SnapshotVtKF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE12ColorSessionC7resolve_15deviceRenderingSo10CGColorRefa0abC00E5PaintO_AH0e6DeviceJ8SnapshotVtKF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "Final"
+            ],
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "makeImageConverter",
+            "printedName": "makeImageConverter(for:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsColorImageConverter",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsColorImageConverter",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE19ColorImageConverterC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsImageDescriptor",
+                "printedName": "SolidPostScript.GraphicsImageDescriptor",
+                "usr": "s:15SolidPostScript23GraphicsImageDescriptorV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC18makeImageConverter3forAA0defiJ0C0abC00eI10DescriptorV_tKF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE12ColorSessionC18makeImageConverter3forAA0defiJ0C0abC00eI10DescriptorV_tKF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "Final"
+            ],
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "makeImageConverter",
+            "printedName": "makeImageConverter(for:deviceRendering:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsColorImageConverter",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsColorImageConverter",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE19ColorImageConverterC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsImageDescriptor",
+                "printedName": "SolidPostScript.GraphicsImageDescriptor",
+                "usr": "s:15SolidPostScript23GraphicsImageDescriptorV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDeviceRenderingSnapshot",
+                "printedName": "SolidPostScript.GraphicsDeviceRenderingSnapshot",
+                "usr": "s:15SolidPostScript31GraphicsDeviceRenderingSnapshotV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC18makeImageConverter3for15deviceRenderingAA0defiJ0C0abC00eI10DescriptorV_AI0e6DeviceM8SnapshotVtKF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE12ColorSessionC18makeImageConverter3for15deviceRenderingAA0defiJ0C0abC00eI10DescriptorV_AI0e6DeviceM8SnapshotVtKF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "Final"
+            ],
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "ImageConverter",
+            "printedName": "ImageConverter",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsColorImageConverter",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsColorImageConverter",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE19ColorImageConverterC"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC14ImageConvertera",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE12ColorSessionC14ImageConvertera",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "implicit": true
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "ResolvedPaint",
+            "printedName": "ResolvedPaint",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CGColor",
+                "printedName": "CoreGraphics.CGColor",
+                "usr": "c:@T@CGColorRef"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC13ResolvedPainta",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE12ColorSessionC13ResolvedPainta",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "implicit": true
+          }
+        ],
+        "declKind": "Class",
+        "usr": "s:27SolidPostScriptCoreGraphics0dE12ColorSessionC",
+        "mangledName": "$s27SolidPostScriptCoreGraphics0dE12ColorSessionC",
+        "moduleName": "SolidPostScriptCoreGraphics",
+        "declAttributes": [
+          "Final"
+        ],
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "GraphicsColorSession",
+            "printedName": "GraphicsColorSession",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "ResolvedPaint",
+                "printedName": "ResolvedPaint",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CGColor",
+                    "printedName": "CoreGraphics.CGColor",
+                    "usr": "c:@T@CGColorRef"
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "ImageConverter",
+                "printedName": "ImageConverter",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CoreGraphicsColorImageConverter",
+                    "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsColorImageConverter",
+                    "usr": "s:27SolidPostScriptCoreGraphics0dE19ColorImageConverterC"
+                  }
+                ]
+              }
+            ],
+            "usr": "s:15SolidPostScript20GraphicsColorSessionP",
+            "mangledName": "$s15SolidPostScript20GraphicsColorSessionP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "CoreGraphicsCompatibleColorSession",
+            "printedName": "CoreGraphicsCompatibleColorSession",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE22CompatibleColorSessionP",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE22CompatibleColorSessionP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "CoreGraphicsColorImageConverter",
+        "printedName": "CoreGraphicsColorImageConverter",
+        "children": [
+          {
+            "kind": "Function",
+            "name": "write",
+            "printedName": "write(_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsImageRows",
+                "printedName": "SolidPostScript.GraphicsImageRows",
+                "usr": "s:15SolidPostScript17GraphicsImageRowsV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE19ColorImageConverterC5writeyy0abC00eG4RowsVKF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE19ColorImageConverterC5writeyy0abC00eG4RowsVKF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "Final"
+            ],
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "finish",
+            "printedName": "finish()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CGImage",
+                "printedName": "CoreGraphics.CGImage",
+                "usr": "c:@T@CGImageRef"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE19ColorImageConverterC6finishSo10CGImageRefayKF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE19ColorImageConverterC6finishSo10CGImageRefayKF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "Final"
+            ],
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "abort",
+            "printedName": "abort()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE19ColorImageConverterC5abortyyF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE19ColorImageConverterC5abortyyF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "Final"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "ResolvedImage",
+            "printedName": "ResolvedImage",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CGImage",
+                "printedName": "CoreGraphics.CGImage",
+                "usr": "c:@T@CGImageRef"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE19ColorImageConverterC08ResolvedG0a",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE19ColorImageConverterC08ResolvedG0a",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "implicit": true
+          }
+        ],
+        "declKind": "Class",
+        "usr": "s:27SolidPostScriptCoreGraphics0dE19ColorImageConverterC",
+        "mangledName": "$s27SolidPostScriptCoreGraphics0dE19ColorImageConverterC",
+        "moduleName": "SolidPostScriptCoreGraphics",
+        "declAttributes": [
+          "Final"
+        ],
+        "hasMissingDesignatedInitializers": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "GraphicsColorImageConverter",
+            "printedName": "GraphicsColorImageConverter",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "ResolvedImage",
+                "printedName": "ResolvedImage",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CGImage",
+                    "printedName": "CoreGraphics.CGImage",
+                    "usr": "c:@T@CGImageRef"
+                  }
+                ]
+              }
+            ],
+            "usr": "s:15SolidPostScript27GraphicsColorImageConverterP",
+            "mangledName": "$s15SolidPostScript27GraphicsColorImageConverterP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "CoreGraphicsDeviceRenderingEngine",
+        "printedName": "CoreGraphicsDeviceRenderingEngine",
+        "children": [
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsDeviceRenderingEngine",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingEngine",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineV"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineVACycfc",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineVACycfc",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "makeSession",
+            "printedName": "makeSession(for:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsDeviceRenderingSession",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingSession",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDeviceDescriptor",
+                "printedName": "SolidPostScript.GraphicsDeviceDescriptor",
+                "usr": "s:15SolidPostScript24GraphicsDeviceDescriptorV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineV11makeSession3forAA0defgJ0C0abC00eF10DescriptorV_tF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineV11makeSession3forAA0defgJ0C0abC00eF10DescriptorV_tF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "Session",
+            "printedName": "Session",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsDeviceRenderingSession",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingSession",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineV7Sessiona",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineV7Sessiona",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "implicit": true
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineV",
+        "mangledName": "$s27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineV",
+        "moduleName": "SolidPostScriptCoreGraphics",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "GraphicsDeviceRenderingEngine",
+            "printedName": "GraphicsDeviceRenderingEngine",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "Session",
+                "printedName": "Session",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CoreGraphicsDeviceRenderingSession",
+                    "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingSession",
+                    "usr": "s:27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC"
+                  }
+                ]
+              }
+            ],
+            "usr": "s:15SolidPostScript29GraphicsDeviceRenderingEngineP",
+            "mangledName": "$s15SolidPostScript29GraphicsDeviceRenderingEngineP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "CoreGraphicsDeviceRenderingSession",
+        "printedName": "CoreGraphicsDeviceRenderingSession",
+        "children": [
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsDeviceRenderingSession",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingSession",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionCACycfc",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionCACycfc",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "resolve",
+            "printedName": "resolve(_:for:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDeviceRenderingSnapshot",
+                "printedName": "SolidPostScript.GraphicsDeviceRenderingSnapshot",
+                "usr": "s:15SolidPostScript31GraphicsDeviceRenderingSnapshotV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDeviceRenderingSnapshot",
+                "printedName": "SolidPostScript.GraphicsDeviceRenderingSnapshot",
+                "usr": "s:15SolidPostScript31GraphicsDeviceRenderingSnapshotV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDeviceDescriptor",
+                "printedName": "SolidPostScript.GraphicsDeviceDescriptor",
+                "usr": "s:15SolidPostScript24GraphicsDeviceDescriptorV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC7resolve_3for0abC00efG8SnapshotVAH_AF0eF10DescriptorVtF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC7resolve_3for0abC00efG8SnapshotVAH_AF0eF10DescriptorVtF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "Final"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "ResolvedProgram",
+            "printedName": "ResolvedProgram",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDeviceRenderingSnapshot",
+                "printedName": "SolidPostScript.GraphicsDeviceRenderingSnapshot",
+                "usr": "s:15SolidPostScript31GraphicsDeviceRenderingSnapshotV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC15ResolvedPrograma",
+            "mangledName": "$s27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC15ResolvedPrograma",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "implicit": true
+          }
+        ],
+        "declKind": "Class",
+        "usr": "s:27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC",
+        "mangledName": "$s27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC",
+        "moduleName": "SolidPostScriptCoreGraphics",
+        "declAttributes": [
+          "Final"
+        ],
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "GraphicsDeviceRenderingSession",
+            "printedName": "GraphicsDeviceRenderingSession",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "ResolvedProgram",
+                "printedName": "ResolvedProgram",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsDeviceRenderingSnapshot",
+                    "printedName": "SolidPostScript.GraphicsDeviceRenderingSnapshot",
+                    "usr": "s:15SolidPostScript31GraphicsDeviceRenderingSnapshotV"
+                  }
+                ]
+              }
+            ],
+            "usr": "s:15SolidPostScript30GraphicsDeviceRenderingSessionP",
+            "mangledName": "$s15SolidPostScript30GraphicsDeviceRenderingSessionP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "ColorManagedCoreGraphicsImageTarget",
+        "printedName": "ColorManagedCoreGraphicsImageTarget",
+        "children": [
+          {
+            "kind": "TypeAlias",
+            "name": "PageOutput",
+            "printedName": "PageOutput",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CGImage",
+                "printedName": "CoreGraphics.CGImage",
+                "usr": "c:@T@CGImageRef"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10PageOutputa",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10PageOutputa",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "Output",
+            "printedName": "Output",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[CoreGraphics.CGImage]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CGImage",
+                    "printedName": "CoreGraphics.CGImage",
+                    "usr": "c:@T@CGImageRef"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV6Outputa",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV6Outputa",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "DeviceRenderingEngine",
+            "printedName": "DeviceRenderingEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsDeviceRenderingEngine",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingEngine",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV21DeviceRenderingEnginea",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV21DeviceRenderingEnginea",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "FontEngine",
+            "printedName": "FontEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreTextGraphicsFontEngine",
+                "printedName": "SolidPostScriptCoreText.CoreTextGraphicsFontEngine",
+                "usr": "s:23SolidPostScriptCoreText0dE18GraphicsFontEngineV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10FontEnginea",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10FontEnginea",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>"
+          },
+          {
+            "kind": "TypeDecl",
+            "name": "Renderer",
+            "printedName": "Renderer",
+            "children": [
+              {
+                "kind": "TypeAlias",
+                "name": "PageOutput",
+                "printedName": "PageOutput",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CGImage",
+                    "printedName": "CoreGraphics.CGImage",
+                    "usr": "c:@T@CGImageRef"
+                  }
+                ],
+                "declKind": "TypeAlias",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC10PageOutputa",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC10PageOutputa",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>"
+              },
+              {
+                "kind": "TypeAlias",
+                "name": "Output",
+                "printedName": "Output",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[CoreGraphics.CGImage]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "CGImage",
+                        "printedName": "CoreGraphics.CGImage",
+                        "usr": "c:@T@CGImageRef"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "TypeAlias",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC6Outputa",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC6Outputa",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>"
+              },
+              {
+                "kind": "TypeAlias",
+                "name": "ColorSession",
+                "printedName": "ColorSession",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "DependentMember",
+                    "printedName": "ColorEngine.Session"
+                  }
+                ],
+                "declKind": "TypeAlias",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC0F7Sessiona",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC0F7Sessiona",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>"
+              },
+              {
+                "kind": "TypeAlias",
+                "name": "DeviceRenderingSession",
+                "printedName": "DeviceRenderingSession",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CoreGraphicsDeviceRenderingSession",
+                    "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingSession",
+                    "usr": "s:27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC"
+                  }
+                ],
+                "declKind": "TypeAlias",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC22DeviceRenderingSessiona",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC22DeviceRenderingSessiona",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>"
+              },
+              {
+                "kind": "TypeAlias",
+                "name": "FontSession",
+                "printedName": "FontSession",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CoreTextGraphicsFontSession",
+                    "printedName": "SolidPostScriptCoreText.CoreTextGraphicsFontSession",
+                    "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionC"
+                  }
+                ],
+                "declKind": "TypeAlias",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC11FontSessiona",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC11FontSessiona",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>"
+              },
+              {
+                "kind": "Var",
+                "name": "pages",
+                "printedName": "pages",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[CoreGraphics.CGImage]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "CGImage",
+                        "printedName": "CoreGraphics.CGImage",
+                        "usr": "c:@T@CGImageRef"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Var",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC5pagesSaySo10CGImageRefaGvp",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC5pagesSaySo10CGImageRefaGvp",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "declAttributes": [
+                  "HasInitialValue",
+                  "Final",
+                  "SetterAccess",
+                  "HasStorage"
+                ],
+                "hasStorage": true,
+                "accessors": [
+                  {
+                    "kind": "Accessor",
+                    "name": "Get",
+                    "printedName": "Get()",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Array",
+                        "printedName": "[CoreGraphics.CGImage]",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "CGImage",
+                            "printedName": "CoreGraphics.CGImage",
+                            "usr": "c:@T@CGImageRef"
+                          }
+                        ],
+                        "usr": "s:Sa"
+                      }
+                    ],
+                    "declKind": "Accessor",
+                    "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC5pagesSaySo10CGImageRefaGvg",
+                    "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC5pagesSaySo10CGImageRefaGvg",
+                    "moduleName": "SolidPostScriptCoreGraphics",
+                    "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                    "implicit": true,
+                    "declAttributes": [
+                      "Final",
+                      "Transparent"
+                    ],
+                    "accessorKind": "get"
+                  }
+                ]
+              },
+              {
+                "kind": "Function",
+                "name": "process",
+                "printedName": "process(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsEvent",
+                    "printedName": "SolidPostScript.GraphicsEvent",
+                    "usr": "s:15SolidPostScript13GraphicsEventV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC7processyy0abC00E5EventVKF",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC7processyy0abC00E5EventVKF",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "beginImage",
+                "printedName": "beginImage(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsEvent",
+                    "printedName": "SolidPostScript.GraphicsEvent",
+                    "usr": "s:15SolidPostScript13GraphicsEventV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC05beginH0yy0abC00E5EventVKF",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC05beginH0yy0abC00E5EventVKF",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "writeImageRows",
+                "printedName": "writeImageRows(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsImageRows",
+                    "printedName": "SolidPostScript.GraphicsImageRows",
+                    "usr": "s:15SolidPostScript17GraphicsImageRowsV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC05writeH4Rowsyy0abC00ehL0VKF",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC05writeH4Rowsyy0abC00ehL0VKF",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "writeImageMaskRows",
+                "printedName": "writeImageMaskRows(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsImageMaskRows",
+                    "printedName": "SolidPostScript.GraphicsImageMaskRows",
+                    "usr": "s:15SolidPostScript21GraphicsImageMaskRowsV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC05writeH8MaskRowsyy0abC00ehlM0VKF",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC05writeH8MaskRowsyy0abC00ehlM0VKF",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "endImage",
+                "printedName": "endImage()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC03endH0yyKF",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC03endH0yyKF",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "abortImage",
+                "printedName": "abortImage()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC05abortH0yyF",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC05abortH0yyF",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "declAttributes": [
+                  "Final"
+                ],
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "installStorageAccounting",
+                "printedName": "installStorageAccounting(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsStorageAccountingSession",
+                    "printedName": "SolidPostScript.GraphicsStorageAccountingSession",
+                    "usr": "s:15SolidPostScript32GraphicsStorageAccountingSessionC"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC24installStorageAccountingyy0abC00elM7SessionCF",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC24installStorageAccountingyy0abC00elM7SessionCF",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "declAttributes": [
+                  "Final"
+                ],
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "activateDevice",
+                "printedName": "activateDevice(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsDeviceSnapshot",
+                    "printedName": "SolidPostScript.GraphicsDeviceSnapshot",
+                    "usr": "s:15SolidPostScript22GraphicsDeviceSnapshotV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC14activateDeviceyy0abC00eL8SnapshotVKF",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC14activateDeviceyy0abC00eL8SnapshotVKF",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "deactivateDevice",
+                "printedName": "deactivateDevice(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsDeviceSnapshot",
+                    "printedName": "SolidPostScript.GraphicsDeviceSnapshot",
+                    "usr": "s:15SolidPostScript22GraphicsDeviceSnapshotV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC16deactivateDeviceyy0abC00eL8SnapshotVF",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC16deactivateDeviceyy0abC00eL8SnapshotVF",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "declAttributes": [
+                  "Final"
+                ],
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "transmitPage",
+                "printedName": "transmitPage(_:copies:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsEvent",
+                    "printedName": "SolidPostScript.GraphicsEvent",
+                    "usr": "s:15SolidPostScript13GraphicsEventV"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC12transmitPage_6copiesy0abC00E5EventV_SitKF",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC12transmitPage_6copiesy0abC00E5EventV_SitKF",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "finish",
+                "printedName": "finish()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[CoreGraphics.CGImage]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "CGImage",
+                        "printedName": "CoreGraphics.CGImage",
+                        "usr": "c:@T@CGImageRef"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC6finishSaySo10CGImageRefaGyF",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC6finishSaySo10CGImageRefaGyF",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "declAttributes": [
+                  "Final"
+                ],
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "abort",
+                "printedName": "abort()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC5abortyyF",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC5abortyyF",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "declAttributes": [
+                  "Final"
+                ],
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "TypeAlias",
+                "name": "TrappingSession",
+                "printedName": "TrappingSession",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SemanticGraphicsTrappingSession",
+                    "printedName": "SolidPostScript.SemanticGraphicsTrappingSession",
+                    "usr": "s:15SolidPostScript31SemanticGraphicsTrappingSessionC"
+                  }
+                ],
+                "declKind": "TypeAlias",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC15TrappingSessiona",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC15TrappingSessiona",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "implicit": true
+              }
+            ],
+            "declKind": "Class",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+            "declAttributes": [
+              "Final"
+            ],
+            "hasMissingDesignatedInitializers": true,
+            "conformances": [
+              {
+                "kind": "Conformance",
+                "name": "GraphicsEventConsumer",
+                "printedName": "GraphicsEventConsumer",
+                "usr": "s:15SolidPostScript21GraphicsEventConsumerP",
+                "mangledName": "$s15SolidPostScript21GraphicsEventConsumerP"
+              },
+              {
+                "kind": "Conformance",
+                "name": "GraphicsRenderer",
+                "printedName": "GraphicsRenderer",
+                "children": [
+                  {
+                    "kind": "TypeWitness",
+                    "name": "PageOutput",
+                    "printedName": "PageOutput",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "PageOutput",
+                        "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.Renderer.PageOutput",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "CGImage",
+                            "printedName": "CoreGraphics.CGImage",
+                            "usr": "c:@T@CGImageRef"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeWitness",
+                    "name": "Output",
+                    "printedName": "Output",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "Output",
+                        "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.Renderer.Output",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Array",
+                            "printedName": "[CoreGraphics.CGImage]",
+                            "children": [
+                              {
+                                "kind": "TypeNominal",
+                                "name": "CGImage",
+                                "printedName": "CoreGraphics.CGImage",
+                                "usr": "c:@T@CGImageRef"
+                              }
+                            ],
+                            "usr": "s:Sa"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeWitness",
+                    "name": "ColorSession",
+                    "printedName": "ColorSession",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "ColorSession",
+                        "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.Renderer.ColorSession",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "DependentMember",
+                            "printedName": "ColorEngine.Session"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeWitness",
+                    "name": "DeviceRenderingSession",
+                    "printedName": "DeviceRenderingSession",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "DeviceRenderingSession",
+                        "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.Renderer.DeviceRenderingSession",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "CoreGraphicsDeviceRenderingSession",
+                            "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingSession",
+                            "usr": "s:27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeWitness",
+                    "name": "FontSession",
+                    "printedName": "FontSession",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "FontSession",
+                        "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.Renderer.FontSession",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "CoreTextGraphicsFontSession",
+                            "printedName": "SolidPostScriptCoreText.CoreTextGraphicsFontSession",
+                            "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionC"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeWitness",
+                    "name": "TrappingSession",
+                    "printedName": "TrappingSession",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "SemanticGraphicsTrappingSession",
+                        "printedName": "SolidPostScript.SemanticGraphicsTrappingSession",
+                        "usr": "s:15SolidPostScript31SemanticGraphicsTrappingSessionC"
+                      }
+                    ]
+                  }
+                ],
+                "usr": "s:15SolidPostScript16GraphicsRendererP",
+                "mangledName": "$s15SolidPostScript16GraphicsRendererP"
+              },
+              {
+                "kind": "Conformance",
+                "name": "Copyable",
+                "printedName": "Copyable",
+                "usr": "s:s8CopyableP",
+                "mangledName": "$ss8CopyableP"
+              },
+              {
+                "kind": "Conformance",
+                "name": "Escapable",
+                "printedName": "Escapable",
+                "usr": "s:s9EscapableP",
+                "mangledName": "$ss9EscapableP"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "deviceDescriptor",
+            "printedName": "deviceDescriptor",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDeviceDescriptor",
+                "printedName": "SolidPostScript.GraphicsDeviceDescriptor",
+                "usr": "s:15SolidPostScript24GraphicsDeviceDescriptorV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV16deviceDescriptor0abC00e6DeviceK0Vvp",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV16deviceDescriptor0abC00e6DeviceK0Vvp",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsDeviceDescriptor",
+                    "printedName": "SolidPostScript.GraphicsDeviceDescriptor",
+                    "usr": "s:15SolidPostScript24GraphicsDeviceDescriptorV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV16deviceDescriptor0abC00e6DeviceK0Vvg",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV16deviceDescriptor0abC00e6DeviceK0Vvg",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "pixelWidth",
+            "printedName": "pixelWidth",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10pixelWidthSivp",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10pixelWidthSivp",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10pixelWidthSivg",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10pixelWidthSivg",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "pixelHeight",
+            "printedName": "pixelHeight",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV11pixelHeightSivp",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV11pixelHeightSivp",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV11pixelHeightSivg",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV11pixelHeightSivg",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "colorEngine",
+            "printedName": "colorEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GenericTypeParam",
+                "printedName": "ColorEngine"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV11colorEnginexvp",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV11colorEnginexvp",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GenericTypeParam",
+                    "printedName": "ColorEngine"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV11colorEnginexvg",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV11colorEnginexvg",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "deviceRenderingEngine",
+            "printedName": "deviceRenderingEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsDeviceRenderingEngine",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingEngine",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV21deviceRenderingEngineAA0de6DevicekL0Vvp",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV21deviceRenderingEngineAA0de6DevicekL0Vvp",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CoreGraphicsDeviceRenderingEngine",
+                    "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingEngine",
+                    "usr": "s:27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV21deviceRenderingEngineAA0de6DevicekL0Vvg",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV21deviceRenderingEngineAA0de6DevicekL0Vvg",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "fontEngine",
+            "printedName": "fontEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreTextGraphicsFontEngine",
+                "printedName": "SolidPostScriptCoreText.CoreTextGraphicsFontEngine",
+                "usr": "s:23SolidPostScriptCoreText0dE18GraphicsFontEngineV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10fontEngine0abcD4Text0dle4FontK0Vvp",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10fontEngine0abcD4Text0dle4FontK0Vvp",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "CoreTextGraphicsFontEngine",
+                    "printedName": "SolidPostScriptCoreText.CoreTextGraphicsFontEngine",
+                    "usr": "s:23SolidPostScriptCoreText0dE18GraphicsFontEngineV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10fontEngine0abcD4Text0dle4FontK0Vvg",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10fontEngine0abcD4Text0dle4FontK0Vvg",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "pageDeviceProvider",
+            "printedName": "pageDeviceProvider",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "StandardGraphicsPageDeviceProvider",
+                "printedName": "SolidPostScript.StandardGraphicsPageDeviceProvider",
+                "usr": "s:15SolidPostScript34StandardGraphicsPageDeviceProviderV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV18pageDeviceProvider0abC008Standarde4PagekL0Vvp",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV18pageDeviceProvider0abC008Standarde4PagekL0Vvp",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "StandardGraphicsPageDeviceProvider",
+                    "printedName": "SolidPostScript.StandardGraphicsPageDeviceProvider",
+                    "usr": "s:15SolidPostScript34StandardGraphicsPageDeviceProviderV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV18pageDeviceProvider0abC008Standarde4PagekL0Vvg",
+                "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV18pageDeviceProvider0abC008Standarde4PagekL0Vvg",
+                "moduleName": "SolidPostScriptCoreGraphics",
+                "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(pixelWidth:pixelHeight:resolution:imageableBounds:colorEngine:pageDeviceMode:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "ColorManagedCoreGraphicsImageTarget",
+                "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GenericTypeParam",
+                    "printedName": "ColorEngine"
+                  }
+                ],
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Double",
+                "printedName": "Swift.Double",
+                "hasDefaultArg": true,
+                "usr": "s:Sd"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsRect?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsRect",
+                    "printedName": "SolidPostScript.GraphicsRect",
+                    "usr": "s:15SolidPostScript12GraphicsRectV"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GenericTypeParam",
+                "printedName": "ColorEngine"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsPageDeviceMode",
+                "printedName": "SolidPostScript.GraphicsPageDeviceMode",
+                "hasDefaultArg": true,
+                "usr": "s:15SolidPostScript22GraphicsPageDeviceModeO"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10pixelWidth0J6Height10resolution15imageableBounds11colorEngine14pageDeviceModeACyxGSi_SiSd0abC00E4RectVSgxAK0e4PagesT0Otcfc",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV10pixelWidth0J6Height10resolution15imageableBounds11colorEngine14pageDeviceModeACyxGSi_SiSd0abC00E4RectVSgxAK0e4PagesT0Otcfc",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "makeRenderer",
+            "printedName": "makeRenderer()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Renderer",
+                "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.Renderer",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV12makeRendererAC0K0Cyx_GyKF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV12makeRendererAC0K0Cyx_GyKF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "makeRenderer",
+            "printedName": "makeRenderer(colorSession:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Renderer",
+                "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.Renderer",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "DependentMember",
+                "printedName": "ColorEngine.Session",
+                "paramValueOwnership": "Owned"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV12makeRenderer12colorSessionAC0K0Cyx_G0M0Qzn_tKF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV12makeRenderer12colorSessionAC0K0Cyx_G0M0Qzn_tKF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "makeRenderer",
+            "printedName": "makeRenderer(colorSession:deviceRenderingSession:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Renderer",
+                "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.Renderer",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "DependentMember",
+                "printedName": "ColorEngine.Session",
+                "paramValueOwnership": "Owned"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsDeviceRenderingSession",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingSession",
+                "paramValueOwnership": "Owned",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV12makeRenderer12colorSession015deviceRenderingM0AC0K0Cyx_G0M0Qzn_AA0de6DeviceoM0CntKF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV12makeRenderer12colorSession015deviceRenderingM0AC0K0Cyx_G0M0Qzn_AA0de6DeviceoM0CntKF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "makeRenderer",
+            "printedName": "makeRenderer(colorSession:deviceRenderingSession:fontSession:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Renderer",
+                "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.Renderer",
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "DependentMember",
+                "printedName": "ColorEngine.Session",
+                "paramValueOwnership": "Owned"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsDeviceRenderingSession",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingSession",
+                "paramValueOwnership": "Owned",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE22DeviceRenderingSessionC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "CoreTextGraphicsFontSession",
+                "printedName": "SolidPostScriptCoreText.CoreTextGraphicsFontSession",
+                "paramValueOwnership": "Owned",
+                "usr": "s:23SolidPostScriptCoreText0dE19GraphicsFontSessionC"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV12makeRenderer12colorSession015deviceRenderingM004fontM0AC0K0Cyx_G0M0Qzn_AA0de6DeviceoM0Cn0abcD4Text0dre4FontM0CntKF",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV12makeRenderer12colorSession015deviceRenderingM004fontM0AC0K0Cyx_G0M0Qzn_AA0de6DeviceoM0Cn0abcD4Text0dre4FontM0CntKF",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "ColorEngine",
+            "printedName": "ColorEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GenericTypeParam",
+                "printedName": "ColorEngine"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV0F6Enginea",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV0F6Enginea",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+            "implicit": true
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "PageDeviceProvider",
+            "printedName": "PageDeviceProvider",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "StandardGraphicsPageDeviceProvider",
+                "printedName": "SolidPostScript.StandardGraphicsPageDeviceProvider",
+                "usr": "s:15SolidPostScript34StandardGraphicsPageDeviceProviderV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV18PageDeviceProvidera",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV18PageDeviceProvidera",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+            "implicit": true
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "TrappingEngine",
+            "printedName": "TrappingEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SemanticGraphicsTrappingEngine",
+                "printedName": "SolidPostScript.SemanticGraphicsTrappingEngine",
+                "usr": "s:15SolidPostScript30SemanticGraphicsTrappingEngineV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV14TrappingEnginea",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV14TrappingEnginea",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+            "implicit": true
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(pixelWidth:pixelHeight:resolution:imageableBounds:destinationColorSpace:pageDeviceMode:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "ColorManagedCoreGraphicsImageTarget",
+                "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GenericTypeParam",
+                    "printedName": "ColorEngine"
+                  }
+                ],
+                "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Double",
+                "printedName": "Swift.Double",
+                "hasDefaultArg": true,
+                "usr": "s:Sd"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsRect?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsRect",
+                    "printedName": "SolidPostScript.GraphicsRect",
+                    "usr": "s:15SolidPostScript12GraphicsRectV"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "CGColorSpace",
+                "printedName": "CoreGraphics.CGColorSpace",
+                "hasDefaultArg": true,
+                "usr": "c:@T@CGColorSpaceRef"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsPageDeviceMode",
+                "printedName": "SolidPostScript.GraphicsPageDeviceMode",
+                "hasDefaultArg": true,
+                "usr": "s:15SolidPostScript22GraphicsPageDeviceModeO"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetVA2A0deF6EngineVRszrlE10pixelWidth0K6Height10resolution15imageableBounds011destinationF5Space14pageDeviceModeACyAEGSi_SiSd0abC00E4RectVSgSo07CGColorR3RefaAM0e4PagetU0Otcfc",
+            "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetVA2A0deF6EngineVRszrlE10pixelWidth0K6Height10resolution15imageableBounds011destinationF5Space14pageDeviceModeACyAEGSi_SiSd0abC00E4RectVSgSo07CGColorR3RefaAM0e4PagetU0Otcfc",
+            "moduleName": "SolidPostScriptCoreGraphics",
+            "genericSig": "<ColorEngine where ColorEngine == SolidPostScriptCoreGraphics.CoreGraphicsColorEngine>",
+            "isFromExtension": true,
+            "init_kind": "Designated"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV",
+        "mangledName": "$s27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV",
+        "moduleName": "SolidPostScriptCoreGraphics",
+        "genericSig": "<ColorEngine where ColorEngine : SolidPostScript.GraphicsColorEngine, ColorEngine.Session : SolidPostScriptCoreGraphics.CoreGraphicsCompatibleColorSession>",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "GraphicsTarget",
+            "printedName": "GraphicsTarget",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "PageOutput",
+                "printedName": "PageOutput",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "PageOutput",
+                    "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.PageOutput",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "CGImage",
+                        "printedName": "CoreGraphics.CGImage",
+                        "usr": "c:@T@CGImageRef"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "Output",
+                "printedName": "Output",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "Output",
+                    "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.Output",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Array",
+                        "printedName": "[CoreGraphics.CGImage]",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "CGImage",
+                            "printedName": "CoreGraphics.CGImage",
+                            "usr": "c:@T@CGImageRef"
+                          }
+                        ],
+                        "usr": "s:Sa"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "ColorEngine",
+                "printedName": "ColorEngine",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GenericTypeParam",
+                    "printedName": "ColorEngine"
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "DeviceRenderingEngine",
+                "printedName": "DeviceRenderingEngine",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "DeviceRenderingEngine",
+                    "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.DeviceRenderingEngine",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "CoreGraphicsDeviceRenderingEngine",
+                        "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsDeviceRenderingEngine",
+                        "usr": "s:27SolidPostScriptCoreGraphics0dE21DeviceRenderingEngineV"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "FontEngine",
+                "printedName": "FontEngine",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "FontEngine",
+                    "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.FontEngine",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "CoreTextGraphicsFontEngine",
+                        "printedName": "SolidPostScriptCoreText.CoreTextGraphicsFontEngine",
+                        "usr": "s:23SolidPostScriptCoreText0dE18GraphicsFontEngineV"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "TrappingEngine",
+                "printedName": "TrappingEngine",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SemanticGraphicsTrappingEngine",
+                    "printedName": "SolidPostScript.SemanticGraphicsTrappingEngine",
+                    "usr": "s:15SolidPostScript30SemanticGraphicsTrappingEngineV"
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "PageDeviceProvider",
+                "printedName": "PageDeviceProvider",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "StandardGraphicsPageDeviceProvider",
+                    "printedName": "SolidPostScript.StandardGraphicsPageDeviceProvider",
+                    "usr": "s:15SolidPostScript34StandardGraphicsPageDeviceProviderV"
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "Renderer",
+                "printedName": "Renderer",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Renderer",
+                    "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<ColorEngine>.Renderer",
+                    "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV8RendererC"
+                  }
+                ]
+              }
+            ],
+            "usr": "s:15SolidPostScript14GraphicsTargetP",
+            "mangledName": "$s15SolidPostScript14GraphicsTargetP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeAlias",
+        "name": "CoreGraphicsImageTarget",
+        "printedName": "CoreGraphicsImageTarget",
+        "children": [
+          {
+            "kind": "TypeNominal",
+            "name": "ColorManagedCoreGraphicsImageTarget",
+            "printedName": "SolidPostScriptCoreGraphics.ColorManagedCoreGraphicsImageTarget<SolidPostScriptCoreGraphics.CoreGraphicsColorEngine>",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "CoreGraphicsColorEngine",
+                "printedName": "SolidPostScriptCoreGraphics.CoreGraphicsColorEngine",
+                "usr": "s:27SolidPostScriptCoreGraphics0dE11ColorEngineV"
+              }
+            ],
+            "usr": "s:27SolidPostScriptCoreGraphics012ColorManageddE11ImageTargetV"
+          }
+        ],
+        "declKind": "TypeAlias",
+        "usr": "s:27SolidPostScriptCoreGraphics0dE11ImageTargeta",
+        "mangledName": "$s27SolidPostScriptCoreGraphics0dE11ImageTargeta",
+        "moduleName": "SolidPostScriptCoreGraphics"
+      }
+    ],
+    "json_format_version": 8
+  }
+}

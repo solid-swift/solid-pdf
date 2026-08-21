@@ -5,7 +5,15 @@ import Synchronization
 
 /// Shared system and device state for one PostScript interpreter environment.
 public final class InterpreterEnvironment: Sendable {
-  let state = Mutex(SystemParameterState())
+  private struct PersistentJobState: Sendable {
+    var nextToken: UInt64 = 0
+    var activeTokens: Set<UInt64> = []
+    var factoryDefaultsArmedBy: UInt64?
+  }
+
+  let state: Mutex<SystemParameterState>
+  private let persistenceGeneration: Mutex<UInt64?>
+  private let persistentJobs = Mutex(PersistentJobState())
   let globalVMAllocationSpace: VMAllocationSpace
   let nameTable: NameTable
   private let globalResources = Mutex(ResourceStore())
@@ -16,12 +24,26 @@ public final class InterpreterEnvironment: Sendable {
   let standardError: StandardOutputChannel
   let standardErrorFile: StandardOutputFile
   let monotonicInstantSource: any MonotonicInstantSource
+  let userPathCache = UserPathCache()
+  let patternCache = PatternCache()
+  let formCache = FormCache()
+  let screenManager = ScreenManager()
+  let fontManager: FontManager
+  let globalFontDirectory: Object
+  let standardEncoding: Object
+  let isoLatin1Encoding: Object
+  let formInitializationRegistry = FormInitializationRegistry()
+  let graphicsStorageLedger = GraphicsStorageLedger()
+  let graphicsResourceIdentities = GraphicsResourceIdentityAllocator()
 
   /// The application integration used by this environment.
   public let hostConfiguration: InterpreterHostConfiguration
 
   /// The file devices available to contexts created in this environment.
   public let fileDevices: FileDevices
+
+  /// Font-resource providers consulted in declaration order after in-VM resources.
+  public let fontProviders: [any FontResourceProvider]
 
   /// Creates an interpreter environment with file devices and optional resource-category overrides.
   ///
@@ -30,12 +52,14 @@ public final class InterpreterEnvironment: Sendable {
   ///   - resourceCategories: Category providers that augment or replace the standard registry.
   public convenience init(
     fileDevices: FileDevices = FileDevices(),
-    resourceCategories: [Object: any ResourceCategory] = [:]
+    resourceCategories: [Object: any ResourceCategory] = [:],
+    fontProviders: [any FontResourceProvider] = []
   ) {
     self.init(
       hostConfiguration: InterpreterHostConfiguration(),
       fileDevices: fileDevices,
-      resourceCategories: resourceCategories
+      resourceCategories: resourceCategories,
+      fontProviders: fontProviders
     )
   }
 
@@ -46,12 +70,14 @@ public final class InterpreterEnvironment: Sendable {
   public convenience init(
     standardOutput: any Sink,
     fileDevices: FileDevices = FileDevices(),
-    resourceCategories: [Object: any ResourceCategory] = [:]
+    resourceCategories: [Object: any ResourceCategory] = [:],
+    fontProviders: [any FontResourceProvider] = []
   ) {
     self.init(
       hostConfiguration: InterpreterHostConfiguration(standardOutput: standardOutput),
       fileDevices: fileDevices,
-      resourceCategories: resourceCategories
+      resourceCategories: resourceCategories,
+      fontProviders: fontProviders
     )
   }
 
@@ -59,12 +85,14 @@ public final class InterpreterEnvironment: Sendable {
   public convenience init(
     hostConfiguration: InterpreterHostConfiguration,
     fileDevices: FileDevices = FileDevices(),
-    resourceCategories: [Object: any ResourceCategory] = [:]
+    resourceCategories: [Object: any ResourceCategory] = [:],
+    fontProviders: [any FontResourceProvider] = []
   ) {
     self.init(
       hostConfiguration: hostConfiguration,
       fileDevices: fileDevices,
       resourceCategories: resourceCategories,
+      fontProviders: fontProviders,
       monotonicInstantSource: UptimeInstantSource.instance
     )
   }
@@ -73,8 +101,12 @@ public final class InterpreterEnvironment: Sendable {
     hostConfiguration: InterpreterHostConfiguration = InterpreterHostConfiguration(),
     fileDevices: FileDevices = FileDevices(),
     resourceCategories: [Object: any ResourceCategory] = [:],
+    fontProviders: [any FontResourceProvider] = [],
     monotonicInstantSource: any MonotonicInstantSource
   ) {
+    let persistent = Self.loadPersistentState(from: hostConfiguration.systemParameterStore)
+    self.state = Mutex(persistent.state)
+    self.persistenceGeneration = Mutex(persistent.generation)
     let globalVMAllocationSpace = VMAllocationSpace(vm: .global)
     self.globalVMAllocationSpace = globalVMAllocationSpace
     self.nameTable = NameTable(globalVM: globalVMAllocationSpace)
@@ -88,16 +120,66 @@ public final class InterpreterEnvironment: Sendable {
     self.standardError = standardError
     self.standardErrorFile = standardErrorFile
     self.monotonicInstantSource = monotonicInstantSource
+    self.fontProviders = fontProviders
+    self.fontManager = FontManager(providers: fontProviders)
+    self.globalFontDirectory = VMAllocationContext.$spaces.withValue(nil) {
+      try! Object.dictionary([:], access: .unlimited, vm: .global, kind: .literal)
+    }
+    self.standardEncoding = VMAllocationContext.$spaces.withValue(nil) { try! StandardEncodings.standard() }
+    self.isoLatin1Encoding = VMAllocationContext.$spaces.withValue(nil) { try! StandardEncodings.isoLatin1() }
     self.fileDevices = fileDevices
       .replacing(StandardInputFileDevice(channel: standardInput))
       .replacing(StandardOutputFileDevice(channel: standardOutput, deviceName: "stdout"))
       .replacing(StandardOutputFileDevice(channel: standardError, deviceName: "stderr", sharedFile: standardErrorFile))
     var categories = Resources.resources
     categories.merge(resourceCategories) { _, replacement in replacement }
+    if resourceCategories["FontType"] == nil {
+      var fontTypes: Set<Int32> = [0, 1, 2, 3, 9, 10, 32]
+      if fontProviders.contains(where: { $0.supportedAssetFormats.contains(.sfnt) }) {
+        fontTypes.formUnion([11, 42])
+      }
+      if fontProviders.contains(where: { $0.supportsChameleonFonts }) { fontTypes.insert(14) }
+      categories["FontType"] = IntegerImplicitResources(category: "FontType", values: fontTypes)
+    }
+    if resourceCategories["CIDFontType"] == nil {
+      var cidFontTypes: Set<Int32> = [0, 1, 4]
+      if fontProviders.contains(where: { $0.supportedAssetFormats.contains(.sfnt) }) {
+        cidFontTypes.insert(2)
+      }
+      categories["CIDFontType"] = IntegerImplicitResources(category: "CIDFontType", values: cidFontTypes)
+    }
     if resourceCategories["IODevice"] == nil {
       categories["IODevice"] = IODeviceResources(fileDevices: self.fileDevices)
     }
     self.resourceCategories = categories
+    applyRuntimeParameterLimits()
+  }
+
+  private static func loadPersistentState(
+    from store: any PostScriptSystemParameterStore
+  ) -> (state: SystemParameterState, generation: UInt64?) {
+    guard let record = try? store.load() else { return (SystemParameterState(), nil) }
+    guard var loaded = SystemParameterPersistence.decode(record.opaquePayload) else {
+      return (SystemParameterState(), record.generation)
+    }
+    guard loaded.values["FactoryDefaults"] == .boolean(true) else {
+      return (loaded, record.generation)
+    }
+
+    let pageCount = loaded.values["PageCount"] ?? .integer(0)
+    loaded = SystemParameterState()
+    loaded.values["PageCount"] = pageCount
+    guard let payload = try? SystemParameterPersistence.encode(loaded) else {
+      return (loaded, record.generation)
+    }
+    let nextGeneration = record.generation.addingReportingOverflow(1)
+    guard !nextGeneration.overflow else { return (loaded, record.generation) }
+    let next = PostScriptSystemParameterRecord(
+      generation: nextGeneration.partialValue,
+      opaquePayload: payload
+    )
+    let replaced = (try? store.compareAndReplace(expectedGeneration: record.generation, with: next)) == true
+    return (loaded, replaced ? next.generation : record.generation)
   }
 
   func startupProgram() async throws -> Data? {
@@ -164,6 +246,16 @@ public final class InterpreterEnvironment: Sendable {
         ResourceEntry(instance: generic, origin: .explicit, size: -1),
         for: .literalName("Generic"),
         in: .literalName("Category")
+      )
+      try initial.define(
+        ResourceEntry(instance: standardEncoding, origin: .explicit, size: -1),
+        for: .literalName("StandardEncoding"),
+        in: .literalName("Encoding")
+      )
+      try initial.define(
+        ResourceEntry(instance: isoLatin1Encoding, origin: .explicit, size: -1),
+        for: .literalName("ISOLatin1Encoding"),
+        in: .literalName("Encoding")
       )
       return initial
     }
@@ -240,7 +332,43 @@ public final class InterpreterEnvironment: Sendable {
   }
 
   func systemParameters() -> [String: ParameterValue] {
-    state.withLock { $0.currentValues }
+    var values = state.withLock { $0.currentValues }
+    let status = userPathCache.status()
+    values["CurUPathCache"] = .integer(Int32(clamping: status.bytes))
+    values["MaxUPathCache"] = .integer(Int32(clamping: status.maximumBytes))
+    let patternStatus = patternCache.status()
+    values["CurPatternCache"] = .integer(Int32(clamping: patternStatus.bytes))
+    values["MaxPatternCache"] = .integer(Int32(clamping: patternStatus.maximumBytes))
+    let formStatus = formCache.status()
+    values["CurFormCache"] = .integer(Int32(clamping: formStatus.bytes))
+    values["MaxFormCache"] = .integer(Int32(clamping: formStatus.maximumBytes))
+    let screenStatus = screenManager.status()
+    values["CurScreenStorage"] = .integer(Int32(clamping: screenStatus.activeBytes))
+    values["CurStoredScreenCache"] = .integer(Int32(clamping: screenStatus.cachedBytes))
+    values["MaxScreenStorage"] = .integer(Int32(clamping: screenStatus.maximumActiveBytes))
+    values["MaxStoredScreenCache"] = .integer(Int32(clamping: screenStatus.maximumCachedBytes))
+    let fontStatus = fontManager.glyphCache.status()
+    values["CurFontCache"] = .integer(Int32(clamping: fontStatus.bytes))
+    values["MaxFontCache"] = .integer(Int32(clamping: fontStatus.maximumBytes))
+    let outlineStatus = fontManager.outlineCache.status()
+    values["CurOutlineCache"] = .integer(Int32(clamping: outlineStatus.bytes))
+    values["MaxOutlineCache"] = .integer(Int32(clamping: outlineStatus.maximumBytes))
+    let graphicsStatus = graphicsStorageLedger.status()
+    values["CurDisplayList"] = .integer(Int32(clamping: graphicsStatus.displayBytes))
+    values["CurSourceList"] = .integer(Int32(clamping: graphicsStatus.sourceBytes))
+    values["MaxDisplayList"] = .integer(Int32(clamping: graphicsStatus.maximumDisplayBytes))
+    values["MaxSourceList"] = .integer(Int32(clamping: graphicsStatus.maximumSourceBytes))
+    values["MaxDisplayAndSourceList"] = .integer(Int32(clamping: graphicsStatus.maximumCombinedBytes))
+    values["MaxImageBuffer"] = .integer(Int32(clamping: graphicsStatus.maximumImageBufferBytes))
+    return values
+  }
+
+  func setFontCacheMaximum(_ requested: Int32, administrator: Bool) throws {
+    guard administrator else { throw Error.invalidAccess }
+    let maximum = min(max(requested, 0), Int32(FontGlyphCache.maximumBytes))
+    state.withLock { $0.values["MaxFontCache"] = .integer(maximum) }
+    fontManager.glyphCache.setMaximumBytes(Int(maximum))
+    persistCurrentState()
   }
 
   func systemString(_ name: String) -> String? {
@@ -252,7 +380,8 @@ public final class InterpreterEnvironment: Sendable {
 
   func updateSystemParameters(
     from dictionary: DictionaryValue,
-    administrator: Bool = false
+    administrator: Bool = false,
+    jobToken: UInt64? = nil
   ) throws {
     try dictionary.access.check(.read)
     var entries: [String: (key: Object, value: Object)] = [:]
@@ -264,6 +393,7 @@ public final class InterpreterEnvironment: Sendable {
     }
 
     let factoryOnly = Set(entries.keys).subtracting(["Password"]) == ["FactoryDefaults"]
+    var factoryDefaultsUpdate: Bool?
     try state.withLock { state in
       if !factoryOnly, !administrator, !state.systemPassword.isEmpty {
         let passwordKey = Object.literalName("Password")
@@ -311,16 +441,17 @@ public final class InterpreterEnvironment: Sendable {
       }
 
       if case .string(let printerName) = valueUpdates["PrinterName"], printerName.isEmpty {
-        valueUpdates["PrinterName"] = .string(Data("SolidPostScript".utf8))
+        valueUpdates["PrinterName"] = .string(Data(PostScriptProduct.name.utf8))
       }
 
       let maxDisplay = updatedInteger("MaxDisplayList", updates: valueUpdates, current: state.values)
       let maxSource = updatedInteger("MaxSourceList", updates: valueUpdates, current: state.values)
-      if let requestedCombined = updatedInteger(
+      let requestedCombined = updatedInteger(
         "MaxDisplayAndSourceList",
         updates: valueUpdates,
         current: state.values
-      ) {
+      )
+      if let requestedCombined {
         valueUpdates["MaxDisplayAndSourceList"] = .integer(max(requestedCombined, max(maxDisplay ?? 0, maxSource ?? 0)))
       }
 
@@ -328,7 +459,130 @@ public final class InterpreterEnvironment: Sendable {
       state.userDefaults.merge(defaultUpdates)
       if let nextSystemPassword { state.systemPassword = nextSystemPassword }
       if let nextStartJobPassword { state.startJobPassword = nextStartJobPassword }
+      if case .boolean(let value) = valueUpdates["FactoryDefaults"] {
+        factoryDefaultsUpdate = value
+      }
     }
+    if let factoryDefaultsUpdate {
+      persistentJobs.withLock { jobs in
+        jobs.factoryDefaultsArmedBy = factoryDefaultsUpdate ? (jobToken ?? 0) : nil
+      }
+    }
+    applyRuntimeParameterLimits()
+    persistCurrentState()
+  }
+
+  private func applyRuntimeParameterLimits() {
+    let maximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxUPathCache"] else { return 0 }
+      return value
+    }
+    userPathCache.setMaximumBytes(Int(maximum))
+    let patternMaximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxPatternCache"] else { return 0 }
+      return value
+    }
+    patternCache.setMaximumBytes(Int(patternMaximum))
+    let formMaximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxFormCache"] else { return 0 }
+      return value
+    }
+    formCache.setMaximumBytes(Int(formMaximum))
+    let screenMaximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxScreenStorage"] else { return 0 }
+      return value
+    }
+    screenManager.setMaximumActiveBytes(Int(screenMaximum))
+    let storedScreenMaximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxStoredScreenCache"] else { return 0 }
+      return value
+    }
+    screenManager.setMaximumCachedBytes(Int(storedScreenMaximum))
+    let fontMaximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxFontCache"] else { return 0 }
+      return value
+    }
+    fontManager.glyphCache.setMaximumBytes(Int(fontMaximum))
+    let outlineMaximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxOutlineCache"] else { return 0 }
+      return value
+    }
+    fontManager.outlineCache.setMaximumBytes(Int(outlineMaximum))
+    let graphicsLimits = state.withLock { state -> (Int, Int, Int, Int) in
+      (
+        Int(updatedInteger("MaxDisplayList", updates: [:], current: state.values) ?? 0),
+        Int(updatedInteger("MaxSourceList", updates: [:], current: state.values) ?? 0),
+        Int(updatedInteger("MaxDisplayAndSourceList", updates: [:], current: state.values) ?? 0),
+        Int(updatedInteger("MaxImageBuffer", updates: [:], current: state.values) ?? 0)
+      )
+    }
+    graphicsStorageLedger.setLimits(
+      display: graphicsLimits.0,
+      source: graphicsLimits.1,
+      combined: graphicsLimits.2,
+      imageBuffer: graphicsLimits.3
+    )
+  }
+
+  private func persistCurrentState() {
+    let snapshot = state.withLock { $0 }
+    guard let payload = try? SystemParameterPersistence.encode(snapshot) else { return }
+    for _ in 0..<3 {
+      let expected = persistenceGeneration.withLock { $0 }
+      let nextGeneration: UInt64
+      if let expected {
+        let incremented = expected.addingReportingOverflow(1)
+        guard !incremented.overflow else { return }
+        nextGeneration = incremented.partialValue
+      } else {
+        nextGeneration = 1
+      }
+      let replacement = PostScriptSystemParameterRecord(
+        generation: nextGeneration,
+        opaquePayload: payload
+      )
+      if (try? hostConfiguration.systemParameterStore.compareAndReplace(
+        expectedGeneration: expected,
+        with: replacement
+      )) == true {
+        persistenceGeneration.withLock { $0 = nextGeneration }
+        return
+      }
+      guard let latest = try? hostConfiguration.systemParameterStore.load() else { return }
+      persistenceGeneration.withLock { $0 = latest.generation }
+    }
+  }
+
+  func beginPersistentJob() -> UInt64 {
+    let result = persistentJobs.withLock { jobs -> (UInt64, Bool) in
+      jobs.nextToken &+= 1
+      let token = jobs.nextToken
+      jobs.activeTokens.insert(token)
+      let shouldDisarm = jobs.factoryDefaultsArmedBy != nil
+      if shouldDisarm { jobs.factoryDefaultsArmedBy = nil }
+      return (token, shouldDisarm)
+    }
+    if result.1 { disarmFactoryDefaults() }
+    return result.0
+  }
+
+  func finishPersistentJob(_ token: UInt64) {
+    let shouldDisarm = persistentJobs.withLock { jobs -> Bool in
+      jobs.activeTokens.remove(token)
+      guard let armedBy = jobs.factoryDefaultsArmedBy, armedBy != token else { return false }
+      jobs.factoryDefaultsArmedBy = nil
+      return true
+    }
+    if shouldDisarm { disarmFactoryDefaults() }
+  }
+
+  private func disarmFactoryDefaults() {
+    let changed = state.withLock { state -> Bool in
+      guard state.values["FactoryDefaults"] == .boolean(true) else { return false }
+      state.values["FactoryDefaults"] = .boolean(false)
+      return true
+    }
+    if changed { persistCurrentState() }
   }
 
 

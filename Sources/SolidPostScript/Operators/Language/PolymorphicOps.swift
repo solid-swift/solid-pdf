@@ -56,6 +56,13 @@ extension Operators {
         try str2.updateCharacters(str1.characters(in: str1.range), startingAt: 0)
         context.operands.push(try .string(sharing: str2, subRange: str1.range, kind: opObj.kind))
 
+      // Copy graphics state
+      case .graphicsState:
+        let source: GraphicsStateValue = try context.operands.popAs()
+        let destination = try opObj.value(as: GraphicsStateValue.self)
+        try destination.update(source.state(), context: context)
+        context.operands.push(opObj)
+
       default:
         throw Error.typeCheck
       }

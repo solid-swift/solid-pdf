@@ -1,0 +1,5 @@
+/s save def
+/value 17 def
+s restore
+(restored) /value where { pop false } { true } ifelse emit
+(readonly) [1 2] readonly rcheck emit
