@@ -1,0 +1,1613 @@
+{
+  "ABIRoot": {
+    "kind": "Root",
+    "name": "SolidPostScriptPlutoVG",
+    "printedName": "SolidPostScriptPlutoVG",
+    "children": [
+      {
+        "kind": "Import",
+        "name": "CPlutoVG",
+        "printedName": "CPlutoVG",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptPlutoVG"
+      },
+      {
+        "kind": "Import",
+        "name": "Foundation",
+        "printedName": "Foundation",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptPlutoVG"
+      },
+      {
+        "kind": "Import",
+        "name": "SolidPostScript",
+        "printedName": "SolidPostScript",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptPlutoVG"
+      },
+      {
+        "kind": "Import",
+        "name": "SolidPostScriptRaster",
+        "printedName": "SolidPostScriptRaster",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptPlutoVG"
+      },
+      {
+        "kind": "Import",
+        "name": "SolidRaster",
+        "printedName": "SolidRaster",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptPlutoVG",
+        "declAttributes": [
+          "Exported"
+        ]
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftOnoneSupport",
+        "printedName": "SwiftOnoneSupport",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptPlutoVG"
+      },
+      {
+        "kind": "Import",
+        "name": "_Concurrency",
+        "printedName": "_Concurrency",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptPlutoVG"
+      },
+      {
+        "kind": "Import",
+        "name": "_StringProcessing",
+        "printedName": "_StringProcessing",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptPlutoVG"
+      },
+      {
+        "kind": "Import",
+        "name": "_SwiftConcurrencyShims",
+        "printedName": "_SwiftConcurrencyShims",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptPlutoVG"
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "PlutoVGImageTarget",
+        "printedName": "PlutoVGImageTarget",
+        "children": [
+          {
+            "kind": "TypeAlias",
+            "name": "PageOutput",
+            "printedName": "PageOutput",
+            "children": [
+              {
+                "kind": "TypeNameAlias",
+                "name": "RasterImage",
+                "printedName": "SolidPostScriptPlutoVG.RasterImage",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "RasterImage",
+                    "printedName": "SolidRaster.RasterImage",
+                    "usr": "s:11SolidRaster0B5ImageV"
+                  }
+                ]
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV10PageOutputa",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV10PageOutputa",
+            "moduleName": "SolidPostScriptPlutoVG"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "Output",
+            "printedName": "Output",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[SolidPostScriptPlutoVG.RasterImage]",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "RasterImage",
+                    "printedName": "SolidPostScriptPlutoVG.RasterImage",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "RasterImage",
+                        "printedName": "SolidRaster.RasterImage",
+                        "usr": "s:11SolidRaster0B5ImageV"
+                      }
+                    ]
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV6Outputa",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV6Outputa",
+            "moduleName": "SolidPostScriptPlutoVG"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "ColorEngine",
+            "printedName": "ColorEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "NativeGraphicsColorEngine",
+                "printedName": "SolidPostScriptRaster.NativeGraphicsColorEngine",
+                "usr": "s:21SolidPostScriptRaster25NativeGraphicsColorEngineV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV11ColorEnginea",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV11ColorEnginea",
+            "moduleName": "SolidPostScriptPlutoVG"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "DeviceRenderingEngine",
+            "printedName": "DeviceRenderingEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "NativeGraphicsDeviceRenderingEngine",
+                "printedName": "SolidPostScriptRaster.NativeGraphicsDeviceRenderingEngine",
+                "usr": "s:21SolidPostScriptRaster35NativeGraphicsDeviceRenderingEngineV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV21DeviceRenderingEnginea",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV21DeviceRenderingEnginea",
+            "moduleName": "SolidPostScriptPlutoVG"
+          },
+          {
+            "kind": "TypeDecl",
+            "name": "Renderer",
+            "printedName": "Renderer",
+            "children": [
+              {
+                "kind": "TypeAlias",
+                "name": "PageOutput",
+                "printedName": "PageOutput",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "RasterImage",
+                    "printedName": "SolidPostScriptPlutoVG.RasterImage",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "RasterImage",
+                        "printedName": "SolidRaster.RasterImage",
+                        "usr": "s:11SolidRaster0B5ImageV"
+                      }
+                    ]
+                  }
+                ],
+                "declKind": "TypeAlias",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC10PageOutputa",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC10PageOutputa",
+                "moduleName": "SolidPostScriptPlutoVG"
+              },
+              {
+                "kind": "TypeAlias",
+                "name": "Output",
+                "printedName": "Output",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[SolidPostScriptPlutoVG.RasterImage]",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "RasterImage",
+                        "printedName": "SolidPostScriptPlutoVG.RasterImage",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "RasterImage",
+                            "printedName": "SolidRaster.RasterImage",
+                            "usr": "s:11SolidRaster0B5ImageV"
+                          }
+                        ]
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "TypeAlias",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC6Outputa",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC6Outputa",
+                "moduleName": "SolidPostScriptPlutoVG"
+              },
+              {
+                "kind": "TypeAlias",
+                "name": "ColorSession",
+                "printedName": "ColorSession",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "NativeGraphicsColorSession",
+                    "printedName": "SolidPostScriptRaster.NativeGraphicsColorSession",
+                    "usr": "s:21SolidPostScriptRaster26NativeGraphicsColorSessionC"
+                  }
+                ],
+                "declKind": "TypeAlias",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC12ColorSessiona",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC12ColorSessiona",
+                "moduleName": "SolidPostScriptPlutoVG"
+              },
+              {
+                "kind": "TypeAlias",
+                "name": "DeviceRenderingSession",
+                "printedName": "DeviceRenderingSession",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "NativeGraphicsDeviceRenderingSession",
+                    "printedName": "SolidPostScriptRaster.NativeGraphicsDeviceRenderingSession",
+                    "usr": "s:21SolidPostScriptRaster36NativeGraphicsDeviceRenderingSessionC"
+                  }
+                ],
+                "declKind": "TypeAlias",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC22DeviceRenderingSessiona",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC22DeviceRenderingSessiona",
+                "moduleName": "SolidPostScriptPlutoVG"
+              },
+              {
+                "kind": "Var",
+                "name": "pages",
+                "printedName": "pages",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[SolidPostScriptPlutoVG.RasterImage]",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "RasterImage",
+                        "printedName": "SolidPostScriptPlutoVG.RasterImage",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "RasterImage",
+                            "printedName": "SolidRaster.RasterImage",
+                            "usr": "s:11SolidRaster0B5ImageV"
+                          }
+                        ]
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Var",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC5pagesSay0A6Raster0J5ImageVGvp",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC5pagesSay0A6Raster0J5ImageVGvp",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "HasInitialValue",
+                  "Final",
+                  "SetterAccess",
+                  "HasStorage"
+                ],
+                "hasStorage": true,
+                "accessors": [
+                  {
+                    "kind": "Accessor",
+                    "name": "Get",
+                    "printedName": "Get()",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Array",
+                        "printedName": "[SolidPostScriptPlutoVG.RasterImage]",
+                        "children": [
+                          {
+                            "kind": "TypeNameAlias",
+                            "name": "RasterImage",
+                            "printedName": "SolidPostScriptPlutoVG.RasterImage",
+                            "children": [
+                              {
+                                "kind": "TypeNominal",
+                                "name": "RasterImage",
+                                "printedName": "SolidRaster.RasterImage",
+                                "usr": "s:11SolidRaster0B5ImageV"
+                              }
+                            ]
+                          }
+                        ],
+                        "usr": "s:Sa"
+                      }
+                    ],
+                    "declKind": "Accessor",
+                    "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC5pagesSay0A6Raster0J5ImageVGvg",
+                    "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC5pagesSay0A6Raster0J5ImageVGvg",
+                    "moduleName": "SolidPostScriptPlutoVG",
+                    "implicit": true,
+                    "declAttributes": [
+                      "Final",
+                      "Transparent"
+                    ],
+                    "accessorKind": "get"
+                  }
+                ]
+              },
+              {
+                "kind": "Function",
+                "name": "process",
+                "printedName": "process(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsEvent",
+                    "printedName": "SolidPostScript.GraphicsEvent",
+                    "usr": "s:15SolidPostScript13GraphicsEventV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC7processyy0abC013GraphicsEventVKF",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC7processyy0abC013GraphicsEventVKF",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "beginImage",
+                "printedName": "beginImage(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsEvent",
+                    "printedName": "SolidPostScript.GraphicsEvent",
+                    "usr": "s:15SolidPostScript13GraphicsEventV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC10beginImageyy0abC013GraphicsEventVKF",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC10beginImageyy0abC013GraphicsEventVKF",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "writeImageRows",
+                "printedName": "writeImageRows(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsImageRows",
+                    "printedName": "SolidPostScript.GraphicsImageRows",
+                    "usr": "s:15SolidPostScript17GraphicsImageRowsV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC14writeImageRowsyy0abC008GraphicsjK0VKF",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC14writeImageRowsyy0abC008GraphicsjK0VKF",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "writeImageMaskRows",
+                "printedName": "writeImageMaskRows(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsImageMaskRows",
+                    "printedName": "SolidPostScript.GraphicsImageMaskRows",
+                    "usr": "s:15SolidPostScript21GraphicsImageMaskRowsV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC18writeImageMaskRowsyy0abC008GraphicsjkL0VKF",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC18writeImageMaskRowsyy0abC008GraphicsjkL0VKF",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "endImage",
+                "printedName": "endImage()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC8endImageyyKF",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC8endImageyyKF",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "abortImage",
+                "printedName": "abortImage()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC10abortImageyyF",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC10abortImageyyF",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "Final"
+                ],
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "installStorageAccounting",
+                "printedName": "installStorageAccounting(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsStorageAccountingSession",
+                    "printedName": "SolidPostScript.GraphicsStorageAccountingSession",
+                    "usr": "s:15SolidPostScript32GraphicsStorageAccountingSessionC"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC24installStorageAccountingyy0abC008GraphicsjK7SessionCF",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC24installStorageAccountingyy0abC008GraphicsjK7SessionCF",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "Final"
+                ],
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "activateDevice",
+                "printedName": "activateDevice(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsDeviceSnapshot",
+                    "printedName": "SolidPostScript.GraphicsDeviceSnapshot",
+                    "usr": "s:15SolidPostScript22GraphicsDeviceSnapshotV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC14activateDeviceyy0abC008GraphicsJ8SnapshotVKF",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC14activateDeviceyy0abC008GraphicsJ8SnapshotVKF",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "deactivateDevice",
+                "printedName": "deactivateDevice(_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsDeviceSnapshot",
+                    "printedName": "SolidPostScript.GraphicsDeviceSnapshot",
+                    "usr": "s:15SolidPostScript22GraphicsDeviceSnapshotV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC16deactivateDeviceyy0abC008GraphicsJ8SnapshotVF",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC16deactivateDeviceyy0abC008GraphicsJ8SnapshotVF",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "Final"
+                ],
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "transmitPage",
+                "printedName": "transmitPage(_:copies:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsEvent",
+                    "printedName": "SolidPostScript.GraphicsEvent",
+                    "usr": "s:15SolidPostScript13GraphicsEventV"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC12transmitPage_6copiesy0abC013GraphicsEventV_SitKF",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC12transmitPage_6copiesy0abC013GraphicsEventV_SitKF",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "finish",
+                "printedName": "finish()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[SolidPostScriptPlutoVG.RasterImage]",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "RasterImage",
+                        "printedName": "SolidPostScriptPlutoVG.RasterImage",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "RasterImage",
+                            "printedName": "SolidRaster.RasterImage",
+                            "usr": "s:11SolidRaster0B5ImageV"
+                          }
+                        ]
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC6finishSay0A6Raster0J5ImageVGyKF",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC6finishSay0A6Raster0J5ImageVGyKF",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "Final"
+                ],
+                "throwing": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "abort",
+                "printedName": "abort()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC5abortyyF",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC5abortyyF",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "declAttributes": [
+                  "Final"
+                ],
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "TypeAlias",
+                "name": "FontSession",
+                "printedName": "FontSession",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SemanticGraphicsFontSession",
+                    "printedName": "SolidPostScript.SemanticGraphicsFontSession",
+                    "usr": "s:15SolidPostScript27SemanticGraphicsFontSessionC"
+                  }
+                ],
+                "declKind": "TypeAlias",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC11FontSessiona",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC11FontSessiona",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "implicit": true
+              },
+              {
+                "kind": "TypeAlias",
+                "name": "TrappingSession",
+                "printedName": "TrappingSession",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SemanticGraphicsTrappingSession",
+                    "printedName": "SolidPostScript.SemanticGraphicsTrappingSession",
+                    "usr": "s:15SolidPostScript31SemanticGraphicsTrappingSessionC"
+                  }
+                ],
+                "declKind": "TypeAlias",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC15TrappingSessiona",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC15TrappingSessiona",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "implicit": true
+              }
+            ],
+            "declKind": "Class",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "declAttributes": [
+              "Final"
+            ],
+            "hasMissingDesignatedInitializers": true,
+            "conformances": [
+              {
+                "kind": "Conformance",
+                "name": "GraphicsEventConsumer",
+                "printedName": "GraphicsEventConsumer",
+                "usr": "s:15SolidPostScript21GraphicsEventConsumerP",
+                "mangledName": "$s15SolidPostScript21GraphicsEventConsumerP"
+              },
+              {
+                "kind": "Conformance",
+                "name": "GraphicsRenderer",
+                "printedName": "GraphicsRenderer",
+                "children": [
+                  {
+                    "kind": "TypeWitness",
+                    "name": "PageOutput",
+                    "printedName": "PageOutput",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "PageOutput",
+                        "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget.Renderer.PageOutput",
+                        "children": [
+                          {
+                            "kind": "TypeNameAlias",
+                            "name": "RasterImage",
+                            "printedName": "SolidPostScriptPlutoVG.RasterImage",
+                            "children": [
+                              {
+                                "kind": "TypeNominal",
+                                "name": "RasterImage",
+                                "printedName": "SolidRaster.RasterImage",
+                                "usr": "s:11SolidRaster0B5ImageV"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeWitness",
+                    "name": "Output",
+                    "printedName": "Output",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "Output",
+                        "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget.Renderer.Output",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Array",
+                            "printedName": "[SolidPostScriptPlutoVG.RasterImage]",
+                            "children": [
+                              {
+                                "kind": "TypeNameAlias",
+                                "name": "RasterImage",
+                                "printedName": "SolidPostScriptPlutoVG.RasterImage",
+                                "children": [
+                                  {
+                                    "kind": "TypeNominal",
+                                    "name": "RasterImage",
+                                    "printedName": "SolidRaster.RasterImage",
+                                    "usr": "s:11SolidRaster0B5ImageV"
+                                  }
+                                ]
+                              }
+                            ],
+                            "usr": "s:Sa"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeWitness",
+                    "name": "ColorSession",
+                    "printedName": "ColorSession",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "ColorSession",
+                        "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget.Renderer.ColorSession",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "NativeGraphicsColorSession",
+                            "printedName": "SolidPostScriptRaster.NativeGraphicsColorSession",
+                            "usr": "s:21SolidPostScriptRaster26NativeGraphicsColorSessionC"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeWitness",
+                    "name": "DeviceRenderingSession",
+                    "printedName": "DeviceRenderingSession",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "DeviceRenderingSession",
+                        "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget.Renderer.DeviceRenderingSession",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "NativeGraphicsDeviceRenderingSession",
+                            "printedName": "SolidPostScriptRaster.NativeGraphicsDeviceRenderingSession",
+                            "usr": "s:21SolidPostScriptRaster36NativeGraphicsDeviceRenderingSessionC"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeWitness",
+                    "name": "FontSession",
+                    "printedName": "FontSession",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "SemanticGraphicsFontSession",
+                        "printedName": "SolidPostScript.SemanticGraphicsFontSession",
+                        "usr": "s:15SolidPostScript27SemanticGraphicsFontSessionC"
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeWitness",
+                    "name": "TrappingSession",
+                    "printedName": "TrappingSession",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "SemanticGraphicsTrappingSession",
+                        "printedName": "SolidPostScript.SemanticGraphicsTrappingSession",
+                        "usr": "s:15SolidPostScript31SemanticGraphicsTrappingSessionC"
+                      }
+                    ]
+                  }
+                ],
+                "usr": "s:15SolidPostScript16GraphicsRendererP",
+                "mangledName": "$s15SolidPostScript16GraphicsRendererP"
+              },
+              {
+                "kind": "Conformance",
+                "name": "Copyable",
+                "printedName": "Copyable",
+                "usr": "s:s8CopyableP",
+                "mangledName": "$ss8CopyableP"
+              },
+              {
+                "kind": "Conformance",
+                "name": "Escapable",
+                "printedName": "Escapable",
+                "usr": "s:s9EscapableP",
+                "mangledName": "$ss9EscapableP"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "deviceDescriptor",
+            "printedName": "deviceDescriptor",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDeviceDescriptor",
+                "printedName": "SolidPostScript.GraphicsDeviceDescriptor",
+                "usr": "s:15SolidPostScript24GraphicsDeviceDescriptorV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV16deviceDescriptor0abC0014GraphicsDeviceI0Vvp",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV16deviceDescriptor0abC0014GraphicsDeviceI0Vvp",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsDeviceDescriptor",
+                    "printedName": "SolidPostScript.GraphicsDeviceDescriptor",
+                    "usr": "s:15SolidPostScript24GraphicsDeviceDescriptorV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV16deviceDescriptor0abC0014GraphicsDeviceI0Vvg",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV16deviceDescriptor0abC0014GraphicsDeviceI0Vvg",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "pixelWidth",
+            "printedName": "pixelWidth",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV10pixelWidthSivp",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV10pixelWidthSivp",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV10pixelWidthSivg",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV10pixelWidthSivg",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "pixelHeight",
+            "printedName": "pixelHeight",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV11pixelHeightSivp",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV11pixelHeightSivp",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV11pixelHeightSivg",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV11pixelHeightSivg",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "colorEngine",
+            "printedName": "colorEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "NativeGraphicsColorEngine",
+                "printedName": "SolidPostScriptRaster.NativeGraphicsColorEngine",
+                "usr": "s:21SolidPostScriptRaster25NativeGraphicsColorEngineV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV11colorEngine0abC6Raster019NativeGraphicsColorI0Vvp",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV11colorEngine0abC6Raster019NativeGraphicsColorI0Vvp",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "NativeGraphicsColorEngine",
+                    "printedName": "SolidPostScriptRaster.NativeGraphicsColorEngine",
+                    "usr": "s:21SolidPostScriptRaster25NativeGraphicsColorEngineV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV11colorEngine0abC6Raster019NativeGraphicsColorI0Vvg",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV11colorEngine0abC6Raster019NativeGraphicsColorI0Vvg",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "deviceRenderingEngine",
+            "printedName": "deviceRenderingEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "NativeGraphicsDeviceRenderingEngine",
+                "printedName": "SolidPostScriptRaster.NativeGraphicsDeviceRenderingEngine",
+                "usr": "s:21SolidPostScriptRaster35NativeGraphicsDeviceRenderingEngineV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV21deviceRenderingEngine0abC6Raster020NativeGraphicsDeviceiJ0Vvp",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV21deviceRenderingEngine0abC6Raster020NativeGraphicsDeviceiJ0Vvp",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "NativeGraphicsDeviceRenderingEngine",
+                    "printedName": "SolidPostScriptRaster.NativeGraphicsDeviceRenderingEngine",
+                    "usr": "s:21SolidPostScriptRaster35NativeGraphicsDeviceRenderingEngineV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV21deviceRenderingEngine0abC6Raster020NativeGraphicsDeviceiJ0Vvg",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV21deviceRenderingEngine0abC6Raster020NativeGraphicsDeviceiJ0Vvg",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "pageDeviceProvider",
+            "printedName": "pageDeviceProvider",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "StandardGraphicsPageDeviceProvider",
+                "printedName": "SolidPostScript.StandardGraphicsPageDeviceProvider",
+                "usr": "s:15SolidPostScript34StandardGraphicsPageDeviceProviderV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV18pageDeviceProvider0abC0020StandardGraphicsPageiJ0Vvp",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV18pageDeviceProvider0abC0020StandardGraphicsPageiJ0Vvp",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "StandardGraphicsPageDeviceProvider",
+                    "printedName": "SolidPostScript.StandardGraphicsPageDeviceProvider",
+                    "usr": "s:15SolidPostScript34StandardGraphicsPageDeviceProviderV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV18pageDeviceProvider0abC0020StandardGraphicsPageiJ0Vvg",
+                "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV18pageDeviceProvider0abC0020StandardGraphicsPageiJ0Vvg",
+                "moduleName": "SolidPostScriptPlutoVG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(pixelWidth:pixelHeight:resolution:imageableBounds:pageDeviceMode:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PlutoVGImageTarget",
+                "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Double",
+                "printedName": "Swift.Double",
+                "hasDefaultArg": true,
+                "usr": "s:Sd"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsRect?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsRect",
+                    "printedName": "SolidPostScript.GraphicsRect",
+                    "usr": "s:15SolidPostScript12GraphicsRectV"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsPageDeviceMode",
+                "printedName": "SolidPostScript.GraphicsPageDeviceMode",
+                "hasDefaultArg": true,
+                "usr": "s:15SolidPostScript22GraphicsPageDeviceModeO"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV10pixelWidth0H6Height10resolution15imageableBounds14pageDeviceModeACSi_SiSd0abC012GraphicsRectVSgAI0q4PageoP0Otcfc",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV10pixelWidth0H6Height10resolution15imageableBounds14pageDeviceModeACSi_SiSd0abC012GraphicsRectVSgAI0q4PageoP0Otcfc",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(pixelWidth:pixelHeight:deviceDescriptor:pageDeviceMode:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PlutoVGImageTarget",
+                "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDeviceDescriptor",
+                "printedName": "SolidPostScript.GraphicsDeviceDescriptor",
+                "usr": "s:15SolidPostScript24GraphicsDeviceDescriptorV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsPageDeviceMode",
+                "printedName": "SolidPostScript.GraphicsPageDeviceMode",
+                "hasDefaultArg": true,
+                "usr": "s:15SolidPostScript22GraphicsPageDeviceModeO"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV10pixelWidth0H6Height16deviceDescriptor14pageDeviceModeACSi_Si0abC008GraphicsnL0VAH0p4PagenO0Otcfc",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV10pixelWidth0H6Height16deviceDescriptor14pageDeviceModeACSi_Si0abC008GraphicsnL0VAH0p4PagenO0Otcfc",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "makeRenderer",
+            "printedName": "makeRenderer()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Renderer",
+                "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget.Renderer",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV12makeRendererAC0I0CyKF",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV12makeRendererAC0I0CyKF",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "makeRenderer",
+            "printedName": "makeRenderer(colorSession:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Renderer",
+                "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget.Renderer",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "NativeGraphicsColorSession",
+                "printedName": "SolidPostScriptRaster.NativeGraphicsColorSession",
+                "paramValueOwnership": "Owned",
+                "usr": "s:21SolidPostScriptRaster26NativeGraphicsColorSessionC"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV12makeRenderer12colorSessionAC0I0C0abC6Raster019NativeGraphicsColorK0Cn_tKF",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV12makeRenderer12colorSessionAC0I0C0abC6Raster019NativeGraphicsColorK0Cn_tKF",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "makeRenderer",
+            "printedName": "makeRenderer(colorSession:deviceRenderingSession:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Renderer",
+                "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget.Renderer",
+                "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "NativeGraphicsColorSession",
+                "printedName": "SolidPostScriptRaster.NativeGraphicsColorSession",
+                "paramValueOwnership": "Owned",
+                "usr": "s:21SolidPostScriptRaster26NativeGraphicsColorSessionC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "NativeGraphicsDeviceRenderingSession",
+                "printedName": "SolidPostScriptRaster.NativeGraphicsDeviceRenderingSession",
+                "paramValueOwnership": "Owned",
+                "usr": "s:21SolidPostScriptRaster36NativeGraphicsDeviceRenderingSessionC"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV12makeRenderer12colorSession015deviceRenderingK0AC0I0C0abC6Raster019NativeGraphicsColorK0Cn_AI0op6DevicemK0CntKF",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV12makeRenderer12colorSession015deviceRenderingK0AC0I0C0abC6Raster019NativeGraphicsColorK0Cn_AI0op6DevicemK0CntKF",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "FontEngine",
+            "printedName": "FontEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SemanticGraphicsFontEngine",
+                "printedName": "SolidPostScript.SemanticGraphicsFontEngine",
+                "usr": "s:15SolidPostScript26SemanticGraphicsFontEngineV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV10FontEnginea",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV10FontEnginea",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "implicit": true
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "PageDeviceProvider",
+            "printedName": "PageDeviceProvider",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "StandardGraphicsPageDeviceProvider",
+                "printedName": "SolidPostScript.StandardGraphicsPageDeviceProvider",
+                "usr": "s:15SolidPostScript34StandardGraphicsPageDeviceProviderV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV18PageDeviceProvidera",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV18PageDeviceProvidera",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "implicit": true
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "TrappingEngine",
+            "printedName": "TrappingEngine",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SemanticGraphicsTrappingEngine",
+                "printedName": "SolidPostScript.SemanticGraphicsTrappingEngine",
+                "usr": "s:15SolidPostScript30SemanticGraphicsTrappingEngineV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV14TrappingEnginea",
+            "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV14TrappingEnginea",
+            "moduleName": "SolidPostScriptPlutoVG",
+            "implicit": true
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV",
+        "mangledName": "$s22SolidPostScriptPlutoVG0D13VGImageTargetV",
+        "moduleName": "SolidPostScriptPlutoVG",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "GraphicsTarget",
+            "printedName": "GraphicsTarget",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "PageOutput",
+                "printedName": "PageOutput",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "PageOutput",
+                    "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget.PageOutput",
+                    "children": [
+                      {
+                        "kind": "TypeNameAlias",
+                        "name": "RasterImage",
+                        "printedName": "SolidPostScriptPlutoVG.RasterImage",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "RasterImage",
+                            "printedName": "SolidRaster.RasterImage",
+                            "usr": "s:11SolidRaster0B5ImageV"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "Output",
+                "printedName": "Output",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "Output",
+                    "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget.Output",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Array",
+                        "printedName": "[SolidPostScriptPlutoVG.RasterImage]",
+                        "children": [
+                          {
+                            "kind": "TypeNameAlias",
+                            "name": "RasterImage",
+                            "printedName": "SolidPostScriptPlutoVG.RasterImage",
+                            "children": [
+                              {
+                                "kind": "TypeNominal",
+                                "name": "RasterImage",
+                                "printedName": "SolidRaster.RasterImage",
+                                "usr": "s:11SolidRaster0B5ImageV"
+                              }
+                            ]
+                          }
+                        ],
+                        "usr": "s:Sa"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "ColorEngine",
+                "printedName": "ColorEngine",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "ColorEngine",
+                    "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget.ColorEngine",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "NativeGraphicsColorEngine",
+                        "printedName": "SolidPostScriptRaster.NativeGraphicsColorEngine",
+                        "usr": "s:21SolidPostScriptRaster25NativeGraphicsColorEngineV"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "DeviceRenderingEngine",
+                "printedName": "DeviceRenderingEngine",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "DeviceRenderingEngine",
+                    "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget.DeviceRenderingEngine",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "NativeGraphicsDeviceRenderingEngine",
+                        "printedName": "SolidPostScriptRaster.NativeGraphicsDeviceRenderingEngine",
+                        "usr": "s:21SolidPostScriptRaster35NativeGraphicsDeviceRenderingEngineV"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "FontEngine",
+                "printedName": "FontEngine",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SemanticGraphicsFontEngine",
+                    "printedName": "SolidPostScript.SemanticGraphicsFontEngine",
+                    "usr": "s:15SolidPostScript26SemanticGraphicsFontEngineV"
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "TrappingEngine",
+                "printedName": "TrappingEngine",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SemanticGraphicsTrappingEngine",
+                    "printedName": "SolidPostScript.SemanticGraphicsTrappingEngine",
+                    "usr": "s:15SolidPostScript30SemanticGraphicsTrappingEngineV"
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "PageDeviceProvider",
+                "printedName": "PageDeviceProvider",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "StandardGraphicsPageDeviceProvider",
+                    "printedName": "SolidPostScript.StandardGraphicsPageDeviceProvider",
+                    "usr": "s:15SolidPostScript34StandardGraphicsPageDeviceProviderV"
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "Renderer",
+                "printedName": "Renderer",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Renderer",
+                    "printedName": "SolidPostScriptPlutoVG.PlutoVGImageTarget.Renderer",
+                    "usr": "s:22SolidPostScriptPlutoVG0D13VGImageTargetV8RendererC"
+                  }
+                ]
+              }
+            ],
+            "usr": "s:15SolidPostScript14GraphicsTargetP",
+            "mangledName": "$s15SolidPostScript14GraphicsTargetP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeAlias",
+        "name": "RasterImage",
+        "printedName": "RasterImage",
+        "children": [
+          {
+            "kind": "TypeNominal",
+            "name": "RasterImage",
+            "printedName": "SolidRaster.RasterImage",
+            "usr": "s:11SolidRaster0B5ImageV"
+          }
+        ],
+        "declKind": "TypeAlias",
+        "usr": "s:22SolidPostScriptPlutoVG11RasterImagea",
+        "mangledName": "$s22SolidPostScriptPlutoVG11RasterImagea",
+        "moduleName": "SolidPostScriptPlutoVG"
+      },
+      {
+        "kind": "TypeAlias",
+        "name": "RasterPixelFormat",
+        "printedName": "RasterPixelFormat",
+        "children": [
+          {
+            "kind": "TypeNominal",
+            "name": "RasterPixelFormat",
+            "printedName": "SolidRaster.RasterPixelFormat",
+            "usr": "s:11SolidRaster0B11PixelFormatO"
+          }
+        ],
+        "declKind": "TypeAlias",
+        "usr": "s:22SolidPostScriptPlutoVG17RasterPixelFormata",
+        "mangledName": "$s22SolidPostScriptPlutoVG17RasterPixelFormata",
+        "moduleName": "SolidPostScriptPlutoVG"
+      }
+    ],
+    "json_format_version": 8
+  }
+}

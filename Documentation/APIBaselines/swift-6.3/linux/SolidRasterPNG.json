@@ -1,0 +1,2489 @@
+{
+  "ABIRoot": {
+    "kind": "Root",
+    "name": "SolidRasterPNG",
+    "printedName": "SolidRasterPNG",
+    "children": [
+      {
+        "kind": "Import",
+        "name": "Foundation",
+        "printedName": "Foundation",
+        "declKind": "Import",
+        "moduleName": "SolidRasterPNG"
+      },
+      {
+        "kind": "Import",
+        "name": "SolidIO",
+        "printedName": "SolidIO",
+        "declKind": "Import",
+        "moduleName": "SolidRasterPNG"
+      },
+      {
+        "kind": "Import",
+        "name": "SolidRaster",
+        "printedName": "SolidRaster",
+        "declKind": "Import",
+        "moduleName": "SolidRasterPNG"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftOnoneSupport",
+        "printedName": "SwiftOnoneSupport",
+        "declKind": "Import",
+        "moduleName": "SolidRasterPNG"
+      },
+      {
+        "kind": "Import",
+        "name": "_Concurrency",
+        "printedName": "_Concurrency",
+        "declKind": "Import",
+        "moduleName": "SolidRasterPNG"
+      },
+      {
+        "kind": "Import",
+        "name": "_StringProcessing",
+        "printedName": "_StringProcessing",
+        "declKind": "Import",
+        "moduleName": "SolidRasterPNG"
+      },
+      {
+        "kind": "Import",
+        "name": "_SwiftConcurrencyShims",
+        "printedName": "_SwiftConcurrencyShims",
+        "declKind": "Import",
+        "moduleName": "SolidRasterPNG"
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "PNGBackground",
+        "printedName": "PNGBackground",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "red",
+            "printedName": "red",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "UInt8",
+                "printedName": "Swift.UInt8",
+                "usr": "s:s5UInt8V"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG13PNGBackgroundV3reds5UInt8Vvp",
+            "mangledName": "$s14SolidRasterPNG13PNGBackgroundV3reds5UInt8Vvp",
+            "moduleName": "SolidRasterPNG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt8",
+                    "printedName": "Swift.UInt8",
+                    "usr": "s:s5UInt8V"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG13PNGBackgroundV3reds5UInt8Vvg",
+                "mangledName": "$s14SolidRasterPNG13PNGBackgroundV3reds5UInt8Vvg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "green",
+            "printedName": "green",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "UInt8",
+                "printedName": "Swift.UInt8",
+                "usr": "s:s5UInt8V"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG13PNGBackgroundV5greens5UInt8Vvp",
+            "mangledName": "$s14SolidRasterPNG13PNGBackgroundV5greens5UInt8Vvp",
+            "moduleName": "SolidRasterPNG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt8",
+                    "printedName": "Swift.UInt8",
+                    "usr": "s:s5UInt8V"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG13PNGBackgroundV5greens5UInt8Vvg",
+                "mangledName": "$s14SolidRasterPNG13PNGBackgroundV5greens5UInt8Vvg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "blue",
+            "printedName": "blue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "UInt8",
+                "printedName": "Swift.UInt8",
+                "usr": "s:s5UInt8V"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG13PNGBackgroundV4blues5UInt8Vvp",
+            "mangledName": "$s14SolidRasterPNG13PNGBackgroundV4blues5UInt8Vvp",
+            "moduleName": "SolidRasterPNG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt8",
+                    "printedName": "Swift.UInt8",
+                    "usr": "s:s5UInt8V"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG13PNGBackgroundV4blues5UInt8Vvg",
+                "mangledName": "$s14SolidRasterPNG13PNGBackgroundV4blues5UInt8Vvg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(red:green:blue:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PNGBackground",
+                "printedName": "SolidRasterPNG.PNGBackground",
+                "usr": "s:14SolidRasterPNG13PNGBackgroundV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UInt8",
+                "printedName": "Swift.UInt8",
+                "usr": "s:s5UInt8V"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UInt8",
+                "printedName": "Swift.UInt8",
+                "usr": "s:s5UInt8V"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UInt8",
+                "printedName": "Swift.UInt8",
+                "usr": "s:s5UInt8V"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:14SolidRasterPNG13PNGBackgroundV3red5green4blueACs5UInt8V_A2Htcfc",
+            "mangledName": "$s14SolidRasterPNG13PNGBackgroundV3red5green4blueACs5UInt8V_A2Htcfc",
+            "moduleName": "SolidRasterPNG",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Var",
+            "name": "white",
+            "printedName": "white",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PNGBackground",
+                "printedName": "SolidRasterPNG.PNGBackground",
+                "usr": "s:14SolidRasterPNG13PNGBackgroundV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG13PNGBackgroundV5whiteACvpZ",
+            "mangledName": "$s14SolidRasterPNG13PNGBackgroundV5whiteACvpZ",
+            "moduleName": "SolidRasterPNG",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGBackground",
+                    "printedName": "SolidRasterPNG.PNGBackground",
+                    "usr": "s:14SolidRasterPNG13PNGBackgroundV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG13PNGBackgroundV5whiteACvgZ",
+                "mangledName": "$s14SolidRasterPNG13PNGBackgroundV5whiteACvgZ",
+                "moduleName": "SolidRasterPNG",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_struct_equals",
+            "printedName": "__derived_struct_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGBackground",
+                "printedName": "SolidRasterPNG.PNGBackground",
+                "usr": "s:14SolidRasterPNG13PNGBackgroundV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGBackground",
+                "printedName": "SolidRasterPNG.PNGBackground",
+                "usr": "s:14SolidRasterPNG13PNGBackgroundV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:14SolidRasterPNG13PNGBackgroundV23__derived_struct_equalsySbAC_ACtFZ",
+            "mangledName": "$s14SolidRasterPNG13PNGBackgroundV23__derived_struct_equalsySbAC_ACtFZ",
+            "moduleName": "SolidRasterPNG",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:14SolidRasterPNG13PNGBackgroundV4hash4intoys6HasherVz_tF",
+            "mangledName": "$s14SolidRasterPNG13PNGBackgroundV4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidRasterPNG",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG13PNGBackgroundV9hashValueSivp",
+            "mangledName": "$s14SolidRasterPNG13PNGBackgroundV9hashValueSivp",
+            "moduleName": "SolidRasterPNG",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG13PNGBackgroundV9hashValueSivg",
+                "mangledName": "$s14SolidRasterPNG13PNGBackgroundV9hashValueSivg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:14SolidRasterPNG13PNGBackgroundV",
+        "mangledName": "$s14SolidRasterPNG13PNGBackgroundV",
+        "moduleName": "SolidRasterPNG",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "PNGColorFormat",
+        "printedName": "PNGColorFormat",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "rgb",
+            "printedName": "rgb",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidRasterPNG.PNGColorFormat.Type) -> SolidRasterPNG.PNGColorFormat",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGColorFormat",
+                    "printedName": "SolidRasterPNG.PNGColorFormat",
+                    "usr": "s:14SolidRasterPNG14PNGColorFormatO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidRasterPNG.PNGColorFormat.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGColorFormat",
+                        "printedName": "SolidRasterPNG.PNGColorFormat",
+                        "usr": "s:14SolidRasterPNG14PNGColorFormatO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:14SolidRasterPNG14PNGColorFormatO3rgbyA2CmF",
+            "mangledName": "$s14SolidRasterPNG14PNGColorFormatO3rgbyA2CmF",
+            "moduleName": "SolidRasterPNG"
+          },
+          {
+            "kind": "Var",
+            "name": "rgba",
+            "printedName": "rgba",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidRasterPNG.PNGColorFormat.Type) -> SolidRasterPNG.PNGColorFormat",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGColorFormat",
+                    "printedName": "SolidRasterPNG.PNGColorFormat",
+                    "usr": "s:14SolidRasterPNG14PNGColorFormatO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidRasterPNG.PNGColorFormat.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGColorFormat",
+                        "printedName": "SolidRasterPNG.PNGColorFormat",
+                        "usr": "s:14SolidRasterPNG14PNGColorFormatO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:14SolidRasterPNG14PNGColorFormatO4rgbayA2CmF",
+            "mangledName": "$s14SolidRasterPNG14PNGColorFormatO4rgbayA2CmF",
+            "moduleName": "SolidRasterPNG"
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_enum_equals",
+            "printedName": "__derived_enum_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGColorFormat",
+                "printedName": "SolidRasterPNG.PNGColorFormat",
+                "usr": "s:14SolidRasterPNG14PNGColorFormatO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGColorFormat",
+                "printedName": "SolidRasterPNG.PNGColorFormat",
+                "usr": "s:14SolidRasterPNG14PNGColorFormatO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:14SolidRasterPNG14PNGColorFormatO21__derived_enum_equalsySbAC_ACtFZ",
+            "mangledName": "$s14SolidRasterPNG14PNGColorFormatO21__derived_enum_equalsySbAC_ACtFZ",
+            "moduleName": "SolidRasterPNG",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements",
+              "Semantics"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:14SolidRasterPNG14PNGColorFormatO4hash4intoys6HasherVz_tF",
+            "mangledName": "$s14SolidRasterPNG14PNGColorFormatO4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidRasterPNG",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG14PNGColorFormatO9hashValueSivp",
+            "mangledName": "$s14SolidRasterPNG14PNGColorFormatO9hashValueSivp",
+            "moduleName": "SolidRasterPNG",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG14PNGColorFormatO9hashValueSivg",
+                "mangledName": "$s14SolidRasterPNG14PNGColorFormatO9hashValueSivg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:14SolidRasterPNG14PNGColorFormatO",
+        "mangledName": "$s14SolidRasterPNG14PNGColorFormatO",
+        "moduleName": "SolidRasterPNG",
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "PNGEncoder",
+        "printedName": "PNGEncoder",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "options",
+            "printedName": "options",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PNGEncodingOptions",
+                "printedName": "SolidRasterPNG.PNGEncodingOptions",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG10PNGEncoderV7optionsAA18PNGEncodingOptionsVvp",
+            "mangledName": "$s14SolidRasterPNG10PNGEncoderV7optionsAA18PNGEncodingOptionsVvp",
+            "moduleName": "SolidRasterPNG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGEncodingOptions",
+                    "printedName": "SolidRasterPNG.PNGEncodingOptions",
+                    "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG10PNGEncoderV7optionsAA18PNGEncodingOptionsVvg",
+                "mangledName": "$s14SolidRasterPNG10PNGEncoderV7optionsAA18PNGEncodingOptionsVvg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(options:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PNGEncoder",
+                "printedName": "SolidRasterPNG.PNGEncoder",
+                "usr": "s:14SolidRasterPNG10PNGEncoderV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGEncodingOptions",
+                "printedName": "SolidRasterPNG.PNGEncodingOptions",
+                "hasDefaultArg": true,
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:14SolidRasterPNG10PNGEncoderV7optionsAcA18PNGEncodingOptionsV_tKcfc",
+            "mangledName": "$s14SolidRasterPNG10PNGEncoderV7optionsAcA18PNGEncodingOptionsV_tKcfc",
+            "moduleName": "SolidRasterPNG",
+            "throwing": true,
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "encode",
+            "printedName": "encode(_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Data",
+                "printedName": "FoundationEssentials.Data",
+                "usr": "s:20FoundationEssentials4DataV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "RasterImage",
+                "printedName": "SolidRaster.RasterImage",
+                "usr": "s:11SolidRaster0B5ImageV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:14SolidRasterPNG10PNGEncoderV6encodey20FoundationEssentials4DataV0aB00B5ImageVKF",
+            "mangledName": "$s14SolidRasterPNG10PNGEncoderV6encodey20FoundationEssentials4DataV0aB00B5ImageVKF",
+            "moduleName": "SolidRasterPNG",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "encode",
+            "printedName": "encode(_:to:replacingExisting:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "RasterImage",
+                "printedName": "SolidRaster.RasterImage",
+                "usr": "s:11SolidRaster0B5ImageV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "URL",
+                "printedName": "FoundationEssentials.URL",
+                "usr": "s:20FoundationEssentials3URLV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "hasDefaultArg": true,
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:14SolidRasterPNG10PNGEncoderV6encode_2to17replacingExistingy0aB00B5ImageV_20FoundationEssentials3URLVSbtKF",
+            "mangledName": "$s14SolidRasterPNG10PNGEncoderV6encode_2to17replacingExistingy0aB00B5ImageV_20FoundationEssentials3URLVSbtKF",
+            "moduleName": "SolidRasterPNG",
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:14SolidRasterPNG10PNGEncoderV",
+        "mangledName": "$s14SolidRasterPNG10PNGEncoderV",
+        "moduleName": "SolidRasterPNG",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "PNGEncodingError",
+        "printedName": "PNGEncodingError",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "invalidOptions",
+            "printedName": "invalidOptions",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidRasterPNG.PNGEncodingError.Type) -> SolidRasterPNG.PNGEncodingError",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGEncodingError",
+                    "printedName": "SolidRasterPNG.PNGEncodingError",
+                    "usr": "s:14SolidRasterPNG16PNGEncodingErrorO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidRasterPNG.PNGEncodingError.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGEncodingError",
+                        "printedName": "SolidRasterPNG.PNGEncodingError",
+                        "usr": "s:14SolidRasterPNG16PNGEncodingErrorO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:14SolidRasterPNG16PNGEncodingErrorO14invalidOptionsyA2CmF",
+            "mangledName": "$s14SolidRasterPNG16PNGEncodingErrorO14invalidOptionsyA2CmF",
+            "moduleName": "SolidRasterPNG"
+          },
+          {
+            "kind": "Var",
+            "name": "invalidImage",
+            "printedName": "invalidImage",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidRasterPNG.PNGEncodingError.Type) -> SolidRasterPNG.PNGEncodingError",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGEncodingError",
+                    "printedName": "SolidRasterPNG.PNGEncodingError",
+                    "usr": "s:14SolidRasterPNG16PNGEncodingErrorO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidRasterPNG.PNGEncodingError.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGEncodingError",
+                        "printedName": "SolidRasterPNG.PNGEncodingError",
+                        "usr": "s:14SolidRasterPNG16PNGEncodingErrorO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:14SolidRasterPNG16PNGEncodingErrorO12invalidImageyA2CmF",
+            "mangledName": "$s14SolidRasterPNG16PNGEncodingErrorO12invalidImageyA2CmF",
+            "moduleName": "SolidRasterPNG"
+          },
+          {
+            "kind": "Var",
+            "name": "outputExists",
+            "printedName": "outputExists",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidRasterPNG.PNGEncodingError.Type) -> SolidRasterPNG.PNGEncodingError",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGEncodingError",
+                    "printedName": "SolidRasterPNG.PNGEncodingError",
+                    "usr": "s:14SolidRasterPNG16PNGEncodingErrorO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidRasterPNG.PNGEncodingError.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGEncodingError",
+                        "printedName": "SolidRasterPNG.PNGEncodingError",
+                        "usr": "s:14SolidRasterPNG16PNGEncodingErrorO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:14SolidRasterPNG16PNGEncodingErrorO12outputExistsyA2CmF",
+            "mangledName": "$s14SolidRasterPNG16PNGEncodingErrorO12outputExistsyA2CmF",
+            "moduleName": "SolidRasterPNG"
+          },
+          {
+            "kind": "Var",
+            "name": "outputFailure",
+            "printedName": "outputFailure",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidRasterPNG.PNGEncodingError.Type) -> SolidRasterPNG.PNGEncodingError",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGEncodingError",
+                    "printedName": "SolidRasterPNG.PNGEncodingError",
+                    "usr": "s:14SolidRasterPNG16PNGEncodingErrorO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidRasterPNG.PNGEncodingError.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGEncodingError",
+                        "printedName": "SolidRasterPNG.PNGEncodingError",
+                        "usr": "s:14SolidRasterPNG16PNGEncodingErrorO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:14SolidRasterPNG16PNGEncodingErrorO13outputFailureyA2CmF",
+            "mangledName": "$s14SolidRasterPNG16PNGEncodingErrorO13outputFailureyA2CmF",
+            "moduleName": "SolidRasterPNG"
+          },
+          {
+            "kind": "Var",
+            "name": "compressionFailure",
+            "printedName": "compressionFailure",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidRasterPNG.PNGEncodingError.Type) -> SolidRasterPNG.PNGEncodingError",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGEncodingError",
+                    "printedName": "SolidRasterPNG.PNGEncodingError",
+                    "usr": "s:14SolidRasterPNG16PNGEncodingErrorO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidRasterPNG.PNGEncodingError.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGEncodingError",
+                        "printedName": "SolidRasterPNG.PNGEncodingError",
+                        "usr": "s:14SolidRasterPNG16PNGEncodingErrorO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:14SolidRasterPNG16PNGEncodingErrorO18compressionFailureyA2CmF",
+            "mangledName": "$s14SolidRasterPNG16PNGEncodingErrorO18compressionFailureyA2CmF",
+            "moduleName": "SolidRasterPNG"
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_enum_equals",
+            "printedName": "__derived_enum_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGEncodingError",
+                "printedName": "SolidRasterPNG.PNGEncodingError",
+                "usr": "s:14SolidRasterPNG16PNGEncodingErrorO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGEncodingError",
+                "printedName": "SolidRasterPNG.PNGEncodingError",
+                "usr": "s:14SolidRasterPNG16PNGEncodingErrorO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:14SolidRasterPNG16PNGEncodingErrorO21__derived_enum_equalsySbAC_ACtFZ",
+            "mangledName": "$s14SolidRasterPNG16PNGEncodingErrorO21__derived_enum_equalsySbAC_ACtFZ",
+            "moduleName": "SolidRasterPNG",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements",
+              "Semantics"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:14SolidRasterPNG16PNGEncodingErrorO4hash4intoys6HasherVz_tF",
+            "mangledName": "$s14SolidRasterPNG16PNGEncodingErrorO4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidRasterPNG",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG16PNGEncodingErrorO9hashValueSivp",
+            "mangledName": "$s14SolidRasterPNG16PNGEncodingErrorO9hashValueSivp",
+            "moduleName": "SolidRasterPNG",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG16PNGEncodingErrorO9hashValueSivg",
+                "mangledName": "$s14SolidRasterPNG16PNGEncodingErrorO9hashValueSivg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:14SolidRasterPNG16PNGEncodingErrorO",
+        "mangledName": "$s14SolidRasterPNG16PNGEncodingErrorO",
+        "moduleName": "SolidRasterPNG",
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Error",
+            "printedName": "Error",
+            "usr": "s:s5ErrorP",
+            "mangledName": "$ss5ErrorP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "PNGEncodingOptions",
+        "printedName": "PNGEncodingOptions",
+        "children": [
+          {
+            "kind": "TypeDecl",
+            "name": "FilterStrategy",
+            "printedName": "FilterStrategy",
+            "children": [
+              {
+                "kind": "Var",
+                "name": "adaptive",
+                "printedName": "adaptive",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(SolidRasterPNG.PNGEncodingOptions.FilterStrategy.Type) -> SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "FilterStrategy",
+                        "printedName": "SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                        "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Metatype",
+                        "printedName": "SolidRasterPNG.PNGEncodingOptions.FilterStrategy.Type",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "FilterStrategy",
+                            "printedName": "SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "declKind": "EnumElement",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO8adaptiveyA2EmF",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO8adaptiveyA2EmF",
+                "moduleName": "SolidRasterPNG"
+              },
+              {
+                "kind": "Var",
+                "name": "fixed",
+                "printedName": "fixed",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(SolidRasterPNG.PNGEncodingOptions.FilterStrategy.Type) -> (SolidRasterPNG.PNGFilter) -> SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                    "children": [
+                      {
+                        "kind": "TypeFunc",
+                        "name": "Function",
+                        "printedName": "(SolidRasterPNG.PNGFilter) -> SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "FilterStrategy",
+                            "printedName": "SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "PNGFilter",
+                            "printedName": "SolidRasterPNG.PNGFilter",
+                            "usr": "s:14SolidRasterPNG9PNGFilterO"
+                          }
+                        ]
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Metatype",
+                        "printedName": "SolidRasterPNG.PNGEncodingOptions.FilterStrategy.Type",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "FilterStrategy",
+                            "printedName": "SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "declKind": "EnumElement",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO5fixedyAeA9PNGFilterOcAEmF",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO5fixedyAeA9PNGFilterOcAEmF",
+                "moduleName": "SolidRasterPNG"
+              },
+              {
+                "kind": "Function",
+                "name": "__derived_enum_equals",
+                "printedName": "__derived_enum_equals(_:_:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "FilterStrategy",
+                    "printedName": "SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                    "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "FilterStrategy",
+                    "printedName": "SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                    "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO21__derived_enum_equalsySbAE_AEtFZ",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO21__derived_enum_equalsySbAE_AEtFZ",
+                "moduleName": "SolidRasterPNG",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Implements",
+                  "Semantics"
+                ],
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Function",
+                "name": "hash",
+                "printedName": "hash(into:)",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Hasher",
+                    "printedName": "Swift.Hasher",
+                    "paramValueOwnership": "InOut",
+                    "usr": "s:s6HasherV"
+                  }
+                ],
+                "declKind": "Func",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO4hash4intoys6HasherVz_tF",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO4hash4intoys6HasherVz_tF",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "funcSelfKind": "NonMutating"
+              },
+              {
+                "kind": "Var",
+                "name": "hashValue",
+                "printedName": "hashValue",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Var",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO9hashValueSivp",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO9hashValueSivp",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "accessors": [
+                  {
+                    "kind": "Accessor",
+                    "name": "Get",
+                    "printedName": "Get()",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Int",
+                        "printedName": "Swift.Int",
+                        "usr": "s:Si"
+                      }
+                    ],
+                    "declKind": "Accessor",
+                    "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO9hashValueSivg",
+                    "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO9hashValueSivg",
+                    "moduleName": "SolidRasterPNG",
+                    "implicit": true,
+                    "accessorKind": "get"
+                  }
+                ]
+              }
+            ],
+            "declKind": "Enum",
+            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO",
+            "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO",
+            "moduleName": "SolidRasterPNG",
+            "isEnumExhaustive": true,
+            "conformances": [
+              {
+                "kind": "Conformance",
+                "name": "Copyable",
+                "printedName": "Copyable",
+                "usr": "s:s8CopyableP",
+                "mangledName": "$ss8CopyableP"
+              },
+              {
+                "kind": "Conformance",
+                "name": "Equatable",
+                "printedName": "Equatable",
+                "usr": "s:SQ",
+                "mangledName": "$sSQ"
+              },
+              {
+                "kind": "Conformance",
+                "name": "Escapable",
+                "printedName": "Escapable",
+                "usr": "s:s9EscapableP",
+                "mangledName": "$ss9EscapableP"
+              },
+              {
+                "kind": "Conformance",
+                "name": "Hashable",
+                "printedName": "Hashable",
+                "usr": "s:SH",
+                "mangledName": "$sSH"
+              },
+              {
+                "kind": "Conformance",
+                "name": "Sendable",
+                "printedName": "Sendable",
+                "usr": "s:s8SendableP",
+                "mangledName": "$ss8SendableP"
+              },
+              {
+                "kind": "Conformance",
+                "name": "SendableMetatype",
+                "printedName": "SendableMetatype",
+                "usr": "s:s16SendableMetatypeP",
+                "mangledName": "$ss16SendableMetatypeP"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "colorFormat",
+            "printedName": "colorFormat",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PNGColorFormat",
+                "printedName": "SolidRasterPNG.PNGColorFormat",
+                "usr": "s:14SolidRasterPNG14PNGColorFormatO"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV11colorFormatAA08PNGColorG0Ovp",
+            "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV11colorFormatAA08PNGColorG0Ovp",
+            "moduleName": "SolidRasterPNG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGColorFormat",
+                    "printedName": "SolidRasterPNG.PNGColorFormat",
+                    "usr": "s:14SolidRasterPNG14PNGColorFormatO"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV11colorFormatAA08PNGColorG0Ovg",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV11colorFormatAA08PNGColorG0Ovg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGColorFormat",
+                    "printedName": "SolidRasterPNG.PNGColorFormat",
+                    "usr": "s:14SolidRasterPNG14PNGColorFormatO"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV11colorFormatAA08PNGColorG0Ovs",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV11colorFormatAA08PNGColorG0Ovs",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "filterStrategy",
+            "printedName": "filterStrategy",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "FilterStrategy",
+                "printedName": "SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14filterStrategyAC06FilterG0Ovp",
+            "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV14filterStrategyAC06FilterG0Ovp",
+            "moduleName": "SolidRasterPNG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "FilterStrategy",
+                    "printedName": "SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                    "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14filterStrategyAC06FilterG0Ovg",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV14filterStrategyAC06FilterG0Ovg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "FilterStrategy",
+                    "printedName": "SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                    "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14filterStrategyAC06FilterG0Ovs",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV14filterStrategyAC06FilterG0Ovs",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "compressionLevel",
+            "printedName": "compressionLevel",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV16compressionLevelSivp",
+            "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV16compressionLevelSivp",
+            "moduleName": "SolidRasterPNG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV16compressionLevelSivg",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV16compressionLevelSivg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV16compressionLevelSivs",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV16compressionLevelSivs",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "resolutionDPI",
+            "printedName": "resolutionDPI",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Swift.Double?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Double",
+                    "printedName": "Swift.Double",
+                    "usr": "s:Sd"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV13resolutionDPISdSgvp",
+            "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV13resolutionDPISdSgvp",
+            "moduleName": "SolidRasterPNG",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Swift.Double?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Double",
+                        "printedName": "Swift.Double",
+                        "usr": "s:Sd"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV13resolutionDPISdSgvg",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV13resolutionDPISdSgvg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Swift.Double?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Double",
+                        "printedName": "Swift.Double",
+                        "usr": "s:Sd"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV13resolutionDPISdSgvs",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV13resolutionDPISdSgvs",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "background",
+            "printedName": "background",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PNGBackground",
+                "printedName": "SolidRasterPNG.PNGBackground",
+                "usr": "s:14SolidRasterPNG13PNGBackgroundV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV10backgroundAA13PNGBackgroundVvp",
+            "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV10backgroundAA13PNGBackgroundVvp",
+            "moduleName": "SolidRasterPNG",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGBackground",
+                    "printedName": "SolidRasterPNG.PNGBackground",
+                    "usr": "s:14SolidRasterPNG13PNGBackgroundV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV10backgroundAA13PNGBackgroundVvg",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV10backgroundAA13PNGBackgroundVvg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGBackground",
+                    "printedName": "SolidRasterPNG.PNGBackground",
+                    "usr": "s:14SolidRasterPNG13PNGBackgroundV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV10backgroundAA13PNGBackgroundVvs",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV10backgroundAA13PNGBackgroundVvs",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(colorFormat:filterStrategy:compressionLevel:resolutionDPI:background:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PNGEncodingOptions",
+                "printedName": "SolidRasterPNG.PNGEncodingOptions",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGColorFormat",
+                "printedName": "SolidRasterPNG.PNGColorFormat",
+                "hasDefaultArg": true,
+                "usr": "s:14SolidRasterPNG14PNGColorFormatO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FilterStrategy",
+                "printedName": "SolidRasterPNG.PNGEncodingOptions.FilterStrategy",
+                "hasDefaultArg": true,
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV14FilterStrategyO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "hasDefaultArg": true,
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Swift.Double?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Double",
+                    "printedName": "Swift.Double",
+                    "usr": "s:Sd"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGBackground",
+                "printedName": "SolidRasterPNG.PNGBackground",
+                "hasDefaultArg": true,
+                "usr": "s:14SolidRasterPNG13PNGBackgroundV"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV11colorFormat14filterStrategy16compressionLevel13resolutionDPI10backgroundAcA08PNGColorG0O_AC06FilterI0OSiSdSgAA13PNGBackgroundVtcfc",
+            "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV11colorFormat14filterStrategy16compressionLevel13resolutionDPI10backgroundAcA08PNGColorG0O_AC06FilterI0OSiSdSgAA13PNGBackgroundVtcfc",
+            "moduleName": "SolidRasterPNG",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_struct_equals",
+            "printedName": "__derived_struct_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGEncodingOptions",
+                "printedName": "SolidRasterPNG.PNGEncodingOptions",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGEncodingOptions",
+                "printedName": "SolidRasterPNG.PNGEncodingOptions",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV23__derived_struct_equalsySbAC_ACtFZ",
+            "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV23__derived_struct_equalsySbAC_ACtFZ",
+            "moduleName": "SolidRasterPNG",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV4hash4intoys6HasherVz_tF",
+            "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidRasterPNG",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV9hashValueSivp",
+            "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV9hashValueSivp",
+            "moduleName": "SolidRasterPNG",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV9hashValueSivg",
+                "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV9hashValueSivg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:14SolidRasterPNG18PNGEncodingOptionsV",
+        "mangledName": "$s14SolidRasterPNG18PNGEncodingOptionsV",
+        "moduleName": "SolidRasterPNG",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "PNGFilter",
+        "printedName": "PNGFilter",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "none",
+            "printedName": "none",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidRasterPNG.PNGFilter.Type) -> SolidRasterPNG.PNGFilter",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGFilter",
+                    "printedName": "SolidRasterPNG.PNGFilter",
+                    "usr": "s:14SolidRasterPNG9PNGFilterO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidRasterPNG.PNGFilter.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGFilter",
+                        "printedName": "SolidRasterPNG.PNGFilter",
+                        "usr": "s:14SolidRasterPNG9PNGFilterO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:14SolidRasterPNG9PNGFilterO4noneyA2CmF",
+            "mangledName": "$s14SolidRasterPNG9PNGFilterO4noneyA2CmF",
+            "moduleName": "SolidRasterPNG"
+          },
+          {
+            "kind": "Var",
+            "name": "sub",
+            "printedName": "sub",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidRasterPNG.PNGFilter.Type) -> SolidRasterPNG.PNGFilter",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGFilter",
+                    "printedName": "SolidRasterPNG.PNGFilter",
+                    "usr": "s:14SolidRasterPNG9PNGFilterO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidRasterPNG.PNGFilter.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGFilter",
+                        "printedName": "SolidRasterPNG.PNGFilter",
+                        "usr": "s:14SolidRasterPNG9PNGFilterO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:14SolidRasterPNG9PNGFilterO3subyA2CmF",
+            "mangledName": "$s14SolidRasterPNG9PNGFilterO3subyA2CmF",
+            "moduleName": "SolidRasterPNG"
+          },
+          {
+            "kind": "Var",
+            "name": "up",
+            "printedName": "up",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidRasterPNG.PNGFilter.Type) -> SolidRasterPNG.PNGFilter",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGFilter",
+                    "printedName": "SolidRasterPNG.PNGFilter",
+                    "usr": "s:14SolidRasterPNG9PNGFilterO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidRasterPNG.PNGFilter.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGFilter",
+                        "printedName": "SolidRasterPNG.PNGFilter",
+                        "usr": "s:14SolidRasterPNG9PNGFilterO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:14SolidRasterPNG9PNGFilterO2upyA2CmF",
+            "mangledName": "$s14SolidRasterPNG9PNGFilterO2upyA2CmF",
+            "moduleName": "SolidRasterPNG"
+          },
+          {
+            "kind": "Var",
+            "name": "average",
+            "printedName": "average",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidRasterPNG.PNGFilter.Type) -> SolidRasterPNG.PNGFilter",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGFilter",
+                    "printedName": "SolidRasterPNG.PNGFilter",
+                    "usr": "s:14SolidRasterPNG9PNGFilterO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidRasterPNG.PNGFilter.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGFilter",
+                        "printedName": "SolidRasterPNG.PNGFilter",
+                        "usr": "s:14SolidRasterPNG9PNGFilterO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:14SolidRasterPNG9PNGFilterO7averageyA2CmF",
+            "mangledName": "$s14SolidRasterPNG9PNGFilterO7averageyA2CmF",
+            "moduleName": "SolidRasterPNG"
+          },
+          {
+            "kind": "Var",
+            "name": "paeth",
+            "printedName": "paeth",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidRasterPNG.PNGFilter.Type) -> SolidRasterPNG.PNGFilter",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGFilter",
+                    "printedName": "SolidRasterPNG.PNGFilter",
+                    "usr": "s:14SolidRasterPNG9PNGFilterO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidRasterPNG.PNGFilter.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGFilter",
+                        "printedName": "SolidRasterPNG.PNGFilter",
+                        "usr": "s:14SolidRasterPNG9PNGFilterO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:14SolidRasterPNG9PNGFilterO5paethyA2CmF",
+            "mangledName": "$s14SolidRasterPNG9PNGFilterO5paethyA2CmF",
+            "moduleName": "SolidRasterPNG"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "AllCases",
+            "printedName": "AllCases",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[SolidRasterPNG.PNGFilter]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGFilter",
+                    "printedName": "SolidRasterPNG.PNGFilter",
+                    "usr": "s:14SolidRasterPNG9PNGFilterO"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:14SolidRasterPNG9PNGFilterO8AllCasesa",
+            "mangledName": "$s14SolidRasterPNG9PNGFilterO8AllCasesa",
+            "moduleName": "SolidRasterPNG",
+            "implicit": true
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_enum_equals",
+            "printedName": "__derived_enum_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGFilter",
+                "printedName": "SolidRasterPNG.PNGFilter",
+                "usr": "s:14SolidRasterPNG9PNGFilterO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PNGFilter",
+                "printedName": "SolidRasterPNG.PNGFilter",
+                "usr": "s:14SolidRasterPNG9PNGFilterO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:14SolidRasterPNG9PNGFilterO21__derived_enum_equalsySbAC_ACtFZ",
+            "mangledName": "$s14SolidRasterPNG9PNGFilterO21__derived_enum_equalsySbAC_ACtFZ",
+            "moduleName": "SolidRasterPNG",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements",
+              "Semantics"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "allCases",
+            "printedName": "allCases",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[SolidRasterPNG.PNGFilter]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PNGFilter",
+                    "printedName": "SolidRasterPNG.PNGFilter",
+                    "usr": "s:14SolidRasterPNG9PNGFilterO"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG9PNGFilterO8allCasesSayACGvpZ",
+            "mangledName": "$s14SolidRasterPNG9PNGFilterO8allCasesSayACGvpZ",
+            "moduleName": "SolidRasterPNG",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Nonisolated"
+            ],
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[SolidRasterPNG.PNGFilter]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGFilter",
+                        "printedName": "SolidRasterPNG.PNGFilter",
+                        "usr": "s:14SolidRasterPNG9PNGFilterO"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG9PNGFilterO8allCasesSayACGvgZ",
+                "mangledName": "$s14SolidRasterPNG9PNGFilterO8allCasesSayACGvgZ",
+                "moduleName": "SolidRasterPNG",
+                "static": true,
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:14SolidRasterPNG9PNGFilterO4hash4intoys6HasherVz_tF",
+            "mangledName": "$s14SolidRasterPNG9PNGFilterO4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidRasterPNG",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:14SolidRasterPNG9PNGFilterO9hashValueSivp",
+            "mangledName": "$s14SolidRasterPNG9PNGFilterO9hashValueSivp",
+            "moduleName": "SolidRasterPNG",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:14SolidRasterPNG9PNGFilterO9hashValueSivg",
+                "mangledName": "$s14SolidRasterPNG9PNGFilterO9hashValueSivg",
+                "moduleName": "SolidRasterPNG",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:14SolidRasterPNG9PNGFilterO",
+        "mangledName": "$s14SolidRasterPNG9PNGFilterO",
+        "moduleName": "SolidRasterPNG",
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "CaseIterable",
+            "printedName": "CaseIterable",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "AllCases",
+                "printedName": "AllCases",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[SolidRasterPNG.PNGFilter]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PNGFilter",
+                        "printedName": "SolidRasterPNG.PNGFilter",
+                        "usr": "s:14SolidRasterPNG9PNGFilterO"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ]
+              }
+            ],
+            "usr": "s:s12CaseIterableP",
+            "mangledName": "$ss12CaseIterableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      }
+    ],
+    "json_format_version": 8
+  }
+}

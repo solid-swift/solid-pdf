@@ -1,0 +1,38 @@
+{
+  "ABIRoot": {
+    "kind": "Root",
+    "name": "SolidPostScriptCoreText",
+    "printedName": "SolidPostScriptCoreText",
+    "children": [
+      {
+        "kind": "Import",
+        "name": "SwiftOnoneSupport",
+        "printedName": "SwiftOnoneSupport",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      },
+      {
+        "kind": "Import",
+        "name": "_Concurrency",
+        "printedName": "_Concurrency",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      },
+      {
+        "kind": "Import",
+        "name": "_StringProcessing",
+        "printedName": "_StringProcessing",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      },
+      {
+        "kind": "Import",
+        "name": "_SwiftConcurrencyShims",
+        "printedName": "_SwiftConcurrencyShims",
+        "declKind": "Import",
+        "moduleName": "SolidPostScriptCoreText"
+      }
+    ],
+    "json_format_version": 8
+  }
+}

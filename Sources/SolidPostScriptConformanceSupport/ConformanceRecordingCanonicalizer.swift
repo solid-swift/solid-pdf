@@ -5,10 +5,13 @@ import SolidPostScript
 package enum ConformanceRecordingCanonicalizer {
   package static func digest(_ recording: GraphicsRecording) -> String {
     var writer = Writer()
-    writer.token("recording-v2")
+    writer.token("recording-v3")
     writer.integer(recording.pages.count)
     for page in recording.pages {
-      writer.device(page.deviceDescriptor)
+      writer.deviceSnapshot(page.device)
+      writer.transmission(page.transmission)
+      writer.integer(page.copyOrdinal)
+      writer.coordinateMapping(page.coordinateMapping)
       writer.trapping(page.trapping)
       writer.effects(page.effects, depth: 0)
     }
@@ -18,6 +21,9 @@ package enum ConformanceRecordingCanonicalizer {
 
 private struct Writer {
   var data = Data()
+  private var resourceIdentifiers: [GraphicsResourceIdentifier: Int] = [:]
+  private var deviceIdentifiers: [GraphicsDeviceIdentifier: Int] = [:]
+  private var outputDeviceIdentifiers: [GraphicsOutputDeviceIdentifier: Int] = [:]
 
   mutating func token(_ value: String) {
     data.append(Data(value.utf8).map { String(format: "%02x", $0) }.joined().data(using: .ascii)!)
@@ -36,6 +42,26 @@ private struct Writer {
     }
     integer(value.count)
     token(ConformanceDigest.sha256(value))
+  }
+
+  mutating func resource(_ value: GraphicsResourceIdentifier) {
+    guard !value.isAnonymous else {
+      token("anonymous")
+      return
+    }
+    if let ordinal = resourceIdentifiers[value] {
+      integer(ordinal)
+    } else {
+      let ordinal = resourceIdentifiers.count + 1
+      resourceIdentifiers[value] = ordinal
+      integer(ordinal)
+    }
+    if let key = value.stableKey {
+      token(key.namespace)
+      binary(key.value)
+    } else {
+      token("nil")
+    }
   }
 
   mutating func point(_ value: GraphicsPoint) {
@@ -207,6 +233,7 @@ private struct Writer {
     }
     paint(value.paint, depth: depth)
     colorSpace(value.colorSpace)
+    colorRealization(value.colorRealization)
     doubles(value.colorComponents)
     boolean(value.overprint)
     double(value.lineWidth)
@@ -219,13 +246,31 @@ private struct Writer {
     boolean(value.strokeAdjustment)
     double(value.smoothness)
     rectangle(value.pathBoundingBox)
-    device(value.device.descriptor)
-    integer(value.device.pageNumber)
-    integer(value.device.numberOfCopies ?? -1)
-    boolean(value.device.usesCIEColor)
-    trapping(value.device.trapping)
+    deviceSnapshot(value.device)
     rendering(value.deviceRendering)
     font(value.font)
+  }
+
+  mutating func colorRealization(_ value: GraphicsColorSpaceRealization?) {
+    guard let value else {
+      token("nil")
+      return
+    }
+    integer(value.componentRanges.count)
+    for range in value.componentRanges {
+      double(range.lowerBound)
+      double(range.upperBound)
+    }
+    binary(value.indexedLookup)
+    if let alternative = value.alternativeSpace { colorSpace(alternative) } else { token("nil") }
+    if let transform = value.sampledTransform {
+      integer(transform.size.count)
+      transform.size.forEach { integer($0) }
+      integer(transform.outputComponentCount)
+      binary(transform.samples)
+    } else {
+      token("nil")
+    }
   }
 
   mutating func device(_ value: GraphicsDeviceDescriptor) {
@@ -239,6 +284,56 @@ private struct Writer {
     double(value.minimumSmoothness)
     double(value.maximumSmoothness)
     double(value.defaultSmoothness)
+  }
+
+  mutating func deviceSnapshot(_ value: GraphicsDeviceSnapshot) {
+    deviceIdentity(value.identifier)
+    outputDeviceIdentity(value.outputDeviceIdentifier)
+    token(String(describing: value.kind))
+    device(value.descriptor)
+    integer(value.pageNumber)
+    integer(value.numberOfCopies ?? -1)
+    boolean(value.usesCIEColor)
+    token(String(describing: value.mediaSelection))
+    token(String(describing: value.placement))
+    token(String(describing: value.delivery))
+    trapping(value.trapping)
+  }
+
+  mutating func deviceIdentity(_ value: GraphicsDeviceIdentifier) {
+    if let ordinal = deviceIdentifiers[value] {
+      integer(ordinal)
+    } else {
+      let ordinal = deviceIdentifiers.count + 1
+      deviceIdentifiers[value] = ordinal
+      integer(ordinal)
+    }
+  }
+
+  mutating func outputDeviceIdentity(_ value: GraphicsOutputDeviceIdentifier) {
+    if let ordinal = outputDeviceIdentifiers[value] {
+      integer(ordinal)
+    } else {
+      let ordinal = outputDeviceIdentifiers.count + 1
+      outputDeviceIdentifiers[value] = ordinal
+      integer(ordinal)
+    }
+  }
+
+  mutating func transmission(_ value: GraphicsPageTransmission) {
+    token(String(describing: value.trigger))
+    integer(value.logicalOrdinal)
+    integer(value.copies)
+    token(String(describing: value.mediaSelection))
+    token(String(describing: value.placement))
+    token(String(describing: value.delivery))
+  }
+
+  mutating func coordinateMapping(_ value: GraphicsPageCoordinateMapping) {
+    matrix(value.pageToDevice)
+    if let inverse = value.deviceToPage { matrix(inverse) } else { token("nil") }
+    rectangle(value.mediaBounds)
+    rectangle(value.imageableBounds)
   }
 
   mutating func rendering(_ value: GraphicsDeviceRenderingSnapshot) {
@@ -346,6 +441,11 @@ private struct Writer {
     matrix(value.matrix)
     integer(value.writingMode)
     token(String(describing: value.outlineAccess))
+    token(String(describing: value.technology))
+    integer(value.fontType ?? -1)
+    integer(value.paintType)
+    double(value.strokeWidth)
+    resource(value.resourceIdentifier)
     if let asset = value.asset {
       token(String(describing: asset.format))
       integer(asset.faceIndex)
@@ -408,8 +508,10 @@ private struct Writer {
       state(stateValue, depth: depth)
     case .form(let form, let stateValue):
       token("form")
+      resource(form.resourceIdentifier)
       rectangle(form.bounds)
       matrix(form.matrix)
+      resource(form.displayList.resourceIdentifier)
       effects(form.displayList.effects, depth: depth + 1)
       state(stateValue, depth: depth)
     case .text(let run, let stateValue):
@@ -420,9 +522,14 @@ private struct Writer {
   }
 
   mutating func sampledImage(_ value: GraphicsImage) {
+    resource(value.descriptor.resourceIdentifier)
+    integer(value.descriptor.sourceType.rawValue)
     integer(value.descriptor.width)
     integer(value.descriptor.height)
     integer(value.descriptor.sourceBitsPerComponent)
+    integer(value.descriptor.sourceComponentCount)
+    doubles(value.descriptor.decode)
+    colorRealization(value.descriptor.colorRealization)
     matrix(value.descriptor.imageToDevice)
     boolean(value.descriptor.interpolate)
     switch value.descriptor.kind {
@@ -441,6 +548,7 @@ private struct Writer {
     imageMaskDescriptor(value.descriptor.mask)
     floats(value.components)
     floats(value.sourceComponents)
+    binary(value.rawSamples)
     if let mask = value.mask {
       token("mask")
       imageMaskDescriptor(mask.descriptor)
@@ -478,6 +586,7 @@ private struct Writer {
       token("empty")
     case .tiling(let pattern, let underlying):
       token("tiling")
+      resource(pattern.resourceIdentifier)
       integer(pattern.paintType)
       integer(pattern.tilingType)
       rectangle(pattern.bounds)
@@ -485,6 +594,7 @@ private struct Writer {
       double(pattern.yStep)
       matrix(pattern.matrix)
       if let underlying { paint(underlying, depth: depth + 1) } else { token("nil") }
+      resource(pattern.displayList.resourceIdentifier)
       effects(pattern.displayList.effects, depth: depth + 1)
     case .shading(let shading):
       token("shadingPattern")
@@ -493,13 +603,15 @@ private struct Writer {
   }
 
   mutating func shadingValue(_ value: GraphicsShading, depth: Int) {
+    resource(value.resourceIdentifier)
     integer(value.type)
     colorSpace(value.colorSpace)
+    colorRealization(value.colorRealization)
     if let background = value.background { paint(background, depth: depth) } else { token("nil") }
     rectangle(value.bounds)
     if let clipPath = value.clipPath { path(clipPath) } else { token("nil") }
     boolean(value.antialias)
-    token(String(describing: value.geometry))
+    shadingGeometry(value.geometry)
     integer(value.mesh.triangles.count)
     for triangle in value.mesh.triangles {
       for vertex in [triangle.first, triangle.second, triangle.third] {
@@ -509,15 +621,74 @@ private struct Writer {
     }
   }
 
+  mutating func shadingGeometry(_ value: GraphicsShadingGeometry) {
+    switch value {
+    case .function(let domain, let transform, let functions):
+      token("function")
+      rectangle(domain)
+      matrix(transform)
+      integer(functions.count)
+      functions.forEach { token(String(describing: $0)) }
+    case .axial(let start, let end, let domainStart, let domainEnd, let extendStart, let extendEnd, let functions):
+      token("axial")
+      point(start)
+      point(end)
+      double(domainStart)
+      double(domainEnd)
+      boolean(extendStart)
+      boolean(extendEnd)
+      integer(functions.count)
+      functions.forEach { token(String(describing: $0)) }
+    case .radial(
+      let startCenter, let startRadius, let endCenter, let endRadius,
+      let domainStart, let domainEnd, let extendStart, let extendEnd, let functions
+    ):
+      token("radial")
+      point(startCenter)
+      double(startRadius)
+      point(endCenter)
+      double(endRadius)
+      double(domainStart)
+      double(domainEnd)
+      boolean(extendStart)
+      boolean(extendEnd)
+      integer(functions.count)
+      functions.forEach { token(String(describing: $0)) }
+    case .triangles(let type, let vertexCount):
+      token("triangles")
+      integer(type)
+      integer(vertexCount)
+    case .patches(let type, let patchCount):
+      token("patches")
+      integer(type)
+      integer(patchCount)
+    }
+  }
+
   mutating func glyphRun(_ value: GraphicsGlyphRun, depth: Int) {
     font(value.rootFont)
+    binary(value.sourceBytes)
     integer(value.glyphs.count)
     for placement in value.glyphs {
+      if let fontValue = placement.font { font(fontValue) } else { token("nil") }
       glyphSelector(placement.glyph.selector)
+      resource(placement.glyph.resourceIdentifier)
+      integer(placement.glyph.resolvedGlyphIndex ?? UInt32.max)
+      point(placement.glyph.metrics.horizontalAdvance)
+      if let vertical = placement.glyph.metrics.verticalAdvance { point(vertical) } else { token("nil") }
+      if let origin = placement.glyph.metrics.verticalOrigin { point(origin) } else { token("nil") }
+      rectangle(placement.glyph.metrics.bounds)
       point(placement.origin)
       matrix(placement.transform)
       point(placement.advance)
       binary(placement.sourceBytes)
+      if let range = placement.sourceRange {
+        integer(range.lowerBound)
+        integer(range.upperBound)
+      } else {
+        token("nil")
+      }
+      token(placement.unicodeProvenance.map(String.init(describing:)) ?? "nil")
       if let scalars = placement.unicodeScalars {
         integer(scalars.count)
         scalars.forEach { integer($0.value) }
@@ -538,6 +709,7 @@ private struct Writer {
         binary(bitmap.coverage)
       case .displayList(let displayList):
         token("displayList")
+        resource(displayList.resourceIdentifier)
         effects(displayList.effects, depth: depth + 1)
       case .empty: token("empty")
       case .missing: token("missing")

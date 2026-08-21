@@ -30,6 +30,33 @@ import Testing
       #expect(error == .ioError)
     }
   }
+
+  @Test func streamingAndRecordingTargetsReceiveEquivalentPaintSemantics() async throws {
+    let program = "0.25 setgray 2 3 11 13 rectfill showpage"
+    let semantic = try await Interpreter.render(
+      content: program,
+      to: SemanticGraphicsTarget(sink: TestSink())
+    )
+    let recording = try await Interpreter.render(content: program, to: RecordingGraphicsTarget())
+    let collector = GraphicsEffectCollector()
+
+    for event in semantic.output.events {
+      if case .page = event.operation { continue }
+      collector.process(event)
+    }
+
+    guard case .fillRectangles(let streamedPaths, let streamedState) = collector.effects.first,
+      case .fillRectangles(let recordedPaths, let recordedState) = recording.output.pages.first?.effects.first
+    else {
+      Issue.record("Expected corresponding rectangle effects")
+      return
+    }
+    #expect(streamedPaths == recordedPaths)
+    #expect(streamedState.paint == recordedState.paint)
+    #expect(streamedState.colorSpace == recordedState.colorSpace)
+    #expect(streamedState.matrix == recordedState.matrix)
+    #expect(streamedState.clip == recordedState.clip)
+  }
 }
 
 private struct TestSink: GraphicsSemanticSink {

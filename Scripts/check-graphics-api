@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly MODE="${1:-check}"
+if [[ "${MODE}" != "check" && "${MODE}" != "update" ]]; then
+  echo "usage: Scripts/check-graphics-api [check|update]" >&2
+  exit 64
+fi
+
+readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"
+readonly TOOLCHAIN_FAMILY="swift-6.3"
+readonly BASELINE_DIRECTORY="${SOLIDPDF_API_BASELINE_DIRECTORY:-${ROOT}/Documentation/APIBaselines/${TOOLCHAIN_FAMILY}/${PLATFORM}}"
+if [[ -n "${SOLIDPDF_BUILD_PATH:-}" ]]; then
+  BUILD_ROOT="${SOLIDPDF_BUILD_PATH}"
+elif [[ "${PLATFORM}" == "linux" && -d /build ]]; then
+  BUILD_ROOT=/build
+else
+  BUILD_ROOT="${ROOT}/.build"
+fi
+readonly BUILD_ROOT
+
+if [[ "${PLATFORM}" == "darwin" ]]; then
+  DIGESTER=(xcrun swift-api-digester)
+else
+  DIGESTER=(swift-api-digester)
+fi
+
+readonly MODULE_DIRECTORY="$(find "${BUILD_ROOT}" -path '*/debug/Modules' -type d | head -n 1)"
+if [[ -z "${MODULE_DIRECTORY}" ]]; then
+  echo "Build the package before checking API compatibility." >&2
+  exit 69
+fi
+
+FOUNDATION_PATH="$(swift package show-dependencies --format json | awk '
+  /"name"[[:space:]]*:[[:space:]]*"SolidFoundation"/ { found = 1 }
+  found && /"path"[[:space:]]*:/ {
+    value = $0
+    sub(/^[^:]*:[[:space:]]*"/, "", value)
+    sub(/",?[[:space:]]*$/, "", value)
+    print value
+    exit
+  }
+')"
+readonly FOUNDATION_PATH
+readonly NUMERICS_INCLUDE="${BUILD_ROOT}/checkouts/swift-numerics/Sources/_NumericsShims/include"
+readonly ZLIB_MODULE_MAP="${FOUNDATION_PATH}/Sources/CZlib/module.modulemap"
+readonly PLUTOVG_MODULE_MAP="$(dirname "${MODULE_DIRECTORY}")/CPlutoVG.build/module.modulemap"
+if [[ ! -f "${NUMERICS_INCLUDE}/module.modulemap" || ! -f "${ZLIB_MODULE_MAP}" \
+  || ! -f "${PLUTOVG_MODULE_MAP}" ]]; then
+  echo "Unable to locate SwiftPM C dependency module maps." >&2
+  exit 69
+fi
+C_MODULE_ARGUMENTS=(
+  -Xcc "-I${NUMERICS_INCLUDE}"
+  -Xcc "-fmodule-map-file=${ZLIB_MODULE_MAP}"
+  -Xcc "-fmodule-map-file=${PLUTOVG_MODULE_MAP}"
+)
+if [[ "${PLATFORM}" == "linux" ]]; then
+  C_MODULE_ARGUMENTS+=(
+    -Xcc "-fmodule-map-file=${ROOT}/Sources/CFreeType/module.modulemap"
+    -Xcc "-fmodule-map-file=${ROOT}/Sources/CFontconfig/module.modulemap"
+  )
+  read -r -a FONT_CFLAGS <<< "$(pkg-config --cflags freetype2 fontconfig)"
+  for flag in "${FONT_CFLAGS[@]}"; do
+    C_MODULE_ARGUMENTS+=(-Xcc "${flag}")
+  done
+fi
+readonly -a C_MODULE_ARGUMENTS
+
+readonly MODULES=(
+  SolidPDF SolidColor SolidFont SolidRaster SolidRasterPNG SolidPostScript
+  SolidPostScriptDocument SolidPostScriptPDF SolidPostScriptRaster
+  SolidPostScriptCoreGraphics SolidPostScriptCoreText SolidPostScriptFreeType
+  SolidPostScriptPlutoVG
+)
+
+mkdir -p "${BASELINE_DIRECTORY}"
+for module in "${MODULES[@]}"; do
+  baseline="${BASELINE_DIRECTORY}/${module}.json"
+  if [[ "${MODE}" == "update" ]]; then
+    "${DIGESTER[@]}" -dump-sdk -module "${module}" -I "${MODULE_DIRECTORY}" \
+      "${C_MODULE_ARGUMENTS[@]}" -avoid-location -avoid-tool-args -o "${baseline}"
+    if grep -q '"name": "NO_MODULE"' "${baseline}"; then
+      echo "API Digester failed to load ${module}." >&2
+      exit 1
+    fi
+  else
+    if [[ ! -f "${baseline}" ]]; then
+      echo "Missing API baseline: ${baseline}" >&2
+      exit 1
+    fi
+    "${DIGESTER[@]}" -diagnose-sdk -module "${module}" -I "${MODULE_DIRECTORY}" \
+      "${C_MODULE_ARGUMENTS[@]}" -baseline-path "${baseline}" -abort-on-module-fail
+  fi
+done
