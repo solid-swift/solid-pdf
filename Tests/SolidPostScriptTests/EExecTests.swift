@@ -179,7 +179,8 @@ import Testing
       """
     var program = Data(cleartext.utf8)
     program.append(10)
-    program.append(Self.transport(Self.encrypt(Data(encrypted.utf8)), as: .hexadecimal))
+    // Keep the `closefile` token delimiter inside the encrypted section so scanning does not consume the trailer.
+    program.append(Self.transport(Self.encrypt(Data((encrypted + "\n").utf8)), as: .hexadecimal))
     program.append(Data(trailer.utf8))
 
     let result = try await Interpreter.render(
