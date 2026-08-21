@@ -33,6 +33,10 @@ public struct RasterPageSinkTarget<Sink: RasterPageSink>: GraphicsTarget, Sendab
     public func endImage() throws { try core.endImage() }
     public func abortImage() { core.abortImage() }
 
+    public func installStorageAccounting(_ session: GraphicsStorageAccountingSession) {
+      core.installStorageAccounting(session)
+    }
+
     public func activateDevice(_ device: GraphicsDeviceSnapshot) throws {
       activeDevice = device
       try core.activateDevice(device)

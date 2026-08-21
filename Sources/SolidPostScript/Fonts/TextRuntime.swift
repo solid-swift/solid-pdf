@@ -48,18 +48,22 @@ extension Context {
     }
 
     let decoded: GraphicsGlyphDescription
-    if let cached = cache.program(for: programKey) {
-      decoded = cached
-    } else {
-      if let face = font.providerFace,
-        let provider = environment.fontManager.provider(identifier: face.providerIdentifier)
-      {
+    if let face = font.providerFace,
+      let provider = environment.fontManager.provider(identifier: face.providerIdentifier)
+    {
+      let outlineCache = environment.fontManager.outlineCache
+      if let cached = outlineCache.glyph(for: programKey) {
+        decoded = cached
+      } else {
         let portableSelector = try selector.fontSelector
         let resolved = try await withUserTimeSuspended { try await provider.glyph(portableSelector, in: face) }
         decoded = resolved.map { GraphicsGlyphDescription($0, selector: selector) } ?? .missing(selector)
-      } else {
-        decoded = try Operators.decodeDictionaryGlyph(selector: selector, font: font)
+        outlineCache.insert(decoded, for: programKey, maximumItemBytes: itemLimit)
       }
+    } else if let cached = cache.program(for: programKey) {
+      decoded = cached
+    } else {
+      decoded = try Operators.decodeDictionaryGlyph(selector: selector, font: font)
       cache.insertProgram(decoded, for: programKey, maximumItemBytes: itemLimit)
     }
 

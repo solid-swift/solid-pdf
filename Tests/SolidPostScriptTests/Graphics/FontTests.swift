@@ -264,6 +264,33 @@ import Testing
     #expect(status.entries == 1)
   }
 
+  @Test func providerOutlineCacheIsIndependentAndImmediatelyEvictable() {
+    let outlineCache = FontOutlineCache()
+    let glyphCache = FontGlyphCache()
+    let font = GraphicsFontIdentifier("Provider")
+    let firstKey = FontGlyphProgramCacheKey(font: font, selector: .name("A"), writingMode: 0, revision: 1)
+    let secondKey = FontGlyphProgramCacheKey(font: font, selector: .name("B"), writingMode: 0, revision: 1)
+    let glyph = GraphicsGlyphDescription(
+      selector: .name("A"),
+      metrics: GraphicsGlyphMetrics(horizontalAdvance: GraphicsPoint(x: 500, y: 0)),
+      program: .empty
+    )
+
+    outlineCache.setMaximumBytes(128)
+    outlineCache.insert(glyph, for: firstKey, maximumItemBytes: FontGlyphCache.maximumItemBytes)
+    glyphCache.insertProgram(glyph, for: firstKey, maximumItemBytes: FontGlyphCache.maximumItemBytes)
+    outlineCache.insert(glyph, for: secondKey, maximumItemBytes: FontGlyphCache.maximumItemBytes)
+
+    #expect(outlineCache.status().bytes == 128)
+    #expect(outlineCache.status().entries == 1)
+    #expect(glyphCache.status().bytes == 128)
+    outlineCache.setMaximumBytes(0)
+    #expect(outlineCache.status().bytes == 0)
+    outlineCache.insert(glyph, for: firstKey, maximumItemBytes: FontGlyphCache.maximumItemBytes)
+    #expect(outlineCache.status().entries == 0)
+    #expect(glyphCache.status().bytes == 128)
+  }
+
   @Test func glyphTransformCacheKeyIgnoresIntegerTranslationButKeepsPhase() {
     let base = GraphicsMatrix(a: 2, b: 0, c: 0, d: 3, tx: 10.25, ty: -4.75)
     let translated = GraphicsMatrix(a: 2, b: 0, c: 0, d: 3, tx: 101.25, ty: 27.25)

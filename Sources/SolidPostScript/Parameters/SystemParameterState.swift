@@ -24,17 +24,27 @@ struct SystemParameterState: Sendable {
     "GenericResourceDir": .readWrite(.string(maximumLength: nil)),
     "GenericResourcePathSep": .readWrite(.string(maximumLength: nil)),
     "LicenseID": .readOnly,
-    "MaxDisplayAndSourceList": .readWrite(.nonnegativeInteger),
-    "MaxDisplayList": .readWrite(.nonnegativeInteger),
+    "MaxDisplayAndSourceList": .readWrite(.integer {
+      min(max($0, 0), Int32(GraphicsStorageLedger.maximumCombinedBytes))
+    }),
+    "MaxDisplayList": .readWrite(.integer {
+      min(max($0, 0), Int32(GraphicsStorageLedger.maximumDisplayBytes))
+    }),
     "MaxFontCache": .readWrite(.integer { min(max($0, 0), Int32(FontGlyphCache.maximumBytes)) }),
     "MaxFormCache": .readWrite(.integer { min(max($0, 0), Int32(FormCache.maximumBytes)) }),
-    "MaxImageBuffer": .readWrite(.nonnegativeInteger),
-    "MaxOutlineCache": .readWrite(.nonnegativeInteger),
+    "MaxImageBuffer": .readWrite(.integer {
+      min(max($0, 0), Int32(GraphicsStorageLedger.maximumImageBufferBytes))
+    }),
+    "MaxOutlineCache": .readWrite(.integer {
+      min(max($0, 0), Int32(FontOutlineCache.maximumBytes))
+    }),
     "MaxPatternCache": .readWrite(.integer { min(max($0, 0), Int32(PatternCache.maximumBytes)) }),
     "MaxScreenStorage": .readWrite(.integer {
       min(max($0, 0), Int32(ScreenManager.maximumActiveBytes))
     }),
-    "MaxSourceList": .readWrite(.nonnegativeInteger),
+    "MaxSourceList": .readWrite(.integer {
+      min(max($0, 0), Int32(GraphicsStorageLedger.maximumSourceBytes))
+    }),
     "MaxStoredScreenCache": .readWrite(.integer {
       min(max($0, 0), Int32(ScreenManager.maximumCachedBytes))
     }),
@@ -73,15 +83,15 @@ struct SystemParameterState: Sendable {
       "GenericResourceDir": .string(Data("%null".utf8)),
       "GenericResourcePathSep": .string(Data("/".utf8)),
       "LicenseID": .string(Data()),
-      "MaxDisplayAndSourceList": .integer(.max),
-      "MaxDisplayList": .integer(.max),
+      "MaxDisplayAndSourceList": .integer(Int32(GraphicsStorageLedger.maximumCombinedBytes)),
+      "MaxDisplayList": .integer(Int32(GraphicsStorageLedger.maximumDisplayBytes)),
       "MaxFontCache": .integer(Int32(FontGlyphCache.maximumBytes)),
       "MaxFormCache": .integer(Int32(FormCache.maximumBytes)),
-      "MaxImageBuffer": .integer(.max),
-      "MaxOutlineCache": .integer(.max),
+      "MaxImageBuffer": .integer(Int32(GraphicsStorageLedger.maximumImageBufferBytes)),
+      "MaxOutlineCache": .integer(Int32(FontOutlineCache.maximumBytes)),
       "MaxPatternCache": .integer(Int32(PatternCache.maximumBytes)),
       "MaxScreenStorage": .integer(Int32(ScreenManager.maximumActiveBytes)),
-      "MaxSourceList": .integer(.max),
+      "MaxSourceList": .integer(Int32(GraphicsStorageLedger.maximumSourceBytes)),
       "MaxStoredScreenCache": .integer(Int32(ScreenManager.maximumCachedBytes)),
       "MaxUPathCache": .integer(Int32(UserPathCache.maximumBytes)),
       "PageCount": .integer(0),

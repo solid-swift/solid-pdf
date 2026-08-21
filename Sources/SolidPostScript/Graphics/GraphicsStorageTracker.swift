@@ -60,6 +60,14 @@ package final class GraphicsStorageTracker {
     try activeImage?.resize(to: bytes)
   }
 
+  package func appendImageBytes(_ bytes: Int) throws {
+    guard bytes >= 0 else { throw GraphicsStorageAccountingError.limitExceeded }
+    guard let activeImage else { return }
+    let total = activeImage.bytes.addingReportingOverflow(bytes)
+    guard !total.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+    try activeImage.resize(to: total.partialValue)
+  }
+
   package func endImage(effects: [GraphicsEffect]) throws {
     activeImage?.release()
     activeImage = nil

@@ -44,6 +44,7 @@ where
       maskOpacities: [Float],
       nextMaskRow: Int
     )?
+    private let storage = GraphicsStorageTracker()
     private static var maximumBitmapBytes: Int { 512 * 1_024 * 1_024 }
 
     fileprivate init(
@@ -121,21 +122,32 @@ where
       guard activeImage == nil, case .paint(.image(let descriptor)) = event.operation else {
         throw SolidPostScript.Error.ioError
       }
-      activeImage = (
-        descriptor,
-        event.before,
-        try colorSession.makeImageConverter(
+      try storage.beginImage()
+      do {
+        activeImage = (
+          descriptor,
+          event.before,
+          try colorSession.makeImageConverter(
           for: descriptor,
           deviceRendering: event.before.deviceRendering
-        ),
-        [],
-        0
-      )
+          ),
+          [],
+          0
+        )
+      } catch {
+        storage.abortImage()
+        throw error
+      }
     }
 
     /// Consumes one bounded group of complete sampled-image rows.
     public func writeImageRows(_ rows: GraphicsImageRows) throws {
       guard let image = activeImage else { throw SolidPostScript.Error.ioError }
+      let components = rows.components.count.addingReportingOverflow(rows.sourceComponents?.count ?? 0)
+      guard !components.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+      let bytes = components.partialValue.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+      guard !bytes.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+      try storage.appendImageBytes(bytes.partialValue)
       try image.converter.write(rows)
     }
 
@@ -151,6 +163,9 @@ where
         rows.rowCount <= Int.max / width,
         rows.opacities.count == rows.rowCount * width
       else { throw SolidPostScript.Error.ioError }
+      let bytes = rows.opacities.count.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+      guard !bytes.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+      try storage.appendImageBytes(bytes.partialValue)
       image.maskOpacities.append(contentsOf: rows.opacities)
       image.nextMaskRow += rows.rowCount
       activeImage = image
@@ -160,6 +175,7 @@ where
     public func endImage() throws {
       guard let image = activeImage else { throw SolidPostScript.Error.ioError }
       activeImage = nil
+      defer { storage.abortImage() }
       let resolved = try image.converter.finish()
       guard renderingEnabled else { return }
       guard let context else { throw SolidPostScript.Error.ioError }
@@ -176,6 +192,12 @@ where
     public func abortImage() {
       activeImage?.converter.abort()
       activeImage = nil
+      storage.abortImage()
+      storage.abortImage()
+    }
+
+    public func installStorageAccounting(_ session: GraphicsStorageAccountingSession) {
+      storage.install(session)
     }
 
     /// Activates page geometry negotiated by the page-device session.
@@ -230,6 +252,7 @@ where
     public func finish() -> sending [CGImage] {
       activeImage?.converter.abort()
       activeImage = nil
+      storage.abortImage()
       context = nil
       return pages
     }

@@ -310,9 +310,16 @@ public final class InterpreterEnvironment: Sendable {
     let fontStatus = fontManager.glyphCache.status()
     values["CurFontCache"] = .integer(Int32(clamping: fontStatus.bytes))
     values["MaxFontCache"] = .integer(Int32(clamping: fontStatus.maximumBytes))
+    let outlineStatus = fontManager.outlineCache.status()
+    values["CurOutlineCache"] = .integer(Int32(clamping: outlineStatus.bytes))
+    values["MaxOutlineCache"] = .integer(Int32(clamping: outlineStatus.maximumBytes))
     let graphicsStatus = graphicsStorageLedger.status()
     values["CurDisplayList"] = .integer(Int32(clamping: graphicsStatus.displayBytes))
     values["CurSourceList"] = .integer(Int32(clamping: graphicsStatus.sourceBytes))
+    values["MaxDisplayList"] = .integer(Int32(clamping: graphicsStatus.maximumDisplayBytes))
+    values["MaxSourceList"] = .integer(Int32(clamping: graphicsStatus.maximumSourceBytes))
+    values["MaxDisplayAndSourceList"] = .integer(Int32(clamping: graphicsStatus.maximumCombinedBytes))
+    values["MaxImageBuffer"] = .integer(Int32(clamping: graphicsStatus.maximumImageBufferBytes))
     return values
   }
 
@@ -396,11 +403,12 @@ public final class InterpreterEnvironment: Sendable {
 
       let maxDisplay = updatedInteger("MaxDisplayList", updates: valueUpdates, current: state.values)
       let maxSource = updatedInteger("MaxSourceList", updates: valueUpdates, current: state.values)
-      if let requestedCombined = updatedInteger(
+      let requestedCombined = updatedInteger(
         "MaxDisplayAndSourceList",
         updates: valueUpdates,
         current: state.values
-      ) {
+      )
+      if let requestedCombined {
         valueUpdates["MaxDisplayAndSourceList"] = .integer(max(requestedCombined, max(maxDisplay ?? 0, maxSource ?? 0)))
       }
 
@@ -439,6 +447,25 @@ public final class InterpreterEnvironment: Sendable {
       return value
     }
     fontManager.glyphCache.setMaximumBytes(Int(fontMaximum))
+    let outlineMaximum = state.withLock { state -> Int32 in
+      guard case .integer(let value) = state.values["MaxOutlineCache"] else { return 0 }
+      return value
+    }
+    fontManager.outlineCache.setMaximumBytes(Int(outlineMaximum))
+    let graphicsLimits = state.withLock { state -> (Int, Int, Int, Int) in
+      (
+        Int(updatedInteger("MaxDisplayList", updates: [:], current: state.values) ?? 0),
+        Int(updatedInteger("MaxSourceList", updates: [:], current: state.values) ?? 0),
+        Int(updatedInteger("MaxDisplayAndSourceList", updates: [:], current: state.values) ?? 0),
+        Int(updatedInteger("MaxImageBuffer", updates: [:], current: state.values) ?? 0)
+      )
+    }
+    graphicsStorageLedger.setLimits(
+      display: graphicsLimits.0,
+      source: graphicsLimits.1,
+      combined: graphicsLimits.2,
+      imageBuffer: graphicsLimits.3
+    )
   }
 
 

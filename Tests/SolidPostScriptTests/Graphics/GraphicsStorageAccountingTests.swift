@@ -72,4 +72,77 @@ struct GraphicsStorageAccountingTests {
     }
     #expect(ledger.status().displayBytes == 0)
   }
+
+  @Test
+  func individualCombinedAndImageLimitsAreExact() throws {
+    let ledger = GraphicsStorageLedger()
+    ledger.setLimits(display: 128, source: 64, combined: 160, imageBuffer: 32)
+    let session = ledger.makeSession()
+    let display = try session.reserve(.displayList, bytes: 128)
+    let source = try session.reserve(.sourceList, bytes: 32)
+
+    #expect(throws: GraphicsStorageAccountingError.limitExceeded) {
+      try source.resize(to: 33)
+    }
+    source.release()
+    let image = try session.reserve(.imageBuffer, bytes: 32)
+    #expect(throws: GraphicsStorageAccountingError.limitExceeded) {
+      try image.resize(to: 33)
+    }
+
+    display.release()
+    image.release()
+  }
+
+  @Test
+  func loweringLiveLimitBlocksGrowthUntilUsageFalls() throws {
+    let ledger = GraphicsStorageLedger()
+    let reservation = try ledger.makeSession().reserve(.displayList, bytes: 128)
+    ledger.setLimits(display: 64, source: 64, combined: 64, imageBuffer: 64)
+
+    #expect(throws: GraphicsStorageAccountingError.limitExceeded) {
+      try reservation.resize(to: 129)
+    }
+    try reservation.resize(to: 64)
+    #expect(throws: GraphicsStorageAccountingError.limitExceeded) {
+      try reservation.resize(to: 65)
+    }
+  }
+
+  @Test
+  func graphicsLimitFailureIsAttributedToTriggeringOperator() async throws {
+    let result = try await Interpreter.render(
+      content:
+        """
+        << /MaxDisplayList 255 >> setsystemparams
+        { newpath 0 0 moveto 10 0 lineto 10 10 lineto closepath fill } stopped
+        $error /errorname get /limitcheck eq
+        $error /command get /fill load eq
+        """,
+      to: RecordingGraphicsTarget()
+    )
+    let values = try await result.context.results()
+    let booleans = values.compactMap { try? $0.value(as: BooleanValue.self).value }
+    #expect(booleans.count == 3)
+    #expect(booleans.allSatisfy { $0 })
+  }
+
+  @Test
+  func imageLimitFailureIsTransactionalAndAttributedToImage() async throws {
+    let result = try await Interpreter.render(
+      content:
+        """
+        << /MaxImageBuffer 3 >> setsystemparams
+        { 1 1 8 [1 0 0 -1 0 1] <80> image } stopped
+        $error /errorname get /limitcheck eq
+        $error /command get /image load eq
+        currentsystemparams /CurSourceList get 0 eq
+        """,
+      to: RecordingGraphicsTarget()
+    )
+    let values = try await result.context.results()
+    let booleans = values.compactMap { try? $0.value(as: BooleanValue.self).value }
+    #expect(booleans.count == 4)
+    #expect(booleans.allSatisfy { $0 })
+  }
 }

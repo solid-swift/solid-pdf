@@ -39,6 +39,7 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
     )?
     private var cachedGraphicsClip: GraphicsClip?
     private var cachedRasterClip: RasterClip?
+    private let storage = GraphicsStorageTracker()
 
     fileprivate init(
       preview: RasterImageTarget.Renderer,
@@ -99,6 +100,12 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
       guard case .paint(.image(let descriptor)) = event.operation, activeImage == nil else {
         throw SolidPostScript.Error.ioError
       }
+      do {
+        try storage.beginImage()
+      } catch {
+        preview.abortImage()
+        throw error
+      }
       activeImage = (descriptor, event.before, [], [], [])
     }
 
@@ -106,6 +113,11 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
     public func writeImageRows(_ rows: GraphicsImageRows) throws {
       try preview.writeImageRows(rows)
       guard var image = activeImage else { throw SolidPostScript.Error.ioError }
+      let components = rows.components.count.addingReportingOverflow(rows.sourceComponents?.count ?? 0)
+      guard !components.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+      let bytes = components.partialValue.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+      guard !bytes.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+      try storage.appendImageBytes(bytes.partialValue)
       image.components.append(contentsOf: rows.components)
       image.sourceComponents.append(contentsOf: rows.sourceComponents ?? [])
       activeImage = image
@@ -115,6 +127,9 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
     public func writeImageMaskRows(_ rows: GraphicsImageMaskRows) throws {
       try preview.writeImageMaskRows(rows)
       guard var image = activeImage else { throw SolidPostScript.Error.ioError }
+      let bytes = rows.opacities.count.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+      guard !bytes.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+      try storage.appendImageBytes(bytes.partialValue)
       image.maskOpacities.append(contentsOf: rows.opacities)
       activeImage = image
     }
@@ -124,6 +139,7 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
       try preview.endImage()
       guard let image = activeImage else { throw SolidPostScript.Error.ioError }
       activeImage = nil
+      defer { storage.abortImage() }
       guard renderingEnabled else { return }
       try paintImage(GraphicsImage(
         descriptor: image.descriptor,
@@ -137,6 +153,12 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
     public func abortImage() {
       preview.abortImage()
       activeImage = nil
+      storage.abortImage()
+    }
+
+    public func installStorageAccounting(_ session: GraphicsStorageAccountingSession) {
+      storage.install(session)
+      preview.installStorageAccounting(session)
     }
 
     /// Activates a negotiated page or null device.

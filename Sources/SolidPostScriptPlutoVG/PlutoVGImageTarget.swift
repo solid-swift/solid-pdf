@@ -48,6 +48,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       maskOpacities: [Float],
       nextMaskRow: Int
     )?
+    private let storage = GraphicsStorageTracker()
 
     fileprivate init(
       pixelWidth: Int,
@@ -123,21 +124,32 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       else {
         throw SolidPostScript.Error.ioError
       }
-      activeImage = (
-        descriptor,
-        event.before,
-        try colorSession.makeImageConverter(
+      try storage.beginImage()
+      do {
+        activeImage = (
+          descriptor,
+          event.before,
+          try colorSession.makeImageConverter(
           for: descriptor,
           deviceRendering: event.before.deviceRendering
-        ),
-        [],
-        0
-      )
+          ),
+          [],
+          0
+        )
+      } catch {
+        storage.abortImage()
+        throw error
+      }
     }
 
     /// Consumes one bounded group of complete sampled-image rows.
     public func writeImageRows(_ rows: GraphicsImageRows) throws {
       guard let image = activeImage else { throw SolidPostScript.Error.ioError }
+      let components = rows.components.count.addingReportingOverflow(rows.sourceComponents?.count ?? 0)
+      guard !components.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+      let bytes = components.partialValue.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+      guard !bytes.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+      try storage.appendImageBytes(bytes.partialValue)
       try image.converter.write(rows)
     }
 
@@ -153,6 +165,9 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         rows.rowCount <= Int.max / width,
         rows.opacities.count == rows.rowCount * width
       else { throw SolidPostScript.Error.ioError }
+      let bytes = rows.opacities.count.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+      guard !bytes.overflow else { throw GraphicsStorageAccountingError.limitExceeded }
+      try storage.appendImageBytes(bytes.partialValue)
       image.maskOpacities.append(contentsOf: rows.opacities)
       image.nextMaskRow += rows.rowCount
       activeImage = image
@@ -164,6 +179,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         throw SolidPostScript.Error.ioError
       }
       activeImage = nil
+      defer { storage.abortImage() }
       let resolved = try image.converter.finish()
       guard renderingEnabled else { return }
       guard let canvas else { throw SolidPostScript.Error.ioError }
@@ -180,6 +196,12 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
     public func abortImage() {
       activeImage?.converter.abort()
       activeImage = nil
+      storage.abortImage()
+      storage.abortImage()
+    }
+
+    public func installStorageAccounting(_ session: GraphicsStorageAccountingSession) {
+      storage.install(session)
     }
 
     /// Activates page geometry negotiated by the page-device session.
@@ -234,6 +256,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       lifecycle = .finished
       activeImage?.converter.abort()
       activeImage = nil
+      storage.abortImage()
       releasePage()
       let output = pages
       pages.removeAll()
