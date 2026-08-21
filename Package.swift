@@ -194,6 +194,23 @@ let package = Package(
       ],
       plugins: lintPlugins
     ),
+    .target(
+      name: "SolidPostScriptConformanceSupport",
+      dependencies: [
+        "SolidPostScript",
+        "SolidPostScriptDocument",
+        "SolidPostScriptRaster",
+        "SolidRaster",
+        "SolidRasterPNG",
+        .product(name: "SolidIO", package: "solid-foundation"),
+      ],
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidPostScriptConformanceSupportTests",
+      dependencies: ["SolidPostScriptConformanceSupport"],
+      plugins: lintPlugins
+    ),
     .testTarget(
       name: "SolidPostScriptRasterTests",
       dependencies: [
@@ -409,6 +426,33 @@ if fuzzingEnabled {
         .product(name: "SolidFuzzSupport", package: "solid-foundation"),
       ],
       path: "Fuzzing/SolidPostScriptFilterFuzz"
+    ),
+  ]
+}
+
+// Independent PostScript conformance validation
+let conformanceEnableEnvironment = ProcessInfo.processInfo.environment["CONFORMANCE_ENABLE"]?.lowercased()
+let conformanceEnabled =
+  if let conformanceEnableEnvironment,
+    conformanceEnableEnvironment == "1"
+      || conformanceEnableEnvironment == "true"
+      || conformanceEnableEnvironment == "t"
+  {
+    true
+  } else {
+    false
+  }
+
+if conformanceEnabled {
+  package.targets += [
+    .executableTarget(
+      name: "solid-ps-conformance",
+      dependencies: [
+        "SolidPostScriptConformanceSupport",
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+      ],
+      path: "Conformance/solid-ps-conformance",
+      plugins: lintPlugins
     ),
   ]
 }
