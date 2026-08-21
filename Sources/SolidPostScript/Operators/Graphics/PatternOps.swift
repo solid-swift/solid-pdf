@@ -244,7 +244,13 @@ extension Operators {
       xStep: try numeric(dictionary.object(forKey: "XStep")),
       yStep: try numeric(dictionary.object(forKey: "YStep")),
       matrix: matrix,
-      displayList: GraphicsDisplayList(effects: consumer.effects)
+      displayList: GraphicsDisplayList(
+        effects: consumer.effects,
+        resourceIdentifier: context.environment.graphicsResourceIdentities.next()
+      ),
+      resourceIdentifier: context.environment.graphicsResourceIdentities.next(
+        stableKey: xuid.map(GraphicsResourceStableKey.xuid)
+      )
     )
     context.environment.patternCache.insert(
       result,

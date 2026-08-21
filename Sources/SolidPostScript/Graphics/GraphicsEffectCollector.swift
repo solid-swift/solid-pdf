@@ -7,6 +7,7 @@ final class GraphicsEffectCollector {
     state: GraphicsStateSnapshot,
     components: [Float],
     sourceComponents: [Float],
+    rawSamples: Data,
     maskOpacities: [Float],
     nextMaskRow: Int
   )?
@@ -36,13 +37,14 @@ final class GraphicsEffectCollector {
     guard activeImage == nil, case .paint(.image(let descriptor)) = event.operation else {
       throw Error.ioError
     }
-    activeImage = (descriptor, event.before, [], [], [], 0)
+    activeImage = (descriptor, event.before, [], [], Data(), [], 0)
   }
 
   func writeImageRows(_ rows: GraphicsImageRows) throws {
     guard var image = activeImage else { throw Error.ioError }
     image.components.append(contentsOf: rows.components)
     if let source = rows.sourceComponents { image.sourceComponents.append(contentsOf: source) }
+    if let rawSamples = rows.rawSamples { image.rawSamples.append(rawSamples) }
     activeImage = image
   }
 
@@ -70,6 +72,7 @@ final class GraphicsEffectCollector {
           descriptor: image.descriptor,
           components: image.components,
           sourceComponents: image.sourceComponents.isEmpty ? nil : image.sourceComponents,
+          rawSamples: image.rawSamples.isEmpty ? nil : image.rawSamples,
           mask: image.descriptor.mask.map {
             GraphicsImageMask(descriptor: $0, opacities: image.maskOpacities)
           }
@@ -93,8 +96,9 @@ final class GraphicsEffectCollector {
       .addingReportingOverflow(activeImage.sourceComponents.count)
     let all = values.partialValue.addingReportingOverflow(activeImage.maskOpacities.count)
     let bytes = all.partialValue.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
-    guard !values.overflow, !all.overflow, !bytes.overflow else { return nil }
-    return bytes.partialValue
+    let total = bytes.partialValue.addingReportingOverflow(activeImage.rawSamples.count)
+    guard !values.overflow, !all.overflow, !bytes.overflow, !total.overflow else { return nil }
+    return total.partialValue
   }
 
   func removeLastEffect() {

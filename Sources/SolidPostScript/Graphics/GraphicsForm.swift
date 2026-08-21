@@ -2,6 +2,8 @@ import Foundation
 
 /// An immutable, reusable Type 1 PostScript form compiled for a graphics device and state.
 public struct GraphicsForm: Sendable, Hashable {
+  /// Identity shared by repeated references to this form instance.
+  public let resourceIdentifier: GraphicsResourceIdentifier
   /// The form's bounding box in form space.
   public let bounds: GraphicsRect
   /// The matrix mapping form space into the user space active at invocation.
@@ -19,8 +21,10 @@ public struct GraphicsForm: Sendable, Hashable {
     matrix: GraphicsMatrix,
     deviceDescriptor: GraphicsDeviceDescriptor,
     compilationState: GraphicsStateSnapshot,
-    displayList: GraphicsDisplayList
+    displayList: GraphicsDisplayList,
+    resourceIdentifier: GraphicsResourceIdentifier = .anonymous
   ) {
+    self.resourceIdentifier = resourceIdentifier
     self.bounds = bounds
     self.matrix = matrix
     self.deviceDescriptor = deviceDescriptor

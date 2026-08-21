@@ -291,7 +291,8 @@ extension Operators {
       clipPath: try shadingClipPath(common.bounds, matrix: matrix),
       antialias: common.antialias,
       geometry: .function(domain: domain, matrix: shadingMatrix, functions: functions.values),
-      mesh: .init(triangles: triangles)
+      mesh: .init(triangles: triangles),
+      resourceIdentifier: context.environment.graphicsResourceIdentities.next()
     )
   }
 
@@ -368,7 +369,8 @@ extension Operators {
         extendEnd: extend[1],
         functions: functions.values
       ),
-      mesh: .init(triangles: gridTriangles(strips))
+      mesh: .init(triangles: gridTriangles(strips)),
+      resourceIdentifier: context.environment.graphicsResourceIdentities.next()
     )
   }
 
@@ -463,7 +465,8 @@ extension Operators {
         extendEnd: extend[1],
         functions: functions.values
       ),
-      mesh: .init(triangles: gridTriangles(vertices))
+      mesh: .init(triangles: gridTriangles(vertices)),
+      resourceIdentifier: context.environment.graphicsResourceIdentities.next()
     )
   }
 
@@ -602,7 +605,8 @@ extension Operators {
       clipPath: try shadingClipPath(common.bounds, matrix: matrix),
       antialias: common.antialias,
       geometry: .triangles(type: common.type, vertexCount: records.count),
-      mesh: .init(triangles: triangles)
+      mesh: .init(triangles: triangles),
+      resourceIdentifier: context.environment.graphicsResourceIdentities.next()
     )
   }
 
@@ -771,7 +775,8 @@ extension Operators {
       clipPath: try shadingClipPath(common.bounds, matrix: matrix),
       antialias: common.antialias,
       geometry: .patches(type: common.type, patchCount: patches.count),
-      mesh: .init(triangles: triangles)
+      mesh: .init(triangles: triangles),
+      resourceIdentifier: context.environment.graphicsResourceIdentities.next()
     )
   }
 

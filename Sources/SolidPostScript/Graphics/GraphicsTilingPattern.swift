@@ -1,5 +1,7 @@
 /// An immutable realized PostScript tiling pattern.
 public struct GraphicsTilingPattern: Sendable, Hashable {
+  /// Identity shared by repeated references to this pattern instance.
+  public let resourceIdentifier: GraphicsResourceIdentifier
   /// Whether the cell supplies its own colors (`1`) or acts as a mask (`2`).
   public let paintType: Int
   /// The requested tiling-adjustment policy (`1`, `2`, or `3`).
@@ -23,8 +25,10 @@ public struct GraphicsTilingPattern: Sendable, Hashable {
     xStep: Double,
     yStep: Double,
     matrix: GraphicsMatrix,
-    displayList: GraphicsDisplayList
+    displayList: GraphicsDisplayList,
+    resourceIdentifier: GraphicsResourceIdentifier = .anonymous
   ) {
+    self.resourceIdentifier = resourceIdentifier
     self.paintType = paintType
     self.tilingType = tilingType
     self.bounds = bounds

@@ -21,6 +21,7 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       state: GraphicsStateSnapshot,
       components: [Float],
       sourceComponents: [Float],
+      rawSamples: Data,
       maskOpacities: [Float],
       nextMaskRow: Int
     )?
@@ -56,10 +57,17 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       case .paint(.text(let run)):
         append(.text(run, state: event.before))
       case .page(.show), .page(.copy):
+        let transmission = GraphicsPageTransmission(
+          trigger: event.operation == .page(.copy) ? .copyPage : .showPage,
+          logicalOrdinal: pages.count + 1,
+          copies: 1
+        )
         pages.append(RecordedGraphicsPage(
           deviceDescriptor: event.before.device.descriptor,
           effects: effects,
-          trapping: event.before.device.trapping
+          trapping: event.before.device.trapping,
+          device: event.before.device,
+          transmission: transmission
         ))
         storage.transmit(retainingPage: true)
         effects.removeAll(keepingCapacity: true)
@@ -74,7 +82,7 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
         throw Error.ioError
       }
       try storage.beginImage()
-      activeImage = (descriptor, event.before, [], [], [], 0)
+      activeImage = (descriptor, event.before, [], [], Data(), [], 0)
     }
 
     /// Records one bounded group of sampled-image rows.
@@ -83,12 +91,14 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       try storage.resizeImage(to: try imageBytes(
         components: image.components.count + rows.components.count,
         sourceComponents: image.sourceComponents.count + (rows.sourceComponents?.count ?? 0),
-        mask: image.maskOpacities.count
+        mask: image.maskOpacities.count,
+        rawBytes: image.rawSamples.count + (rows.rawSamples?.count ?? 0)
       ))
       image.components.append(contentsOf: rows.components)
       if let source = rows.sourceComponents {
         image.sourceComponents.append(contentsOf: source)
       }
+      if let rawSamples = rows.rawSamples { image.rawSamples.append(rawSamples) }
       activeImage = image
     }
 
@@ -107,7 +117,8 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       try storage.resizeImage(to: try imageBytes(
         components: image.components.count,
         sourceComponents: image.sourceComponents.count,
-        mask: image.maskOpacities.count + rows.opacities.count
+        mask: image.maskOpacities.count + rows.opacities.count,
+        rawBytes: image.rawSamples.count
       ))
       image.maskOpacities.append(contentsOf: rows.opacities)
       image.nextMaskRow += rows.rowCount
@@ -128,6 +139,7 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
             descriptor: image.descriptor,
             components: image.components,
             sourceComponents: image.sourceComponents.isEmpty ? nil : image.sourceComponents,
+            rawSamples: image.rawSamples.isEmpty ? nil : image.rawSamples,
             mask: image.descriptor.mask.map {
               GraphicsImageMask(descriptor: $0, opacities: image.maskOpacities)
             }
@@ -162,13 +174,34 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
 
     /// Records the requested immutable copies and clears the transmitted page.
     public func transmitPage(_ event: GraphicsEvent, copies: Int) throws {
-      guard copies >= 0 else { throw Error.ioError }
-      let page = RecordedGraphicsPage(
-        deviceDescriptor: event.before.device.descriptor,
-        effects: effects,
-        trapping: event.before.device.trapping
+      try transmitPage(
+        event,
+        transmission: GraphicsPageTransmission(
+          trigger: event.operation == .page(.copy) ? .copyPage : .showPage,
+          logicalOrdinal: pages.count + 1,
+          copies: copies
+        )
       )
-      pages.append(contentsOf: repeatElement(page, count: copies))
+    }
+
+    /// Records the requested immutable copies with complete transmission metadata.
+    public func transmitPage(
+      _ event: GraphicsEvent,
+      transmission: GraphicsPageTransmission
+    ) throws {
+      guard transmission.copies >= 0 else { throw Error.ioError }
+      if transmission.copies > 0 {
+        for copyOrdinal in 1...transmission.copies {
+          pages.append(RecordedGraphicsPage(
+            deviceDescriptor: event.before.device.descriptor,
+            effects: effects,
+            trapping: event.before.device.trapping,
+            device: event.before.device,
+            transmission: transmission,
+            copyOrdinal: copyOrdinal
+          ))
+        }
+      }
       storage.transmit(retainingPage: true)
       effects.removeAll(keepingCapacity: true)
     }
@@ -202,14 +235,20 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       if storage.updateCurrentDeferringError(effects: effects + [effect]) { effects.append(effect) }
     }
 
-    private func imageBytes(components: Int, sourceComponents: Int, mask: Int) throws -> Int {
+    private func imageBytes(
+      components: Int,
+      sourceComponents: Int,
+      mask: Int,
+      rawBytes: Int
+    ) throws -> Int {
       let values = components.addingReportingOverflow(sourceComponents)
       let all = values.partialValue.addingReportingOverflow(mask)
       let bytes = all.partialValue.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
-      guard !values.overflow, !all.overflow, !bytes.overflow else {
+      let total = bytes.partialValue.addingReportingOverflow(rawBytes)
+      guard !values.overflow, !all.overflow, !bytes.overflow, !total.overflow else {
         throw GraphicsStorageAccountingError.limitExceeded
       }
-      return bytes.partialValue
+      return total.partialValue
     }
 
     private func maskDimensions(for descriptor: GraphicsImageDescriptor) -> (width: Int, height: Int)? {

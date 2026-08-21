@@ -12,6 +12,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
   public let paint: GraphicsPaint
   /// The current color-space description.
   public let colorSpace: GraphicsColorSpaceDescription
+  /// Immutable realization data for the selected color space, when required by a target.
+  public let colorRealization: GraphicsColorSpaceRealization?
   /// The current components in the current color space.
   public let colorComponents: [Double]
   /// Whether overprinting is enabled.
@@ -48,6 +50,7 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     clip: GraphicsClip,
     paint: GraphicsPaint,
     colorSpace: GraphicsColorSpaceDescription = .deviceGray,
+    colorRealization: GraphicsColorSpaceRealization? = nil,
     colorComponents: [Double] = [0],
     overprint: Bool = false,
     lineWidth: Double,
@@ -68,6 +71,7 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     self.clip = clip
     self.paint = paint
     self.colorSpace = colorSpace
+    self.colorRealization = colorRealization
     self.colorComponents = colorComponents
     self.overprint = overprint
     self.lineWidth = lineWidth
@@ -92,6 +96,7 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
       clip: clip,
       paint: paint,
       colorSpace: colorSpace,
+      colorRealization: colorRealization,
       colorComponents: colorComponents,
       overprint: overprint,
       lineWidth: lineWidth,

@@ -70,8 +70,9 @@ public struct PrintSpoolGraphicsTarget: GraphicsTarget, Sendable {
       guard let current = collector.activeImageBytes else { throw Error.ioError }
       let values = rows.components.count.addingReportingOverflow(rows.sourceComponents?.count ?? 0)
       let additional = values.partialValue.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
-      let total = current.addingReportingOverflow(additional.partialValue)
-      guard !values.overflow, !additional.overflow, !total.overflow else {
+      let rowBytes = additional.partialValue.addingReportingOverflow(rows.rawSamples?.count ?? 0)
+      let total = current.addingReportingOverflow(rowBytes.partialValue)
+      guard !values.overflow, !additional.overflow, !rowBytes.overflow, !total.overflow else {
         throw GraphicsStorageAccountingError.limitExceeded
       }
       try storage.resizeImage(to: total.partialValue)

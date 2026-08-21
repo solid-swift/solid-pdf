@@ -34,6 +34,7 @@ public final class InterpreterEnvironment: Sendable {
   let isoLatin1Encoding: Object
   let formInitializationRegistry = FormInitializationRegistry()
   let graphicsStorageLedger = GraphicsStorageLedger()
+  let graphicsResourceIdentities = GraphicsResourceIdentityAllocator()
 
   /// The application integration used by this environment.
   public let hostConfiguration: InterpreterHostConfiguration

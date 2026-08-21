@@ -712,16 +712,23 @@ private extension RasterSeparationTarget.Renderer {
         width: image.descriptor.width,
         height: image.descriptor.height,
         kind: kind,
+        sourceType: image.descriptor.sourceType,
         sourceColorSpace: image.descriptor.sourceColorSpace,
+        sourceBitsPerComponent: image.descriptor.sourceBitsPerComponent,
+        sourceComponentCount: image.descriptor.sourceComponentCount,
+        decode: image.descriptor.decode,
+        colorRealization: image.descriptor.colorRealization,
         imageToDevice: image.descriptor.imageToDevice.concatenated(with: translation),
         interpolate: image.descriptor.interpolate,
-        mask: image.descriptor.mask?.transformed(by: translation)
+        mask: image.descriptor.mask?.transformed(by: translation),
+        resourceIdentifier: image.descriptor.resourceIdentifier
       )
       try paintImage(
         GraphicsImage(
           descriptor: transformedDescriptor,
           components: image.components,
           sourceComponents: image.sourceComponents,
+          rawSamples: image.rawSamples,
           mask: image.mask.map {
             GraphicsImageMask(
               descriptor: $0.descriptor.transformed(by: translation),
@@ -801,6 +808,7 @@ private extension RasterSeparationTarget.Renderer {
       let transformed = GraphicsShading(
         type: shading.type,
         colorSpace: shading.colorSpace,
+        colorRealization: shading.colorRealization,
         background: shading.background,
         bounds: shading.bounds,
         clipPath: shading.clipPath?.transformed(by: translation),
@@ -812,7 +820,8 @@ private extension RasterSeparationTarget.Renderer {
             second: .init(position: translation.transform(triangle.second.position), paint: triangle.second.paint),
             third: .init(position: translation.transform(triangle.third.position), paint: triangle.third.paint)
           )
-        })
+        }),
+        resourceIdentifier: shading.resourceIdentifier
       )
       try paintShading(
         transformed,

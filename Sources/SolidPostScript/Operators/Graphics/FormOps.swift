@@ -130,12 +130,17 @@ extension Operators {
       collector.abort()
       throw error
     }
+    let stableKey = definition.xuid.map(GraphicsResourceStableKey.xuid)
     return GraphicsForm(
       bounds: definition.bounds,
       matrix: definition.matrix,
       deviceDescriptor: context.graphicsDeviceDescriptor,
       compilationState: formState.snapshot,
-      displayList: GraphicsDisplayList(effects: collector.effects)
+      displayList: GraphicsDisplayList(
+        effects: collector.effects,
+        resourceIdentifier: context.environment.graphicsResourceIdentities.next()
+      ),
+      resourceIdentifier: context.environment.graphicsResourceIdentities.next(stableKey: stableKey)
     )
   }
 

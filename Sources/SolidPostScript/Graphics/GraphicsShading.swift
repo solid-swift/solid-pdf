@@ -34,10 +34,14 @@ public enum GraphicsShadingGeometry: Sendable, Hashable {
 
 /// A semantic PostScript shading with a deterministic portable fallback mesh.
 public struct GraphicsShading: Sendable, Hashable {
+  /// Identity shared by repeated references to this shading instance.
+  public let resourceIdentifier: GraphicsResourceIdentifier
   /// The LanguageLevel 3 shading type (`1...7`).
   public let type: Int
   /// The non-Pattern source color space.
   public let colorSpace: GraphicsColorSpaceDescription
+  /// Immutable realization data for the shading's selected color space.
+  public let colorRealization: GraphicsColorSpaceRealization?
   /// The optional color painted outside the defined shading domain.
   public let background: GraphicsPaint?
   /// The optional user-space clipping bounds.
@@ -55,15 +59,19 @@ public struct GraphicsShading: Sendable, Hashable {
   public init(
     type: Int,
     colorSpace: GraphicsColorSpaceDescription,
+    colorRealization: GraphicsColorSpaceRealization? = nil,
     background: GraphicsPaint? = nil,
     bounds: GraphicsRect? = nil,
     clipPath: GraphicsPath? = nil,
     antialias: Bool = false,
     geometry: GraphicsShadingGeometry,
-    mesh: GraphicsShadingMesh
+    mesh: GraphicsShadingMesh,
+    resourceIdentifier: GraphicsResourceIdentifier = .anonymous
   ) {
+    self.resourceIdentifier = resourceIdentifier
     self.type = type
     self.colorSpace = colorSpace
+    self.colorRealization = colorRealization
     self.background = background
     self.bounds = bounds
     self.clipPath = clipPath

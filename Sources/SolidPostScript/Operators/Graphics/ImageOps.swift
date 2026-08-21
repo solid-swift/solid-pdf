@@ -169,6 +169,13 @@ extension Operators {
     case explicit(ExplicitImageMaskSpecification)
     case colorKey([GraphicsImageSampleRange])
 
+    var sourceType: GraphicsImageSourceType {
+      switch self {
+      case .explicit: .explicitMask
+      case .colorKey: .colorKeyMask
+      }
+    }
+
     func descriptor(imageToDevice _: GraphicsMatrix) -> GraphicsImageMaskDescriptor {
       switch self {
       case .explicit(let mask):
@@ -581,12 +588,17 @@ extension Operators {
       width: specification.width,
       height: specification.height,
       kind: specification.kind,
+      sourceType: specification.mask?.sourceType ?? .sampled,
       sourceColorSpace: specification.sourceColorSpace?.description,
+      sourceBitsPerComponent: specification.bitsPerComponent,
+      sourceComponentCount: specification.sourceComponentCount,
+      decode: specification.decode,
       imageToDevice: imageToUser.concatenated(with: context.graphicsState.matrix),
       interpolate: specification.interpolate,
       mask: specification.mask?.descriptor(
         imageToDevice: imageToUser.concatenated(with: context.graphicsState.matrix)
-      )
+      ),
+      resourceIdentifier: context.environment.graphicsResourceIdentities.next()
     )
     do {
       try context.beginGraphicsImage(descriptor)
@@ -613,11 +625,16 @@ extension Operators {
           rowCount * specification.width * specification.sourceComponentCount
         )
         var completedRows = 0
+        var rawComponents: [UInt16] = []
+        rawComponents.reserveCapacity(
+          rowCount * specification.width * specification.sourceComponentCount
+        )
         var maskOpacities: [Float] = []
         for _ in 0..<rowCount {
           guard let row = try await readImageRow(&specification, context: context) else { break }
           components.append(contentsOf: row.components)
           sourceComponents.append(contentsOf: row.sourceComponents ?? [])
+          rawComponents.append(contentsOf: row.rawComponents)
           if case .colorKey(let ranges) = specification.mask {
             maskOpacities.append(contentsOf: colorKeyOpacities(
               rawComponents: row.rawComponents,
@@ -632,7 +649,8 @@ extension Operators {
           startRow: startRow,
           rowCount: completedRows,
           components: components,
-          sourceComponents: sourceComponents.isEmpty ? nil : sourceComponents
+          sourceComponents: sourceComponents.isEmpty ? nil : sourceComponents,
+          rawSamples: rawSampleData(rawComponents)
         ))
         if !maskOpacities.isEmpty {
           try context.writeGraphicsImageMaskRows(GraphicsImageMaskRows(
@@ -820,7 +838,8 @@ extension Operators {
       startRow: rowIndex,
       rowCount: 1,
       components: row.components,
-      sourceComponents: row.sourceComponents
+      sourceComponents: row.sourceComponents,
+      rawSamples: rawSampleData(row.rawComponents)
     ))
     if let maskOpacities {
       try context.writeGraphicsImageMaskRows(.init(
@@ -965,6 +984,15 @@ extension Operators {
       samples.append(UInt16(raw))
     }
     return samples
+  }
+
+  static func rawSampleData(_ samples: [UInt16]) -> Data {
+    var data = Data(capacity: samples.count * MemoryLayout<UInt16>.size)
+    for sample in samples {
+      var bigEndian = sample.bigEndian
+      withUnsafeBytes(of: &bigEndian) { data.append(contentsOf: $0) }
+    }
+    return data
   }
 
   static func decodeRawSamples(
