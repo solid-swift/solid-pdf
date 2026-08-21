@@ -3,6 +3,26 @@
 import PackageDescription
 import class Foundation.ProcessInfo
 
+let foundationDependency: Package.Dependency =
+  if let path = ProcessInfo.processInfo.environment["SOLIDPDF_FOUNDATION_PATH"] {
+    .package(name: "solid-foundation", path: path)
+  } else {
+    .package(
+      url: "https://github.com/solid-swift/solid-foundation.git",
+      revision: "c372253a7bcca19d51c5dcc8328825a1c03d3bf5"
+    )
+  }
+
+let imageDependency: Package.Dependency =
+  if let path = ProcessInfo.processInfo.environment["SOLIDPDF_SOLIDIMAGE_PATH"] {
+    .package(name: "solid-image", path: path)
+  } else {
+    .package(
+      url: "https://github.com/solid-swift/solid-image.git",
+      revision: "f4a1c6a035035768a7a7fb12ca822566244d4ed9"
+    )
+  }
+
 let package = Package(
   name: "SolidPDF",
   platforms: [
@@ -13,10 +33,7 @@ let package = Package(
   ],
   products: [
     .library(name: "SolidPDF", targets: ["SolidPDF"]),
-    .library(name: "SolidColor", targets: ["SolidColor"]),
     .library(name: "SolidFont", targets: ["SolidFont"]),
-    .library(name: "SolidRaster", targets: ["SolidRaster"]),
-    .library(name: "SolidRasterPNG", targets: ["SolidRasterPNG"]),
     .library(name: "SolidPostScript", targets: ["SolidPostScript"]),
     .library(name: "SolidPostScriptDocument", targets: ["SolidPostScriptDocument"]),
     .library(name: "SolidPostScriptPDF", targets: ["SolidPostScriptPDF"]),
@@ -28,10 +45,8 @@ let package = Package(
     .executable(name: "solid-ps", targets: ["solid-ps"]),
   ],
   dependencies: [
-    .package(
-      url: "https://github.com/solid-swift/solid-foundation.git",
-      revision: "c372253a7bcca19d51c5dcc8328825a1c03d3bf5"
-    ),
+    foundationDependency,
+    imageDependency,
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.0"),
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
   ],
@@ -49,10 +64,6 @@ let package = Package(
       plugins: lintPlugins
     ),
     .target(
-      name: "SolidColor",
-      plugins: lintPlugins
-    ),
-    .target(
       name: "SolidFont",
       plugins: lintPlugins
     ),
@@ -61,39 +72,12 @@ let package = Package(
       dependencies: ["SolidFont"],
       plugins: lintPlugins
     ),
-    .testTarget(
-      name: "SolidColorTests",
-      dependencies: ["SolidColor"],
-      plugins: lintPlugins
-    ),
-    .target(
-      name: "SolidRaster",
-      plugins: lintPlugins
-    ),
-    .testTarget(
-      name: "SolidRasterTests",
-      dependencies: ["SolidRaster"],
-      plugins: lintPlugins
-    ),
-    .target(
-      name: "SolidRasterPNG",
-      dependencies: [
-        "SolidRaster",
-        .product(name: "SolidIO", package: "solid-foundation"),
-      ],
-      plugins: lintPlugins
-    ),
-    .testTarget(
-      name: "SolidRasterPNGTests",
-      dependencies: ["SolidRaster", "SolidRasterPNG"],
-      plugins: lintPlugins
-    ),
     .target(
       name: "SolidPostScript",
       dependencies: [
-        "SolidColor",
         "SolidFont",
-        "SolidRaster",
+        .product(name: "SolidColor", package: "solid-image"),
+        .product(name: "SolidRaster", package: "solid-image"),
         .product(name: "SolidCore", package: "solid-foundation"),
         .product(name: "SolidIO", package: "solid-foundation"),
         .product(name: "SolidTempo", package: "solid-foundation"),
@@ -105,6 +89,7 @@ let package = Package(
       dependencies: [
         "SolidFont",
         "SolidPostScript",
+        .product(name: "SolidColor", package: "solid-image"),
         .product(name: "SolidCore", package: "solid-foundation"),
         .product(name: "SolidIO", package: "solid-foundation"),
         .product(name: "SolidTempo", package: "solid-foundation"),
@@ -113,7 +98,12 @@ let package = Package(
     ),
     .target(
       name: "SolidPostScriptCoreGraphics",
-      dependencies: ["SolidFont", "SolidPostScript", "SolidPostScriptCoreText", "SolidRaster"],
+      dependencies: [
+        "SolidFont",
+        "SolidPostScript",
+        "SolidPostScriptCoreText",
+        .product(name: "SolidRaster", package: "solid-image"),
+      ],
       plugins: lintPlugins
     ),
     .target(
@@ -158,7 +148,10 @@ let package = Package(
     ),
     .target(
       name: "SolidPostScriptRaster",
-      dependencies: ["SolidPostScript", "SolidRaster"],
+      dependencies: [
+        "SolidPostScript",
+        .product(name: "SolidRaster", package: "solid-image"),
+      ],
       plugins: lintPlugins
     ),
     .target(
@@ -168,13 +161,19 @@ let package = Package(
         "SolidPostScript",
         "SolidPostScriptPDF",
         "SolidPostScriptRaster",
-        "SolidRaster",
+        .product(name: "SolidRaster", package: "solid-image"),
       ],
       plugins: lintPlugins
     ),
     .target(
       name: "SolidPostScriptPDF",
-      dependencies: ["SolidFont", "SolidPDF", "SolidPostScript", "SolidPostScriptRaster", "SolidRaster"],
+      dependencies: [
+        "SolidFont",
+        "SolidPDF",
+        "SolidPostScript",
+        "SolidPostScriptRaster",
+        .product(name: "SolidRaster", package: "solid-image"),
+      ],
       plugins: lintPlugins
     ),
     .testTarget(
@@ -200,8 +199,8 @@ let package = Package(
         "SolidPostScript",
         "SolidPostScriptDocument",
         "SolidPostScriptRaster",
-        "SolidRaster",
-        "SolidRasterPNG",
+        .product(name: "SolidRaster", package: "solid-image"),
+        .product(name: "SolidRasterPNG", package: "solid-image"),
         .product(name: "SolidIO", package: "solid-foundation"),
       ],
       plugins: lintPlugins
@@ -217,7 +216,8 @@ let package = Package(
         "SolidPostScript",
         "SolidPostScriptPlutoVG",
         "SolidPostScriptRaster",
-        "SolidRaster",
+        .product(name: "SolidColor", package: "solid-image"),
+        .product(name: "SolidRaster", package: "solid-image"),
       ],
       plugins: lintPlugins
     ),
@@ -252,7 +252,12 @@ let package = Package(
     ),
     .target(
       name: "SolidPostScriptPlutoVG",
-      dependencies: ["SolidPostScript", "SolidPostScriptRaster", "SolidRaster", "CPlutoVG"],
+      dependencies: [
+        "SolidPostScript",
+        "SolidPostScriptRaster",
+        "CPlutoVG",
+        .product(name: "SolidRaster", package: "solid-image"),
+      ],
       plugins: lintPlugins
     ),
     .testTarget(
@@ -274,8 +279,8 @@ let package = Package(
         "SolidPostScriptFreeType",
         "SolidPostScriptPDF",
         "SolidPostScriptRaster",
-        "SolidRaster",
-        "SolidRasterPNG",
+        .product(name: "SolidRaster", package: "solid-image"),
+        .product(name: "SolidRasterPNG", package: "solid-image"),
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "SolidIO", package: "solid-foundation"),
       ],
@@ -340,22 +345,9 @@ if benchmarkEnabled {
         "SolidPostScript",
         "SolidPostScriptPlutoVG",
         "SolidPostScriptRaster",
-        "SolidRaster",
+        .product(name: "SolidRaster", package: "solid-image"),
       ],
       path: "Benchmarks/SolidRasterBenchmarkSupport"
-    ),
-    .executableTarget(
-      name: "SolidRasterBenchmark",
-      dependencies: [
-        "SolidColor",
-        "SolidRaster",
-        "SolidRasterBenchmarkSupport",
-        .product(name: "Benchmark", package: "benchmark"),
-      ],
-      path: "Benchmarks/SolidRasterBenchmark",
-      plugins: [
-        .plugin(name: "BenchmarkPlugin", package: "benchmark")
-      ]
     ),
     .executableTarget(
       name: "SolidPostScriptRasterBenchmark",
@@ -363,8 +355,8 @@ if benchmarkEnabled {
         "SolidPostScript",
         "SolidPostScriptPlutoVG",
         "SolidPostScriptRaster",
-        "SolidRaster",
         "SolidRasterBenchmarkSupport",
+        .product(name: "SolidRaster", package: "solid-image"),
         .product(name: "Benchmark", package: "benchmark"),
       ],
       path: "Benchmarks/SolidPostScriptRasterBenchmark",
@@ -389,8 +381,8 @@ if benchmarkEnabled {
         "SolidPostScript",
         "SolidPostScriptPlutoVG",
         "SolidPostScriptRaster",
-        "SolidRaster",
         "SolidRasterBenchmarkSupport",
+        .product(name: "SolidRaster", package: "solid-image"),
       ],
       path: "Tests/SolidRasterBenchmarkSupportTests",
       plugins: lintPlugins

@@ -2,6 +2,11 @@ import SolidPostScript
 
 /// Prepared target-level workloads shared by native and PlutoVG benchmarks.
 public enum RasterRendererBenchmarkFixtures {
+  private static let pathSurfaceWidth = 640
+  private static let pathSurfaceHeight = 800
+  private static let imageWidth = 3_840
+  private static let imageHeight = 2_160
+
   /// Stable workload names in registration order.
   public static let names = [
     "Flat Fill",
@@ -27,8 +32,8 @@ public enum RasterRendererBenchmarkFixtures {
 
   /// Creates every comparison workload without including fixture construction in measurements.
   public static func all() throws -> [RasterRendererBenchmarkWorkload] {
-    let width = RasterBenchmarkFixtures.pathSurfaceWidth
-    let height = RasterBenchmarkFixtures.pathSurfaceHeight
+    let width = pathSurfaceWidth
+    let height = pathSurfaceHeight
     let descriptor = deviceDescriptor(width: width, height: height)
     let emptyState = state(width: width, height: height)
     let surfacePath = graphicsSurfacePath(width: width, height: height)
@@ -342,8 +347,8 @@ public enum RasterRendererBenchmarkFixtures {
   }
 
   private static func gradientShading(type: Int, radial: Bool) -> GraphicsShading {
-    let width = Double(RasterBenchmarkFixtures.pathSurfaceWidth)
-    let height = Double(RasterBenchmarkFixtures.pathSurfaceHeight)
+    let width = Double(pathSurfaceWidth)
+    let height = Double(pathSurfaceHeight)
     let triangles = gradientTriangles(width: width, height: height, columns: 256)
     let geometry: GraphicsShadingGeometry = radial
       ? .radial(
@@ -401,12 +406,12 @@ public enum RasterRendererBenchmarkFixtures {
     triangleCount: Int,
     geometry: GraphicsShadingGeometry
   ) -> GraphicsShading {
-    let width = RasterBenchmarkFixtures.pathSurfaceWidth
+    let width = pathSurfaceWidth
     var triangles: [GraphicsShadingTriangle] = []
     triangles.reserveCapacity(triangleCount)
     for index in 0..<triangleCount {
       let x = Double(index % width)
-      let y = Double((index / width) % RasterBenchmarkFixtures.pathSurfaceHeight)
+      let y = Double((index / width) % pathSurfaceHeight)
       let paint = gradientPaint(Double(index % 256) / 255)
       triangles.append(.init(
         first: .init(position: .init(x: x, y: y), paint: paint),
@@ -443,8 +448,8 @@ public enum RasterRendererBenchmarkFixtures {
   }
 
   private static func imageWorkload(name: String, interpolate: Bool) throws -> RasterRendererBenchmarkWorkload {
-    let width = RasterBenchmarkFixtures.imageWidth
-    let height = RasterBenchmarkFixtures.imageHeight
+    let width = imageWidth
+    let height = imageHeight
     let descriptor = deviceDescriptor(width: width, height: height)
     let state = state(width: width, height: height)
     let image = GraphicsImageDescriptor(
