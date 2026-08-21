@@ -45,9 +45,9 @@ registration check alone can no longer be mistaken for semantic evidence.
 
 ## Portable filter status
 
-The postponed filter tranche is complete at the portable runtime boundary:
+The postponed filter tranche is complete at the portable runtime boundary provided by SolidImage:
 
-- `DCTEncode` and `DCTDecode` use the project-owned native `SolidJPEG` baseline sequential codec. It supports one
+- `DCTEncode` and `DCTDecode` use SolidImage's project-owned native `SolidJPEG` baseline sequential codec. It supports one
   through four raw components, legal baseline sampling layouts, interleaved and separate scans, restart intervals,
   abbreviated streams, caller-supplied tables, `QFactor`, and PostScript color transforms. Unsupported JPEG coding
   processes fail explicitly.
@@ -72,9 +72,9 @@ is a discrepancy oracle, not specification authority: every accepted difference 
 results and the exact reference version. External PS/EPS and Ghostscript-example directories can be attached for
 discovery, but their files are neither copied into the repository nor promoted to expectations without adjudication.
 
-Passing this suite closes the planned PostScript implementation gate. The next product stage may freeze the portable
-graphics event contracts and begin native PDF parsing and text-processing work; new conformance discrepancies remain
-tracked against the same ledger.
+Passing this suite closes the planned PostScript implementation gate. The portable graphics event contract is frozen
+as `GraphicsSemanticContractVersion.v1`; native PDF parsing and text-processing work is the next product stage. New
+conformance discrepancies remain tracked against the same ledger.
 
 Appendix C accounting is authoritative: display/source/image reservations are shared across contexts in an
 environment, provider outlines use their own bounded LRU, and lowering live limits blocks growth or evicts cacheable

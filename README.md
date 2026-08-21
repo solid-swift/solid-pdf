@@ -70,14 +70,15 @@ physical separation plates and in-RIP trapping remain available through `RasterS
 `a574257dbc01f555a28cd995e3b20009b36266d6`. The initial migration preserves that implementation's
 public API and execution behavior while replacing shared TPPackages utilities with `SolidCore`.
 
-This baseline is not a claim of complete PostScript conformance. Scanner hardening, ASCII85 edge cases,
-file-reset semantics, and further language-conformance work remain follow-up work.
+The preserved migration history is followed by the complete LanguageLevel 3 implementation, semantic audit,
+owned compatibility corpus, and frozen graphics contract. This remains an implementation claim rather than Adobe
+certification; conformance evidence and accepted reference differences are maintained in the checked-in ledger.
 
 ## LanguageLevel target
 
-`languagelevel` reports 3 as the implementation target. This is aspirational roadmap metadata, not a
-claim of complete LanguageLevel 3 conformance. Unsupported operators are not represented by stubs and
-continue to resolve as `undefined` until they are implemented.
+`languagelevel` reports 3. Standard operators and advertised resources are inventoried and linked to owned semantic
+cases. Product-specific, proprietary, and intentionally unavailable facilities remain absent instead of being
+represented by approximate stubs.
 
 ## Numeric implementation profile
 
@@ -88,17 +89,16 @@ reported through the PostScript error environment; NaN and infinity are not repr
 
 ## DCT/JPEG implementation profile
 
-On Apple platforms, `DCTDecode` supports the common baseline JPEG profiles used by PostScript jobs,
-including grayscale, RGB/YCbCr, CMYK, and YCCK data with common 4:4:4, 4:2:2, and 4:2:0 sampling.
-The interpreter validates JPEG structure and PostScript parameters before delegating pixel conversion
-to ImageIO. Progressive, abbreviated, two-component, and separate-scan JPEG data remains deferred and
-fails deterministically with `ioerror` rather than being accepted with partial semantics.
+`DCTEncode` and `DCTDecode` use the owned portable baseline-sequential codec from
+[`solid-swift/solid-image`](https://github.com/solid-swift/solid-image). Raw one- through four-component data,
+sampling layouts, abbreviated tables, restart intervals, interleaved and separate scans, and PostScript color
+transforms remain interpreter-controlled. ImageIO is selected only for equivalent whole-codec operations.
 
 See [PostScript conformance](Documentation/PostScriptConformance.md) for the detailed support matrix and
 the remaining portability boundary.
 
 ## License
 
-SolidPDF is available under the MIT License. See [LICENSE](LICENSE). Portions of `SolidRaster` are
-derived from the FreeType Project under the FreeType License; see
-[Vendor/PlutoVG/source/FTL.TXT](Vendor/PlutoVG/source/FTL.TXT).
+SolidPDF is available under the MIT License. See [LICENSE](LICENSE). The vendored PlutoVG implementation contains
+code derived from the FreeType Project under the FreeType License; see
+[Vendor/PlutoVG/source/FTL.TXT](Vendor/PlutoVG/source/FTL.TXT). SolidRaster provenance is maintained by SolidImage.

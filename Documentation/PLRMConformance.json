@@ -269,8 +269,8 @@
     {
       "name": "degenerate-domain-and-sampled-function-interpolation",
       "status": "implemented",
-      "registration": ["Sources/SolidColor/ColorSampledFunction.swift", "Sources/SolidColor/ColorStitchingFunction.swift"],
-      "tests": ["Tests/SolidColorTests/ColorFunctionTests.swift"],
+      "registration": ["Sources/SolidPostScript/Graphics/PostScriptColorFunction.swift"],
+      "tests": ["Tests/SolidPostScriptTests/Graphics/ShadingTests.swift"],
       "conformanceCases": ["graphics.color"]
     },
     {

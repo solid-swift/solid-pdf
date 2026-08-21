@@ -1,3 +1,5 @@
+import Foundation
+import SolidColor
 import Testing
 
 @testable import SolidPostScript
@@ -66,6 +68,33 @@ import Testing
       to: RecordingGraphicsTarget()
     )
     #expect(try #require(result.output.pages.first).effects.count == 1)
+  }
+
+  @Test func sampledAndStitchingFunctionsAcceptDegenerateDomains() throws {
+    let sampled = try ColorSampledFunction(
+      domain: [ColorComponentRange(0.5, 0.5)],
+      range: [ColorComponentRange(0.25, 0.25)],
+      size: [2],
+      bitsPerSample: 8,
+      order: 3,
+      encode: [1, 0],
+      sampleData: Data([0, 255])
+    )
+    #expect(try sampled.evaluate([1]) == [0.25])
+
+    let exponential = try ColorExponentialFunction(
+      domain: ColorComponentRange(0.5, 0.5),
+      c0: [0],
+      c1: [1],
+      exponent: 2
+    )
+    let stitching = try ColorStitchingFunction(
+      domain: ColorComponentRange(2, 2),
+      functions: [.exponential(exponential)],
+      bounds: [],
+      encode: [0.25, 0.75]
+    )
+    #expect(try stitching.evaluate([10]) == [0.25])
   }
 
   @Test func arrayTriangleAndPatchMeshesSupportAllFourMeshTypes() async throws {

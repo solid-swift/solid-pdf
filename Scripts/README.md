@@ -60,8 +60,9 @@ The first form performs adjudicated differential validation. Setting `SOLIDPDF_C
 
 # Graphics API compatibility
 
-After building, `Scripts/check-graphics-api` diagnoses the public library products against the
-checked-in Swift 6.3 platform baseline. A deliberate public API change requires
+After building, `Scripts/check-graphics-api` diagnoses SolidPDF-owned public library products against the
+checked-in Swift 6.3 platform baseline. SolidColor, SolidRaster, and SolidRasterPNG are checked by SolidImage.
+A deliberate public API change requires
 `Scripts/check-graphics-api update`, review of the resulting diff, and an explicit semantic-contract
 version decision. Linux baselines are generated and checked through the reusable container so C
 system-module availability matches supported Linux builds.

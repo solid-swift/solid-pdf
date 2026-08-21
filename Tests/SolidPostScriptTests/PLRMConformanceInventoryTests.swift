@@ -111,8 +111,10 @@ struct PLRMConformanceInventoryTests {
         == Set(inventory.languageLevelRequirements.map(\.name)).count
     )
 
+    #expect(inventory.authority.source == "Reference/PLRM.pdf")
+
+    // The copyrighted PLRM is an external validation input and is deliberately absent from clean checkouts.
     var evidence = [
-      inventory.authority.source,
       inventory.operators.evidence.registration,
       inventory.operators.evidence.systemDictionary,
       inventory.parameters.evidence.user,

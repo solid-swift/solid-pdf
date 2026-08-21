@@ -26,11 +26,14 @@ jobs:
         with:
           swift-version: ${{ steps.swift-version.outputs.version }}
 
-      - name: Build
-        run: swift build --enable-code-coverage
+      - name: Lint and build
+        run: ENABLE_LINT=1 swift build --enable-code-coverage
 
       - name: Test
         run: swift test --enable-code-coverage --xunit-output .build/test-results.xml
+
+      - name: Check public API compatibility
+        run: Scripts/check-graphics-api check
 
       - name: Compile with sanitizers
         run: swift build --sanitize thread --sanitize undefined
@@ -60,11 +63,17 @@ jobs:
           swift-version: ${{ steps.swift-version.outputs.version }}
           skip-verify-signature: true
 
-      - name: Build
-        run: swift build --enable-code-coverage
+      - name: Install font backend prerequisites
+        run: sudo apt-get update && sudo apt-get install --yes pkg-config libfreetype-dev libfontconfig1-dev
+
+      - name: Lint and build
+        run: ENABLE_LINT=1 swift build --enable-code-coverage
 
       - name: Test
         run: swift test --enable-code-coverage --xunit-output .build/test-results.xml
+
+      - name: Check public API compatibility
+        run: Scripts/check-graphics-api check
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -97,8 +106,10 @@ jobs:
           path: ~/.cache/solidpdf/conformance
           key: ghostscript-10.07.1-${{ runner.os }}-${{ runner.arch }}
 
-      - name: Install reference build prerequisites
-        run: sudo apt-get update && sudo apt-get install --yes build-essential curl xz-utils
+      - name: Install reference and font backend prerequisites
+        run: >-
+          sudo apt-get update && sudo apt-get install --yes build-essential curl xz-utils pkg-config
+          libfreetype-dev libfontconfig1-dev
 
       - name: Run owned differential suite
         run: Scripts/conformance

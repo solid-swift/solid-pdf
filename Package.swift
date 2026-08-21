@@ -9,7 +9,7 @@ let foundationDependency: Package.Dependency =
   } else {
     .package(
       url: "https://github.com/solid-swift/solid-foundation.git",
-      revision: "166e1cd0a63ff0f5fa4c2bf927f94d286063cf72"
+      revision: "9bc4c0a88a265af77880e1a72c60cef77a5ea339"
     )
   }
 
@@ -19,7 +19,7 @@ let imageDependency: Package.Dependency =
   } else {
     .package(
       url: "https://github.com/solid-swift/solid-image.git",
-      revision: "71a67a7c5f56b65c126aab88e8e37038a7d25ed9"
+      revision: "bd810d1d8e1c409d008a91f4791db0526242ab92"
     )
   }
 

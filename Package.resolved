@@ -1,5 +1,5 @@
 {
-  "originHash" : "412c558a4496749fc4c4aa0360d682c5211304b73e9a6fc0b858a70ca50c3934",
+  "originHash" : "2b24b7f795a744cdcfa9c818b8077408e9729dc1287cada80f5711ef3c2e542e",
   "pins" : [
     {
       "identity" : "benchmark",
@@ -42,7 +42,15 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/solid-swift/solid-foundation.git",
       "state" : {
-        "revision" : "c372253a7bcca19d51c5dcc8328825a1c03d3bf5"
+        "revision" : "9bc4c0a88a265af77880e1a72c60cef77a5ea339"
+      }
+    },
+    {
+      "identity" : "solid-image",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/solid-swift/solid-image.git",
+      "state" : {
+        "revision" : "bd810d1d8e1c409d008a91f4791db0526242ab92"
       }
     },
     {

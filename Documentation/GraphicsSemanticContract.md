@@ -5,6 +5,11 @@ SolidPostScript. `SemanticGraphicsTarget` is the bounded streaming interface;
 `RecordingGraphicsTarget` is its materialized counterpart. Neither interface exposes PostScript VM
 objects, executable callbacks, renderer sessions, or platform-native handles.
 
+The contract is frozen at the PostScript graphics closeout milestone. Native PDF parsing is the next
+product stage. A parser may consume this contract and the shared SolidImage products, but it may not
+change version 1 coordinate, identity, ordering, text, or lifetime semantics without the major-version
+process described below.
+
 ## Coordinates
 
 Effect geometry, paths, clips, image transforms, and glyph origins are authoritative in device
