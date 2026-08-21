@@ -277,8 +277,8 @@ import Testing
 
   @Test func fillsClipsCurvesAndEvenOddPaths() async throws {
     let program = """
-    0 0 moveto 25 0 lineto 25 50 lineto 0 50 lineto closepath clip
-    0 15 moveto 50 15 lineto 50 35 lineto 0 35 lineto closepath eoclip
+    0 0 moveto 25 0 lineto 25 50 lineto 0 50 lineto closepath clip newpath
+    0 15 moveto 50 15 lineto 50 35 lineto 0 35 lineto closepath eoclip newpath
     10 0 translate
     -10 5 moveto 35 5 35 45 35 45 curveto -10 45 lineto closepath fill
     showpage

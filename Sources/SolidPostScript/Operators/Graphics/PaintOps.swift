@@ -57,7 +57,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["erasepage"]
 
     func execute(context: isolated Context) async throws {
-      try context.applyGraphicsOperation(.paint(.erasePage)) { _ in }
+      try await context.eraseCurrentPage()
     }
   }
 
@@ -93,7 +93,9 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["showpage"]
 
     func execute(context: isolated Context) async throws {
-      guard context.encapsulatedPaintDepth == 0 else { throw Error.undefined }
+      guard context.encapsulatedPaintDepth == 0,
+        context.pageDeviceCallbackStack.isEmpty
+      else { throw Error.undefined }
       try await context.showCurrentPage()
     }
   }
@@ -103,7 +105,9 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["copypage"]
 
     func execute(context: isolated Context) async throws {
-      guard context.encapsulatedPaintDepth == 0 else { throw Error.undefined }
+      guard context.encapsulatedPaintDepth == 0,
+        context.pageDeviceCallbackStack.isEmpty
+      else { throw Error.undefined }
       try await context.copyCurrentPage()
     }
   }
@@ -118,7 +122,6 @@ extension Operators {
     try context.applyGraphicsOperation(.clip(.intersect(rule))) {
       $0.clip = try $0.clip.appending(GraphicsClipConstraint(path: $0.path, rule: rule))
       $0.resolvedClip = resolved
-      $0.clearPath()
     }
   }
 

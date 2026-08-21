@@ -53,6 +53,11 @@ public struct GraphicsPath: Sendable, Hashable {
     return nil
   }
 
+  var currentSubpathIsClosed: Bool {
+    guard case .close? = elements.last else { return false }
+    return true
+  }
+
   var boundingPoints: [GraphicsPoint] {
     var points: [GraphicsPoint] = []
     for (index, element) in elements.enumerated() {

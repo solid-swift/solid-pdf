@@ -84,7 +84,7 @@ where
       guard lifecycle == .active else { throw SolidPostScript.Error.ioError }
       switch event.operation {
       case .paint(.erasePage):
-        try erasePage()
+        try erasePage(state: event.before)
       case .paint(.fill(let rule)):
         try fill(event.before.path, rule: rule, state: event.before)
       case .paint(.stroke):
@@ -487,8 +487,8 @@ where
         try stroke(path, matrix: state.matrix, state: state)
       case .userPathStroke(let outline, let state):
         try fill(outline, rule: .winding, state: state)
-      case .erase:
-        try erasePage()
+      case .erase(let state):
+        try erasePage(state: state)
       case .fillRectangles(let paths, let state):
         try fill(GraphicsPath(elements: paths.flatMap(\.elements)), rule: .winding, state: state)
       case .strokeRectangles(let paths, let matrix, let state):
@@ -937,12 +937,14 @@ where
       return GraphicsPoint(x: x, y: y)
     }
 
-    private func erasePage() throws {
-      let clip = GraphicsClip(imageableBounds: descriptor.imageableBounds)
+    private func erasePage(state: GraphicsStateSnapshot) throws {
+      let clip = GraphicsClip(imageableBounds: logicalMediaBounds)
       let mediaPath = GraphicsPath.rectangle(logicalMediaBounds).transformed(by: rasterMatrix).rasterPath
+      let program = try deviceRenderingSession.resolve(state.deviceRendering, for: descriptor)
+      let paint = try colorSession.resolve(state.paint, deviceRendering: state.deviceRendering)
       try withCanvas { canvas in
         try canvas.setClip(try rasterClip(clip))
-        try canvas.fill(mediaPath, rule: .winding, paint: .solid(background))
+        try canvas.fill(mediaPath, rule: .winding, paint: paint, deviceRendering: program)
       }
     }
 

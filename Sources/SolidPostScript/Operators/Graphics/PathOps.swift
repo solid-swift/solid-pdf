@@ -149,7 +149,7 @@ extension Operators {
 
     func execute(context: isolated Context) async throws {
       try context.applyGraphicsOperation(.path(.close)) {
-        guard $0.path.currentPoint != nil else { return }
+        guard $0.path.currentPoint != nil, !$0.path.currentSubpathIsClosed else { return }
         try $0.appendPath(.close)
       }
     }

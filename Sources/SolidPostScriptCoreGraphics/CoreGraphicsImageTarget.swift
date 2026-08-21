@@ -86,7 +86,7 @@ where
       guard let context else { throw SolidPostScript.Error.ioError }
       switch event.operation {
       case .paint(.erasePage):
-        erasePage(context)
+        try erasePage(context, state: event.before)
       case .paint(.fill(let rule)):
         try fill(event.before.path, rule: rule, state: event.before, in: context)
       case .paint(.stroke):
@@ -315,11 +315,11 @@ where
       )
     }
 
-    private func erasePage(_ context: CGContext) {
+    private func erasePage(_ context: CGContext, state: GraphicsStateSnapshot) throws {
       context.saveGState()
-      context.setFillColor(gray: 1, alpha: 1)
+      defer { context.restoreGState() }
+      try setPaint(state.paint, state: state, in: context)
       context.fill(descriptor.mediaBounds.cgRect)
-      context.restoreGState()
     }
 
     private func fill(
@@ -425,8 +425,8 @@ where
         try stroke(path, state: state, in: context)
       case .userPathStroke(let outline, let state):
         try fill(outline, rule: .winding, state: state, in: context)
-      case .erase:
-        erasePage(context)
+      case .erase(let state):
+        try erasePage(context, state: state)
       case .fillRectangles(let paths, let state):
         try fill(
           GraphicsPath(elements: paths.flatMap(\.elements)),

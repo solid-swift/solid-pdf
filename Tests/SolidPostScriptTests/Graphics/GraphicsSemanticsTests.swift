@@ -94,6 +94,39 @@ struct GraphicsSemanticsTests {
     #expect(state.matrix == GraphicsMatrix(a: 2, b: 0, c: 0, d: 3, tx: 0, ty: 0))
   }
 
+  @Test func closepathIsIdempotentAndPostCloseSegmentsBeginANewSubpath() async throws {
+    let result = try await Interpreter.render(
+      content: "0 0 moveto 10 0 lineto closepath closepath 20 0 lineto stroke showpage",
+      to: RecordingGraphicsTarget()
+    )
+    guard case .stroke(let path, _) = try #require(result.output.pages.first?.effects.first) else {
+      Issue.record("Expected a stroke effect")
+      return
+    }
+    #expect(path.elements == [
+      .move(to: GraphicsPoint(x: 0, y: 0)),
+      .line(to: GraphicsPoint(x: 10, y: 0)),
+      .close,
+      .move(to: GraphicsPoint(x: 0, y: 0)),
+      .line(to: GraphicsPoint(x: 20, y: 0)),
+    ])
+  }
+
+  @Test func clippingPreservesThePathAndClipRestoreUsesSavedGraphicsState() async throws {
+    let values = try await Interpreter.results(content: """
+      gsave 0 0 moveto 10 0 lineto 10 20 lineto closepath clip pathbbox
+      newpath cliprestore clippath pathbbox grestore
+      """)
+    let numbers = values.compactMap { try? Operators.numeric($0) }
+    #expect(numbers.prefix(4).elementsEqual([792, 612, 0, 0]))
+    #expect(numbers.suffix(4).elementsEqual([20, 10, 0, 0]))
+  }
+
+  @Test func emptyGRestoreAllIsANoOp() async throws {
+    let value: RealValue = try await Interpreter.result(content: "5 setlinewidth grestoreall currentlinewidth")
+    #expect(value.value == 5)
+  }
+
   @Test func clippingAndPageTransmissionAreRecorded() async throws {
     let result = try await Interpreter.render(
       content: """
@@ -212,7 +245,11 @@ struct GraphicsSemanticsTests {
     #expect(try values.first?.value(as: RealValue.self).value == 4)
     #expect(result.output.pages.count == 2)
     #expect(result.output.pages[0].effects.count == 1)
-    #expect(result.output.pages[1].effects.isEmpty)
+    #expect(result.output.pages[1].effects.count == 1)
+    guard case .erase = result.output.pages[1].effects[0] else {
+      Issue.record("Expected copypage to erase the retained page")
+      return
+    }
   }
 
   @Test func sampledImagesUseBoundedNormalizedTransfers() async throws {

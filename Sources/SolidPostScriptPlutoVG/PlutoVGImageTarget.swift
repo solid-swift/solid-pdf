@@ -85,7 +85,7 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       guard let canvas else { throw SolidPostScript.Error.ioError }
       switch event.operation {
       case .paint(.erasePage):
-        try erasePage(in: canvas)
+        try erasePage(state: event.before, in: canvas)
       case .paint(.fill(let rule)):
         try fill(event.before.path, rule: rule, state: event.before, in: canvas)
       case .paint(.stroke):
@@ -387,12 +387,11 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       )
     }
 
-    private func erasePage(in canvas: OpaquePointer) throws {
+    private func erasePage(state: GraphicsStateSnapshot, in canvas: OpaquePointer) throws {
       plutovg_canvas_save(canvas)
       defer { plutovg_canvas_restore(canvas) }
       try setMatrix(rasterMatrix, in: canvas)
-      try clipToImageableBounds(in: canvas)
-      plutovg_canvas_set_rgb(canvas, 1, 1, 1)
+      try setPaint(state.paint, state: state, in: canvas)
       try addRect(descriptor.mediaBounds, to: canvas)
       plutovg_canvas_fill(canvas)
     }
@@ -515,8 +514,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         try stroke(path, state: state, in: canvas)
       case .userPathStroke(let outline, let state):
         try fill(outline, rule: .winding, state: state, in: canvas)
-      case .erase:
-        try erasePage(in: canvas)
+      case .erase(let state):
+        try erasePage(state: state, in: canvas)
       case .fillRectangles(let paths, let state):
         try fill(
           GraphicsPath(elements: paths.flatMap(\.elements)),

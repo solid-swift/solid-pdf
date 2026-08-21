@@ -8,6 +8,18 @@ extension Context {
     case policyReport
   }
 
+  func eraseCurrentPage() async throws {
+    let selection = PostScriptColorSelection.direct(.deviceGray(nil))
+    let color = try await Operators.resolveColor([1], in: selection, context: self)
+    var eraseState = graphicsState
+    eraseState.colorSelection = selection
+    eraseState.colorComponents = [1]
+    eraseState.patternSource = nil
+    eraseState.paint = Operators.graphicsPaint(color)
+    eraseState.overprint = false
+    try emitGraphicsOperation(.paint(.erasePage), before: eraseState, after: graphicsState)
+  }
+
   func ensurePageDevice() throws {
     if graphicsPageDeviceSession == nil {
       graphicsPageDeviceSession = try StandardGraphicsPageDeviceProvider(mode: .adaptive)
@@ -128,7 +140,6 @@ extension Context {
     graphicsState = .initial(for: configuration.descriptor, device: record)
     apply(initialColor, to: &graphicsState)
     graphicsState.pageDeviceParameters = parameters
-    graphicsStack.removeAll()
     do {
       try graphicsEventConsumer?.activateDevice(record.snapshot)
     } catch {
@@ -137,7 +148,7 @@ extension Context {
     try await executePageDeviceProcedure(parameters.install, callback: .install, operands: [])
     record.captureDefaultTrappingZones()
     try applyInstalledDefaultMatrix()
-    try applyGraphicsOperation(.paint(.erasePage)) { _ in }
+    try await eraseCurrentPage()
     try await initializeGraphicsState(emitOperation: false)
     try installCurrentOutputDeviceResource()
     try await callBeginPage()
@@ -189,8 +200,11 @@ extension Context {
 
   func copyCurrentPage() async throws {
     guard graphicsState.device.kind == .page else { return }
-    let transmit = try await callEndPage(reason: 1)
-    if transmit { try transmitCurrentPage(.copy, trigger: .copyPage) }
+    let transmit = try await callEndPage(reason: 0)
+    if transmit {
+      try transmitCurrentPage(.copy, trigger: .copyPage)
+      try await eraseCurrentPage()
+    }
     graphicsState.device.restoreDefaultTrappingZones()
     try await callBeginPage()
   }

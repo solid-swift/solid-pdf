@@ -113,12 +113,26 @@ struct GraphicsCanonicalState: Sendable {
   }
 
   mutating func appendPath(_ element: GraphicsPath.Element) throws {
+    var elements = [GraphicsPath.Element]()
+    if path.currentSubpathIsClosed {
+      switch element {
+      case .line, .curve:
+        guard let start = path.currentSubpathStart else { throw Error.noCurrentPoint }
+        elements.append(.move(to: start))
+      case .move, .close:
+        break
+      }
+    }
+    elements.append(element)
+    guard elements.count <= LanguageLimits.maximumPathElements - path.elements.count else {
+      throw Error.limitCheck
+    }
     if let pathBoundingBox {
-      for point in element.points where !pathBoundingBox.contains(point) {
+      for point in elements.flatMap(\.points) where !pathBoundingBox.contains(point) {
         throw Error.rangeCheck
       }
     }
-    try path.append(element)
+    for element in elements { try path.append(element) }
   }
 
   func validatePathBounds() throws {

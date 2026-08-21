@@ -434,7 +434,34 @@ struct PageDeviceTests {
 
     #expect(result.output.pages.count == 1)
     #expect(try values[1].value(as: IntegerValue.self).value == 0)
-    #expect(try values[0].value(as: IntegerValue.self).value == 1)
+    #expect(try values[0].value(as: IntegerValue.self).value == 0)
+  }
+
+  @Test func graphicsSaveRetainsItsPageDeviceAcrossSetPageDevice() async throws {
+    let values: [RealValue] = try await Interpreter.result(
+      content: """
+        /beforeWidth currentpagedevice /PageSize get 0 get def
+        gsave << /PageSize [144 216] >> setpagedevice
+        /changedWidth currentpagedevice /PageSize get 0 get def
+        grestore /restoredWidth currentpagedevice /PageSize get 0 get def
+        beforeWidth changedWidth restoredWidth
+        """,
+      count: 3
+    )
+    #expect(values.map(\.value) == [612, 144, 612])
+  }
+
+  @Test func pageTransmissionIsRejectedInsideLifecycleCallbacks() async throws {
+    let context = try await Interpreter.execute(content: """
+      /beginRejected false def /endRejected false def
+      <<
+        /BeginPage { pop { showpage } stopped /beginRejected exch store }
+        /EndPage { pop pop { copypage } stopped /endRejected exch store false }
+      >> setpagedevice
+      showpage beginRejected endRejected
+      """)
+    let values = try await context.results().compactMap { ($0.value as? BooleanValue)?.value }
+    #expect(values.prefix(2).allSatisfy { $0 })
   }
 
   @Test func unsupportedPhysicalDeliveryUsesPageDevicePolicies() async throws {

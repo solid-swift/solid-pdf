@@ -68,7 +68,7 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
       guard renderingEnabled else { return }
       switch event.operation {
       case .paint(.erasePage):
-        try clearPage()
+        try erasePage(state: event.before)
       case .paint(.fill(let rule)), .paint(.userPathFill(let rule)):
         try fill(event.before.path, rule: rule, state: event.before)
       case .paint(.stroke):
@@ -389,8 +389,15 @@ private extension RasterSeparationTarget.Renderer {
     }
   }
 
-  func clearPage() throws {
-    try withColorantCanvas { try $0.clear() }
+  func erasePage(state: GraphicsStateSnapshot) throws {
+    let clip = GraphicsClip(imageableBounds: descriptor.mediaBounds)
+    try fill(
+      GraphicsPath.rectangle(descriptor.mediaBounds),
+      rule: .winding,
+      state: state,
+      paint: state.paint,
+      clip: clip
+    )
   }
 
   func rasterClip(_ clip: GraphicsClip) throws(RasterError) -> RasterClip {
@@ -581,8 +588,8 @@ private extension RasterSeparationTarget.Renderer {
       try stroke(path, matrix: state.matrix, state: state)
     case .userPathStroke(let outline, let state):
       try fill(outline, rule: .winding, state: state, depth: depth)
-    case .erase:
-      try clearPage()
+    case .erase(let state):
+      try erasePage(state: state)
     case .fillRectangles(let paths, let state):
       try fill(GraphicsPath(elements: paths.flatMap(\.elements)), rule: .winding, state: state, depth: depth)
     case .strokeRectangles(let paths, let matrix, let state):

@@ -53,6 +53,7 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["grestore"]
 
     func execute(context: isolated Context) async throws {
+      guard !context.graphicsStack.isEmpty else { return }
       let before = context.graphicsState
       guard let frame = context.graphicsStack.last else { return }
       let after: GraphicsCanonicalState
@@ -91,10 +92,7 @@ extension Operators {
       } else if let first = context.graphicsStack.first {
         after = first.state
         nextStack.removeAll()
-      } else {
-        after = .initial(for: context.graphicsDeviceDescriptor, device: context.graphicsState.device)
-        after.pageDeviceParameters = context.graphicsState.pageDeviceParameters
-      }
+      } else { return }
       try context.emitGraphicsOperation(.state(.restoreAll), before: before, after: after)
       context.graphicsStack = nextStack
       try await context.transitionGraphicsState(to: after)
@@ -129,11 +127,18 @@ extension Operators {
     static let systemDictionaryNames: [Object] = ["cliprestore"]
 
     func execute(context: isolated Context) async throws {
-      guard let entry = context.graphicsState.clipStack.last else { throw Error.invalidRestore }
+      let localEntry = context.graphicsState.clipStack.last
+      let savedState = context.graphicsStack.last?.state
+      guard localEntry != nil || savedState != nil else { return }
       try context.applyGraphicsOperation(.state(.clipRestore)) {
-        _ = $0.clipStack.popLast()
-        $0.clip = entry.clip
-        $0.resolvedClip = entry.region
+        if let entry = localEntry {
+          _ = $0.clipStack.popLast()
+          $0.clip = entry.clip
+          $0.resolvedClip = entry.region
+        } else if let savedState {
+          $0.clip = savedState.clip
+          $0.resolvedClip = savedState.resolvedClip
+        }
       }
     }
   }
