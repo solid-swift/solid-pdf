@@ -26,14 +26,20 @@ extension Operators {
       let space = try await parseColorSpace(object, context: context)
       let selection = try await selectColorSpace(space, context: context)
       let components = space.initialComponents
-      let paint: GraphicsPaint = if case .pattern = space {
-        .pattern(.empty)
+      let paint: GraphicsPaint
+      let projection: PostScriptDeviceColorProjection?
+      if case .pattern = space {
+        paint = .pattern(.empty)
+        projection = nil
       } else {
-        graphicsPaint(try await resolveColor(components, in: selection, context: context))
+        let resolved = try await resolveColorWithProjection(components, in: selection, context: context)
+        paint = resolved.paint
+        projection = resolved.projection
       }
       try context.applyGraphicsOperation(.state(.setColorSpace(space.description))) {
         $0.colorSelection = selection
         $0.colorComponents = components
+        $0.deviceColorProjection = projection
         $0.patternSource = nil
         $0.paint = paint
       }
@@ -90,6 +96,7 @@ extension Operators {
         )
         try context.applyGraphicsOperation(.state(.setColorSpace(context.graphicsState.colorSpace.description))) {
           $0.colorComponents = components
+          $0.deviceColorProjection = nil
           $0.patternSource = pattern
           $0.paint = .pattern(paint)
         }
@@ -98,15 +105,16 @@ extension Operators {
       let count = context.graphicsState.colorSpace.componentCount
       let rawComponents = try context.operands.pop(count: count).reversed().map(numeric)
       let components = context.graphicsState.colorSpace.normalized(rawComponents)
-      let paint = try await resolveColor(
+      let resolved = try await resolveColorWithProjection(
         components,
         in: context.graphicsState.colorSelection,
         context: context
       )
-      try context.applyGraphicsOperation(.state(.setColor(paint))) {
+      try context.applyGraphicsOperation(.state(.setColor(resolved.color))) {
         $0.colorComponents = components
+        $0.deviceColorProjection = resolved.projection
         $0.patternSource = nil
-        $0.paint = graphicsPaint(paint)
+        $0.paint = resolved.paint
       }
     }
   }
@@ -305,12 +313,13 @@ extension Operators {
     try requireColorOperationAllowed(context)
     let selection = try await selectColorSpace(.deviceRGB(nil), context: context)
     let components = [red, green, blue]
-    let paint = try await resolveColor(components, in: selection, context: context)
+    let resolved = try await resolveColorWithProjection(components, in: selection, context: context)
     try context.applyGraphicsOperation(.state(.setRGB(red: red, green: green, blue: blue))) {
       $0.colorSelection = selection
       $0.colorComponents = components
+      $0.deviceColorProjection = resolved.projection
       $0.patternSource = nil
-      $0.paint = graphicsPaint(paint)
+      $0.paint = resolved.paint
     }
   }
 
@@ -321,25 +330,7 @@ extension Operators {
   }
 
   static func visibleDevicePaint(in state: GraphicsCanonicalState) -> GraphicsPaint? {
-    switch state.colorSpace {
-    case .deviceGray:
-      return .deviceGray(state.colorComponents[0])
-    case .deviceRGB:
-      return .deviceRGB(
-        red: state.colorComponents[0],
-        green: state.colorComponents[1],
-        blue: state.colorComponents[2]
-      )
-    case .deviceCMYK:
-      return .deviceCMYK(
-        cyan: state.colorComponents[0],
-        magenta: state.colorComponents[1],
-        yellow: state.colorComponents[2],
-        black: state.colorComponents[3]
-      )
-    default:
-      return nil
-    }
+    state.deviceColorProjection?.paint
   }
 
   static func graphicsPaint(_ color: GraphicsColorValue) -> GraphicsPaint {
@@ -606,50 +597,74 @@ extension Operators {
     in selection: PostScriptColorSelection,
     context: isolated Context
   ) async throws -> GraphicsColorValue {
+    return try await resolveColorWithProjection(rawComponents, in: selection, context: context).color
+  }
+
+  static func resolveColorWithProjection(
+    _ rawComponents: [Double],
+    in selection: PostScriptColorSelection,
+    context: isolated Context
+  ) async throws -> (color: GraphicsColorValue, paint: GraphicsPaint, projection: PostScriptDeviceColorProjection?) {
     guard rawComponents.count == selection.source.componentCount,
       rawComponents.allSatisfy(\.isFinite)
     else {
       throw Error.typeCheck
     }
-    return try await resolveColor(rawComponents, route: selection.route, context: context)
+    let resolved = try await resolveColor(
+      rawComponents,
+      source: selection.source,
+      route: selection.route,
+      context: context
+    )
+    return (resolved.color, graphicsPaint(resolved.color), resolved.projection)
   }
 
   private static func resolveColor(
     _ rawComponents: [Double],
+    source: PostScriptColorSpace,
     route: PostScriptColorSelection.Route,
     context: isolated Context
-  ) async throws -> GraphicsColorValue {
+  ) async throws -> (color: GraphicsColorValue, projection: PostScriptDeviceColorProjection?) {
     switch route {
     case .colorSpace(let space):
+      let projection = deviceColorProjection(for: source, components: rawComponents)
       switch space {
-    case .deviceGray:
-      return .deviceGray(clamped(rawComponents[0]))
-    case .deviceRGB:
-      return .deviceRGB(.init(
-        red: clamped(rawComponents[0]),
-        green: clamped(rawComponents[1]),
-        blue: clamped(rawComponents[2])
-      ))
-    case .deviceCMYK:
-      return .deviceCMYK(.init(
-        cyan: clamped(rawComponents[0]),
-        magenta: clamped(rawComponents[1]),
-        yellow: clamped(rawComponents[2]),
-        black: clamped(rawComponents[3])
-      ))
-    case .cieA(_, let parameters), .cieABC(_, let parameters), .cieDEF(_, let parameters),
-         .cieDEFG(_, let parameters):
-      let xyz = try await resolveCIE(rawComponents, parameters: parameters, context: context)
-      let device = try await renderCIE(
-        xyz,
-        source: parameters,
-        context: context
-      )
-      return .cie(space: space.description, source: rawComponents, xyz: xyz, device: device)
+      case .deviceGray:
+        return (.deviceGray(clamped(rawComponents[0])), projection)
+      case .deviceRGB:
+        return (
+          .deviceRGB(.init(
+            red: clamped(rawComponents[0]),
+            green: clamped(rawComponents[1]),
+            blue: clamped(rawComponents[2])
+          )),
+          projection
+        )
+      case .deviceCMYK:
+        return (
+          .deviceCMYK(.init(
+            cyan: clamped(rawComponents[0]),
+            magenta: clamped(rawComponents[1]),
+            yellow: clamped(rawComponents[2]),
+            black: clamped(rawComponents[3])
+          )),
+          projection
+        )
+      case .cieA(_, let parameters), .cieABC(_, let parameters), .cieDEF(_, let parameters),
+           .cieDEFG(_, let parameters):
+        let xyz = try await resolveCIE(rawComponents, parameters: parameters, context: context)
+        let device = try await renderCIE(xyz, source: parameters, context: context)
+        return (
+          .cie(space: space.description, source: rawComponents, xyz: xyz, device: device),
+          projection
+        )
       default:
         preconditionFailure("Selected color route contains a composite leaf")
       }
     case .indexed(let base, let maximum, let lookup):
+      guard case .indexed(_, let baseSource, _, _) = source else {
+        preconditionFailure("Indexed route must have an Indexed source")
+      }
       let index = min(maximum, max(0, Int(rawComponents[0].rounded())))
       let values: [Double]
       if let string = lookup.value as? StringValue {
@@ -664,11 +679,15 @@ extension Operators {
           context: context
         )
       }
-      return try await resolveColor(values, route: base, context: context)
+      return try await resolveColor(values, source: baseSource, route: base, context: context)
     case .directColorants(let space, let names):
       let tints = rawComponents.map(clamped)
-      return .directColorants(space: space, colorants: names, tints: tints)
+      return (.directColorants(space: space, colorants: names, tints: tints), nil)
     case .alternative(let space, let names, let transform, let alternative):
+      let alternativeSource: PostScriptColorSpace = switch source {
+      case .separation(_, _, let colorSpace, _), .deviceN(_, _, let colorSpace, _): colorSpace
+      default: preconditionFailure("Alternative route must have a named-color source")
+      }
       let tints = rawComponents.map(clamped)
       let values = try await executeTransform(
         transform,
@@ -676,10 +695,43 @@ extension Operators {
         outputs: alternative.componentCount,
         context: context
       )
-      let fallback = try await resolveColor(values, route: alternative, context: context)
-      return .named(space: space, colorants: names, tints: tints, alternative: fallback)
+      let fallback = try await resolveColor(
+        values,
+        source: alternativeSource,
+        route: alternative,
+        context: context
+      )
+      return (
+        .named(space: space, colorants: names, tints: tints, alternative: fallback.color),
+        fallback.projection
+      )
     case .pattern:
       throw Error.typeCheck
+    }
+  }
+
+  private static func deviceColorProjection(
+    for source: PostScriptColorSpace,
+    components: [Double]
+  ) -> PostScriptDeviceColorProjection? {
+    switch source {
+    case .deviceGray:
+      .gray(clamped(components[0]))
+    case .deviceRGB:
+      .rgb(
+        red: clamped(components[0]),
+        green: clamped(components[1]),
+        blue: clamped(components[2])
+      )
+    case .deviceCMYK:
+      .cmyk(
+        cyan: clamped(components[0]),
+        magenta: clamped(components[1]),
+        yellow: clamped(components[2]),
+        black: clamped(components[3])
+      )
+    default:
+      nil
     }
   }
 

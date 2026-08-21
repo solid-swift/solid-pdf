@@ -24,13 +24,14 @@ public struct ColorStitchingFunction: Sendable, Hashable {
     bounds: [Double],
     encode: [Double]
   ) throws(ColorError) {
-    guard domain.lowerBound < domain.upperBound, !functions.isEmpty, functions.count <= 65_536,
+    guard domain.lowerBound <= domain.upperBound, !functions.isEmpty, functions.count <= 65_536,
       functions.allSatisfy({ $0.inputCount == 1 }),
       functions.allSatisfy({ $0.outputCount == functions[0].outputCount }),
       range == nil || range?.count == functions[0].outputCount,
       bounds.count == functions.count - 1, encode.count == functions.count * 2,
       encode.allSatisfy(\.isFinite)
     else { throw .invalidDomain }
+    if domain.lowerBound == domain.upperBound, functions.count != 1 { throw .invalidDomain }
     var prior = domain.lowerBound
     for boundary in bounds {
       guard boundary > prior, boundary < domain.upperBound else { throw .invalidDomain }
@@ -47,6 +48,10 @@ public struct ColorStitchingFunction: Sendable, Hashable {
   public func evaluate(_ input: [Double]) throws(ColorError) -> [Double] {
     guard input.count == 1, input[0].isFinite else { throw .componentCount }
     let value = domain.clamp(input[0])
+    if domain.lowerBound == domain.upperBound {
+      let result = try functions[0].evaluate([encode[0]])
+      return result.indices.map { range?[$0].clamp(result[$0]) ?? result[$0] }
+    }
     let index = bounds.firstIndex(where: { value < $0 }) ?? functions.count - 1
     let lower = index == 0 ? domain.lowerBound : bounds[index - 1]
     let upper = index == functions.count - 1 ? domain.upperBound : bounds[index]

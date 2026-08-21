@@ -36,7 +36,7 @@ public struct ColorSampledFunction: Sendable, Hashable {
     sampleData: Data
   ) throws(ColorError) {
     guard (1...8).contains(domain.count), size.count == domain.count,
-      domain.allSatisfy({ $0.lowerBound < $0.upperBound }), size.allSatisfy({ $0 > 0 }),
+      domain.allSatisfy({ $0.lowerBound <= $0.upperBound }), size.allSatisfy({ $0 > 0 }),
       [1, 2, 4, 8, 12, 16, 24, 32].contains(bitsPerSample), order == 1 || order == 3
     else { throw .invalidDomain }
     let encode: [Double] = encode ?? size.flatMap { [0.0, Double($0 - 1)] }
@@ -86,15 +86,16 @@ public struct ColorSampledFunction: Sendable, Hashable {
     guard input.count == inputCount, input.allSatisfy(\.isFinite) else { throw .componentCount }
     let positions = input.indices.map { axis -> Double in
       let clipped = domain[axis].clamp(input[axis])
-      let fraction = (clipped - domain[axis].lowerBound) / (domain[axis].upperBound - domain[axis].lowerBound)
+      let width = domain[axis].upperBound - domain[axis].lowerBound
+      let fraction = width == 0 ? 0 : (clipped - domain[axis].lowerBound) / width
       let encoded = encode[axis * 2] + fraction * (encode[axis * 2 + 1] - encode[axis * 2])
       return min(Double(size[axis] - 1), max(0, encoded))
     }
     var result = Array(repeating: 0.0, count: outputCount)
-    if order == 1 {
-      interpolateLinear(positions, into: &result)
-    } else {
+    if order == 3, size.allSatisfy({ $0 >= 4 }) {
       interpolateCubic(positions, into: &result)
+    } else {
+      interpolateLinear(positions, into: &result)
     }
     for component in result.indices {
       let decoded = decode[component * 2]

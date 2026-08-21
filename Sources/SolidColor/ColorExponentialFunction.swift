@@ -26,7 +26,7 @@ public struct ColorExponentialFunction: Sendable, Hashable {
     c1: [Double] = [1],
     exponent: Double
   ) throws(ColorError) {
-    guard domain.lowerBound < domain.upperBound, (1...16).contains(c0.count), c0.count == c1.count,
+    guard domain.lowerBound <= domain.upperBound, (1...16).contains(c0.count), c0.count == c1.count,
       range == nil || range?.count == c0.count,
       c0.allSatisfy(\.isFinite), c1.allSatisfy(\.isFinite), exponent.isFinite
     else { throw .invalidDomain }

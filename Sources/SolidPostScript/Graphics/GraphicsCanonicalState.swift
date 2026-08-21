@@ -15,6 +15,7 @@ struct GraphicsCanonicalState: Sendable {
   var paint: GraphicsPaint
   var colorSelection: PostScriptColorSelection
   var colorComponents: [Double]
+  var deviceColorProjection: PostScriptDeviceColorProjection?
   var patternSource: Object?
   var colorRenderingSource: Object?
   var transferFunctionSources: [Object?]
@@ -55,6 +56,7 @@ struct GraphicsCanonicalState: Sendable {
       paint: .deviceGray(0),
       colorSelection: .direct(.deviceGray(nil)),
       colorComponents: [0],
+      deviceColorProjection: .gray(0),
       patternSource: nil,
       colorRenderingSource: nil,
       transferFunctionSources: [nil, nil, nil, nil],

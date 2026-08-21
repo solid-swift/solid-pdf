@@ -43,6 +43,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
     var dashSource: VMStoredObject?
     var colorSelection: PostScriptColorSelection.Stored
     var colorComponents: [Double]
+    var deviceColorProjection: PostScriptDeviceColorProjection?
     var patternSource: VMStoredObject?
     var colorRenderingSource: VMStoredObject?
     var transferFunctionSources: [VMStoredObject?]
@@ -63,6 +64,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       self.dashSource = state.dashSource.map(VMStoredObject.init)
       self.colorSelection = PostScriptColorSelection.Stored(state.colorSelection)
       self.colorComponents = state.colorComponents
+      self.deviceColorProjection = state.deviceColorProjection
       self.patternSource = state.patternSource.map(VMStoredObject.init)
       self.colorRenderingSource = state.colorRenderingSource.map(VMStoredObject.init)
       self.transferFunctionSources = state.transferFunctionSources.map { $0.map(VMStoredObject.init) }
@@ -85,6 +87,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         paint: snapshot.paint,
         colorSelection: colorSelection.value,
         colorComponents: colorComponents,
+        deviceColorProjection: deviceColorProjection,
         patternSource: patternSource?.object,
         colorRenderingSource: colorRenderingSource?.object,
         transferFunctionSources: transferFunctionSources.map { $0?.object },
@@ -168,6 +171,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
         $0.dashSource = nil
         $0.colorSelection = PostScriptColorSelection.Stored(.direct(.deviceGray(nil)))
         $0.colorComponents = [0]
+        $0.deviceColorProjection = .gray(0)
         $0.colorRenderingSource = nil
         $0.transferFunctionSources = [nil, nil, nil, nil]
         $0.blackGenerationSource = nil

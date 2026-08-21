@@ -365,12 +365,13 @@ extension Operators {
       try requireColorOperationAllowed(context)
       let gray = min(1, max(0, try numeric(context.operands.pop())))
       let selection = try await selectColorSpace(.deviceGray(nil), context: context)
-      let paint = try await resolveColor([gray], in: selection, context: context)
+      let resolved = try await resolveColorWithProjection([gray], in: selection, context: context)
       try context.applyGraphicsOperation(.state(.setGray(gray))) {
         $0.colorSelection = selection
         $0.colorComponents = [gray]
+        $0.deviceColorProjection = resolved.projection
         $0.patternSource = nil
-        $0.paint = graphicsPaint(paint)
+        $0.paint = resolved.paint
       }
     }
   }
@@ -397,12 +398,13 @@ extension Operators {
       let blue = clamped(try numeric(operands[0]))
       let selection = try await selectColorSpace(.deviceRGB(nil), context: context)
       let components = [red, green, blue]
-      let paint = try await resolveColor(components, in: selection, context: context)
+      let resolved = try await resolveColorWithProjection(components, in: selection, context: context)
       try context.applyGraphicsOperation(.state(.setRGB(red: red, green: green, blue: blue))) {
         $0.colorSelection = selection
         $0.colorComponents = components
+        $0.deviceColorProjection = resolved.projection
         $0.patternSource = nil
-        $0.paint = graphicsPaint(paint)
+        $0.paint = resolved.paint
       }
     }
   }
@@ -435,7 +437,7 @@ extension Operators {
       let black = clamped(try numeric(operands[0]))
       let selection = try await selectColorSpace(.deviceCMYK(nil), context: context)
       let components = [cyan, magenta, yellow, black]
-      let paint = try await resolveColor(components, in: selection, context: context)
+      let resolved = try await resolveColorWithProjection(components, in: selection, context: context)
       try context.applyGraphicsOperation(.state(.setCMYK(
         cyan: cyan,
         magenta: magenta,
@@ -444,8 +446,9 @@ extension Operators {
       ))) {
         $0.colorSelection = selection
         $0.colorComponents = components
+        $0.deviceColorProjection = resolved.projection
         $0.patternSource = nil
-        $0.paint = graphicsPaint(paint)
+        $0.paint = resolved.paint
       }
     }
   }
@@ -476,7 +479,7 @@ extension Operators {
           components = visiblePaint.cmykComponents
         }
       } else {
-        components = (0, 0, 0, 1)
+        components = (0, 0, 0, 0)
       }
       context.operands.push(
         try .real(components.black),

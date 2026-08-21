@@ -81,6 +81,53 @@ struct ColorSemanticsTests {
     #expect(alternative.rgb == ColorRGB(red: 0.25, green: 0.75, blue: 0))
   }
 
+  @Test func currentColorQueriesUseTheSelectedCompositeProjectionOnce() async throws {
+    let indexed: [RealValue] = try await Interpreter.result(
+      content: "[/Indexed /DeviceRGB 1 <ff000000ff00>] setcolorspace 1 setcolor currentrgbcolor",
+      count: 3
+    )
+    #expect(indexed.map(\.value).reversed() == [0, 1, 0])
+
+    let alternative = try await Interpreter.results(content: """
+      /calls 0 def
+      [/Separation /Missing /DeviceRGB {
+        userdict /calls calls 1 add put dup 1 exch sub 0
+      }] setcolorspace
+      /calls 0 def
+      .25 setcolor currentrgbcolor calls
+      """)
+    #expect(try alternative[0].value(as: IntegerValue.self).value == 1)
+    let alternativeRGB = Array(try alternative[1...3]
+      .map { try $0.value(as: RealValue.self).value }
+      .reversed())
+    #expect(alternativeRGB == [0.25, 0.75, 0])
+
+    let direct: [RealValue] = try await Interpreter.result(
+      content: """
+      [/Separation /None /DeviceRGB {1 0 0}] setcolorspace
+      .5 setcolor currentgray currentrgbcolor currentcmykcolor
+      """,
+      count: 8
+    )
+    #expect(direct.map(\.value).reversed() == [0, 0, 0, 0, 0, 0, 0, 0])
+  }
+
+  @Test func compositeColorProjectionParticipatesInEverySaveMechanism() async throws {
+    let values: [RealValue] = try await Interpreter.result(
+      content: """
+      [/Indexed /DeviceRGB 0 <ff0000>] setcolorspace 0 setcolor
+      gsave /DeviceGray setcolorspace grestore currentrgbcolor
+      gstate /saved exch def
+      /DeviceGray setcolorspace saved setgstate currentrgbcolor
+      save /checkpoint exch def
+      /DeviceGray setcolorspace checkpoint restore currentrgbcolor
+      """,
+      count: 9
+    )
+
+    #expect(values.map(\.value).reversed() == [1, 0, 0, 1, 0, 0, 1, 0, 0])
+  }
+
   @Test func deviceNTransformsAllTintsAndParticipatesInGraphicsSave() async throws {
     let values: [RealValue] = try await Interpreter.result(
       content: """

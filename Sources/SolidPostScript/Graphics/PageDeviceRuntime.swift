@@ -10,12 +10,13 @@ extension Context {
 
   func eraseCurrentPage() async throws {
     let selection = PostScriptColorSelection.direct(.deviceGray(nil))
-    let color = try await Operators.resolveColor([1], in: selection, context: self)
+    let resolved = try await Operators.resolveColorWithProjection([1], in: selection, context: self)
     var eraseState = graphicsState
     eraseState.colorSelection = selection
     eraseState.colorComponents = [1]
+    eraseState.deviceColorProjection = resolved.projection
     eraseState.patternSource = nil
-    eraseState.paint = Operators.graphicsPaint(color)
+    eraseState.paint = resolved.paint
     eraseState.overprint = false
     try emitGraphicsOperation(.paint(.erasePage), before: eraseState, after: graphicsState)
   }
@@ -304,6 +305,7 @@ extension Context {
     let selection: PostScriptColorSelection
     let components: [Double]
     let paint: GraphicsPaint
+    let projection: PostScriptDeviceColorProjection?
   }
 
   private func initialColor() async throws -> InitialColor {
@@ -342,13 +344,19 @@ extension Context {
       context: self
     )
     let components = source.initialComponents
-    let paint = try await Operators.resolveColor(components, in: selection, context: self)
-    return InitialColor(selection: selection, components: components, paint: Operators.graphicsPaint(paint))
+    let resolved = try await Operators.resolveColorWithProjection(components, in: selection, context: self)
+    return InitialColor(
+      selection: selection,
+      components: components,
+      paint: resolved.paint,
+      projection: resolved.projection
+    )
   }
 
   private func apply(_ initial: InitialColor, to state: inout GraphicsCanonicalState) {
     state.colorSelection = initial.selection
     state.colorComponents = initial.components
+    state.deviceColorProjection = initial.projection
     state.paint = initial.paint
     state.patternSource = nil
   }

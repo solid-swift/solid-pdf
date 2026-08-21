@@ -111,6 +111,7 @@ extension Operators {
       try context.applyGraphicsOperation(.state(.setColorSpace(space.description))) {
         $0.colorSelection = selection
         $0.colorComponents = components
+        $0.deviceColorProjection = nil
         $0.patternSource = pattern
         $0.paint = .pattern(paint)
       }
