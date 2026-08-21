@@ -79,7 +79,7 @@ SOLIDPDF_LINUX_SWIFT_IMAGE=swift:6.3.3-jammy \
 expect_equal "$(creation_count)" 2
 expect_equal "$(cat "${CONTAINER_DIRECTORY}/mounts")" "${ORIGINAL_MOUNTS}"
 
-SOLIDPDF_LINUX_SWIFT_IMAGE=swift:6.3.3-jammy SOLIDPDF_LINUX_SCRIPT_SCHEMA_VERSION=7 \
+SOLIDPDF_LINUX_SWIFT_IMAGE=swift:6.3.3-jammy SOLIDPDF_LINUX_SCRIPT_SCHEMA_VERSION=8 \
   "${TEST_REPOSITORY}/Scripts/linux-container" ensure >/dev/null
 expect_equal "$(creation_count)" 3
 expect_equal "$(cat "${CONTAINER_DIRECTORY}/mounts")" "${ORIGINAL_MOUNTS}"

@@ -17,6 +17,7 @@ Scripts/linux-test --filter PlutoVGImageTargetTests
 ENABLE_LINT=1 Scripts/linux-build
 Scripts/linux-benchmark-raster.sh --filter "Flat Fill"
 Scripts/linux-benchmark-raster-comparison.sh
+Scripts/linux-conformance
 ```
 
 Use `linux-container` to inspect or control the reusable environment:
@@ -41,4 +42,16 @@ SOLIDPDF_LINUX_PLATFORM=linux/amd64 Scripts/linux-build
 SOLIDPDF_LINUX_SWIFT_IMAGE=swift:6.3.3-jammy Scripts/linux-test
 ```
 
-Each checkout and target platform receives distinct stable container and volume names, so worktrees and cross-architecture builds do not share incompatible products or baselines. Swift-image and script updates reuse those volumes after replacing the container. The writable `Package.resolved` mount is refreshed whenever the checkout copy changes. Container creation also installs the FreeType and Fontconfig development packages required by `SolidPostScriptFreeType`, plus qpdf, MuPDF, and Poppler for generated-PDF interoperability checks.
+Each checkout and target platform receives distinct stable container and volume names, so worktrees and cross-architecture builds do not share incompatible products or baselines. Swift-image and script updates reuse those volumes after replacing the container. The writable `Package.resolved` mount is refreshed whenever the checkout copy changes. Container creation also installs the FreeType and Fontconfig development packages required by `SolidPostScriptFreeType`, qpdf, MuPDF, and Poppler for generated-PDF interoperability checks, and the compiler utilities needed by the independent conformance reference.
+
+# PostScript conformance
+
+`Scripts/conformance` prepares the checksummed Ghostscript 10.07.1 reference and runs the owned suite. The reference is cached beneath `~/.cache/solidpdf/conformance`; Linux uses the existing persistent dependency-cache volume rather than a separate container. An already installed reference can be selected explicitly:
+
+```shell
+SOLIDPDF_GHOSTSCRIPT_EXECUTABLE=/opt/ghostscript/bin/gs Scripts/conformance
+SOLIDPDF_CONFORMANCE_REFERENCE=0 Scripts/conformance
+Scripts/linux-conformance
+```
+
+The first form performs adjudicated differential validation. Setting `SOLIDPDF_CONFORMANCE_REFERENCE=0` runs only checked-in Solid expectations. Reference programs execute as a separate AGPL tool and are never linked into or distributed with SolidPDF.

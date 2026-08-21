@@ -7,8 +7,8 @@ readonly SCRIPT_DIRECTORY
 REPOSITORY_ROOT="$(cd "${SCRIPT_DIRECTORY}/.." && pwd -P)"
 readonly REPOSITORY_ROOT
 readonly SWIFT_IMAGE="${SOLIDPDF_LINUX_SWIFT_IMAGE:-swift:6.3.3}"
-readonly SCRIPT_SCHEMA_VERSION="${SOLIDPDF_LINUX_SCRIPT_SCHEMA_VERSION:-6}"
-readonly DEPENDENCY_GENERATION="${SOLIDPDF_LINUX_DEPENDENCY_GENERATION:-6}"
+readonly SCRIPT_SCHEMA_VERSION="${SOLIDPDF_LINUX_SCRIPT_SCHEMA_VERSION:-7}"
+readonly DEPENDENCY_GENERATION="${SOLIDPDF_LINUX_DEPENDENCY_GENERATION:-7}"
 
 function fail() {
   echo "linux-container: $*" >&2
@@ -208,10 +208,10 @@ function create_container() {
 
 function install_dependencies() {
   if ! docker exec "${CONTAINER_NAME}" test -f "${DEPENDENCY_SENTINEL}"; then
-    echo "Installing font and PDF validation packages..." >&2
+    echo "Installing font, PDF validation, and conformance build packages..." >&2
     docker exec "${CONTAINER_NAME}" apt-get update >/dev/null
     docker exec "${CONTAINER_NAME}" apt-get install --yes \
-      pkg-config libfreetype-dev libfontconfig1-dev \
+      build-essential curl xz-utils pkg-config libfreetype-dev libfontconfig1-dev \
       qpdf mupdf-tools poppler-utils >/dev/null
     docker exec "${CONTAINER_NAME}" touch "${DEPENDENCY_SENTINEL}"
   fi

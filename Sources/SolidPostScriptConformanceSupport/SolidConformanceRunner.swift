@@ -85,17 +85,17 @@ package enum SolidConformanceRunner {
   private static func digest(image: RasterImage, limit: Int) throws -> String {
     let pixels = image.width.multipliedReportingOverflow(by: image.height)
     guard !pixels.overflow, pixels.partialValue <= limit else { throw ConformanceError.rasterLimitExceeded }
-    var value = Data("raster-v1 \(image.width) \(image.height)\n".utf8)
-    value.reserveCapacity(value.count + pixels.partialValue * 3)
+    var rgb = Data()
+    rgb.reserveCapacity(pixels.partialValue * 3)
     for y in 0..<image.height {
       let row = y * image.bytesPerRow
       for x in 0..<image.width {
         let pixel = row + x * 4
-        value.append(image.data[pixel])
-        value.append(image.data[pixel + 1])
-        value.append(image.data[pixel + 2])
+        rgb.append(image.data[pixel])
+        rgb.append(image.data[pixel + 1])
+        rgb.append(image.data[pixel + 2])
       }
     }
-    return ConformanceDigest.sha256(value)
+    return try PortableRaster(width: image.width, height: image.height, channels: 3, pixels: rgb).digest
   }
 }

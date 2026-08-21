@@ -30,6 +30,7 @@ private struct Run: AsyncParsableCommand {
   @Argument(help: "Suite manifest path.") var suite: String
   @Option(name: .long, help: "Directory for JSON, JUnit, and failure artifacts.") var output = ".conformance-results"
   @Option(name: .long, help: "Maximum concurrent workers.") var jobs: Int?
+  @Option(name: .long, help: "Pinned Ghostscript executable used for differential validation.") var reference: String?
   @Option(name: .long, parsing: .upToNextOption, help: "Case tags to include.") var tags: [String] = []
 
   mutating func run() async throws {
@@ -40,13 +41,21 @@ private struct Run: AsyncParsableCommand {
     }
     let concurrency = min(max(jobs ?? ProcessInfo.processInfo.activeProcessorCount, 1), 4)
     let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+    let referenceURL = reference.map { URL(fileURLWithPath: $0).standardizedFileURL }
+    if let referenceURL, !FileManager.default.isExecutableFile(atPath: referenceURL.path) { throw ExitCode(69) }
+    let referenceVersion = try referenceURL.map { try GhostscriptConformanceRunner.version(executable: $0) }
     let results = await runWorkers(
       selected,
       suiteURL: suiteURL,
       executable: executable,
+      reference: referenceURL,
       concurrency: concurrency
     )
-    let report = ConformanceRunReport(suite: loaded.manifest.name, results: results)
+    let report = ConformanceRunReport(
+      suite: loaded.manifest.name,
+      referenceVersion: referenceVersion,
+      results: results
+    )
     try write(report: report, to: URL(fileURLWithPath: output))
     if report.exitStatus != 0 { throw ExitCode(report.exitStatus) }
   }
@@ -99,20 +108,21 @@ private func runWorkers(
   _ cases: [ConformanceCaseManifest],
   suiteURL: URL,
   executable: URL,
+  reference: URL?,
   concurrency: Int
 ) async -> [ConformanceCaseResult] {
   await withTaskGroup(of: ConformanceCaseResult.self, returning: [ConformanceCaseResult].self) { group in
     var iterator = cases.makeIterator()
     for _ in 0..<min(concurrency, cases.count) {
       if let testCase = iterator.next() {
-        addWorker(testCase, suiteURL: suiteURL, executable: executable, to: &group)
+        addWorker(testCase, suiteURL: suiteURL, executable: executable, reference: reference, to: &group)
       }
     }
     var results: [ConformanceCaseResult] = []
     while let result = await group.next() {
       results.append(result)
       if let testCase = iterator.next() {
-        addWorker(testCase, suiteURL: suiteURL, executable: executable, to: &group)
+        addWorker(testCase, suiteURL: suiteURL, executable: executable, reference: reference, to: &group)
       }
     }
     return results
@@ -123,6 +133,7 @@ private func addWorker(
   _ testCase: ConformanceCaseManifest,
   suiteURL: URL,
   executable: URL,
+  reference: URL?,
   to group: inout TaskGroup<ConformanceCaseResult>
 ) {
   group.addTask {
@@ -146,10 +157,15 @@ private func addWorker(
       }
       let observation = try JSONDecoder().decode(ConformanceObservationResult.self, from: process.standardOutput)
       let suite = try ConformanceSuite.load(from: suiteURL)
+      let ghostscript = try reference.map {
+        try GhostscriptConformanceRunner.run(testCase, in: suite, executable: $0)
+      }
       return try ConformanceAdjudicator.evaluate(
         testCase,
         suite: suite,
         solid: observation,
+        reference: ghostscript?.observation,
+        referenceVersion: ghostscript?.version,
         durationMilliseconds: milliseconds
       )
     } catch {
