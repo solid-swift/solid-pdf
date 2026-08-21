@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "name": "owned-plrm-semantic",
+  "cases": [
+    {
+      "id": "language.objects",
+      "title": "Objects, stacks, and primitive observations",
+      "authority": [{"document":"PLRM3","section":"3.2-3.4"}],
+      "tags": ["language", "objects", "stacks"],
+      "source": "Programs/objects.ps",
+      "disposition": "equivalent",
+      "expectation": {"solid":{"transcript":"Expected/objects.transcript"}}
+    },
+    {
+      "id": "language.scanner-ascii85",
+      "title": "Scanner names and ASCII85 strings",
+      "authority": [{"document":"PLRM3","section":"3.2.2, 3.12.6"}],
+      "tags": ["scanner", "filters", "binary"],
+      "source": "Programs/scanner.ps",
+      "disposition": "equivalent",
+      "expectation": {"solid":{"transcript":"Expected/scanner.transcript"}}
+    },
+    {
+      "id": "language.raw-currentfile",
+      "title": "Unrewritten currentfile execution",
+      "authority": [{"document":"PLRM3","section":"3.8.3"}],
+      "tags": ["raw", "files", "filters", "eexec", "binary"],
+      "mode": "raw",
+      "source": "Programs/raw-currentfile.ps",
+      "disposition": "solidExpected",
+      "expectation": {"solid":{"transcript":"Expected/raw-currentfile.transcript"}}
+    },
+    {
+      "id": "language.procedures",
+      "title": "Binding and packed arrays",
+      "authority": [{"document":"PLRM3","section":"3.11"}],
+      "tags": ["language", "packedarray"],
+      "source": "Programs/procedures.ps",
+      "disposition": "equivalent",
+      "expectation": {"solid":{"transcript":"Expected/procedures.transcript"}}
+    },
+    {
+      "id": "language.errors",
+      "title": "Stopped error and operand-stack effects",
+      "authority": [{"document":"PLRM3","section":"3.11.1","note":"Error initiation restores the operand stack and pushes the failing object."}],
+      "tags": ["errors", "stack"],
+      "source": "Programs/errors.ps",
+      "disposition": "acceptedDifference",
+      "expectation": {
+        "solid": {"transcript":"Expected/errors.transcript"},
+        "reference": {"transcript":"Expected/errors.ghostscript-10.07.1.transcript"},
+        "referenceVersion": "10.07.1",
+        "rationale": "PLRM 3.11.1 requires restoration to the operand stack state before the failing object and then pushes that object; Ghostscript omits one resulting stack entry after stopped catches div."
+      }
+    },
+    {
+      "id": "language.resources",
+      "title": "Implicit resource lookup",
+      "authority": [{"document":"PLRM3","section":"3.9"}],
+      "tags": ["resources", "fonts", "color"],
+      "source": "Programs/resources.ps",
+      "disposition": "solidExpected",
+      "expectation": {"solid":{"transcript":"Expected/resources.transcript"}}
+    },
+    {
+      "id": "graphics.color",
+      "title": "Device color selection and query",
+      "authority": [{"document":"PLRM3","section":"4.8"}],
+      "tags": ["color", "rendering-controls", "functions"],
+      "source": "Programs/color.ps",
+      "disposition": "equivalent",
+      "expectation": {"solid":{"transcript":"Expected/color.transcript"}}
+    },
+    {
+      "id": "graphics.recording",
+      "title": "Path painting and recording canonicalization",
+      "authority": [{"document":"PLRM3","section":"4.4-4.6"}],
+      "tags": ["paths", "clipping", "forms", "patterns", "shadings", "user-paths"],
+      "source": "Programs/graphics.ps",
+      "observations": ["transcript", "recording"],
+      "disposition": "solidExpected",
+      "expectation": {"solid":{"transcript":"Expected/graphics.transcript"}}
+    },
+    {
+      "id": "device.page-lifecycle",
+      "title": "Page-device geometry and transmission",
+      "authority": [{"document":"PLRM3","section":"6.2"}],
+      "tags": ["page-device", "copies", "media", "delivery", "separation", "overprint", "trapping"],
+      "source": "Programs/page-device.ps",
+      "observations": ["transcript", "recording"],
+      "disposition": "solidExpected",
+      "expectation": {"solid":{"transcript":"Expected/page-device.transcript"}}
+    },
+    {
+      "id": "graphics.raster-blank",
+      "title": "Deterministic blank raster page",
+      "authority": [{"document":"PLRM3","section":"6.1"}],
+      "tags": ["raster", "page-device"],
+      "source": "Programs/raster-blank.ps",
+      "observations": ["raster"],
+      "disposition": "equivalent"
+    },
+    {
+      "id": "graphics.permissive-raster-box",
+      "title": "License-attributed PostScript raster fixture",
+      "authority": [{"document":"PLRM3","section":"4.5, 6.1"}],
+      "tags": ["raster", "paths", "permissive-fixture"],
+      "mode": "document",
+      "source": "Programs/permissive-raster-box.ps",
+      "observations": ["raster"],
+      "disposition": "equivalent"
+    },
+    {
+      "id": "language.vm-access",
+      "title": "Save restore and access semantics",
+      "authority": [{"document":"PLRM3","section":"3.7.3, 3.3"}],
+      "tags": ["vm", "access", "files", "eexec", "images", "masks", "text", "cid", "type3"],
+      "source": "Programs/vm-access.ps",
+      "disposition": "equivalent",
+      "expectation": {"solid":{"transcript":"Expected/vm-access.transcript"}}
+    }
+  ]
+}

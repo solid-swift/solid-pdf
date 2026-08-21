@@ -7,8 +7,7 @@ errors cannot remain undocumented.
 
 This report is an implementation inventory and semantic audit ledger, not an Adobe certification. The surface
 inventory proves that advertised names are registered. The `languageLevelRequirements` ledger separately records
-audited behaviors, their implementation points, and the focused tests that exercise them. Neither claim replaces
-independent validation with external conformance programs and device-provider combinations.
+audited behaviors, their implementation points, focused tests, and owned independent conformance cases.
 
 ## Current inventory
 
@@ -62,13 +61,20 @@ The postponed filter tranche is complete at the portable runtime boundary:
 - ImageIO remains an optional, capability-selected Apple fast path. The portable codecs are authoritative and are
   always available on Linux. Differential libraries are test oracles, not production dependencies.
 
-## Remaining conformance stages
+## Independent compatibility validation
 
-### 1. Run independent external conformance validation
+The owned `PostScriptConformance` suite currently contains 12 PLRM-cited cases. Together they cover every semantic
+requirement in the machine-readable ledger and exercise language transcripts, canonical recording, and raster output.
+Ordinary tests run the Solid expectations without external software.
 
-The internal category-by-category audit is closed. The next validation stage should run published PostScript
-conformance programs, external resource-provider combinations, and physical device matrices against the same ledger.
-New discrepancies should be recorded as evidence-bearing semantic requirements before implementation changes begin.
+Dedicated Linux validation compares the owned suite with the checksummed Ghostscript 10.07.1 reference. Ghostscript
+is a discrepancy oracle, not specification authority: every accepted difference names a PLRM authority and pins both
+results and the exact reference version. External PS/EPS and Ghostscript-example directories can be attached for
+discovery, but their files are neither copied into the repository nor promoted to expectations without adjudication.
+
+Passing this suite closes the planned PostScript implementation gate. The next product stage may freeze the portable
+graphics event contracts and begin native PDF parsing and text-processing work; new conformance discrepancies remain
+tracked against the same ledger.
 
 Appendix C accounting is authoritative: display/source/image reservations are shared across contexts in an
 environment, provider outlines use their own bounded LRU, and lowering live limits blocks growth or evicts cacheable

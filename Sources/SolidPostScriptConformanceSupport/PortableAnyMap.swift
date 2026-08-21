@@ -26,6 +26,16 @@ package struct PortableRaster: Sendable, Hashable {
 }
 
 package enum PortableAnyMap {
+  package static func encode(_ raster: PortableRaster) throws -> Data {
+    guard raster.channels == 1 || raster.channels == 3 else {
+      throw ConformanceError.processFailed("only gray and RGB portable rasters can be encoded")
+    }
+    let magic = raster.channels == 1 ? "P5" : "P6"
+    var data = Data("\(magic)\n\(raster.width) \(raster.height)\n255\n".utf8)
+    data.append(raster.pixels)
+    return data
+  }
+
   package static func decode(_ data: Data, maximumPixels: Int) throws -> PortableRaster {
     var parser = Parser(data: data)
     let magic = try parser.token()
@@ -51,6 +61,10 @@ package enum PortableAnyMap {
       while true {
         let key = try parser.token()
         if key == "ENDHDR" { break }
+        if key == "TUPLTYPE" {
+          _ = try parser.token()
+          continue
+        }
         let value = try parser.positiveInteger()
         switch key {
         case "WIDTH": width = value

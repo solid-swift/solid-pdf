@@ -7,8 +7,18 @@ package struct ConformanceSuite: Sendable {
   package static func load(from manifestURL: URL) throws -> Self {
     let standardizedURL = manifestURL.standardizedFileURL
     let root = standardizedURL.deletingLastPathComponent().resolvingSymlinksInPath()
-    let data = try Data(contentsOf: standardizedURL, options: [.mappedIfSafe])
-    let manifest = try JSONDecoder().decode(ConformanceSuiteManifest.self, from: data)
+    let data: Data
+    do {
+      data = try Data(contentsOf: standardizedURL, options: [.mappedIfSafe])
+    } catch {
+      throw ConformanceError.invalidPath(standardizedURL.path)
+    }
+    let manifest: ConformanceSuiteManifest
+    do {
+      manifest = try JSONDecoder().decode(ConformanceSuiteManifest.self, from: data)
+    } catch {
+      throw ConformanceError.invalidManifest(String(describing: error))
+    }
     guard manifest.schemaVersion == 1 else {
       throw ConformanceError.invalidManifest("unsupported schema version \(manifest.schemaVersion)")
     }

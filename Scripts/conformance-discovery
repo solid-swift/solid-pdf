@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIRECTORY
+REPOSITORY_ROOT="$(cd "${SCRIPT_DIRECTORY}/.." && pwd -P)"
+readonly REPOSITORY_ROOT
+readonly CACHE_ROOT="${SOLIDPDF_CONFORMANCE_CACHE:-${XDG_CACHE_HOME:-${HOME}/.cache}/solidpdf/conformance}"
+readonly CORPUS="${SOLIDPDF_EXTERNAL_CONFORMANCE_CORPUS:-${CACHE_ROOT}/references/ghostscript-10.07.1-examples}"
+
+reference="$(${SCRIPT_DIRECTORY}/prepare-ghostscript-reference)"
+arguments=(
+  discover "${CORPUS}"
+  --reference "${reference}"
+  --output "${SOLIDPDF_CONFORMANCE_DISCOVERY_OUTPUT:-${REPOSITORY_ROOT}/.conformance-discovery}"
+)
+arguments+=("$@")
+exec env CONFORMANCE_ENABLE=1 swift run --package-path "${REPOSITORY_ROOT}" solid-ps-conformance "${arguments[@]}"

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "authority": {
     "title": "PostScript Language Reference, third edition",
     "sections": ["3.8", "3.9", "3.10", "3.11", "4.4-4.10", "5", "6", "7", "8.1", "Appendix A", "Appendix C"],
@@ -136,143 +136,165 @@
       "name": "dictionary-and-name-scanner-semantics",
       "status": "implemented",
       "registration": ["Sources/SolidPostScript/Scanner.swift"],
-      "tests": ["Tests/SolidPostScriptTests/ScannerTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/ScannerTests.swift"],
+      "conformanceCases": ["language.objects", "language.scanner-ascii85"]
     },
     {
       "name": "ascii85-string-syntax",
       "status": "implemented",
       "registration": ["Sources/SolidPostScript/Scanner.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Ascii85Tests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Ascii85Tests.swift"],
+      "conformanceCases": ["language.scanner-ascii85", "language.raw-currentfile"]
     },
     {
       "name": "binary-object-encodings",
       "status": "implemented",
       "registration": ["Sources/SolidPostScript/Binary"],
-      "tests": ["Tests/SolidPostScriptTests/BinaryEncodingTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/BinaryEncodingTests.swift"],
+      "conformanceCases": ["language.scanner-ascii85", "language.raw-currentfile"]
     },
     {
       "name": "packedarray-and-bind-semantics",
       "status": "implemented",
       "registration": ["Sources/SolidPostScript/Objects/PackedArrayValue.swift", "Sources/SolidPostScript/Operators/Language/ProcedureOps.swift"],
-      "tests": ["Tests/SolidPostScriptTests/PackedArrayTests.swift", "Tests/SolidPostScriptTests/IdiomRecognitionTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/PackedArrayTests.swift", "Tests/SolidPostScriptTests/IdiomRecognitionTests.swift"],
+      "conformanceCases": ["language.procedures"]
+    },
+    {
+      "name": "error-initiation-and-stopped-semantics",
+      "status": "implemented",
+      "registration": ["Sources/SolidPostScript/Execution/Context.swift", "Sources/SolidPostScript/Operators/Language/ErrorHandlingOps.swift"],
+      "tests": ["Tests/SolidPostScriptTests/ErrorHandlingTests.swift", "Tests/SolidPostScriptTests/ControlTests.swift"],
+      "conformanceCases": ["language.errors"]
     },
     {
       "name": "filtered-file-cursor-and-close-semantics",
       "status": "implemented",
       "registration": ["Sources/SolidPostScript/Operators/Language/FilterOps.swift"],
-      "tests": ["Tests/SolidPostScriptTests/FilteredFileTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/FilteredFileTests.swift"],
+      "conformanceCases": ["language.scanner-ascii85", "language.raw-currentfile"]
     },
     {
       "name": "type1-eexec-encrypted-execution",
       "status": "implemented",
       "registration": ["Sources/SolidPostScript/Files/EExecFile.swift"],
-      "tests": ["Tests/SolidPostScriptTests/EExecTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/EExecTests.swift"],
+      "conformanceCases": ["language.vm-access", "language.raw-currentfile"]
     },
     {
       "name": "composite-font-fmaptypes-2-through-9",
       "status": "implemented",
       "registration": ["Sources/SolidPostScript/Fonts/CompositeFontMapping.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Graphics/CompositeFontTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Graphics/CompositeFontTests.swift"],
+      "conformanceCases": ["language.resources"]
     },
     {
       "name": "text-font-scope-glyph-selection-and-displacement",
       "status": "implemented",
       "operators": ["ashow", "awidthshow", "glyphshow", "rootfont", "selectfont", "widthshow", "xshow", "xyshow", "yshow"],
       "registration": ["Sources/SolidPostScript/Fonts/TextRuntime.swift", "Sources/SolidPostScript/Operators/Graphics/TextOps.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["language.vm-access"]
     },
     {
       "name": "type3-cache-device-and-charstrings-procedure-semantics",
       "status": "implemented",
       "operators": ["setcachedevice2"],
       "registration": ["Sources/SolidPostScript/Fonts/TextRuntime.swift", "Sources/SolidPostScript/Operators/Graphics/TextOps.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["language.vm-access"]
     },
     {
       "name": "charpath-outline-mode-and-protection",
       "status": "implemented",
       "registration": ["Sources/SolidPostScript/Operators/Graphics/TextOps.swift", "Sources/SolidPostScript/Graphics/GraphicsCanonicalState.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift"],
+      "conformanceCases": ["graphics.recording"]
     },
     {
       "name": "path-construction-clipping-and-empty-restore-semantics",
       "status": "implemented",
       "operators": ["arcn", "eoclip", "grestoreall", "rcurveto", "rectstroke"],
       "registration": ["Sources/SolidPostScript/Graphics/GraphicsPath.swift", "Sources/SolidPostScript/Operators/Graphics/GraphicsStateOps.swift", "Sources/SolidPostScript/Operators/Graphics/PathOps.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Graphics/GraphicsSemanticsTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Graphics/GraphicsSemanticsTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["graphics.recording", "graphics.permissive-raster-box"]
     },
     {
       "name": "user-path-even-odd-semantics",
       "status": "implemented",
       "operators": ["inueofill", "ueofill"],
       "registration": ["Sources/SolidPostScript/Operators/Graphics/UserPathOps.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Graphics/PathInsidenessTests.swift", "Tests/SolidPostScriptTests/Graphics/UserPathTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Graphics/PathInsidenessTests.swift", "Tests/SolidPostScriptTests/Graphics/UserPathTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["graphics.recording"]
     },
     {
       "name": "matrix-construction-query-and-inversion-semantics",
       "status": "implemented",
       "operators": ["concatmatrix", "defaultmatrix", "identmatrix", "invertmatrix", "rotate", "setmatrix"],
       "registration": ["Sources/SolidPostScript/Operators/Graphics/MatrixOps.swift"],
-      "tests": ["Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["graphics.recording"]
     },
     {
       "name": "font-encoding-resource-lookup",
       "status": "implemented",
       "operators": ["findencoding"],
       "registration": ["Sources/SolidPostScript/Operators/Graphics/FontOps.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["language.resources"]
     },
     {
       "name": "font-cache-and-vm-threshold-compatibility",
       "status": "implemented",
       "operators": ["setcacheparams", "setvmthreshold"],
       "registration": ["Sources/SolidPostScript/Operators/Graphics/FontOps.swift", "Sources/SolidPostScript/Operators/Language/VMOps.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Graphics/FontTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["language.vm-access"]
     },
     {
       "name": "device-color-query-and-rendering-control-semantics",
       "status": "implemented",
       "operators": ["currentblackgeneration", "currentcolorscreen", "currentcolortransfer", "currenthsbcolor", "currentundercolorremoval", "setcolortransfer", "sethsbcolor"],
       "registration": ["Sources/SolidPostScript/Operators/Graphics/ColorOps.swift", "Sources/SolidPostScript/Operators/Graphics/DeviceRenderingOps.swift", "Sources/SolidPostScript/Operators/Graphics/HalftoneOps.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Graphics/ColorSemanticsTests.swift", "Tests/SolidPostScriptTests/Graphics/HalftoneTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Graphics/ColorSemanticsTests.swift", "Tests/SolidPostScriptTests/Graphics/HalftoneTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["graphics.color"]
     },
     {
       "name": "indexed-separation-devicen-and-overprint-realization",
       "status": "implemented",
       "registration": ["Sources/SolidPostScript/Graphics/PostScriptColorSpace.swift", "Sources/SolidPostScriptRaster/RasterSeparationTarget.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Graphics/ColorSemanticsTests.swift", "Tests/SolidPostScriptTests/Graphics/DeviceColorRemappingTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Graphics/ColorSemanticsTests.swift", "Tests/SolidPostScriptTests/Graphics/DeviceColorRemappingTests.swift"],
+      "conformanceCases": ["graphics.color"]
     },
     {
       "name": "degenerate-domain-and-sampled-function-interpolation",
       "status": "implemented",
       "registration": ["Sources/SolidColor/ColorSampledFunction.swift", "Sources/SolidColor/ColorStitchingFunction.swift"],
-      "tests": ["Tests/SolidColorTests/ColorFunctionTests.swift"]
+      "tests": ["Tests/SolidColorTests/ColorFunctionTests.swift"],
+      "conformanceCases": ["graphics.color"]
     },
     {
       "name": "page-device-save-lifecycle-and-copypage-semantics",
       "status": "implemented",
       "registration": ["Sources/SolidPostScript/Graphics/PageDeviceRuntime.swift", "Sources/SolidPostScript/Operators/Graphics/GraphicsStateOps.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Graphics/PageDeviceTests.swift", "Tests/SolidPostScriptTests/Graphics/GraphicsSemanticsTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Graphics/PageDeviceTests.swift", "Tests/SolidPostScriptTests/Graphics/GraphicsSemanticsTests.swift"],
+      "conformanceCases": ["device.page-lifecycle", "graphics.raster-blank"]
     },
     {
       "name": "erasepage-device-rendering-semantics",
       "status": "implemented",
       "operators": ["erasepage"],
       "registration": ["Sources/SolidPostScript/Operators/Graphics/PaintOps.swift", "Sources/SolidPostScriptRaster/RasterImageTarget.swift", "Sources/SolidPostScriptRaster/RasterSeparationTarget.swift"],
-      "tests": ["Tests/SolidPostScriptTests/Graphics/GraphicsSemanticsTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"]
+      "tests": ["Tests/SolidPostScriptTests/Graphics/GraphicsSemanticsTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
+      "conformanceCases": ["device.page-lifecycle"]
     },
     {
       "name": "portable-type1-and-type2-charstring-semantics",
       "status": "implemented",
       "registration": ["Sources/SolidFont/FontCharStringDecoder.swift"],
-      "tests": ["Tests/SolidFontTests/FontCharStringDecoderTests.swift"]
+      "tests": ["Tests/SolidFontTests/FontCharStringDecoderTests.swift"],
+      "conformanceCases": ["language.vm-access"]
     }
   ],
-  "remainingStages": [
-    {
-      "priority": 1,
-      "title": "Independent external conformance validation",
-      "items": ["published PostScript conformance suites", "external resource-provider matrices", "device-specific physical output validation"]
-    }
-  ]
+  "remainingStages": []
 }

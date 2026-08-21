@@ -7,11 +7,13 @@ package enum ConformanceAdjudicator {
     solid: ConformanceObservationResult,
     reference: ConformanceObservationResult? = nil,
     referenceVersion: String? = nil,
-    durationMilliseconds: Int = 0
+    durationMilliseconds: Int = 0,
+    additionalDifferences: [String] = []
   ) throws -> ConformanceCaseResult {
     let solidExpected = testCase.expectation?.solid
     let referenceExpected = testCase.expectation?.reference
     var differences = try compare(solid, expected: solidExpected, suite: suite, testCase: testCase, label: "Solid")
+    differences += additionalDifferences
 
     switch testCase.disposition {
     case .equivalent:
@@ -24,11 +26,17 @@ package enum ConformanceAdjudicator {
           differences: differences
         )
       }
-      differences += compare(solid, actual: reference, label: "reference")
+      differences += compare(
+        solid,
+        actual: reference,
+        label: "reference",
+        compareRasterDigests: !testCase.observations.contains(.raster)
+      )
     case .solidExpected:
       break
     case .acceptedDifference:
-      guard let reference, referenceVersion == testCase.expectation?.referenceVersion else {
+      guard let reference else { break }
+      guard referenceVersion == testCase.expectation?.referenceVersion else {
         differences.append("accepted reference version is stale or unavailable")
         return ConformanceCaseResult(
           id: testCase.id,
@@ -47,7 +55,14 @@ package enum ConformanceAdjudicator {
         label: "reference"
       )
     case .discovery:
-      if let reference { differences += compare(solid, actual: reference, label: "reference") }
+      if let reference {
+        differences += compare(
+          solid,
+          actual: reference,
+          label: "reference",
+          compareRasterDigests: !testCase.observations.contains(.raster)
+        )
+      }
       return ConformanceCaseResult(
         id: testCase.id,
         status: differences.isEmpty ? .passed : .difference,
@@ -98,7 +113,8 @@ package enum ConformanceAdjudicator {
   private static func compare(
     _ solid: ConformanceObservationResult,
     actual reference: ConformanceObservationResult,
-    label: String
+    label: String,
+    compareRasterDigests: Bool
   ) -> [String] {
     var differences: [String] = []
     if let lhsData = solid.transcript, let rhsData = reference.transcript,
@@ -113,7 +129,7 @@ package enum ConformanceAdjudicator {
     if solid.recordingDigest != reference.recordingDigest {
       differences.append("Solid recording differs from \(label)")
     }
-    if solid.rasterDigests != reference.rasterDigests {
+    if compareRasterDigests, solid.rasterDigests != reference.rasterDigests {
       differences.append("Solid raster differs from \(label)")
     }
     return differences

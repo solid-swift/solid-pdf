@@ -96,7 +96,7 @@ struct PLRMConformanceInventoryTests {
   @Test
   func inventoryClassificationsAndEvidenceAreWellFormed() throws {
     let inventory = try Inventory.load()
-    #expect(inventory.schemaVersion == 2)
+    #expect(inventory.schemaVersion == 3)
     #expect(Set(inventory.classifications) == ["implemented", "intentionally-unavailable", "postponed", "nonconforming"])
     #expect(inventory.standardFiles.map(\.name) == ["%stdin", "%stdout", "%stderr", "%lineedit", "%statementedit"])
     #expect(inventory.standardFiles.allSatisfy { $0.status == "implemented" })
@@ -105,6 +105,7 @@ struct PLRMConformanceInventoryTests {
     #expect(inventory.parameters.systemNonconforming.isEmpty)
     #expect(inventory.errors.nonconforming.isEmpty)
     #expect(inventory.languageLevelRequirements.allSatisfy { $0.status == "implemented" })
+    #expect(inventory.languageLevelRequirements.allSatisfy { !$0.conformanceCases.isEmpty })
     #expect(
       inventory.languageLevelRequirements.map(\.name).count
         == Set(inventory.languageLevelRequirements.map(\.name)).count
@@ -141,6 +142,25 @@ struct PLRMConformanceInventoryTests {
     }
   }
 
+  @Test
+  func semanticLedgerMatchesOwnedConformanceCases() throws {
+    let inventory = try Inventory.load()
+    let suiteURL = Inventory.repositoryRoot.appending(path: "Tests/Fixtures/PostScriptConformance/suite.json")
+    let suite = try JSONDecoder().decode(ConformanceCaseLedger.self, from: Data(contentsOf: suiteURL))
+    let caseIDs = suite.cases.map(\.id)
+    let referenced = inventory.languageLevelRequirements.flatMap(\.conformanceCases)
+
+    #expect(caseIDs.count == Set(caseIDs).count)
+    #expect(Set(referenced).isSubset(of: Set(caseIDs)))
+    #expect(Set(caseIDs).isSubset(of: Set(referenced)))
+    for testCase in suite.cases {
+      #expect(!testCase.authority.isEmpty)
+      #expect(FileManager.default.fileExists(
+        atPath: suiteURL.deletingLastPathComponent().appending(path: testCase.source).path
+      ))
+    }
+  }
+
   private static func name(_ object: Object) throws -> String {
     try object.value(as: NameValue.self).value
   }
@@ -170,6 +190,18 @@ struct PLRMConformanceInventoryTests {
     "selectfont", "setcachedevice2", "setcacheparams", "setcolortransfer", "sethsbcolor", "setmatrix",
     "setvmthreshold", "ueofill", "widthshow", "xshow", "xyshow", "yshow",
   ]
+}
+
+private struct ConformanceCaseLedger: Decodable {
+  struct Case: Decodable {
+    struct Authority: Decodable {}
+
+    let id: String
+    let source: String
+    let authority: [Authority]
+  }
+
+  let cases: [Case]
 }
 
 private struct Inventory: Decodable {
@@ -266,6 +298,7 @@ private struct Inventory: Decodable {
     let operators: [String]
     let registration: [String]
     let tests: [String]
+    let conformanceCases: [String]
 
     private enum CodingKeys: String, CodingKey {
       case name
@@ -273,6 +306,7 @@ private struct Inventory: Decodable {
       case operators
       case registration
       case tests
+      case conformanceCases
     }
 
     init(from decoder: any Decoder) throws {
@@ -282,6 +316,7 @@ private struct Inventory: Decodable {
       operators = try container.decodeIfPresent([String].self, forKey: .operators) ?? []
       registration = try container.decode([String].self, forKey: .registration)
       tests = try container.decode([String].self, forKey: .tests)
+      conformanceCases = try container.decode([String].self, forKey: .conformanceCases)
     }
   }
 

@@ -15,13 +15,35 @@ import Testing
   }
 
   @Test func decodesPAM() throws {
-    var data = Data("P7\nWIDTH 1\nHEIGHT 1\nDEPTH 4\nMAXVAL 255\nENDHDR\n".utf8)
+    var data = Data("P7\nWIDTH 1\nHEIGHT 1\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n".utf8)
     data.append(contentsOf: [1, 2, 3, 4])
 
     let raster = try PortableAnyMap.decode(data, maximumPixels: 1)
 
     #expect(raster.channels == 4)
     #expect(raster.pixels == Data([1, 2, 3, 4]))
+  }
+
+  @Test func roundTripsRawGrayAndRGB() throws {
+    for channels in [1, 3] {
+      let raster = try PortableRaster(
+        width: 2,
+        height: 1,
+        channels: channels,
+        pixels: Data((0..<(2 * channels)).map(UInt8.init))
+      )
+      let decoded = try PortableAnyMap.decode(PortableAnyMap.encode(raster), maximumPixels: 2)
+      #expect(decoded == raster)
+    }
+  }
+
+  @Test func createsDeterministicDifferenceImage() throws {
+    let solid = try PortableRaster(width: 1, height: 1, channels: 3, pixels: Data([10, 20, 30]))
+    let reference = try PortableRaster(width: 1, height: 1, channels: 3, pixels: Data([12, 90, 28]))
+
+    let difference = try ConformanceRasterComparator.differenceImage(solid, reference)
+
+    #expect(difference.pixels == Data([70, 0, 0]))
   }
 
   @Test func rejectsTruncatedRaster() {

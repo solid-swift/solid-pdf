@@ -9,6 +9,12 @@ package enum SolidConformanceRunner {
   package static func run(_ testCase: ConformanceCaseManifest, in suite: ConformanceSuite) async throws
     -> ConformanceObservationResult
   {
+    try await runWithRasters(testCase, in: suite).observation
+  }
+
+  package static func runWithRasters(_ testCase: ConformanceCaseManifest, in suite: ConformanceSuite) async throws
+    -> (observation: ConformanceObservationResult, rasterPages: [PortableRaster])
+  {
     let sourceURL = try suite.sourceURL(for: testCase)
     let source = try Data(contentsOf: sourceURL, options: [.mappedIfSafe])
     guard source.count <= testCase.limits.maximumInputBytes else { throw ConformanceError.inputLimitExceeded }
@@ -28,13 +34,15 @@ package enum SolidConformanceRunner {
 
     var recordingDigest: String?
     var rasterDigests: [String] = []
+    var rasterPages: [PortableRaster] = []
     let file = { DataFile(data: program, mode: .read) }
     if testCase.observations.contains(.recording) {
       let rendered = try await Interpreter.render(file: file(), to: RecordingGraphicsTarget(), environment: environment)
       recordingDigest = digest(recording: rendered.output)
     } else if testCase.observations.contains(.raster) {
       let rendered = try await Interpreter.render(file: file(), to: RasterImageTarget(), environment: environment)
-      rasterDigests = try rendered.output.map { try digest(image: $0, limit: testCase.limits.maximumRasterPixels) }
+      rasterPages = try rendered.output.map { try portableRaster(image: $0, limit: testCase.limits.maximumRasterPixels) }
+      rasterDigests = rasterPages.map(\.digest)
     } else {
       _ = try await Interpreter.execute(file: file(), environment: environment)
     }
@@ -47,42 +55,21 @@ package enum SolidConformanceRunner {
     } else {
       transcript = nil
     }
-    return ConformanceObservationResult(
-      transcript: transcript,
-      recordingDigest: recordingDigest,
-      rasterDigests: rasterDigests
+    return (
+      ConformanceObservationResult(
+        transcript: transcript,
+        recordingDigest: recordingDigest,
+        rasterDigests: rasterDigests
+      ),
+      rasterPages
     )
   }
 
   private static func digest(recording: GraphicsRecording) -> String {
-    var value = Data("recording-v1\n".utf8)
-    for (pageIndex, page) in recording.pages.enumerated() {
-      value.append(Data(
-        "page \(pageIndex) \(page.deviceDescriptor.mediaBounds.width.bitPattern) \(page.deviceDescriptor.mediaBounds.height.bitPattern)\n".utf8
-      ))
-      for effect in page.effects { value.append(Data("\(effectSummary(effect))\n".utf8)) }
-    }
-    return ConformanceDigest.sha256(value)
+    ConformanceRecordingCanonicalizer.digest(recording)
   }
 
-  private static func effectSummary(_ effect: GraphicsEffect) -> String {
-    switch effect {
-    case .fill(let path, let rule, _): "fill \(rule) \(path.elements.count)"
-    case .stroke(let path, _): "stroke \(path.elements.count)"
-    case .userPathFill(let path, let rule, _): "upfill \(rule) \(path.elements.count)"
-    case .userPathStroke(let outline, _): "upstroke \(outline.elements.count)"
-    case .erase: "erase"
-    case .fillRectangles(let paths, _): "rectfill \(paths.reduce(0) { $0 + $1.elements.count })"
-    case .strokeRectangles(let paths, let matrix, _):
-      "rectstroke \(paths.reduce(0) { $0 + $1.elements.count }) \(matrix == nil ? 0 : 1)"
-    case .image(let image, _): "image \(image.descriptor.width) \(image.descriptor.height) \(image.components.count)"
-    case .shading(let shading, _): "shading \(String(describing: shading))"
-    case .form(let form, _): "form \(form.displayList.effects.count)"
-    case .text(let run, _): "text \(run.glyphs.count)"
-    }
-  }
-
-  private static func digest(image: RasterImage, limit: Int) throws -> String {
+  private static func portableRaster(image: RasterImage, limit: Int) throws -> PortableRaster {
     let pixels = image.width.multipliedReportingOverflow(by: image.height)
     guard !pixels.overflow, pixels.partialValue <= limit else { throw ConformanceError.rasterLimitExceeded }
     var rgb = Data()
@@ -96,6 +83,6 @@ package enum SolidConformanceRunner {
         rgb.append(image.data[pixel + 2])
       }
     }
-    return try PortableRaster(width: image.width, height: image.height, channels: 3, pixels: rgb).digest
+    return try PortableRaster(width: image.width, height: image.height, channels: 3, pixels: rgb)
   }
 }

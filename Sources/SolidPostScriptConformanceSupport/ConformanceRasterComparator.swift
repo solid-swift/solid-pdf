@@ -30,7 +30,22 @@ package enum ConformanceRasterComparator {
       let x = pixel % solid.width
       let y = pixel / solid.width
       let channel = index % solid.channels
-      if !matchesWithinEdgeEnvelope(
+      let isEdge = hasEdge(
+        atX: x,
+        y: y,
+        channel: channel,
+        raster: solid,
+        radius: tolerance.edgeRadius,
+        channelTolerance: tolerance.maximumInteriorChannelDifference
+      ) || hasEdge(
+        atX: x,
+        y: y,
+        channel: channel,
+        raster: reference,
+        radius: tolerance.edgeRadius,
+        channelTolerance: tolerance.maximumInteriorChannelDifference
+      )
+      let isSymmetricMatch = matchesWithinEdgeEnvelope(
         solid.pixels[index],
         x: x,
         y: y,
@@ -38,7 +53,16 @@ package enum ConformanceRasterComparator {
         reference: reference,
         radius: tolerance.edgeRadius,
         channelTolerance: tolerance.maximumInteriorChannelDifference
-      ) {
+      ) && matchesWithinEdgeEnvelope(
+        reference.pixels[index],
+        x: x,
+        y: y,
+        channel: channel,
+        reference: solid,
+        radius: tolerance.edgeRadius,
+        channelTolerance: tolerance.maximumInteriorChannelDifference
+      )
+      if !isEdge || !isSymmetricMatch {
         failures += 1
       }
     }
@@ -49,6 +73,45 @@ package enum ConformanceRasterComparator {
       normalizedRMSE: rmse,
       structuralFailureCount: failures
     )
+  }
+
+  private static func hasEdge(
+    atX x: Int,
+    y: Int,
+    channel: Int,
+    raster: PortableRaster,
+    radius: Int,
+    channelTolerance: UInt8
+  ) -> Bool {
+    let center = raster.pixels[(y * raster.width + x) * raster.channels + channel]
+    for candidateY in max(0, y - radius)...min(raster.height - 1, y + radius) {
+      for candidateX in max(0, x - radius)...min(raster.width - 1, x + radius) {
+        let index = (candidateY * raster.width + candidateX) * raster.channels + channel
+        if abs(Int(center) - Int(raster.pixels[index])) > Int(channelTolerance) { return true }
+      }
+    }
+    return false
+  }
+
+  package static func differenceImage(_ solid: PortableRaster, _ reference: PortableRaster) throws -> PortableRaster {
+    guard solid.width == reference.width, solid.height == reference.height, solid.channels == reference.channels else {
+      throw ConformanceError.processFailed("raster page dimensions or channels differ")
+    }
+    let pixelCount = solid.width.multipliedReportingOverflow(by: solid.height)
+    let byteCount = pixelCount.partialValue.multipliedReportingOverflow(by: 3)
+    guard !pixelCount.overflow, !byteCount.overflow else { throw ConformanceError.rasterLimitExceeded }
+    var pixels = Data(capacity: byteCount.partialValue)
+    for pixel in 0..<pixelCount.partialValue {
+      var difference = 0
+      for channel in 0..<solid.channels {
+        let index = pixel * solid.channels + channel
+        difference = max(difference, abs(Int(solid.pixels[index]) - Int(reference.pixels[index])))
+      }
+      pixels.append(UInt8(clamping: difference))
+      pixels.append(0)
+      pixels.append(0)
+    }
+    return try PortableRaster(width: solid.width, height: solid.height, channels: 3, pixels: pixels)
   }
 
   private static func matchesWithinEdgeEnvelope(

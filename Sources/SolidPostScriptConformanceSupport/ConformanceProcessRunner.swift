@@ -28,8 +28,8 @@ package enum ConformanceProcessRunner {
     defer { try? FileManager.default.removeItem(at: temporary) }
     let outputURL = temporary.appending(path: "stdout")
     let errorURL = temporary.appending(path: "stderr")
-    FileManager.default.createFile(atPath: outputURL.path, contents: nil)
-    FileManager.default.createFile(atPath: errorURL.path, contents: nil)
+    try Data().write(to: outputURL)
+    try Data().write(to: errorURL)
     let output = try FileHandle(forWritingTo: outputURL)
     let error = try FileHandle(forWritingTo: errorURL)
     defer {
