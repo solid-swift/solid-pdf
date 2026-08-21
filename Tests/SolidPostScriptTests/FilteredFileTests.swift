@@ -7,6 +7,7 @@
 
 import Foundation
 @testable import SolidPostScript
+import SolidImageIO
 import SolidIO
 import Testing
 

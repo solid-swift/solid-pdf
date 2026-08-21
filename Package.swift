@@ -9,7 +9,7 @@ let foundationDependency: Package.Dependency =
   } else {
     .package(
       url: "https://github.com/solid-swift/solid-foundation.git",
-      revision: "c372253a7bcca19d51c5dcc8328825a1c03d3bf5"
+      revision: "166e1cd0a63ff0f5fa4c2bf927f94d286063cf72"
     )
   }
 
@@ -19,7 +19,7 @@ let imageDependency: Package.Dependency =
   } else {
     .package(
       url: "https://github.com/solid-swift/solid-image.git",
-      revision: "f4a1c6a035035768a7a7fb12ca822566244d4ed9"
+      revision: "71a67a7c5f56b65c126aab88e8e37038a7d25ed9"
     )
   }
 
@@ -77,6 +77,7 @@ let package = Package(
       dependencies: [
         "SolidFont",
         .product(name: "SolidColor", package: "solid-image"),
+        .product(name: "SolidImageIO", package: "solid-image"),
         .product(name: "SolidRaster", package: "solid-image"),
         .product(name: "SolidCore", package: "solid-foundation"),
         .product(name: "SolidIO", package: "solid-foundation"),
@@ -90,6 +91,7 @@ let package = Package(
         "SolidFont",
         "SolidPostScript",
         .product(name: "SolidColor", package: "solid-image"),
+        .product(name: "SolidImageIO", package: "solid-image"),
         .product(name: "SolidCore", package: "solid-foundation"),
         .product(name: "SolidIO", package: "solid-foundation"),
         .product(name: "SolidTempo", package: "solid-foundation"),

@@ -313,7 +313,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       return overflow ? .max : value
     }
     let clipStackTrapezoids = storage.clipStack.reduce(0) {
-      add($0, $1.region.trapezoids.count)
+      add($0, $1.region.trapezoidCount)
     }
     let colorBytes = multiply(storage.colorComponents.count, MemoryLayout<Double>.stride)
     return add(
@@ -321,7 +321,7 @@ public struct GraphicsStateValue: CompositeValue, VMStoredCompositeValue {
       add(
         multiply(storage.snapshot.clip.constraints.count, 64),
         add(
-          multiply(storage.resolvedClip.trapezoids.count, 56),
+          multiply(storage.resolvedClip.trapezoidCount, 56),
           add(
             multiply(storage.clipStack.count, 32),
             add(multiply(clipStackTrapezoids, 56), colorBytes)

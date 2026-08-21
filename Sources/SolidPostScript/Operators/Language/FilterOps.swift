@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SolidImageIO
 import SolidIO
 import Synchronization
 
@@ -204,7 +205,7 @@ extension Operators {
       case "LZWEncode":
         try makeLZWEncoder(dictionary: dictionary)
       case "FlateEncode":
-        FlateEncoder(options: try flateOptions(dictionary: dictionary, encoding: true))
+        try makeFlateEncoder(dictionary: dictionary)
       case "CCITTFaxEncode":
         CCITTFaxEncoder(options: try ccittOptions(dictionary: dictionary))
       case "DCTEncode":
@@ -229,7 +230,7 @@ extension Operators {
       case "LZWDecode":
         try makeLZWDecoder(dictionary: dictionary)
       case "FlateDecode":
-        FlateDecoder(options: try flateOptions(dictionary: dictionary, encoding: false))
+        try makeFlateDecoder(dictionary: dictionary)
       case "RunLengthDecode":
         RunLengthDecoder()
       case "CCITTFaxDecode":
@@ -266,11 +267,17 @@ extension Operators {
       return predictor.predictor == 1 ? codec : PredictingDecoder(codec: codec, options: predictor)
     }
 
-    private func flateOptions(dictionary: FilterDictionary, encoding: Bool) throws -> FlateOptions {
-      let effort = encoding ? try dictionary.integer("Effort", default: -1) : -1
-      return try translateCodecOption {
-        try FlateOptions(effort: effort, predictor: predictorOptions(dictionary: dictionary))
-      }
+    private func makeFlateEncoder(dictionary: FilterDictionary) throws -> any IncrementalFilter {
+      let effort = try dictionary.integer("Effort", default: -1)
+      let codec = try translateCodecOption { FlateEncoder(options: try FlateOptions(effort: effort)) }
+      let predictor = try predictorOptions(dictionary: dictionary)
+      return predictor.predictor == 1 ? codec : PredictingEncoder(codec: codec, options: predictor)
+    }
+
+    private func makeFlateDecoder(dictionary: FilterDictionary) throws -> any IncrementalFilter {
+      let codec = FlateDecoder()
+      let predictor = try predictorOptions(dictionary: dictionary)
+      return predictor.predictor == 1 ? codec : PredictingDecoder(codec: codec, options: predictor)
     }
 
     private func predictorOptions(dictionary: FilterDictionary) throws -> PredictorOptions {
@@ -647,26 +654,32 @@ private final class SubFileDecoder: IncrementalFilter {
 private final class PredictingEncoder: IncrementalFilter {
 
   private let codec: any IncrementalFilter
-  private let options: PredictorOptions
-  private let input = Mutex(Data())
+  private let predictor: PredictorEncoder
 
   init(codec: any IncrementalFilter, options: PredictorOptions) {
     self.codec = codec
-    self.options = options
+    predictor = PredictorEncoder(options: options)
   }
 
   func process(input: Data) throws -> IncrementalFilterResult {
-    self.input.withLock { $0.append(input) }
-    return IncrementalFilterResult(output: Data(), consumedInput: input.count, progress: .needsInput)
+    let predicted = try predictor.process(input: input)
+    let result = try codec.process(input: predicted.output)
+    guard result.consumedInput == predicted.output.count else { throw StreamCodecError.invalidData }
+    return IncrementalFilterResult(
+      output: result.output,
+      consumedInput: input.count,
+      progress: .needsInput
+    )
+  }
+
+  func flush() throws -> Data {
+    try codec.flush()
   }
 
   func finish() throws -> Data? {
-    let source = input.withLock { data -> Data in
-      defer { data.removeAll() }
-      return data
-    }
-    let predicted = try PredictorCodec.encode(source, options: options)
+    let predicted = try predictor.finish() ?? Data()
     let result = try codec.process(input: predicted)
+    guard result.consumedInput == predicted.count else { throw StreamCodecError.invalidData }
     return result.output + (try codec.finish() ?? Data())
   }
 
@@ -675,26 +688,37 @@ private final class PredictingEncoder: IncrementalFilter {
 private final class PredictingDecoder: IncrementalFilter {
 
   private let codec: any IncrementalFilter
-  private let options: PredictorOptions
+  private let predictor: PredictorDecoder
 
   init(codec: any IncrementalFilter, options: PredictorOptions) {
     self.codec = codec
-    self.options = options
+    predictor = PredictorDecoder(options: options)
   }
 
   func process(input: Data) throws -> IncrementalFilterResult {
     let result = try codec.process(input: input)
-    guard result.progress == .finished else { return result }
+    let predicted = try predictor.process(input: result.output)
+    var output = predicted.output
+    if result.progress == .finished {
+      output.append(try predictor.finish() ?? Data())
+    }
     return IncrementalFilterResult(
-      output: try PredictorCodec.decode(result.output, options: options),
+      output: output,
       consumedInput: result.consumedInput,
-      progress: .finished
+      progress: result.progress
     )
+  }
+
+  func flush() throws -> Data {
+    let output = try codec.flush()
+    return try predictor.process(input: output).output
   }
 
   func finish() throws -> Data? {
     guard let output = try codec.finish() else { return nil }
-    return try PredictorCodec.decode(output, options: options)
+    var decoded = try predictor.process(input: output).output
+    decoded.append(try predictor.finish() ?? Data())
+    return decoded
   }
 
 }
