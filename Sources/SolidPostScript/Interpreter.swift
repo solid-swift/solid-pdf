@@ -62,6 +62,7 @@ public enum Interpreter {
       fontSession: fontSession,
       trappingSession: trappingSession
     )
+    try renderer.installStorageAccounting(environment.graphicsStorageLedger.makeSession())
     let context = Context(environment: environment)
     do {
       let output = try await context.renderEncapsulated(
@@ -94,6 +95,7 @@ public enum Interpreter {
       fontSession: fontSession,
       trappingSession: trappingSession
     )
+    try renderer.installStorageAccounting(environment.graphicsStorageLedger.makeSession())
     let context = Context(environment: environment)
     do {
       let output = try await context.render(
@@ -148,6 +150,7 @@ public enum Interpreter {
       fontSession: fontSession,
       trappingSession: trappingSession
     )
+    try renderer.installStorageAccounting(environment.graphicsStorageLedger.makeSession())
     let context = Context(environment: environment)
     do {
       let output = try await context.render(

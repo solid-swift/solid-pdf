@@ -155,6 +155,8 @@ public protocol GraphicsEventConsumer: AnyObject {
   func transmitPage(_ event: GraphicsEvent, transmission: GraphicsPageTransmission) throws
   /// Abandons the current render without producing output.
   func abort()
+  /// Removes a deferred accounting failure from a source-compatible nonthrowing consumer.
+  func takeStorageAccountingError() -> GraphicsStorageAccountingError?
 }
 
 extension GraphicsEventConsumer {
@@ -187,6 +189,8 @@ extension GraphicsEventConsumer {
     else { throw Error.ioError }
     try transmitPage(event, copies: transmission.copies)
   }
+  /// Reports no deferred accounting failure by default.
+  public func takeStorageAccountingError() -> GraphicsStorageAccountingError? { nil }
 }
 
 /// Consumes graphics events and completes a typed sequence of pages and job output.
@@ -200,6 +204,13 @@ public protocol GraphicsRenderer<PageOutput, Output>: GraphicsEventConsumer {
 
   /// Pages transmitted so far.
   var pages: [PageOutput] { get }
+  /// Installs render-scoped Appendix C storage accounting before device activation.
+  func installStorageAccounting(_ session: GraphicsStorageAccountingSession) throws
   /// Completes the render, discarding an untransmitted final page.
   func finish() throws -> sending Output
+}
+
+extension GraphicsRenderer {
+  /// Leaves renderer-owned storage outside Appendix C accounting for source compatibility.
+  public func installStorageAccounting(_ session: GraphicsStorageAccountingSession) throws {}
 }

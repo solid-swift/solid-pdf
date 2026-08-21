@@ -25,6 +25,7 @@ public final class InterpreterEnvironment: Sendable {
   let standardEncoding: Object
   let isoLatin1Encoding: Object
   let formInitializationRegistry = FormInitializationRegistry()
+  let graphicsStorageLedger = GraphicsStorageLedger()
 
   /// The application integration used by this environment.
   public let hostConfiguration: InterpreterHostConfiguration
@@ -309,6 +310,9 @@ public final class InterpreterEnvironment: Sendable {
     let fontStatus = fontManager.glyphCache.status()
     values["CurFontCache"] = .integer(Int32(clamping: fontStatus.bytes))
     values["MaxFontCache"] = .integer(Int32(clamping: fontStatus.maximumBytes))
+    let graphicsStatus = graphicsStorageLedger.status()
+    values["CurDisplayList"] = .integer(Int32(clamping: graphicsStatus.displayBytes))
+    values["CurSourceList"] = .integer(Int32(clamping: graphicsStatus.sourceBytes))
     return values
   }
 

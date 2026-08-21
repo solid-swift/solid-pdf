@@ -87,6 +87,20 @@ final class GraphicsEffectCollector {
     effects.removeAll(keepingCapacity: true)
   }
 
+  var activeImageBytes: Int? {
+    guard let activeImage else { return nil }
+    let values = activeImage.components.count
+      .addingReportingOverflow(activeImage.sourceComponents.count)
+    let all = values.partialValue.addingReportingOverflow(activeImage.maskOpacities.count)
+    let bytes = all.partialValue.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+    guard !values.overflow, !all.overflow, !bytes.overflow else { return nil }
+    return bytes.partialValue
+  }
+
+  func removeLastEffect() {
+    if !effects.isEmpty { effects.removeLast() }
+  }
+
   private func maskDimensions(for descriptor: GraphicsImageDescriptor) -> (width: Int, height: Int)? {
     switch descriptor.mask {
     case .explicit(let width, let height, _, _): (width, height)

@@ -168,6 +168,8 @@ extension Context {
       try graphicsEventConsumer?.transmitPage(event, transmission: transmission)
       state.device.commitTransmission(copies: copies)
       graphicsDeviceDescriptor = state.device.descriptor
+    } catch GraphicsStorageAccountingError.limitExceeded {
+      throw Error.limitCheck
     } catch let error as Error {
       throw error
     } catch {

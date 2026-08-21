@@ -81,9 +81,12 @@ extension Context {
     let event = GraphicsEvent(operation: operation, before: before, after: next.snapshot)
     do {
       try graphicsEventConsumer?.process(event)
+    } catch GraphicsStorageAccountingError.limitExceeded {
+      throw Error.limitCheck
     } catch {
       throw Error.ioError
     }
+    if graphicsEventConsumer?.takeStorageAccountingError() != nil { throw Error.limitCheck }
     graphicsState = next
   }
 
@@ -96,9 +99,12 @@ extension Context {
     let event = GraphicsEvent(operation: operation, before: before.snapshot, after: after.snapshot)
     do {
       try graphicsEventConsumer?.process(event)
+    } catch GraphicsStorageAccountingError.limitExceeded {
+      throw Error.limitCheck
     } catch {
       throw Error.ioError
     }
+    if graphicsEventConsumer?.takeStorageAccountingError() != nil { throw Error.limitCheck }
   }
 
   func beginGraphicsImage(_ descriptor: GraphicsImageDescriptor) throws {
@@ -107,6 +113,8 @@ extension Context {
     let event = GraphicsEvent(operation: .paint(.image(descriptor)), before: snapshot, after: snapshot)
     do {
       try graphicsEventConsumer?.beginImage(event)
+    } catch GraphicsStorageAccountingError.limitExceeded {
+      throw Error.limitCheck
     } catch {
       throw Error.ioError
     }
@@ -115,6 +123,8 @@ extension Context {
   func writeGraphicsImageRows(_ rows: GraphicsImageRows) throws {
     do {
       try graphicsEventConsumer?.writeImageRows(rows)
+    } catch GraphicsStorageAccountingError.limitExceeded {
+      throw Error.limitCheck
     } catch {
       throw Error.ioError
     }
@@ -123,6 +133,8 @@ extension Context {
   func writeGraphicsImageMaskRows(_ rows: GraphicsImageMaskRows) throws {
     do {
       try graphicsEventConsumer?.writeImageMaskRows(rows)
+    } catch GraphicsStorageAccountingError.limitExceeded {
+      throw Error.limitCheck
     } catch {
       throw Error.ioError
     }
@@ -131,6 +143,8 @@ extension Context {
   func endGraphicsImage() throws {
     do {
       try graphicsEventConsumer?.endImage()
+    } catch GraphicsStorageAccountingError.limitExceeded {
+      throw Error.limitCheck
     } catch {
       throw Error.ioError
     }

@@ -15,7 +15,95 @@ extension GraphicsDisplayList {
   }
 }
 
+package struct GraphicsStorageFootprint: Sendable, Equatable {
+  package let displayBytes: Int
+  package let sourceBytes: Int
+
+  package static let zero = GraphicsStorageFootprint(displayBytes: 0, sourceBytes: 0)
+
+  package func adding(_ other: Self) -> Self? {
+    let display = displayBytes.addingReportingOverflow(other.displayBytes)
+    let source = sourceBytes.addingReportingOverflow(other.sourceBytes)
+    guard !display.overflow, !source.overflow else { return nil }
+    return Self(displayBytes: display.partialValue, sourceBytes: source.partialValue)
+  }
+}
+
+package extension GraphicsDisplayList {
+  func storageFootprint(maximumDepth: Int = 16) -> GraphicsStorageFootprint? {
+    guard maximumDepth >= 0 else { return nil }
+    return effects.reduce(GraphicsStorageFootprint(displayBytes: 256, sourceBytes: 0)) { partial, effect in
+      guard let footprint = effect.storageFootprint(depth: 0, maximumDepth: maximumDepth) else {
+        return GraphicsStorageFootprint(displayBytes: .max, sourceBytes: .max)
+      }
+      return partial.adding(footprint) ?? GraphicsStorageFootprint(displayBytes: .max, sourceBytes: .max)
+    }
+  }
+}
+
 private extension GraphicsEffect {
+  func storageFootprint(depth: Int, maximumDepth: Int) -> GraphicsStorageFootprint? {
+    switch self {
+    case .fill(let path, _, _), .stroke(let path, _), .userPathFill(let path, _, _),
+         .userPathStroke(let path, _):
+      guard let elements = checkedProduct(path.elements.count, 56) else { return nil }
+      return GraphicsStorageFootprint(displayBytes: elements + 256, sourceBytes: 0)
+    case .fillRectangles(let paths, _), .strokeRectangles(let paths, _, _):
+      let bytes = paths.reduce(256) { partial, path in
+        guard let elements = checkedProduct(path.elements.count, 56) else { return .max }
+        let total = partial.addingReportingOverflow(elements)
+        return total.overflow ? .max : total.partialValue
+      }
+      return bytes == .max ? nil : GraphicsStorageFootprint(displayBytes: bytes, sourceBytes: 0)
+    case .image(let image, _):
+      guard let components = checkedProduct(image.components.count, MemoryLayout<Float>.stride),
+        let source = checkedProduct(image.sourceComponents?.count ?? 0, MemoryLayout<Float>.stride),
+        let mask = checkedProduct(image.mask?.opacities.count ?? 0, MemoryLayout<Float>.stride)
+      else { return nil }
+      let first = components.addingReportingOverflow(source)
+      let second = first.partialValue.addingReportingOverflow(mask)
+      guard !first.overflow, !second.overflow else { return nil }
+      return GraphicsStorageFootprint(displayBytes: 256, sourceBytes: second.partialValue)
+    case .shading(let shading, _):
+      guard let triangles = checkedProduct(
+        shading.mesh.triangles.count,
+        MemoryLayout<GraphicsShadingTriangle>.stride
+      ) else { return nil }
+      return GraphicsStorageFootprint(displayBytes: triangles + 256, sourceBytes: 0)
+    case .form:
+      // Cached form bodies are governed by MaxFormCache. A page display list retains only a reference.
+      return GraphicsStorageFootprint(displayBytes: 128, sourceBytes: 0)
+    case .text(let run, _):
+      var result = GraphicsStorageFootprint(displayBytes: 256, sourceBytes: 0)
+      for placement in run.glyphs {
+        let glyph: GraphicsStorageFootprint
+        switch placement.glyph.program {
+        case .outline(let path):
+          guard let bytes = checkedProduct(path.elements.count, 56) else { return nil }
+          glyph = GraphicsStorageFootprint(displayBytes: bytes, sourceBytes: 0)
+        case .bitmap(let bitmap):
+          glyph = GraphicsStorageFootprint(displayBytes: 32, sourceBytes: bitmap.coverage.count)
+        case .displayList(let list):
+          guard depth < maximumDepth,
+            let nested = list.effects.reduce(Optional(GraphicsStorageFootprint.zero), { partial, effect in
+              guard let partial, let next = effect.storageFootprint(depth: depth + 1, maximumDepth: maximumDepth)
+              else { return nil }
+              return partial.adding(next)
+            })
+          else { return nil }
+          glyph = nested
+        case .empty, .missing:
+          glyph = GraphicsStorageFootprint(displayBytes: 32, sourceBytes: 0)
+        }
+        guard let combined = result.adding(glyph) else { return nil }
+        result = combined
+      }
+      return result
+    case .erase:
+      return GraphicsStorageFootprint(displayBytes: 128, sourceBytes: 0)
+    }
+  }
+
   func checkedFootprint(depth: Int, maximumDepth: Int) -> Int? {
     switch self {
     case .fill(let path, _, _), .stroke(let path, _), .userPathFill(let path, _, _),

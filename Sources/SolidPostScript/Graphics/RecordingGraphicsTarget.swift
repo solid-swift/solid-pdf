@@ -25,6 +25,7 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       nextMaskRow: Int
     )?
     private var aborted = false
+    private let storage = GraphicsStorageTracker()
 
     fileprivate init(descriptor: GraphicsDeviceDescriptor) {
       self.descriptor = descriptor
@@ -35,31 +36,32 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       guard !aborted, renderingEnabled else { return }
       switch event.operation {
       case .paint(.erasePage):
-        effects.append(.erase(state: event.before))
+        append(.erase(state: event.before))
       case .paint(.fill(let rule)):
-        effects.append(.fill(path: event.before.path, rule: rule, state: event.before))
+        append(.fill(path: event.before.path, rule: rule, state: event.before))
       case .paint(.stroke):
-        effects.append(.stroke(path: event.before.path, state: event.before))
+        append(.stroke(path: event.before.path, state: event.before))
       case .paint(.userPathFill(let rule)):
-        effects.append(.userPathFill(path: event.before.path, rule: rule, state: event.before))
+        append(.userPathFill(path: event.before.path, rule: rule, state: event.before))
       case .paint(.userPathStroke):
-        effects.append(.userPathStroke(outline: event.before.path, state: event.before))
+        append(.userPathStroke(outline: event.before.path, state: event.before))
       case .paint(.fillRectangles(let paths)):
-        effects.append(.fillRectangles(paths: paths, state: event.before))
+        append(.fillRectangles(paths: paths, state: event.before))
       case .paint(.strokeRectangles(let paths, let matrix)):
-        effects.append(.strokeRectangles(paths: paths, matrix: matrix, state: event.before))
+        append(.strokeRectangles(paths: paths, matrix: matrix, state: event.before))
       case .paint(.shading(let shading)):
-        effects.append(.shading(shading, state: event.before))
+        append(.shading(shading, state: event.before))
       case .paint(.form(let form)):
-        effects.append(.form(form, state: event.before))
+        append(.form(form, state: event.before))
       case .paint(.text(let run)):
-        effects.append(.text(run, state: event.before))
+        append(.text(run, state: event.before))
       case .page(.show), .page(.copy):
         pages.append(RecordedGraphicsPage(
           deviceDescriptor: event.before.device.descriptor,
           effects: effects,
           trapping: event.before.device.trapping
         ))
+        storage.transmit(retainingPage: true)
         effects.removeAll(keepingCapacity: true)
       default:
         break
@@ -71,12 +73,18 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       guard !aborted, activeImage == nil, case .paint(.image(let descriptor)) = event.operation else {
         throw Error.ioError
       }
+      try storage.beginImage()
       activeImage = (descriptor, event.before, [], [], [], 0)
     }
 
     /// Records one bounded group of sampled-image rows.
     public func writeImageRows(_ rows: GraphicsImageRows) throws {
       guard var image = activeImage else { throw Error.ioError }
+      try storage.resizeImage(to: try imageBytes(
+        components: image.components.count + rows.components.count,
+        sourceComponents: image.sourceComponents.count + (rows.sourceComponents?.count ?? 0),
+        mask: image.maskOpacities.count
+      ))
       image.components.append(contentsOf: rows.components)
       if let source = rows.sourceComponents {
         image.sourceComponents.append(contentsOf: source)
@@ -96,6 +104,11 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
         rows.rowCount <= Int.max / dimensions.width,
         rows.opacities.count == rows.rowCount * dimensions.width
       else { throw Error.ioError }
+      try storage.resizeImage(to: try imageBytes(
+        components: image.components.count,
+        sourceComponents: image.sourceComponents.count,
+        mask: image.maskOpacities.count + rows.opacities.count
+      ))
       image.maskOpacities.append(contentsOf: rows.opacities)
       image.nextMaskRow += rows.rowCount
       activeImage = image
@@ -105,29 +118,33 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
     public func endImage() throws {
       guard let image = activeImage else { throw Error.ioError }
       guard renderingEnabled else {
+        storage.abortImage()
         activeImage = nil
         return
       }
       if !image.components.isEmpty, image.descriptor.width > 0, image.descriptor.height > 0 {
-        effects.append(
-          .image(
-            GraphicsImage(
-              descriptor: image.descriptor,
-              components: image.components,
-              sourceComponents: image.sourceComponents.isEmpty ? nil : image.sourceComponents,
-              mask: image.descriptor.mask.map {
-                GraphicsImageMask(descriptor: $0, opacities: image.maskOpacities)
-              }
-            ),
-            state: image.state
-          )
+        let effect = GraphicsEffect.image(
+          GraphicsImage(
+            descriptor: image.descriptor,
+            components: image.components,
+            sourceComponents: image.sourceComponents.isEmpty ? nil : image.sourceComponents,
+            mask: image.descriptor.mask.map {
+              GraphicsImageMask(descriptor: $0, opacities: image.maskOpacities)
+            }
+          ),
+          state: image.state
         )
+        try storage.endImage(effects: effects + [effect])
+        effects.append(effect)
+      } else {
+        storage.abortImage()
       }
       activeImage = nil
     }
 
     /// Abandons the active sampled image without recording it.
     public func abortImage() {
+      storage.abortImage()
       activeImage = nil
     }
 
@@ -139,6 +156,7 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
 
     /// Discards the raster memory associated with a deactivated page device.
     public func deactivateDevice(_ device: GraphicsDeviceSnapshot) {
+      storage.clearCurrent()
       effects.removeAll(keepingCapacity: true)
     }
 
@@ -151,12 +169,15 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
         trapping: event.before.device.trapping
       )
       pages.append(contentsOf: repeatElement(page, count: copies))
+      storage.transmit(retainingPage: true)
       effects.removeAll(keepingCapacity: true)
     }
 
     /// Completes the recording and discards the untransmitted final page.
     public func finish() -> sending GraphicsRecording {
-      GraphicsRecording(pages: pages)
+      let output = GraphicsRecording(pages: pages)
+      storage.releaseAll()
+      return output
     }
 
     /// Abandons all recorded output.
@@ -165,6 +186,30 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
       activeImage = nil
       effects.removeAll()
       pages.removeAll()
+      storage.releaseAll()
+    }
+
+    /// Installs Appendix C accounting for retained recording storage.
+    public func installStorageAccounting(_ session: GraphicsStorageAccountingSession) {
+      storage.install(session)
+    }
+
+    public func takeStorageAccountingError() -> GraphicsStorageAccountingError? {
+      storage.takeError()
+    }
+
+    private func append(_ effect: GraphicsEffect) {
+      if storage.updateCurrentDeferringError(effects: effects + [effect]) { effects.append(effect) }
+    }
+
+    private func imageBytes(components: Int, sourceComponents: Int, mask: Int) throws -> Int {
+      let values = components.addingReportingOverflow(sourceComponents)
+      let all = values.partialValue.addingReportingOverflow(mask)
+      let bytes = all.partialValue.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+      guard !values.overflow, !all.overflow, !bytes.overflow else {
+        throw GraphicsStorageAccountingError.limitExceeded
+      }
+      return bytes.partialValue
     }
 
     private func maskDimensions(for descriptor: GraphicsImageDescriptor) -> (width: Int, height: Int)? {

@@ -42,6 +42,7 @@ public struct PrintSpoolGraphicsTarget: GraphicsTarget, Sendable {
     private var lastDelivery = GraphicsPageDeliveryConfiguration.virtual
     private var renderingEnabled = true
     private var aborted = false
+    private let storage = GraphicsStorageTracker()
 
     fileprivate init(limits: GraphicsPrintSpoolLimits) {
       self.limits = limits
@@ -50,30 +51,61 @@ public struct PrintSpoolGraphicsTarget: GraphicsTarget, Sendable {
     /// Captures one realized graphics effect.
     public func process(_ event: GraphicsEvent) {
       guard !aborted, renderingEnabled else { return }
+      let previousCount = collector.effects.count
       collector.process(event)
+      if !storage.updateCurrentDeferringError(effects: collector.effects) {
+        if collector.effects.count > previousCount { collector.removeLastEffect() }
+      }
     }
 
     /// Begins a sampled-image capture.
     public func beginImage(_ event: GraphicsEvent) throws {
       guard !aborted, renderingEnabled else { return }
+      try storage.beginImage()
       try collector.beginImage(event)
     }
 
     /// Captures sampled-image rows.
     public func writeImageRows(_ rows: GraphicsImageRows) throws {
+      guard let current = collector.activeImageBytes else { throw Error.ioError }
+      let values = rows.components.count.addingReportingOverflow(rows.sourceComponents?.count ?? 0)
+      let additional = values.partialValue.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+      let total = current.addingReportingOverflow(additional.partialValue)
+      guard !values.overflow, !additional.overflow, !total.overflow else {
+        throw GraphicsStorageAccountingError.limitExceeded
+      }
+      try storage.resizeImage(to: total.partialValue)
       try collector.writeImageRows(rows)
     }
 
     /// Captures sampled-image mask rows.
     public func writeImageMaskRows(_ rows: GraphicsImageMaskRows) throws {
+      guard let current = collector.activeImageBytes else { throw Error.ioError }
+      let additional = rows.opacities.count.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+      let total = current.addingReportingOverflow(additional.partialValue)
+      guard !additional.overflow, !total.overflow else {
+        throw GraphicsStorageAccountingError.limitExceeded
+      }
+      try storage.resizeImage(to: total.partialValue)
       try collector.writeImageMaskRows(rows)
     }
 
     /// Completes a sampled-image capture.
-    public func endImage() throws { try collector.endImage() }
+    public func endImage() throws {
+      try collector.endImage()
+      do {
+        try storage.endImage(effects: collector.effects)
+      } catch {
+        collector.removeLastEffect()
+        throw error
+      }
+    }
 
     /// Abandons an incomplete sampled-image capture.
-    public func abortImage() { collector.abortImage() }
+    public func abortImage() {
+      collector.abortImage()
+      storage.abortImage()
+    }
 
     /// Activates one print or null device.
     public func activateDevice(_ device: GraphicsDeviceSnapshot) {
@@ -86,6 +118,7 @@ public struct PrintSpoolGraphicsTarget: GraphicsTarget, Sendable {
       try schedule(delivery: device.delivery, mode: .deviceDeactivation, boundary: .deviceDeactivation)
       if device.delivery.jog == .deviceDeactivation { appendAction(.jog, boundary: .deviceDeactivation) }
       collector.clear()
+      storage.clearCurrent()
       currentDevice = nil
     }
 
@@ -106,7 +139,10 @@ public struct PrintSpoolGraphicsTarget: GraphicsTarget, Sendable {
       guard !aborted, transmission.copies >= 0 else { throw Error.ioError }
       lastDelivery = transmission.delivery
       defer { collector.clear() }
-      guard transmission.copies > 0 else { return }
+      guard transmission.copies > 0 else {
+        storage.transmit(retainingPage: false)
+        return
+      }
       guard pages.count < limits.maximumLogicalPages else { throw Error.limitCheck }
       let separationCount = event.before.device.descriptor.colorants.producesSeparations
         ? event.before.device.descriptor.colorants.separationOrder.count
@@ -133,6 +169,7 @@ public struct PrintSpoolGraphicsTarget: GraphicsTarget, Sendable {
       )
       pages.append(page)
       planningBytes = total.partialValue
+      storage.transmit(retainingPage: true)
 
       if transmission.delivery.collates {
         try appendCollated(page)
@@ -155,7 +192,7 @@ public struct PrintSpoolGraphicsTarget: GraphicsTarget, Sendable {
       if lastDelivery.jog == .jobCompletion { appendAction(.jog, boundary: .jobCompletion) }
       let physical = sheets.map(\.index)
       let stack = stackReadOrder()
-      return GraphicsPrintSpool(
+      let output = GraphicsPrintSpool(
         pages: pages,
         sheets: sheets,
         pageSets: pageSets,
@@ -163,6 +200,8 @@ public struct PrintSpoolGraphicsTarget: GraphicsTarget, Sendable {
         physicalDeliveryOrder: physical,
         stackReadOrder: stack
       )
+      storage.releaseAll()
+      return output
     }
 
     /// Abandons the entire spool.
@@ -176,6 +215,16 @@ public struct PrintSpoolGraphicsTarget: GraphicsTarget, Sendable {
       deliveredSideCount = 0
       pendingSection = nil
       openSheetIndex = nil
+      storage.releaseAll()
+    }
+
+    /// Installs Appendix C accounting for retained print-planning storage.
+    public func installStorageAccounting(_ session: GraphicsStorageAccountingSession) {
+      storage.install(session)
+    }
+
+    public func takeStorageAccountingError() -> GraphicsStorageAccountingError? {
+      storage.takeError()
     }
 
     private func appendCollated(_ page: GraphicsPrintPage) throws {

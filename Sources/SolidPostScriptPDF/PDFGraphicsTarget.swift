@@ -33,6 +33,7 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
     )?
     private var aborted = false
     private var transmittedPageCount = 0
+    private let storage = GraphicsStorageTracker()
 
     fileprivate init(
       sink: Sink,
@@ -49,24 +50,24 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
     public func process(_ event: GraphicsEvent) throws {
       guard !aborted, renderingEnabled else { return }
       switch event.operation {
-      case .paint(.erasePage): effects.append(.erase(state: event.before))
+      case .paint(.erasePage): try append(.erase(state: event.before))
       case .paint(.fill(let rule)):
-        effects.append(.fill(path: event.before.path, rule: rule, state: event.before))
-      case .paint(.stroke): effects.append(.stroke(path: event.before.path, state: event.before))
+        try append(.fill(path: event.before.path, rule: rule, state: event.before))
+      case .paint(.stroke): try append(.stroke(path: event.before.path, state: event.before))
       case .paint(.userPathFill(let rule)):
-        effects.append(.userPathFill(path: event.before.path, rule: rule, state: event.before))
+        try append(.userPathFill(path: event.before.path, rule: rule, state: event.before))
       case .paint(.userPathStroke):
-        effects.append(.userPathStroke(outline: event.before.path, state: event.before))
+        try append(.userPathStroke(outline: event.before.path, state: event.before))
       case .paint(.fillRectangles(let paths)):
-        effects.append(.fillRectangles(paths: paths, state: event.before))
+        try append(.fillRectangles(paths: paths, state: event.before))
       case .paint(.strokeRectangles(let paths, let matrix)):
-        effects.append(.strokeRectangles(paths: paths, matrix: matrix, state: event.before))
+        try append(.strokeRectangles(paths: paths, matrix: matrix, state: event.before))
       case .paint(.shading(let shading)):
-        effects.append(.shading(shading, state: event.before))
+        try append(.shading(shading, state: event.before))
       case .paint(.form(let form)):
-        effects.append(.form(form, state: event.before))
+        try append(.form(form, state: event.before))
       case .paint(.text(let run)):
-        effects.append(.text(run, state: event.before))
+        try append(.text(run, state: event.before))
       case .page(.show), .page(.copy):
         try transmitPage(event, copies: 1)
       default:
@@ -78,11 +79,17 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
       guard !aborted, activeImage == nil, case .paint(.image(let descriptor)) = event.operation else {
         throw SolidPostScript.Error.ioError
       }
+      try storage.beginImage()
       activeImage = (descriptor, event.before, [], [], [], 0)
     }
 
     public func writeImageRows(_ rows: GraphicsImageRows) throws {
       guard var image = activeImage else { throw SolidPostScript.Error.ioError }
+      try storage.resizeImage(to: try Self.imageBytes(
+        components: image.components.count + rows.components.count,
+        sourceComponents: image.sourceComponents.count + (rows.sourceComponents?.count ?? 0),
+        mask: image.maskOpacities.count
+      ))
       image.components.append(contentsOf: rows.components)
       if let source = rows.sourceComponents { image.sourceComponents.append(contentsOf: source) }
       activeImage = image
@@ -96,6 +103,11 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
         rows.rowCount <= dimensions.height - image.nextMaskRow,
         rows.opacities.count == rows.rowCount * dimensions.width
       else { throw SolidPostScript.Error.ioError }
+      try storage.resizeImage(to: try Self.imageBytes(
+        components: image.components.count,
+        sourceComponents: image.sourceComponents.count,
+        mask: image.maskOpacities.count + rows.opacities.count
+      ))
       image.maskOpacities.append(contentsOf: rows.opacities)
       image.nextMaskRow += rows.rowCount
       activeImage = image
@@ -104,8 +116,11 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
     public func endImage() throws {
       guard let image = activeImage else { throw SolidPostScript.Error.ioError }
       activeImage = nil
-      guard renderingEnabled, !image.components.isEmpty else { return }
-      effects.append(.image(
+      guard renderingEnabled, !image.components.isEmpty else {
+        storage.abortImage()
+        return
+      }
+      let effect = GraphicsEffect.image(
         GraphicsImage(
           descriptor: image.descriptor,
           components: image.components,
@@ -115,10 +130,15 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
           }
         ),
         state: image.state
-      ))
+      )
+      try storage.endImage(effects: effects + [effect])
+      effects.append(effect)
     }
 
-    public func abortImage() { activeImage = nil }
+    public func abortImage() {
+      activeImage = nil
+      storage.abortImage()
+    }
 
     public func activateDevice(_ device: GraphicsDeviceSnapshot) {
       renderingEnabled = device.kind == .page
@@ -126,6 +146,7 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
     }
 
     public func deactivateDevice(_ device: GraphicsDeviceSnapshot) {
+      storage.clearCurrent()
       effects.removeAll(keepingCapacity: true)
     }
 
@@ -142,6 +163,9 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
       }
       if selectedCopies > 0 {
         plans.append(PDFPagePlan(device: event.before.device, effects: effects, copies: selectedCopies))
+        storage.transmit(retainingPage: true)
+      } else {
+        storage.transmit(retainingPage: false)
       }
       for _ in 0..<selectedCopies {
         pages.append(PDFPageOutput(
@@ -165,8 +189,11 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
       aborted = true
       activeImage = nil
       do {
-        return try PDFGraphicsDocumentEncoder.encode(plans: plans, sink: sink, options: options)
+        let output = try PDFGraphicsDocumentEncoder.encode(plans: plans, sink: sink, options: options)
+        storage.releaseAll()
+        return output
       } catch {
+        storage.releaseAll()
         throw SolidPostScript.Error.ioError
       }
     }
@@ -177,6 +204,16 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
       effects.removeAll()
       plans.removeAll()
       pages.removeAll()
+      storage.releaseAll()
+    }
+
+    public func installStorageAccounting(_ session: GraphicsStorageAccountingSession) {
+      storage.install(session)
+    }
+
+    private func append(_ effect: GraphicsEffect) throws {
+      try storage.updateCurrent(effects: effects + [effect])
+      effects.append(effect)
     }
 
     private static func maskDimensions(
@@ -187,6 +224,16 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
       case .colorKey: (descriptor.width, descriptor.height)
       case nil: nil
       }
+    }
+
+    private static func imageBytes(components: Int, sourceComponents: Int, mask: Int) throws -> Int {
+      let values = components.addingReportingOverflow(sourceComponents)
+      let all = values.partialValue.addingReportingOverflow(mask)
+      let bytes = all.partialValue.multipliedReportingOverflow(by: MemoryLayout<Float>.stride)
+      guard !values.overflow, !all.overflow, !bytes.overflow else {
+        throw GraphicsStorageAccountingError.limitExceeded
+      }
+      return bytes.partialValue
     }
   }
 
