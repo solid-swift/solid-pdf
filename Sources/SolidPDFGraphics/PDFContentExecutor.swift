@@ -71,6 +71,15 @@ final class PDFContentExecutor {
       compatibilityDepth -= 1
       return
     }
+    if name == "BI" {
+      try requireOperandCount(0, name: name, location: location)
+      guard !inTextObject else {
+        throw malformed("Inline image inside a text object.", operatorName: name, at: location)
+      }
+      let image = try await parser.parseInlineImage(startingAt: location)
+      try await handler.executeInlineImage(image)
+      return
+    }
     guard Self.knownOperators.contains(name) else {
       if compatibilityDepth > 0 { return }
       throw malformed("Unknown PDF content operator.", operatorName: name, at: location)

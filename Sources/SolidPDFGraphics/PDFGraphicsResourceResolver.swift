@@ -9,13 +9,15 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
     let realization: GraphicsColorSpaceRealization?
     let initialComponents: [Double]
     let makePaint: @Sendable ([Double]) throws -> GraphicsPaint
+    var underlyingMakePaint: (@Sendable ([Double]) throws -> GraphicsPaint)? = nil
   }
 
-  private let document: PDFDocument<Source>
-  private let revision: PDFRevisionIdentifier
+  let document: PDFDocument<Source>
+  let revision: PDFRevisionIdentifier
   private let limits: PDFGraphicsLimits
   private var scopes: [[PDFName: PDFObject]]
   private var colorSpaceCache: [PDFName: ResolvedColorSpace] = [:]
+  private var activeReusableResources: Set<PDFObjectReference> = []
 
   init(
     document: PDFDocument<Source>,
@@ -37,6 +39,18 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
   }
 
   func pop() { if scopes.count > 1 { scopes.removeLast() } }
+
+  func enter(_ reference: PDFObjectReference) throws {
+    guard !activeReusableResources.contains(reference) else {
+      throw PDFGraphicsError.limitExceeded("Cyclic PDF reusable resource.", location: nil)
+    }
+    guard activeReusableResources.count < limits.maximumResourceDepth else {
+      throw PDFGraphicsError.limitExceeded("PDF reusable-resource nesting limit exceeded.", location: nil)
+    }
+    activeReusableResources.insert(reference)
+  }
+
+  func leave(_ reference: PDFObjectReference) { activeReusableResources.remove(reference) }
 
   func resource(category: PDFName, name: PDFName) async throws -> PDFIndirectObject? {
     for scope in scopes.reversed() {
@@ -208,12 +222,14 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
       )
     case "Pattern":
       let underlying = values.count > 1 ? try await colorSpace(values[1], depth: depth + 1) : nil
-      return ResolvedColorSpace(
+      var result = ResolvedColorSpace(
         description: .pattern(underlying: underlying?.description),
         realization: underlying?.realization,
         initialComponents: underlying?.initialComponents ?? [],
-        makePaint: { _ in throw PDFObjectAccess.TypeMismatch.name }
+        makePaint: { _ in .pattern(.empty) }
       )
+      result.underlyingMakePaint = underlying?.makePaint
+      return result
     default:
       throw PDFObjectAccess.TypeMismatch.name
     }
@@ -314,6 +330,16 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
       return dictionary[name]
     }
     return nil
+  }
+
+  func resolvedResource(category: PDFName, name: PDFName) async throws -> PDFIndirectObject? {
+    guard let object = try await resourceObject(category: category, name: name) else { return nil }
+    guard case .reference(let reference) = object else { return nil }
+    return try await document.resolve(reference, in: revision)
+  }
+
+  func resolvedObject(_ object: PDFObject) async throws -> PDFObject {
+    try await resolvedValue(object)
   }
 
   private func resolvedValue(_ object: PDFObject) async throws -> PDFObject {

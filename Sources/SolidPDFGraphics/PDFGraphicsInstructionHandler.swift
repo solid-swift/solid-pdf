@@ -5,28 +5,46 @@ import SolidPostScript
 final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentInstructionHandler {
   typealias Emit = (GraphicsEvent) throws -> Void
 
-  private let resources: PDFGraphicsResourceResolver<Source>
-  private let emit: Emit
-  private let limits: PDFGraphicsLimits
-  private var state: PDFGraphicsState
+  let resources: PDFGraphicsResourceResolver<Source>
+  let output: PDFGraphicsEventOutput
+  let limits: PDFGraphicsLimits
+  var state: PDFGraphicsState
   private var stack: [PDFGraphicsState] = []
   private var currentPoint: GraphicsPoint?
   private var subpathStart: GraphicsPoint?
   private var diagnosticsStorage: [PDFGraphicsDiagnostic] = []
 
   var diagnostics: [PDFGraphicsDiagnostic] { diagnosticsStorage }
+  var currentSnapshot: GraphicsStateSnapshot { state.snapshot(stroking: false) }
 
-  init(
+  convenience init(
     device: GraphicsDeviceSnapshot,
     resources: PDFGraphicsResourceResolver<Source>,
     limits: PDFGraphicsLimits,
     emit: @escaping Emit
   ) {
-    state = PDFGraphicsState(device: device)
+    self.init(
+      device: device,
+      resources: resources,
+      limits: limits,
+      output: PDFGraphicsClosureOutput(emit: emit)
+    )
+  }
+
+  init(
+    device: GraphicsDeviceSnapshot,
+    resources: PDFGraphicsResourceResolver<Source>,
+    limits: PDFGraphicsLimits,
+    output: PDFGraphicsEventOutput,
+    initialState: PDFGraphicsState? = nil
+  ) {
+    state = initialState ?? PDFGraphicsState(device: device)
     self.resources = resources
     self.limits = limits
-    self.emit = emit
+    self.output = output
   }
+
+  private func emit(_ event: GraphicsEvent) throws { try output.process(event) }
 
   func execute(_ instruction: PDFContentInstruction) async throws {
     do {
@@ -122,8 +140,8 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
       case "k": try setDeviceCMYK(instruction, stroking: false)
       case "CS": try await setColorSpace(instruction, stroking: true)
       case "cs": try await setColorSpace(instruction, stroking: false)
-      case "SC", "SCN": try setColor(instruction, stroking: true)
-      case "sc", "scn": try setColor(instruction, stroking: false)
+      case "SC", "SCN": try await setColor(instruction, stroking: true)
+      case "sc", "scn": try await setColor(instruction, stroking: false)
       case "gs": try await applyExtendedState(instruction)
       case "BT", "ET": try operands(instruction, count: 0)
       case "Tc", "Tw", "Tz", "TL", "Tr", "Ts": _ = try numbers(instruction, count: 1)
@@ -138,8 +156,10 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
         throw PDFGraphicsError.unsupported(.textPainting, location: instruction.location)
       case "BMC", "BDC", "EMC", "MP", "DP":
         try validateMarkedContent(instruction)
-      case "Do", "BI", "sh", "d0", "d1":
-        throw PDFGraphicsError.unsupported(.operatorName(instruction.name), location: instruction.location)
+      case "Do": try await paintXObject(instruction)
+      case "sh": try await paintShading(instruction)
+      case "BI": throw PDFGraphicsError.unsupported(.operatorName("BI"), location: instruction.location)
+      case "d0", "d1": throw PDFGraphicsError.unsupported(.operatorName(instruction.name), location: instruction.location)
       case "ID", "EI": throw malformed("Inline-image delimiter outside an inline image.", instruction)
       default: throw malformed("Unimplemented known operator.", instruction)
       }
@@ -370,7 +390,8 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
       realization: space.realization,
       components: space.initialComponents,
       paint: try space.makePaint(space.initialComponents),
-      makePaint: space.makePaint
+      makePaint: space.makePaint,
+      underlyingMakePaint: space.underlyingMakePaint
     )
     try setColorState(
       color,
@@ -380,7 +401,7 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
     )
   }
 
-  private func setColor(_ instruction: PDFContentInstruction, stroking: Bool) throws {
+  private func setColor(_ instruction: PDFContentInstruction, stroking: Bool) async throws {
     let current = stroking ? state.stroking : state.nonstroking
     guard case .pattern = current.space else {
       let values = try instruction.operands.map(PDFObjectAccess.number)
@@ -400,7 +421,32 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
       )
       return
     }
-    throw PDFGraphicsError.unsupported(.operatorName(instruction.name), location: instruction.location)
+    guard let last = instruction.operands.last else { throw malformed("Pattern name is missing.", instruction) }
+    let name = try PDFObjectAccess.name(last)
+    let values = try instruction.operands.dropLast().map(PDFObjectAccess.number)
+    let underlying: GraphicsPaint?
+    if let makePaint = current.underlyingMakePaint {
+      guard values.count == current.components.count else { throw malformed("Wrong pattern component count.", instruction) }
+      underlying = try makePaint(values)
+    } else {
+      guard values.isEmpty else { throw malformed("Colored pattern has color components.", instruction) }
+      underlying = nil
+    }
+    let pattern = try await compilePattern(named: name, underlying: underlying, instruction: instruction)
+    let paint = GraphicsPaint.pattern(pattern)
+    try setColorState(
+      PDFGraphicsState.ColorState(
+        space: current.space,
+        realization: current.realization,
+        components: values,
+        paint: paint,
+        makePaint: current.makePaint,
+        underlyingMakePaint: current.underlyingMakePaint
+      ),
+      stroking: stroking,
+      operation: .setColor(Self.colorValue(paint)),
+      location: instruction.location
+    )
   }
 
   private func applyExtendedState(_ instruction: PDFContentInstruction) async throws {
@@ -605,7 +651,7 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
     ))
   }
 
-  private func operands(_ instruction: PDFContentInstruction, count: Int) throws {
+  func operands(_ instruction: PDFContentInstruction, count: Int) throws {
     guard instruction.operands.count == count else { throw malformed("Wrong operand count.", instruction) }
   }
 
@@ -619,16 +665,19 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
     return try PDFObjectAccess.integer(instruction.operands[0])
   }
 
-  private func malformed(_ message: String, _ instruction: PDFContentInstruction) -> PDFGraphicsError {
+  func malformed(_ message: String, _ instruction: PDFContentInstruction) -> PDFGraphicsError {
     .malformedContent(message: message, operatorName: instruction.name, location: instruction.location)
   }
 
-  private func origin(_ location: PDFContentLocation) -> GraphicsEventOrigin {
+  func origin(
+    _ location: PDFContentLocation,
+    resource: GraphicsResourceIdentifier? = nil
+  ) -> GraphicsEventOrigin {
     let pageIdentifier = GraphicsResourceIdentifier(
       rawValue: "pdf:r\(location.revision.ordinal):o\(location.pageReference.objectNumber):\(location.pageReference.generationNumber)"
     )
     return GraphicsEventOrigin(
-      resourceIdentifier: pageIdentifier,
+      resourceIdentifier: resource ?? pageIdentifier,
       byteSegments: location.segments.map {
         GraphicsEventSourceSegment(
           resourceIdentifier: $0.streamReference.map {

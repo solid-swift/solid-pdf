@@ -8,19 +8,22 @@ struct PDFGraphicsState {
     var components: [Double]
     var paint: GraphicsPaint
     var makePaint: (@Sendable ([Double]) throws -> GraphicsPaint)?
+    var underlyingMakePaint: (@Sendable ([Double]) throws -> GraphicsPaint)?
 
     init(
       space: GraphicsColorSpaceDescription,
       realization: GraphicsColorSpaceRealization? = nil,
       components: [Double],
       paint: GraphicsPaint,
-      makePaint: (@Sendable ([Double]) throws -> GraphicsPaint)? = nil
+      makePaint: (@Sendable ([Double]) throws -> GraphicsPaint)? = nil,
+      underlyingMakePaint: (@Sendable ([Double]) throws -> GraphicsPaint)? = nil
     ) {
       self.space = space
       self.realization = realization
       self.components = components
       self.paint = paint
       self.makePaint = makePaint
+      self.underlyingMakePaint = underlyingMakePaint
     }
   }
 

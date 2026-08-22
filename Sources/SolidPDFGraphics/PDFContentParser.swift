@@ -6,17 +6,20 @@ final class PDFContentParser {
   private let revision: PDFRevisionIdentifier
   private let page: PDFPage
   private let maximumScratchBytes: Int
+  private let resourceStack: [PDFObjectReference]
 
   init(
     input: PDFContentInput,
     revision: PDFRevisionIdentifier,
     page: PDFPage,
-    maximumScratchBytes: Int
+    maximumScratchBytes: Int,
+    resourceStack: [PDFObjectReference] = []
   ) {
     self.input = input
     self.revision = revision
     self.page = page
     self.maximumScratchBytes = maximumScratchBytes
+    self.resourceStack = resourceStack
   }
 
   func next() async throws -> PDFContentToken? {
@@ -31,6 +34,52 @@ final class PDFContentParser {
   }
 
   func close() async { await input.close() }
+
+  func parseInlineImage(startingAt start: PDFContentLocation) async throws -> PDFInlineImage {
+    var dictionary: [PDFName: PDFObject] = [:]
+    while let key = try await next() {
+      if case .keyword("ID") = key.value { break }
+      guard case .object(.name(let name)) = key.value, let value = try await next(),
+        case .object(let object) = value.value
+      else { throw malformed("Malformed inline-image dictionary.", at: inlineByte(start)) }
+      dictionary[name] = object
+      try checkScratch(dictionary.count * 64, at: inlineByte(start))
+    }
+    guard let separator = try await input.read(), Self.isWhitespace(separator.value) else {
+      throw malformed("Inline-image ID lacks required whitespace.", at: inlineByte(start))
+    }
+    if separator.value == 0x0D, let lineFeed = try await input.peek(), lineFeed.value == 0x0A {
+      _ = try await input.read()
+    }
+    let length = try inlineImageByteCount(dictionary, at: inlineByte(start))
+    guard length <= maximumScratchBytes else {
+      throw PDFGraphicsError.limitExceeded("Inline image exceeds interpretation scratch.", location: start)
+    }
+    var data = Data(capacity: length)
+    var last = inlineByte(start)
+    for _ in 0..<length {
+      guard let byte = try await input.read() else { throw malformed("Truncated inline-image data.", at: last) }
+      data.append(byte.value)
+      last = byte
+    }
+    guard let whitespace = try await input.read(), Self.isWhitespace(whitespace.value),
+      let e = try await input.read(), e.value == 0x45,
+      let i = try await input.read(), i.value == 0x49,
+      let delimiter = try await input.peek(), Self.isWhitespace(delimiter.value)
+    else { throw malformed("Inline-image EI terminator is invalid.", at: last) }
+    return PDFInlineImage(
+      dictionary: dictionary,
+      data: data,
+      location: PDFContentLocation(
+        revision: start.revision,
+        pageIndex: start.pageIndex,
+        pageReference: start.pageReference,
+        decodedOffset: start.decodedOffset,
+        segments: start.segments + input.sourceSegment(from: last, through: i),
+        resourceStack: start.resourceStack
+      )
+    )
+  }
 
   private enum ParsedValue {
     case object(PDFObject)
@@ -277,7 +326,8 @@ final class PDFContentParser {
       pageIndex: page.index,
       pageReference: page.reference,
       decodedOffset: first.decodedOffset,
-      segments: input.sourceSegment(from: first, through: last)
+      segments: input.sourceSegment(from: first, through: last),
+      resourceStack: resourceStack
     )
   }
 
@@ -296,6 +346,54 @@ final class PDFContentParser {
         location: makeLocation(first: byte, last: byte)
       )
     }
+  }
+
+  private func inlineImageByteCount(
+    _ dictionary: [PDFName: PDFObject],
+    at byte: PDFContentInput.Byte
+  ) throws -> Int {
+    if let filter = dictionary["Filter"] ?? dictionary["F"] {
+      let name = (try? PDFObjectAccess.name(filter)) ?? PDFName("Unknown")
+      throw PDFGraphicsError.unsupported(.imageFilter(name), location: makeLocation(first: byte, last: byte))
+    }
+    let width = try PDFObjectAccess.integer(dictionary["Width"] ?? dictionary["W"] ?? .null)
+    let height = try PDFObjectAccess.integer(dictionary["Height"] ?? dictionary["H"] ?? .null)
+    let mask: Bool
+    switch dictionary["ImageMask"] ?? dictionary["IM"] {
+    case .boolean(let value): mask = value
+    case nil: mask = false
+    default: throw malformed("Invalid inline-image mask flag.", at: byte)
+    }
+    let bits = mask ? 1 : try PDFObjectAccess.integer(dictionary["BitsPerComponent"] ?? dictionary["BPC"] ?? .null)
+    let components: Int
+    if mask {
+      components = 1
+    } else {
+      let color = try PDFObjectAccess.name(dictionary["ColorSpace"] ?? dictionary["CS"] ?? .null).pdfGraphicsString
+      switch color {
+      case "G", "DeviceGray": components = 1
+      case "RGB", "DeviceRGB": components = 3
+      case "CMYK", "DeviceCMYK": components = 4
+      default:
+        throw PDFGraphicsError.unsupported(.operatorName("inline-image named ColorSpace"), location: makeLocation(first: byte, last: byte))
+      }
+    }
+    guard width > 0, height > 0, [1, 2, 4, 8, 16].contains(bits) else {
+      throw malformed("Invalid inline-image dimensions or precision.", at: byte)
+    }
+    let componentBits = width.multipliedReportingOverflow(by: components)
+    let rowBits = componentBits.partialValue.multipliedReportingOverflow(by: bits)
+    guard !componentBits.overflow, !rowBits.overflow else {
+      throw malformed("Inline-image row overflow.", at: byte)
+    }
+    let rowBytes = (rowBits.partialValue + 7) / 8
+    let total = rowBytes.multipliedReportingOverflow(by: height)
+    guard !total.overflow else { throw malformed("Inline-image size overflow.", at: byte) }
+    return total.partialValue
+  }
+
+  private func inlineByte(_ location: PDFContentLocation) -> PDFContentInput.Byte {
+    PDFContentInput.Byte(value: 0, streamIndex: 0, decodedOffset: location.decodedOffset)
   }
 
   private static func isWhitespace(_ byte: UInt8) -> Bool {

@@ -67,7 +67,7 @@ public struct GraphicsPath: Sendable, Hashable {
     return points
   }
 
-  func transformed(by matrix: GraphicsMatrix) -> Self {
+  package func transformed(by matrix: GraphicsMatrix) -> Self {
     Self(elements: elements.map { element in
       switch element {
       case .move(let point): .move(to: matrix.transform(point))
