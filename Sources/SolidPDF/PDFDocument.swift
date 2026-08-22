@@ -261,6 +261,49 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     try await interactiveStructure.validateAnnotations(in: revision)
   }
 
+  /// Returns the latest document's interactive form, when present.
+  public func acroForm() async throws -> PDFAcroForm? {
+    try await interactiveStructure.acroForm(in: latestRevision.identifier)
+  }
+
+  /// Returns the interactive form in a selected revision, when present.
+  public func acroForm(in revision: PDFRevisionIdentifier) async throws -> PDFAcroForm? {
+    try await interactiveStructure.acroForm(in: revision)
+  }
+
+  /// Resolves one field in the latest document revision.
+  public func formField(_ identifier: PDFFormFieldIdentifier) async throws -> PDFFormField {
+    try await interactiveStructure.formField(identifier, in: latestRevision.identifier)
+  }
+
+  /// Resolves one field in a selected document revision.
+  public func formField(
+    _ identifier: PDFFormFieldIdentifier,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFFormField {
+    try await interactiveStructure.formField(identifier, in: revision)
+  }
+
+  /// Returns all fields in the latest document revision.
+  public func formFields() async throws -> [PDFFormField] {
+    try await interactiveStructure.formFields(in: latestRevision.identifier)
+  }
+
+  /// Returns all fields in a selected document revision.
+  public func formFields(in revision: PDFRevisionIdentifier) async throws -> [PDFFormField] {
+    try await interactiveStructure.formFields(in: revision)
+  }
+
+  /// Audits the complete latest AcroForm field tree and widget membership.
+  public func validateAcroForm() async throws {
+    try await interactiveStructure.validateAcroForm(in: latestRevision.identifier)
+  }
+
+  /// Audits an AcroForm field tree in a selected revision.
+  public func validateAcroForm(in revision: PDFRevisionIdentifier) async throws {
+    try await interactiveStructure.validateAcroForm(in: revision)
+  }
+
   /// Resolves one logical structure element in the latest revision.
   public func structureElement(
     _ identifier: PDFStructureElementIdentifier

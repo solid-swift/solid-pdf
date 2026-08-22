@@ -8,6 +8,9 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
   private var annotationsByPage = [PageKey: [PDFAnnotation]]()
   private var annotationsByIdentifier = [AnnotationKey: PDFAnnotation]()
   private var namedDestinations = [PDFRevisionIdentifier: [PDFDestinationName: PDFDestination]]()
+  private var acroForms = [PDFRevisionIdentifier: PDFAcroForm?]()
+  private var formFields = [PDFRevisionIdentifier: [PDFFormFieldIdentifier: PDFFormField]]()
+  private var validatedAcroForms = Set<PDFRevisionIdentifier>()
   private var closed = false
 
   init(
@@ -27,6 +30,9 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
     annotationsByPage.removeAll()
     annotationsByIdentifier.removeAll()
     namedDestinations.removeAll()
+    acroForms.removeAll()
+    formFields.removeAll()
+    validatedAcroForms.removeAll()
   }
 
   func annotations(on page: PDFPage, in revision: PDFRevisionIdentifier) async throws -> [PDFAnnotation] {
@@ -102,6 +108,403 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
       namedDestinations[revision] = try await loadNamedDestinations(in: revision)
     }
     return namedDestinations[revision]?[name]
+  }
+
+  func acroForm(in revision: PDFRevisionIdentifier) async throws -> PDFAcroForm? {
+    try ensureOpen(revision)
+    if let cached = acroForms[revision] { return cached }
+    let catalog = try await structure.catalog(in: revision)
+    guard let raw = catalog.rawDictionary["AcroForm"] else {
+      acroForms[revision] = .some(nil)
+      return nil
+    }
+    let (dictionary, definingRevision) = try await resolvedDictionary(raw, revision: revision)
+    guard let rawFields = dictionary["Fields"] else {
+      throw malformed("An AcroForm dictionary requires Fields.")
+    }
+    let fieldsObject = try await resolveDirect(rawFields, revision: revision, visited: [])
+    guard case .array(let roots) = fieldsObject,
+      roots.count <= limits.maximumFormFields
+    else { throw malformed("AcroForm Fields must be a bounded array.") }
+    let rootIdentifiers = try roots.map { value -> PDFFormFieldIdentifier in
+      guard case .reference(let reference) = value else {
+        throw malformed("Every root AcroForm field must be indirect.")
+      }
+      return .init(reference: reference)
+    }
+    guard Set(rootIdentifiers).count == rootIdentifiers.count else {
+      throw malformed("AcroForm Fields contains duplicate roots.")
+    }
+    let calculationOrder: [PDFFormFieldIdentifier]
+    if let rawOrder = dictionary["CO"] {
+      let order = try await resolveDirect(rawOrder, revision: revision, visited: [])
+      guard case .array(let values) = order else { throw malformed("AcroForm CO must be an array.") }
+      calculationOrder = try values.map { value in
+        guard case .reference(let reference) = value else {
+          throw malformed("Every calculation-order entry must be an indirect field.")
+        }
+        return .init(reference: reference)
+      }
+    } else {
+      calculationOrder = []
+    }
+    let defaultResources = try await optionalDictionary(dictionary["DR"], revision: revision)
+    let defaultAppearance = try optionalString(dictionary["DA"], name: "DA")
+    let justification = try boundedJustification(dictionary.pdfInteger(named: "Q") ?? 0)
+    let form = PDFAcroForm(
+      fields: rootIdentifiers,
+      defaultResources: defaultResources,
+      defaultAppearance: defaultAppearance,
+      justification: justification,
+      calculationOrder: calculationOrder,
+      signatureFlags: try nonnegativeInt(dictionary.pdfInteger(named: "SigFlags") ?? 0, name: "SigFlags"),
+      needsAppearances: boolean(dictionary["NeedAppearances"]) ?? false,
+      xfa: dictionary["XFA"],
+      rawDictionary: dictionary,
+      definingRevision: definingRevision ?? revision
+    )
+    acroForms[revision] = form
+    return form
+  }
+
+  func formFields(in revision: PDFRevisionIdentifier) async throws -> [PDFFormField] {
+    guard let form = try await acroForm(in: revision) else { return [] }
+    if !validatedAcroForms.contains(revision) {
+      try await auditAcroForm(form, revision: revision)
+    }
+    let fields = formFields[revision] ?? [:]
+    return fields.values.sorted { $0.identifier < $1.identifier }
+  }
+
+  func formField(
+    _ identifier: PDFFormFieldIdentifier,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFFormField {
+    _ = try await formFields(in: revision)
+    guard let field = formFields[revision]?[identifier] else {
+      throw PDFParsingError.unresolvedReference(identifier.reference)
+    }
+    return field
+  }
+
+  func validateAcroForm(in revision: PDFRevisionIdentifier) async throws {
+    _ = try await formFields(in: revision)
+  }
+
+  private func auditAcroForm(
+    _ form: PDFAcroForm,
+    revision: PDFRevisionIdentifier
+  ) async throws {
+    let pageCount = try await structure.pageCount(in: revision)
+    var annotations = [PDFAnnotationIdentifier: PDFAnnotation]()
+    for index in 0..<pageCount {
+      let page = try await structure.page(at: index, in: revision)
+      for annotation in try await self.annotations(on: page, in: revision) {
+        annotations[annotation.identifier] = annotation
+      }
+    }
+    var parsed = [PDFFormFieldIdentifier: PDFFormField]()
+    var membership = Set<PDFObjectReference>()
+    var scratch = 0
+    let rootInheritance = FieldInheritance(
+      type: nil,
+      flags: [],
+      value: nil,
+      defaultValue: nil,
+      actions: [:],
+      defaultAppearance: form.defaultAppearance,
+      justification: form.justification,
+      resources: form.defaultResources
+    )
+    for root in form.fields {
+      try await parseField(
+        root,
+        expectedParent: nil,
+        parentName: nil,
+        inheritance: rootInheritance,
+        revision: revision,
+        annotations: annotations,
+        depth: 0,
+        ancestry: [],
+        membership: &membership,
+        parsed: &parsed,
+        scratch: &scratch
+      )
+    }
+    for identifier in form.calculationOrder where parsed[identifier] == nil {
+      throw malformed("AcroForm CO refers to an object outside the field tree.")
+    }
+    formFields[revision] = parsed
+    validatedAcroForms.insert(revision)
+  }
+
+  private func parseField(
+    _ identifier: PDFFormFieldIdentifier,
+    expectedParent: PDFFormFieldIdentifier?,
+    parentName: String?,
+    inheritance: FieldInheritance,
+    revision: PDFRevisionIdentifier,
+    annotations: [PDFAnnotationIdentifier: PDFAnnotation],
+    depth: Int,
+    ancestry: Set<PDFObjectReference>,
+    membership: inout Set<PDFObjectReference>,
+    parsed: inout [PDFFormFieldIdentifier: PDFFormField],
+    scratch: inout Int
+  ) async throws {
+    guard depth <= limits.maximumFormFieldDepth else { throw limit("The AcroForm field tree is too deep.") }
+    guard membership.insert(identifier.reference).inserted,
+      !ancestry.contains(identifier.reference)
+    else { throw malformed("The AcroForm field tree contains a cycle or duplicate member.") }
+    let object = try await resolver.resolve(identifier.reference, in: revision)
+    guard case .value(.dictionary(let dictionary)) = object.value else {
+      throw malformed("An AcroForm field must be an ordinary dictionary.")
+    }
+    let declaredParent = dictionary.pdfReference(named: "Parent").map(PDFFormFieldIdentifier.init(reference:))
+    guard declaredParent == expectedParent else { throw malformed("An AcroForm field has an incorrect Parent.") }
+
+    let partialName = try text(dictionary["T"], allowsUTF8: true)
+    let fullyQualifiedName = [parentName, partialName].compactMap { $0 }.joined(separator: ".")
+    let inherited = try await fieldInheritance(dictionary, parent: inheritance, revision: revision)
+    let rawKids: [PDFObject]
+    if let raw = dictionary["Kids"] {
+      let value = try await resolveDirect(raw, revision: revision, visited: [])
+      guard case .array(let values) = value else { throw malformed("A field Kids entry must be an array.") }
+      rawKids = values
+    } else {
+      rawKids = []
+    }
+    var childIDs = [PDFFormFieldIdentifier]()
+    var widgets = [PDFWidget]()
+    for kid in rawKids {
+      guard case .reference(let reference) = kid else { throw malformed("Every field child must be indirect.") }
+      let resolved = try await resolver.resolve(reference, in: revision)
+      guard case .value(.dictionary(let child)) = resolved.value else {
+        throw malformed("A field child must be an ordinary dictionary.")
+      }
+      if child.pdfName(named: "Subtype") == PDFName("Widget"), child["T"] == nil, child["FT"] == nil {
+        guard child.pdfReference(named: "Parent") == identifier.reference else {
+          throw malformed("A widget child has an incorrect Parent.")
+        }
+        widgets.append(try widget(reference, dictionary: child, annotations: annotations))
+      } else {
+        childIDs.append(.init(reference: reference))
+      }
+    }
+    if dictionary.pdfName(named: "Subtype") == PDFName("Widget") {
+      widgets.append(try widget(identifier.reference, dictionary: dictionary, annotations: annotations))
+    }
+    let field = PDFFormField(
+      identifier: identifier,
+      parent: expectedParent,
+      children: childIDs,
+      widgets: widgets,
+      type: inherited.type,
+      flags: inherited.flags,
+      partialName: partialName,
+      fullyQualifiedName: fullyQualifiedName.isEmpty ? nil : fullyQualifiedName,
+      alternateName: try text(dictionary["TU"], allowsUTF8: true),
+      mappingName: try text(dictionary["TM"], allowsUTF8: true),
+      value: inherited.value,
+      defaultValue: inherited.defaultValue,
+      options: try await optionalArray(dictionary["Opt"], revision: revision),
+      defaultAppearance: inherited.defaultAppearance,
+      justification: inherited.justification,
+      resources: inherited.resources,
+      actions: inherited.actions,
+      richTextValue: try optionalString(dictionary["RV"], name: "RV"),
+      signature: inherited.type == .signature
+        ? try await signature(inherited.value, revision: revision)
+        : nil,
+      rawDictionary: dictionary,
+      definingRevision: object.definitionRevision ?? revision
+    )
+    parsed[identifier] = field
+    scratch = try checkedAdd(scratch, 384 + dictionary.count * 32)
+    guard parsed.count <= limits.maximumFormFields else { throw limit("The AcroForm has too many fields.") }
+    let nextAncestry = ancestry.union([identifier.reference])
+    for child in childIDs {
+      try await parseField(
+        child,
+        expectedParent: identifier,
+        parentName: field.fullyQualifiedName,
+        inheritance: inherited,
+        revision: revision,
+        annotations: annotations,
+        depth: depth + 1,
+        ancestry: nextAncestry,
+        membership: &membership,
+        parsed: &parsed,
+        scratch: &scratch
+      )
+    }
+  }
+
+  private func fieldInheritance(
+    _ dictionary: [PDFName: PDFObject],
+    parent: FieldInheritance,
+    revision: PDFRevisionIdentifier
+  ) async throws -> FieldInheritance {
+    let type = try dictionary.pdfName(named: "FT").map(fieldType) ?? parent.type
+    let rawFlags = dictionary.pdfInteger(named: "Ff")
+    let flags: PDFFormFieldFlags
+    if let rawFlags {
+      guard rawFlags >= 0, rawFlags <= Int64(UInt32.max) else { throw malformed("Field flags are invalid.") }
+      flags = .init(rawValue: UInt32(rawFlags))
+    } else { flags = parent.flags }
+    var actions = parent.actions
+    if let rawActions = dictionary["AA"] {
+      let actionDictionary = try await optionalDictionary(rawActions, revision: revision) ?? [:]
+      for (name, value) in actionDictionary {
+        actions[name] = try await parseAction(value, revision: revision, depth: 0, visited: [])
+      }
+    }
+    return FieldInheritance(
+      type: type,
+      flags: flags,
+      value: try formValue(dictionary["V"]) ?? parent.value,
+      defaultValue: try formValue(dictionary["DV"]) ?? parent.defaultValue,
+      actions: actions,
+      defaultAppearance: try optionalString(dictionary["DA"], name: "DA") ?? parent.defaultAppearance,
+      justification: try dictionary.pdfInteger(named: "Q").map(boundedJustification) ?? parent.justification,
+      resources: try await optionalDictionary(dictionary["DR"], revision: revision) ?? parent.resources
+    )
+  }
+
+  private func widget(
+    _ reference: PDFObjectReference,
+    dictionary: [PDFName: PDFObject],
+    annotations: [PDFAnnotationIdentifier: PDFAnnotation]
+  ) throws -> PDFWidget {
+    let identifier = PDFAnnotationIdentifier(reference: reference)
+    guard let annotation = annotations[identifier], annotation.subtype == .widget else {
+      throw malformed("Every widget must occur in exactly one page annotation array.")
+    }
+    return PDFWidget(
+      annotationIdentifier: identifier,
+      pageReference: annotation.pageReference,
+      rectangle: annotation.rectangle,
+      appearanceState: annotation.appearanceState,
+      rawDictionary: dictionary
+    )
+  }
+
+  private func signature(
+    _ value: PDFFormValue?,
+    revision: PDFRevisionIdentifier
+  ) async throws -> PDFSignature? {
+    guard let value else { return nil }
+    let raw: PDFObject
+    switch value {
+    case .other(let object): raw = object
+    case .null: return nil
+    default: throw malformed("A signature field value must be a signature dictionary.")
+    }
+    let (dictionary, definingRevision) = try await resolvedDictionary(raw, revision: revision)
+    guard let byteRange = dictionary.pdfArray(named: "ByteRange"),
+      byteRange.count.isMultiple(of: 2),
+      byteRange.count / 2 <= limits.maximumSignatureByteRanges,
+      case .string(let contents)? = dictionary["Contents"]
+    else { throw malformed("A signature requires a bounded ByteRange and Contents.") }
+    var ranges = [PDFSourceRange]()
+    var previousEnd: Int64 = 0
+    for index in stride(from: 0, to: byteRange.count, by: 2) {
+      guard case .number(.integer(let offset)) = byteRange[index],
+        case .number(.integer(let lengthValue)) = byteRange[index + 1],
+        lengthValue >= 0,
+        lengthValue <= Int64(Int.max)
+      else { throw malformed("A signature ByteRange contains invalid integers.") }
+      let range = try PDFSourceRange(offset: offset, length: Int(lengthValue))
+      guard range.offset >= previousEnd else { throw malformed("Signature byte ranges overlap or are unsorted.") }
+      previousEnd = range.endOffset
+      ranges.append(range)
+    }
+    return PDFSignature(
+      byteRanges: ranges,
+      contents: contents.bytes,
+      filter: dictionary.pdfName(named: "Filter"),
+      subfilter: dictionary.pdfName(named: "SubFilter"),
+      reason: try text(dictionary["Reason"], allowsUTF8: true),
+      signingTime: try optionalString(dictionary["M"], name: "M"),
+      permissions: dictionary["Reference"],
+      rawDictionary: dictionary,
+      definingRevision: definingRevision ?? revision
+    )
+  }
+
+  private func fieldType(_ name: PDFName) throws -> PDFFormFieldType {
+    switch name {
+    case "Btn": .button
+    case "Tx": .text
+    case "Ch": .choice
+    case "Sig": .signature
+    default: throw malformed("A field has an unknown FT value.")
+    }
+  }
+
+  private func formValue(_ object: PDFObject?) throws -> PDFFormValue? {
+    guard let object else { return nil }
+    return switch object {
+    case .string(let value): .string(value)
+    case .name(let value): .name(value)
+    case .array(let values):
+      .strings(try values.map { value in
+        guard case .string(let string) = value else { throw malformed("A multiselect field value must contain strings.") }
+        return string
+      })
+    case .null: .null
+    default: .other(object)
+    }
+  }
+
+  private func resolvedDictionary(
+    _ object: PDFObject,
+    revision: PDFRevisionIdentifier
+  ) async throws -> ([PDFName: PDFObject], PDFRevisionIdentifier?) {
+    if case .reference(let reference) = object {
+      let resolved = try await resolver.resolve(reference, in: revision)
+      guard case .value(.dictionary(let dictionary)) = resolved.value else {
+        throw malformed("The referenced value must be an ordinary dictionary.")
+      }
+      return (dictionary, resolved.definitionRevision)
+    }
+    guard case .dictionary(let dictionary) = object else { throw malformed("The value must be a dictionary.") }
+    return (dictionary, nil)
+  }
+
+  private func optionalDictionary(
+    _ object: PDFObject?,
+    revision: PDFRevisionIdentifier
+  ) async throws -> [PDFName: PDFObject]? {
+    guard let object else { return nil }
+    let direct = try await resolveDirect(object, revision: revision, visited: [])
+    guard case .dictionary(let dictionary) = direct else { throw malformed("The value must be a dictionary.") }
+    return dictionary
+  }
+
+  private func optionalArray(
+    _ object: PDFObject?,
+    revision: PDFRevisionIdentifier
+  ) async throws -> [PDFObject] {
+    guard let object else { return [] }
+    let direct = try await resolveDirect(object, revision: revision, visited: [])
+    guard case .array(let values) = direct else { throw malformed("The value must be an array.") }
+    return values
+  }
+
+  private func optionalString(_ object: PDFObject?, name: PDFName) throws -> PDFString? {
+    guard let object else { return nil }
+    guard case .string(let value) = object else { throw malformed("\(name) must be a string.") }
+    return value
+  }
+
+  private func boundedJustification(_ value: Int64) throws -> Int {
+    guard 0...2 ~= value else { throw malformed("Field justification must be 0, 1, or 2.") }
+    return Int(value)
+  }
+
+  private func nonnegativeInt(_ value: Int64, name: PDFName) throws -> Int {
+    guard value >= 0, value <= Int64(Int.max) else { throw malformed("\(name) is outside its supported range.") }
+    return Int(value)
   }
 
   private func parseAnnotation(
@@ -531,6 +934,17 @@ private struct PageKey: Hashable {
 private struct AnnotationKey: Hashable {
   let revision: PDFRevisionIdentifier
   let identifier: PDFAnnotationIdentifier
+}
+
+private struct FieldInheritance {
+  let type: PDFFormFieldType?
+  let flags: PDFFormFieldFlags
+  let value: PDFFormValue?
+  let defaultValue: PDFFormValue?
+  let actions: [PDFName: PDFAction]
+  let defaultAppearance: PDFString?
+  let justification: Int
+  let resources: [PDFName: PDFObject]?
 }
 
 private extension PDFAnnotationDetails {
