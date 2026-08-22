@@ -15,6 +15,8 @@ public struct PDFRenderedPage: Sendable, Hashable {
   public let coordinateMapping: GraphicsPageCoordinateMapping
   /// The zero-based transmission ordinal in this result.
   public let transmittedOrdinal: Int
+  /// Annotation appearances painted after the page content.
+  public let renderedAnnotations: [PDFAnnotationIdentifier]
 
   /// Creates rendered-page metadata.
   public init(
@@ -23,7 +25,8 @@ public struct PDFRenderedPage: Sendable, Hashable {
     pageReference: PDFObjectReference,
     device: GraphicsDeviceSnapshot,
     coordinateMapping: GraphicsPageCoordinateMapping,
-    transmittedOrdinal: Int
+    transmittedOrdinal: Int,
+    renderedAnnotations: [PDFAnnotationIdentifier] = []
   ) {
     self.revision = revision
     self.pageIndex = pageIndex
@@ -31,5 +34,6 @@ public struct PDFRenderedPage: Sendable, Hashable {
     self.device = device
     self.coordinateMapping = coordinateMapping
     self.transmittedOrdinal = transmittedOrdinal
+    self.renderedAnnotations = renderedAnnotations
   }
 }

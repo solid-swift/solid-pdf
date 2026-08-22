@@ -1,3 +1,5 @@
+import SolidPDF
+
 /// A nonfatal observation produced while interpreting PDF graphics.
 public struct PDFGraphicsDiagnostic: Sendable, Hashable {
   /// Diagnostic severity.
@@ -16,17 +18,21 @@ public struct PDFGraphicsDiagnostic: Sendable, Hashable {
   public let severity: Severity
   /// Source location, when the diagnostic belongs to a content operation.
   public let location: PDFContentLocation?
+  /// The annotation associated with this diagnostic, when applicable.
+  public let annotation: PDFAnnotationIdentifier?
 
   /// Creates a diagnostic.
   public init(
     identifier: String,
     message: String,
     severity: Severity,
-    location: PDFContentLocation? = nil
+    location: PDFContentLocation? = nil,
+    annotation: PDFAnnotationIdentifier? = nil
   ) {
     self.identifier = identifier
     self.message = message
     self.severity = severity
     self.location = location
+    self.annotation = annotation
   }
 }

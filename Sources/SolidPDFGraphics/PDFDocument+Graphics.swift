@@ -132,6 +132,15 @@ extension PDFDocument {
           maximumOperators: options.limits.maximumOperatorsPerPage
         ).execute()
         diagnostics.append(contentsOf: handler.diagnostics)
+        let annotationResult = try await renderAnnotations(
+          on: page,
+          revision: revision,
+          device: device,
+          resources: resources,
+          output: output,
+          options: options
+        )
+        diagnostics.append(contentsOf: annotationResult.diagnostics)
         let snapshot = handler.currentSnapshot
         let origin = GraphicsEventOrigin(
           resourceIdentifier: GraphicsResourceIdentifier(
@@ -161,7 +170,8 @@ extension PDFDocument {
           pageReference: page.reference,
           device: device,
           coordinateMapping: GraphicsPageCoordinateMapping(device: descriptor),
-          transmittedOrdinal: ordinal
+          transmittedOrdinal: ordinal,
+          renderedAnnotations: annotationResult.rendered
         ))
       }
       return try PDFGraphicsRenderResult(
@@ -177,6 +187,129 @@ extension PDFDocument {
       if let error = error as? PDFParsingError { throw error }
       throw PDFGraphicsError.targetFailure(String(describing: error))
     }
+  }
+
+  private func renderAnnotations(
+    on page: PDFPage,
+    revision: PDFRevisionIdentifier,
+    device: GraphicsDeviceSnapshot,
+    resources: PDFGraphicsResourceResolver<Source>,
+    output: PDFGraphicsEventOutput,
+    options: PDFGraphicsInterpretationOptions
+  ) async throws -> (rendered: [PDFAnnotationIdentifier], diagnostics: [PDFGraphicsDiagnostic]) {
+    guard options.annotationRenderingPolicy != .none else { return ([], []) }
+    let annotations = try await annotations(on: page, in: revision)
+    var rendered = [PDFAnnotationIdentifier]()
+    var diagnostics = [PDFGraphicsDiagnostic]()
+    for annotation in annotations where annotationIsEligible(annotation, options: options) {
+      if let optionalContent = annotation.optionalContent {
+        let visibility = try await optionalContentVisibility(
+          of: optionalContent,
+          selection: options.optionalContentSelection,
+          context: options.optionalContentContext,
+          in: revision
+        )
+        if !visibility.isVisible { continue }
+      }
+      if annotation.details.payload.action != nil {
+        diagnostics.append(.init(
+          identifier: "pdf.annotation.inert-action",
+          message: "Annotation action was retained as inert metadata and was not executed.",
+          severity: .information,
+          annotation: annotation.identifier
+        ))
+      }
+      guard let appearance = try await selectedAppearance(annotation, revision: revision) else {
+        if options.annotationAppearancePolicy == .generateMissingStandard {
+          throw PDFGraphicsError.unsupported(.annotationAppearanceGeneration, location: annotationLocation(annotation, page: page))
+        }
+        throw PDFGraphicsError.malformedContent(
+          message: "An eligible annotation has no selected normal appearance.",
+          operatorName: "annotation-appearance",
+          location: annotationLocation(annotation, page: page)
+        )
+      }
+      let annotationOutput = PDFAnnotationEventOutput(
+        base: output,
+        annotation: annotation.identifier,
+        revision: revision
+      )
+      let handler = PDFGraphicsInstructionHandler(
+        device: device,
+        resources: resources,
+        limits: options.limits,
+        output: annotationOutput
+      )
+      try await handler.paintAnnotationAppearance(
+        appearance,
+        annotation: annotation,
+        page: page,
+        resourceFallbackAllowed: effectiveVersion != .v2_0
+      )
+      diagnostics.append(contentsOf: handler.diagnostics)
+      rendered.append(annotation.identifier)
+    }
+    return (rendered, diagnostics)
+  }
+
+  private func annotationIsEligible(
+    _ annotation: PDFAnnotation,
+    options: PDFGraphicsInterpretationOptions
+  ) -> Bool {
+    let policy: PDFAnnotationRenderingPolicy = switch options.annotationRenderingPolicy {
+    case .purposeAware:
+      switch options.accessPurpose {
+      case .viewing: .view
+      case .printing, .highQualityPrinting: .print
+      case .extraction, .accessibilityExtraction: .none
+      }
+    case let policy: policy
+    }
+    switch policy {
+    case .none: return false
+    case .all: return true
+    case .view, .purposeAware:
+      return !annotation.flags.contains(.invisible)
+        && !annotation.flags.contains(.hidden)
+        && !annotation.flags.contains(.noView)
+    case .print:
+      return annotation.flags.contains(.print)
+        && !annotation.flags.contains(.invisible)
+        && !annotation.flags.contains(.hidden)
+    }
+  }
+
+  private func selectedAppearance(
+    _ annotation: PDFAnnotation,
+    revision: PDFRevisionIdentifier
+  ) async throws -> PDFStreamObject? {
+    guard let normal = annotation.appearances.normal else { return nil }
+    switch normal {
+    case .stream(let stream): return stream
+    case .states(let states):
+      if let state = annotation.appearanceState { return states[state] }
+      guard annotation.subtype == .widget else { return nil }
+      let fields = try await formFields(in: revision)
+      let matches = fields.filter { field in
+        field.widgets.contains { $0.annotationIdentifier == annotation.identifier }
+      }
+      guard matches.count == 1, case .name(let name)? = matches[0].value else { return nil }
+      return states[name]
+    }
+  }
+
+  private func annotationLocation(
+    _ annotation: PDFAnnotation,
+    page: PDFPage
+  ) -> PDFContentLocation {
+    PDFContentLocation(
+      revision: annotation.definingRevision,
+      pageIndex: page.index,
+      pageReference: page.reference,
+      decodedOffset: 0,
+      segments: [],
+      resourceStack: [annotation.identifier.reference]
+    )
   }
 
   private func selectedPageIndices(

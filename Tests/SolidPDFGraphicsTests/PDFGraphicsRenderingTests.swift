@@ -260,6 +260,58 @@ struct PDFGraphicsRenderingTests {
   }
 
   @Test
+  func rendersPurposeEligibleAnnotationAppearancesAfterPageContent() async throws {
+    let appearanceContent = "1 0 0 rg 0 0 10 10 re f"
+    let appearance = streamObject(
+      dictionary: "/Type /XObject /Subtype /Form /BBox [0 0 10 10] /Resources <<>>",
+      data: Data(appearanceContent.utf8)
+    )
+    let annotation = Data(
+      "<< /Type /Annot /Subtype /Square /P 3 0 R /Rect [20 30 60 70] /F 4 /AP << /N 6 0 R >> >>".utf8
+    )
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "0 0 1 rg 0 0 100 100 re f",
+      pageExtras: "/Annots [5 0 R]",
+      extraObjects: [annotation, appearance]
+    )))
+    let result = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    #expect(result.pages[0].renderedAnnotations.map(\.reference.objectNumber) == [5])
+    #expect(result.output.pages[0].effects.contains { effect in
+      if case .form = effect { true } else { false }
+    })
+
+    let extraction = try await document.render(
+      page: 0,
+      to: RecordingGraphicsTarget(),
+      options: .init(accessPurpose: .extraction)
+    )
+    #expect(extraction.pages[0].renderedAnnotations.isEmpty)
+    await document.close()
+  }
+
+  @Test
+  func enforcesStrictMissingAppearancesAndExplicitAnnotationSuppression() async throws {
+    let annotation = Data(
+      "<< /Type /Annot /Subtype /Text /P 3 0 R /Rect [1 2 10 12] /Contents (Note) >>".utf8
+    )
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "",
+      pageExtras: "/Annots [5 0 R]",
+      extraObjects: [annotation]
+    )))
+    await #expect(throws: PDFGraphicsError.self) {
+      try await document.render(page: 0, to: RecordingGraphicsTarget())
+    }
+    let result = try await document.render(
+      page: 0,
+      to: RecordingGraphicsTarget(),
+      options: .init(annotationRenderingPolicy: .none)
+    )
+    #expect(result.pages[0].renderedAnnotations.isEmpty)
+    await document.close()
+  }
+
+  @Test
   func interpretsTextRunsUsingPDFWidthsSpacingAndSourceRanges() async throws {
     let resources = """
       << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic
