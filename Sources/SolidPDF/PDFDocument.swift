@@ -111,6 +111,49 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     try await structure.catalog(in: revision)
   }
 
+  /// Returns the fully validated page count for the latest revision.
+  public func pageCount() async throws -> Int {
+    try await structure.pageCount(in: latestRevision.identifier)
+  }
+
+  /// Returns the fully validated page count for a selected revision.
+  public func pageCount(in revision: PDFRevisionIdentifier) async throws -> Int {
+    try await structure.pageCount(in: revision)
+  }
+
+  /// Resolves a zero-based page in the latest revision.
+  public func page(at index: Int) async throws -> PDFPage {
+    try await structure.page(at: index, in: latestRevision.identifier)
+  }
+
+  /// Resolves a zero-based page in a selected revision.
+  public func page(
+    at index: Int,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFPage {
+    try await structure.page(at: index, in: revision)
+  }
+
+  /// Opens a single-pass page sequence for the latest revision.
+  public func pages() async throws -> PDFPageSequence {
+    try await structure.pages(in: latestRevision.identifier)
+  }
+
+  /// Opens a single-pass page sequence for a selected revision.
+  public func pages(in revision: PDFRevisionIdentifier) async throws -> PDFPageSequence {
+    try await structure.pages(in: revision)
+  }
+
+  /// Validates the complete latest page tree.
+  public func validatePageTree() async throws {
+    try await structure.validatePageTree(in: latestRevision.identifier)
+  }
+
+  /// Validates the complete page tree in a selected revision.
+  public func validatePageTree(in revision: PDFRevisionIdentifier) async throws {
+    try await structure.validatePageTree(in: revision)
+  }
+
   /// Reads the exact encoded bytes of a resolved stream.
   public func encodedBytes(of stream: PDFStreamObject) async throws -> Data {
     try await resolver.readStream(stream)
