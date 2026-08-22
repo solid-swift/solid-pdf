@@ -311,13 +311,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
         .init(offset: 0, object: reference, message: "The compressed object container is invalid.")
       )
     }
-    let encoded = try await reader.read(stream.encodedRange)
-    let data = try PDFStructuralStreamDecoder.decode(
-      encoded,
-      dictionary: stream.dictionary,
-      limits: options.limits,
-      offset: stream.encodedRange.offset
-    )
+    let data = try await decodedBytes(stream)
     let count = Int(countValue)
     let first = Int(firstValue)
     guard first <= data.count else {

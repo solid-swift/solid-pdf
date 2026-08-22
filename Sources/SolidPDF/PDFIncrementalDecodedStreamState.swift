@@ -134,8 +134,8 @@ actor PDFIncrementalDecodedStreamState: PDFDecodedStreamState {
     self.options = options
     self.diagnostic = diagnostic
     self.registry = registry
-    stages = try filters.map {
-      Stage(filter: try PDFStreamFilterFactory.make($0, diagnostic: diagnostic))
+    stages = try filters.flatMap {
+      try PDFStreamFilterFactory.make($0, diagnostic: diagnostic).map { Stage(filter: $0) }
     }
   }
 

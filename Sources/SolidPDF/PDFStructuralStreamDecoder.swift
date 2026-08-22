@@ -1,5 +1,4 @@
 import Foundation
-import SolidIO
 
 enum PDFStructuralStreamDecoder {
   static func decode(
@@ -7,52 +6,43 @@ enum PDFStructuralStreamDecoder {
     dictionary: [PDFName: PDFObject],
     limits: PDFParsingLimits,
     offset: Int64
-  ) throws -> Data {
-    if dictionary["Filter"] == nil {
-      guard data.count <= limits.maximumDecodedStreamBytes else {
-        throw PDFParsingError.limitExceeded(
-          .init(offset: offset, message: "The structural stream exceeds its decoded-size limit.")
-        )
-      }
-      return data
-    }
-    let filter: PDFName?
-    switch dictionary["Filter"] {
-    case .name(let name):
-      filter = name
-    case .array(let values) where values.count == 1:
-      if case .name(let name) = values[0] { filter = name } else { filter = nil }
-    default:
-      filter = nil
-    }
-    guard filter == PDFName("FlateDecode"),
-      dictionary["DecodeParms"] == nil || dictionary["DecodeParms"] == .null
-    else {
+  ) async throws -> Data {
+    let stream = PDFStreamObject(
+      dictionary: dictionary,
+      encodedRange: PDFSourceRange(uncheckedOffset: offset, length: data.count)
+    )
+    let options = PDFParsingOptions(limits: limits)
+    let configuration = try await PDFStreamConfiguration.resolve(
+      stream: stream,
+      options: options,
+      resolve: { reference in throw PDFParsingError.unresolvedReference(reference) }
+    )
+    guard configuration.fileSpecification == nil else {
       throw PDFParsingError.unsupported(
-        .structuralStreamFilter,
-        .init(offset: offset, message: "Only raw or plain Flate structural streams are supported.")
+        .externalStream,
+        .init(offset: offset, message: "A structural stream cannot use external data.")
       )
     }
+    let session = try await PDFDataInputSource(data).makeSession()
+    let input = try await PDFDecodedStreamInput(externalSession: session)
+    let registry = PDFDecodedStreamRegistry()
+    let state = try PDFIncrementalDecodedStreamState(
+      input: input,
+      filters: configuration.filters,
+      options: options,
+      diagnostic: .init(offset: offset, message: "The structural stream is malformed."),
+      registry: registry
+    )
+    await state.register()
+    let decoded = PDFDecodedStream(state: state)
+    var result = Data()
     do {
-      let decoder = FlateDecoder()
-      let result = try decoder.process(input: data)
-      guard result.progress == .finished, result.consumedInput == data.count else {
-        throw malformed(offset, "The Flate structural stream is truncated.")
-      }
-      guard result.output.count <= limits.maximumDecodedStreamBytes else {
-        throw PDFParsingError.limitExceeded(
-          .init(offset: offset, message: "The decoded structural stream exceeds its limit.")
-        )
-      }
-      return result.output
-    } catch let error as PDFParsingError {
-      throw error
+      for try await chunk in decoded { result.append(chunk) }
+      await decoded.close()
+      return result
     } catch {
-      throw malformed(offset, "The Flate structural stream is malformed: \(error)")
+      await decoded.close()
+      throw error
     }
-  }
-
-  private static func malformed(_ offset: Int64, _ message: String) -> PDFParsingError {
-    .malformed(.init(offset: offset, message: message))
   }
 }

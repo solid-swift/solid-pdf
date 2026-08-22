@@ -204,7 +204,7 @@ struct PDFCrossReferenceParser<Session: PDFInputSourceSession> {
       size <= Int64(options.limits.maximumObjectCount)
     else { throw malformed(offset, "The object at startxref is not a valid cross-reference stream.") }
     let encoded = try await reader.read(range)
-    let decoded = try PDFStructuralStreamDecoder.decode(
+    let decoded = try await PDFStructuralStreamDecoder.decode(
       encoded,
       dictionary: dictionary,
       limits: options.limits,

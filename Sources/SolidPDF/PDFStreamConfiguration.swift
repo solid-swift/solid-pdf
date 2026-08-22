@@ -1,5 +1,6 @@
 import Foundation
 import SolidIO
+import SolidImageIO
 
 struct PDFStreamFilterSpecification: Sendable {
   let name: PDFName
@@ -166,16 +167,33 @@ struct PDFStreamFilterFactory {
   static func make(
     _ specification: PDFStreamFilterSpecification,
     diagnostic: PDFParsingDiagnostic
-  ) throws -> any IncrementalFilter {
+  ) throws -> [any IncrementalFilter] {
     switch specification.name {
-    case PDFName("FlateDecode"):
-      guard specification.parameters == nil else {
-        throw PDFParsingError.unsupported(
-          .streamFilter(specification.name),
-          diagnostic.replacingMessage("Flate predictor parameters are not available yet.")
-        )
+    case PDFName("ASCIIHexDecode"):
+      return [ASCIIHexDecoder()]
+    case PDFName("ASCII85Decode"):
+      return [ASCII85Decoder()]
+    case PDFName("LZWDecode"):
+      let earlyChange = try integer(
+        "EarlyChange",
+        in: specification.parameters,
+        default: 1,
+        diagnostic: diagnostic
+      )
+      guard earlyChange == 0 || earlyChange == 1 else {
+        throw malformedParameter("EarlyChange", diagnostic: diagnostic)
       }
-      return FlateDecoder()
+      return [
+        LZWDecoder(options: try LZWOptions(earlyChange: earlyChange)),
+        try predictor(specification.parameters, diagnostic: diagnostic),
+      ].compactMap { $0 }
+    case PDFName("FlateDecode"):
+      return [
+        FlateDecoder(),
+        try predictor(specification.parameters, diagnostic: diagnostic),
+      ].compactMap { $0 }
+    case PDFName("RunLengthDecode"):
+      return [RunLengthDecoder()]
     case PDFName("Crypt"):
       throw PDFParsingError.unsupported(.encryptionFilter, diagnostic)
     case PDFName("JPXDecode"):
@@ -185,6 +203,59 @@ struct PDFStreamFilterFactory {
     default:
       throw PDFParsingError.unsupported(.streamFilter(specification.name), diagnostic)
     }
+  }
+
+  private static func predictor(
+    _ parameters: [PDFName: PDFObject]?,
+    diagnostic: PDFParsingDiagnostic
+  ) throws -> (any IncrementalFilter)? {
+    let predictor = try integer("Predictor", in: parameters, default: 1, diagnostic: diagnostic)
+    guard predictor == 1 || predictor == 2 || (10...15).contains(predictor) else {
+      throw malformedParameter("Predictor", diagnostic: diagnostic)
+    }
+    guard predictor != 1 else { return nil }
+    let colors = try integer("Colors", in: parameters, default: 1, diagnostic: diagnostic)
+    let bits = try integer(
+      "BitsPerComponent",
+      in: parameters,
+      default: 8,
+      diagnostic: diagnostic
+    )
+    let columns = try integer("Columns", in: parameters, default: 1, diagnostic: diagnostic)
+    do {
+      return PredictorDecoder(
+        options: try PredictorOptions(
+          predictor: predictor,
+          colors: colors,
+          bitsPerComponent: bits,
+          columns: columns
+        )
+      )
+    } catch {
+      throw malformedParameter("Predictor", diagnostic: diagnostic)
+    }
+  }
+
+  private static func integer(
+    _ name: PDFName,
+    in parameters: [PDFName: PDFObject]?,
+    default defaultValue: Int,
+    diagnostic: PDFParsingDiagnostic
+  ) throws -> Int {
+    guard let value = parameters?[name] else { return defaultValue }
+    guard case .number(.integer(let integer)) = value,
+      integer >= Int64(Int.min), integer <= Int64(Int.max)
+    else {
+      throw malformedParameter(String(decoding: name.bytes, as: UTF8.self), diagnostic: diagnostic)
+    }
+    return Int(integer)
+  }
+
+  private static func malformedParameter(
+    _ name: String,
+    diagnostic: PDFParsingDiagnostic
+  ) -> PDFParsingError {
+    .malformed(diagnostic.replacingMessage("The \(name) decode parameter is invalid."))
   }
 }
 

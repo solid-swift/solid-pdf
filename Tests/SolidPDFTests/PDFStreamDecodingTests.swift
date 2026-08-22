@@ -1,5 +1,7 @@
 import Foundation
 @testable import SolidPDF
+import SolidIO
+import SolidImageIO
 import Testing
 
 @Suite
@@ -99,6 +101,91 @@ struct PDFStreamDecodingTests {
     await document.close()
   }
 
+  @Test
+  func decodesEveryPortableDataFilterAndMixedChains() async throws {
+    let expected = Data((0..<8_192).map { UInt8(truncatingIfNeeded: $0 * 17) })
+    let cases: [([PDFName], Data)] = try [
+      (["ASCIIHexDecode"], encoded(expected, with: [ASCIIHexEncoder()])),
+      (["ASCII85Decode"], encoded(expected, with: [ASCII85Encoder()])),
+      (["LZWDecode"], encoded(expected, with: [LZWEncoder()])),
+      (["FlateDecode"], encoded(expected, with: [FlateEncoder()])),
+      (["RunLengthDecode"], encoded(expected, with: [RunLengthEncoder()])),
+      (
+        ["ASCII85Decode", "FlateDecode"],
+        encoded(expected, with: [FlateEncoder(), ASCII85Encoder()])
+      ),
+    ]
+    for (filters, data) in cases {
+      let dictionary: [PDFName: PDFObject] = [
+        "Filter": filters.count == 1
+          ? .name(filters[0])
+          : .array(filters.map { .name($0) })
+      ]
+      let documentBytes = try makeDocument(
+        data: data,
+        compressed: false,
+        dictionary: dictionary
+      ).data
+      let document = try await PDFDocument(source: PDFDataInputSource(documentBytes))
+      #expect(try await document.decodedBytes(of: contentStream(in: document)) == expected)
+      await document.close()
+    }
+  }
+
+  @Test(arguments: [1, 2, 4, 8, 16])
+  func decodesFlatePredictorsAtEveryPDFBitDepth(_ bits: Int) async throws {
+    let columns = 17
+    let colors = 3
+    let rowBytes = (columns * colors * bits + 7) / 8
+    let expected = Data((0..<(rowBytes * 5)).map { UInt8(truncatingIfNeeded: $0 * 29) })
+    let predictorOptions = try PredictorOptions(
+      predictor: bits == 16 ? 12 : 15,
+      colors: colors,
+      bitsPerComponent: bits,
+      columns: columns
+    )
+    let data = try encoded(
+      expected,
+      with: [PredictorEncoder(options: predictorOptions), FlateEncoder()]
+    )
+    let dictionary: [PDFName: PDFObject] = [
+      "Filter": .name("FlateDecode"),
+      "DecodeParms": .dictionary([
+        "Predictor": .integer(bits == 16 ? 12 : 15),
+        "Colors": .integer(colors),
+        "BitsPerComponent": .integer(bits),
+        "Columns": .integer(columns),
+      ]),
+    ]
+    let documentBytes = try makeDocument(
+      data: data,
+      compressed: false,
+      dictionary: dictionary
+    ).data
+    let document = try await PDFDocument(source: PDFDataInputSource(documentBytes))
+    #expect(try await document.decodedBytes(of: contentStream(in: document)) == expected)
+    await document.close()
+  }
+
+  @Test(arguments: [0, 1])
+  func decodesBothLZWEarlyChangeValues(_ earlyChange: Int) async throws {
+    let expected = Data(repeating: 0x6C, count: 16_384)
+    let options = try LZWOptions(earlyChange: earlyChange)
+    let data = try encoded(expected, with: [LZWEncoder(options: options)])
+    let dictionary: [PDFName: PDFObject] = [
+      "Filter": .name("LZWDecode"),
+      "DecodeParms": .dictionary(["EarlyChange": .integer(earlyChange)]),
+    ]
+    let documentBytes = try makeDocument(
+      data: data,
+      compressed: false,
+      dictionary: dictionary
+    ).data
+    let document = try await PDFDocument(source: PDFDataInputSource(documentBytes))
+    #expect(try await document.decodedBytes(of: contentStream(in: document)) == expected)
+    await document.close()
+  }
+
   private func makeDocument(
     data: Data,
     compressed: Bool,
@@ -131,6 +218,18 @@ struct PDFStreamDecodingTests {
       throw PDFParsingError.malformed(.init(offset: 0, message: "The fixture stream is absent."))
     }
     return stream
+  }
+
+  private func encoded(_ data: Data, with filters: [any IncrementalFilter]) throws -> Data {
+    var current = data
+    for filter in filters {
+      let result = try filter.process(input: current)
+      #expect(result.consumedInput == current.count)
+      var output = result.output
+      output.append(try filter.finish() ?? Data())
+      current = output
+    }
+    return current
   }
 }
 

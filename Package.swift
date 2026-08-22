@@ -54,6 +54,7 @@ let package = Package(
     .target(
       name: "SolidPDF",
       dependencies: [
+        .product(name: "SolidImageIO", package: "solid-image"),
         .product(name: "SolidIO", package: "solid-foundation"),
       ],
       plugins: lintPlugins
@@ -62,6 +63,7 @@ let package = Package(
       name: "SolidPDFTests",
       dependencies: [
         "SolidPDF",
+        .product(name: "SolidImageIO", package: "solid-image"),
         .product(name: "SolidIO", package: "solid-foundation"),
       ],
       plugins: lintPlugins
