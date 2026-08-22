@@ -52,6 +52,19 @@ this additive metadata to retain page, content-stream, and nested-resource prove
 graphics state also preserves rendering intent and device-rendering state preserves halftone phase;
 legacy producers receive the documented defaults.
 
+Version 3 adds ordered marked-content boundaries and points, binary-safe property values,
+content-stream-scoped identifiers, replacement text, artifact metadata, and evaluated content
+visibility. Semantic and recording targets retain hidden paint for analysis. Visual targets execute
+its state and path transitions but omit hidden painting operations and image transfers. Nested
+visibility is conjunctive: content is visible only when every enclosing optional-content scope is
+visible.
+
+The native PDF extraction layer may expose either physical content-stream order or structure-tree
+order. Each extracted span retains its glyph runs, marked-content and structure paths, optional
+visibility, and device/page bounds. `/ActualText` replaces the complete associated marked-content
+or structure-element contents once; it does not alter glyph selection, placement, or stored
+physical runs.
+
 Type 6 and Type 7 shadings retain their exact reconstructed source patches, including the original
 continuation flags, ordered control points, and corner components before function or color-space
 realization. The accompanying triangle mesh is a deterministic portable fallback and does not

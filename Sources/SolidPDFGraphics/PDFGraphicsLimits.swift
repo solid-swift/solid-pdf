@@ -26,6 +26,10 @@ public struct PDFGraphicsLimits: Sendable, Hashable {
   public let maximumMarkedContentDepth: Int
   /// Maximum semantic entries retained from one property list.
   public let maximumMarkedContentProperties: Int
+  /// Maximum extracted text spans retained for one page.
+  public let maximumExtractedTextSpans: Int
+  /// Maximum logical text bytes retained for one page.
+  public let maximumExtractedTextBytes: Int
 
   /// Creates interpretation limits.
   public init(
@@ -41,7 +45,9 @@ public struct PDFGraphicsLimits: Sendable, Hashable {
     maximumType3Depth: Int = 32,
     maximumDecodedFontBytes: Int = 256 * 1_024 * 1_024,
     maximumMarkedContentDepth: Int = 256,
-    maximumMarkedContentProperties: Int = 4_096
+    maximumMarkedContentProperties: Int = 4_096,
+    maximumExtractedTextSpans: Int = 10_000_000,
+    maximumExtractedTextBytes: Int = 512 * 1_024 * 1_024
   ) {
     self.maximumOperatorsPerPage = maximumOperatorsPerPage
     self.maximumGraphicsStateDepth = maximumGraphicsStateDepth
@@ -56,5 +62,7 @@ public struct PDFGraphicsLimits: Sendable, Hashable {
     self.maximumDecodedFontBytes = maximumDecodedFontBytes
     self.maximumMarkedContentDepth = maximumMarkedContentDepth
     self.maximumMarkedContentProperties = maximumMarkedContentProperties
+    self.maximumExtractedTextSpans = maximumExtractedTextSpans
+    self.maximumExtractedTextBytes = maximumExtractedTextBytes
   }
 }

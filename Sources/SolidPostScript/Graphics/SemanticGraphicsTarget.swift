@@ -10,6 +10,8 @@ public struct SemanticGraphicsTarget<Sink: GraphicsSemanticSink>: GraphicsTarget
 
     /// Semantic targets do not retain materialized pages.
     public var pages: [Never] { [] }
+    /// Semantic sinks receive hidden events with explicit visibility metadata.
+    public var preservesHiddenSemanticContent: Bool { true }
 
     private let session: Sink.Session
     private var imageActive = false

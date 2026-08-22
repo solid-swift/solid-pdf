@@ -67,6 +67,41 @@ struct PDFGraphicsRenderingTests {
   }
 
   @Test
+  func extractsPhysicalAndStructureOrderedTextWithStructureActualText() async throws {
+    let resources = """
+      << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic
+        /FirstChar 65 /LastChar 66 /Widths [600 600] /Encoding /WinAnsiEncoding >> >> >>
+      """
+    let content = """
+      /P << /MCID 1 >> BDC BT /F1 12 Tf (B) Tj ET EMC
+      /P << /MCID 0 >> BDC BT /F1 12 Tf (A) Tj ET EMC
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: content,
+      resources: resources,
+      catalogExtras: "/StructTreeRoot 5 0 R",
+      pageExtras: "/StructParents 0",
+      extraObjects: [
+        Data("<< /Type /StructTreeRoot /K [6 0 R] >>".utf8),
+        Data("<< /Type /StructElem /S /Document /P 5 0 R /K [7 0 R 8 0 R] >>".utf8),
+        Data("<< /Type /StructElem /S /P /P 6 0 R /Pg 3 0 R /ActualText (First logical) /K 0 >>".utf8),
+        Data("<< /Type /StructElem /S /P /P 6 0 R /Pg 3 0 R /K 1 >>".utf8),
+      ]
+    )))
+    let fontEnvironment = PDFGraphicsFontEnvironment(providers: [SyntheticPDFFontProvider()])
+    let structured = try await document.extractedText(options: .init(fontEnvironment: fontEnvironment))
+    #expect(try await structured.next()?.spans.map(\.text) == ["First logical", "B"])
+    await structured.close()
+    let physical = try await document.extractedText(options: .init(
+      order: .physical,
+      fontEnvironment: fontEnvironment
+    ))
+    #expect(try await physical.next()?.spans.map(\.text) == ["B", "A"])
+    await physical.close()
+    await document.close()
+  }
+
+  @Test
   func evaluatesOptionalContentAndPreservesHiddenScope() async throws {
     let document = try await PDFDocument(source: PDFDataInputSource(fixture(
       content: "/OC /Layer BDC 0 0 20 20 re f EMC",
@@ -80,6 +115,15 @@ struct PDFGraphicsRenderingTests {
       return
     }
     #expect(!scope.visibility.isVisible)
+    let hiddenRaster = try await document.render(
+      page: 0, to: RasterImageTarget(pixelWidth: 100, pixelHeight: 100)
+    )
+    let blankDocument = try await PDFDocument(source: PDFDataInputSource(fixture(content: "")))
+    let blankRaster = try await blankDocument.render(
+      page: 0, to: RasterImageTarget(pixelWidth: 100, pixelHeight: 100)
+    )
+    #expect(hiddenRaster.output[0].data == blankRaster.output[0].data)
+    await blankDocument.close()
     await document.close()
   }
 
@@ -764,12 +808,13 @@ struct PDFGraphicsRenderingTests {
     content: String,
     resources: String = "<< >>",
     catalogExtras: String = "",
+    pageExtras: String = "",
     extraObjects: [Data] = []
   ) -> Data {
     var objects = [
       Data("<< /Type /Catalog /Pages 2 0 R \(catalogExtras) >>".utf8),
       Data("<< /Type /Pages /Kids [3 0 R] /Count 1 >>".utf8),
-      Data("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources \(resources) /Contents 4 0 R >>".utf8),
+      Data("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources \(resources) /Contents 4 0 R \(pageExtras) >>".utf8),
       Data("<< /Length \(content.utf8.count) >>\nstream\n\(content)\nendstream".utf8),
     ]
     objects.append(contentsOf: extraObjects)

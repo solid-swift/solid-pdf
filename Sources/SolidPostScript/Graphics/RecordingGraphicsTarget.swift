@@ -12,6 +12,8 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
 
     /// Pages transmitted so far.
     public private(set) var pages: [RecordedGraphicsPage] = []
+    /// Recordings retain hidden effects for later semantic analysis.
+    public var preservesHiddenSemanticContent: Bool { true }
 
     private var descriptor: GraphicsDeviceDescriptor
     private var effects: [GraphicsEffect] = []
