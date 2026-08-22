@@ -7,6 +7,9 @@ extension PDFGraphicsInstructionHandler {
     let descriptor: GraphicsImageMaskDescriptor
     let stream: PDFStreamObject?
     let decode: [Double]
+    let bitsPerComponent: Int
+    let invertsSamples: Bool
+    let matte: [Double]?
   }
 
   func inlineImageByteCount(
@@ -199,7 +202,6 @@ extension PDFGraphicsInstructionHandler {
       location: instruction.location
     )
     let mask = resolvedMask?.descriptor
-    if dictionary["SMask"] != nil { throw PDFGraphicsError.unsupported(.transparency("SMask"), location: instruction.location) }
 
     let kind: GraphicsImageKind
     if imageMask {
@@ -211,7 +213,9 @@ extension PDFGraphicsInstructionHandler {
       width: width,
       height: height,
       kind: kind,
-      sourceType: mask == nil ? .sampled : (isColorKey(mask!) ? .colorKeyMask : .explicitMask),
+      sourceType: mask == nil
+        ? .sampled
+        : (dictionary["SMask"] != nil ? .softMask : (isColorKey(mask!) ? .colorKeyMask : .explicitMask)),
       sourceColorSpace: colorSpace?.description,
       sourceBitsPerComponent: bits,
       sourceComponentCount: sourceCount,
@@ -230,6 +234,19 @@ extension PDFGraphicsInstructionHandler {
     )
     try output.beginImage(decorated(event))
     do {
+      let materializedMask: [Float]?
+      if let maskStream = resolvedMask?.stream, resolvedMask?.matte != nil {
+        materializedMask = try await materializeMaskRows(
+          maskStream,
+          descriptor: resolvedMask!.descriptor,
+          decode: resolvedMask!.decode,
+          bits: resolvedMask!.bitsPerComponent,
+          invertsSamples: resolvedMask!.invertsSamples,
+          instruction: instruction
+        )
+      } else {
+        materializedMask = nil
+      }
       try await streamImageRows(
         stream,
         width: width,
@@ -239,13 +256,19 @@ extension PDFGraphicsInstructionHandler {
         decode: decode,
         colorSpace: colorSpace,
         imageMask: imageMask,
+        matte: resolvedMask?.matte,
+        maskOpacities: materializedMask,
         location: instruction.location
       )
-      if let maskStream = resolvedMask?.stream {
+      if let materializedMask {
+        try writeMaskRows(materializedMask, descriptor: resolvedMask!.descriptor)
+      } else if let maskStream = resolvedMask?.stream {
         try await streamMaskRows(
           maskStream,
           descriptor: resolvedMask!.descriptor,
           decode: resolvedMask!.decode,
+          bits: resolvedMask!.bitsPerComponent,
+          invertsSamples: resolvedMask!.invertsSamples,
           instruction: instruction
         )
       }
@@ -265,6 +288,8 @@ extension PDFGraphicsInstructionHandler {
     decode: [Double],
     colorSpace: PDFGraphicsResourceResolver<Source>.ResolvedColorSpace?,
     imageMask: Bool,
+    matte: [Double]? = nil,
+    maskOpacities: [Float]? = nil,
     location: PDFContentLocation
   ) async throws {
     let rowBits = try checkedProduct(width, sourceCount, bits)
@@ -291,7 +316,27 @@ extension PDFGraphicsInstructionHandler {
         for (index, sample) in samples.enumerated() {
           let component = index % sourceCount
           let normalized = Double(sample) / maximum
-          sourceComponents.append(Float(decode[component * 2] + normalized * (decode[component * 2 + 1] - decode[component * 2])))
+          sourceComponents.append(
+            Float(decode[component * 2] + normalized * (decode[component * 2 + 1] - decode[component * 2]))
+          )
+        }
+        if let matte, let maskOpacities {
+          guard matte.count == sourceCount,
+            maskOpacities.count == width * height
+          else { throw PDFObjectAccess.TypeMismatch.array }
+          for pixel in 0..<width {
+            let alpha = Double(maskOpacities[row * width + pixel])
+            for component in 0..<sourceCount {
+              let index = pixel * sourceCount + component
+              let lower = min(decode[component * 2], decode[component * 2 + 1])
+              let upper = max(decode[component * 2], decode[component * 2 + 1])
+              let unblended =
+                alpha == 0
+                ? matte[component]
+                : (Double(sourceComponents[index]) - (1 - alpha) * matte[component]) / alpha
+              sourceComponents[index] = Float(min(upper, max(lower, unblended)))
+            }
+          }
         }
         let components: [Float]
         if imageMask {
@@ -346,6 +391,52 @@ extension PDFGraphicsInstructionHandler {
     sourceBitsPerComponent: Int,
     location: PDFContentLocation
   ) async throws -> ResolvedImageMask? {
+    if let softMask = dictionary["SMask"] {
+      guard dictionary["Mask"] == nil, case .reference(let reference) = softMask else {
+        throw PDFObjectAccess.TypeMismatch.dictionary
+      }
+      let resolved = try await resources.document.resolve(reference, in: resources.revision)
+      guard case .stream(let stream) = resolved.value else { throw PDFObjectAccess.TypeMismatch.dictionary }
+      let maskDictionary = stream.dictionary
+      guard try PDFObjectAccess.name(maskDictionary["Subtype"] ?? .null).pdfGraphicsString == "Image",
+        try boolean(maskDictionary["ImageMask"], default: false) == false,
+        maskDictionary["Mask"] == nil,
+        maskDictionary["SMask"] == nil
+      else { throw PDFObjectAccess.TypeMismatch.dictionary }
+      guard let colorObject = maskDictionary["ColorSpace"] else {
+        throw PDFObjectAccess.TypeMismatch.dictionary
+      }
+      let colorSpace = try await resources.colorSpace(colorObject)
+      guard colorSpace.description.componentCount == 1 else { throw PDFObjectAccess.TypeMismatch.dictionary }
+      let width = try PDFObjectAccess.integer(maskDictionary["Width"] ?? .null)
+      let height = try PDFObjectAccess.integer(maskDictionary["Height"] ?? .null)
+      let bits = try PDFObjectAccess.integer(maskDictionary["BitsPerComponent"] ?? .null)
+      guard width > 0, height > 0, [1, 2, 4, 8, 16].contains(bits),
+        width <= limits.maximumImagePixels / height,
+        width * height <= limits.maximumImagePixels
+      else { throw PDFGraphicsError.limitExceeded("PDF soft-mask pixel limit exceeded.", location: location) }
+      let decode = try maskDictionary["Decode"].map(PDFObjectAccess.numbers) ?? [0, 1]
+      guard decode.count == 2 else { throw PDFObjectAccess.TypeMismatch.array }
+      let matte = try maskDictionary["Matte"].map(PDFObjectAccess.numbers)
+      if let matte {
+        guard matte.count == sourceComponentCount, matte.allSatisfy(\.isFinite) else {
+          throw PDFObjectAccess.TypeMismatch.array
+        }
+      }
+      return ResolvedImageMask(
+        descriptor: .explicit(
+          width: width,
+          height: height,
+          maskToDevice: imageTransform(width: width, height: height),
+          interpolate: try boolean(maskDictionary["Interpolate"], default: false)
+        ),
+        stream: stream,
+        decode: decode,
+        bitsPerComponent: bits,
+        invertsSamples: false,
+        matte: matte
+      )
+    }
     guard let object = dictionary["Mask"] else { return nil }
     switch object {
     case .array(let values):
@@ -388,7 +479,10 @@ extension PDFGraphicsInstructionHandler {
           interpolate: try boolean(maskDictionary["Interpolate"], default: false)
         ),
         stream: stream,
-        decode: decode
+        decode: decode,
+        bitsPerComponent: 1,
+        invertsSamples: true,
+        matte: nil
       )
     default:
       throw PDFObjectAccess.TypeMismatch.array
@@ -403,22 +497,107 @@ extension PDFGraphicsInstructionHandler {
     let numbers = try values.map(PDFObjectAccess.integer)
     guard numbers.count == sourceComponentCount * 2 else { throw PDFObjectAccess.TypeMismatch.array }
     let maximum = sourceBitsPerComponent == 16 ? Int(UInt16.max) : (1 << sourceBitsPerComponent) - 1
-    return ResolvedImageMask(descriptor: .colorKey(ranges: try stride(from: 0, to: numbers.count, by: 2).map {
-      guard let lower = UInt16(exactly: numbers[$0]), let upper = UInt16(exactly: numbers[$0 + 1]),
-        lower <= upper, upper <= maximum
-      else { throw PDFObjectAccess.TypeMismatch.integer }
-      return GraphicsImageSampleRange(lowerBound: lower, upperBound: upper)
-    }), stream: nil, decode: [])
+    return ResolvedImageMask(
+      descriptor: .colorKey(
+        ranges: try stride(from: 0, to: numbers.count, by: 2)
+          .map {
+            guard let lower = UInt16(exactly: numbers[$0]), let upper = UInt16(exactly: numbers[$0 + 1]),
+              lower <= upper, upper <= maximum
+            else { throw PDFObjectAccess.TypeMismatch.integer }
+            return GraphicsImageSampleRange(lowerBound: lower, upperBound: upper)
+          }
+      ),
+      stream: nil,
+      decode: [],
+      bitsPerComponent: 0,
+      invertsSamples: false,
+      matte: nil
+    )
+  }
+
+  private func materializeMaskRows(
+    _ stream: PDFStreamObject,
+    descriptor: GraphicsImageMaskDescriptor,
+    decode: [Double],
+    bits: Int,
+    invertsSamples: Bool,
+    instruction: PDFContentInstruction
+  ) async throws -> [Float] {
+    guard case .explicit(let width, let height, _, _) = descriptor,
+      width <= Int.max / height,
+      width * height <= limits.maximumScratchBytes / MemoryLayout<Float>.stride
+    else {
+      throw PDFGraphicsError.limitExceeded(
+        "PDF soft-mask unblending exceeds interpretation scratch.",
+        location: instruction.location
+      )
+    }
+    let rowBytes = (try checkedProduct(width, bits) + 7) / 8
+    let decoded = try await resources.document.decodedStream(of: stream)
+    defer { Task { await decoded.close() } }
+    var pending = Data()
+    var opacities: [Float] = []
+    opacities.reserveCapacity(width * height)
+    for try await chunk in decoded {
+      pending.append(chunk)
+      guard pending.count <= limits.maximumScratchBytes else {
+        throw PDFGraphicsError.limitExceeded("PDF soft-mask scratch limit exceeded.", location: instruction.location)
+      }
+      while pending.count >= rowBytes, opacities.count < width * height {
+        let source = Data(pending.prefix(rowBytes))
+        pending.removeFirst(rowBytes)
+        let maximum = bits == 16 ? Double(UInt16.max) : Double((1 << bits) - 1)
+        opacities.append(
+          contentsOf: unpack(source, count: width, bits: bits)
+            .map { sample -> Float in
+              let normalized = Double(sample) / maximum
+              let decoded = decode[0] + normalized * (decode[1] - decode[0])
+              let opacity = min(1, max(0, decoded))
+              return Float(invertsSamples ? 1 - opacity : opacity)
+            }
+        )
+      }
+      if opacities.count == width * height, !pending.isEmpty {
+        throw malformed("Soft image mask has excess data.", instruction)
+      }
+    }
+    guard opacities.count == width * height, pending.isEmpty else {
+      throw malformed("Soft image mask is truncated.", instruction)
+    }
+    return opacities
+  }
+
+  private func writeMaskRows(
+    _ opacities: [Float],
+    descriptor: GraphicsImageMaskDescriptor
+  ) throws {
+    guard case .explicit(let width, _, _, _) = descriptor,
+      width > 0,
+      opacities.count.isMultiple(of: width)
+    else {
+      throw PDFObjectAccess.TypeMismatch.array
+    }
+    for row in 0..<(opacities.count / width) {
+      try output.writeImageMaskRows(
+        .init(
+          startRow: row,
+          rowCount: 1,
+          opacities: Array(opacities[(row * width)..<((row + 1) * width)])
+        )
+      )
+    }
   }
 
   private func streamMaskRows(
     _ stream: PDFStreamObject,
     descriptor: GraphicsImageMaskDescriptor,
     decode: [Double],
+    bits: Int,
+    invertsSamples: Bool,
     instruction: PDFContentInstruction
   ) async throws {
     guard case .explicit(let width, let height, _, _) = descriptor else { return }
-    let rowBytes = (width + 7) / 8
+    let rowBytes = (try checkedProduct(width, bits) + 7) / 8
     let decoded = try await resources.document.decodedStream(of: stream)
     defer { Task { await decoded.close() } }
     var pending = Data()
@@ -426,15 +605,22 @@ extension PDFGraphicsInstructionHandler {
     for try await chunk in decoded {
       pending.append(chunk)
       guard pending.count <= limits.maximumScratchBytes else {
-        throw PDFGraphicsError.limitExceeded("PDF explicit-mask scratch limit exceeded.", location: instruction.location)
+        throw PDFGraphicsError.limitExceeded(
+          "PDF explicit-mask scratch limit exceeded.",
+          location: instruction.location
+        )
       }
       while pending.count >= rowBytes, row < height {
         let source = Data(pending.prefix(rowBytes))
         pending.removeFirst(rowBytes)
-        let opacities = unpack(source, count: width, bits: 1).map { sample -> Float in
-          let decoded = decode[0] + Double(sample) * (decode[1] - decode[0])
-          return Float(1 - min(1, max(0, decoded)))
-        }
+        let maximum = bits == 16 ? Double(UInt16.max) : Double((1 << bits) - 1)
+        let opacities = unpack(source, count: width, bits: bits)
+          .map { sample -> Float in
+            let normalized = Double(sample) / maximum
+            let decoded = decode[0] + normalized * (decode[1] - decode[0])
+            let opacity = min(1, max(0, decoded))
+            return Float(invertsSamples ? 1 - opacity : opacity)
+          }
         try output.writeImageMaskRows(.init(startRow: row, rowCount: 1, opacities: opacities))
         row += 1
       }

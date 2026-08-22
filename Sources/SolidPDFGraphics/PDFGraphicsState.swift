@@ -55,6 +55,12 @@ struct PDFGraphicsState {
   var strokeAdjustment = false
   var smoothness = 0.02
   var renderingIntent = ColorRenderingIntent.relativeColorimetric
+  var blendMode = GraphicsBlendMode.normal
+  var strokingAlpha = 1.0
+  var nonstrokingAlpha = 1.0
+  var alphaIsShape = false
+  var softMask: GraphicsSoftMask?
+  var textKnockout = true
   var deviceRendering = GraphicsDeviceRenderingSnapshot.continuousTone
   var text = TextState()
   let device: GraphicsDeviceSnapshot
@@ -91,7 +97,14 @@ struct PDFGraphicsState {
       device: device,
       deviceRendering: deviceRendering,
       font: text.font?.description ?? .invalid,
-      renderingIntent: renderingIntent
+      renderingIntent: renderingIntent,
+      transparency: GraphicsTransparencyState(
+        blendMode: blendMode,
+        constantAlpha: useStroking ? strokingAlpha : nonstrokingAlpha,
+        alphaIsShape: alphaIsShape,
+        softMask: softMask,
+        textKnockout: textKnockout
+      )
     )
   }
 }

@@ -7,7 +7,7 @@ import Testing
 @Suite
 struct PDFGraphicsStateTests {
   @Test
-  func emitsOpaqueFillAndStrokeWithSeparatePaintAndTransformedPath() async throws {
+  func emitsAtomicFillAndStrokeWithSeparatePaintAndTransformedPath() async throws {
     let content = "q 2 0 0 2 0 0 cm 1 0 0 RG 0 1 0 rg 2 w 0 0 m 10 0 l 10 10 l h B Q"
     let document = try await PDFDocument(source: PDFDataInputSource(fixture(content: content)))
     let page = try await document.page(at: 0)
@@ -29,13 +29,12 @@ struct PDFGraphicsStateTests {
       guard case .paint(let paint) = event.operation else { return nil }
       return paint
     }
-    #expect(paints.count == 2)
-    let fill = events.first { if case .paint(.fill) = $0.operation { true } else { false } }
-    let stroke = events.first { if case .paint(.stroke) = $0.operation { true } else { false } }
-    #expect(fill?.before.paint == .deviceRGB(red: 0, green: 1, blue: 0))
-    #expect(stroke?.before.paint == .deviceRGB(red: 1, green: 0, blue: 0))
-    #expect(fill?.before.path.elements.contains(.line(to: GraphicsPoint(x: 20, y: 20))) == true)
-    #expect(fill?.origin?.byteSegments.isEmpty == false)
+    #expect(paints.count == 1)
+    let atomic = events.first { if case .paint(.fillAndStroke) = $0.operation { true } else { false } }
+    #expect(atomic?.before.paint == .deviceRGB(red: 0, green: 1, blue: 0))
+    #expect(atomic?.after.paint == .deviceRGB(red: 1, green: 0, blue: 0))
+    #expect(atomic?.before.path.elements.contains(.line(to: GraphicsPoint(x: 20, y: 20))) == true)
+    #expect(atomic?.origin?.byteSegments.isEmpty == false)
     await document.close()
   }
 
@@ -79,13 +78,14 @@ struct PDFGraphicsStateTests {
   }
 
   @Test
-  func rejectsNonidentityTransparencyBeforePainting() async throws {
+  func capturesBlendAlphaShapeAndTextKnockout() async throws {
     let content = "/Transparent gs 0 0 10 10 re f"
-    let resources = "<< /ExtGState << /Transparent << /ca 0.5 >> >> >>"
+    let resources = "<< /ExtGState << /Transparent << /BM /Multiply /ca 0.5 /AIS true /TK false >> >> >>"
     let document = try await PDFDocument(
       source: PDFDataInputSource(fixture(content: content, resources: resources))
     )
     let page = try await document.page(at: 0)
+    var events: [GraphicsEvent] = []
     let handler = PDFGraphicsInstructionHandler(
       device: .letter,
       resources: PDFGraphicsResourceResolver(
@@ -95,11 +95,98 @@ struct PDFGraphicsStateTests {
         limits: .init()
       ),
       limits: .init(),
-      emit: { _ in }
+      emit: { events.append($0) }
     )
-    await #expect(throws: PDFGraphicsError.self) {
-      try await executor(document: document, page: page, handler: handler).execute()
+    try await executor(document: document, page: page, handler: handler).execute()
+    let fill = events.first { if case .paint(.fill) = $0.operation { true } else { false } }
+    #expect(fill?.before.transparency.blendMode == .multiply)
+    #expect(fill?.before.transparency.constantAlpha == 0.5)
+    #expect(fill?.before.transparency.alphaIsShape == true)
+    #expect(fill?.before.transparency.textKnockout == false)
+    await document.close()
+  }
+
+  @Test
+  func capturesSoftMaskGroupAndBackdrop() async throws {
+    let group = transparencyGroupObject(content: "0 g 0 0 10 10 re f", isolated: true)
+    let resources = """
+      << /ExtGState
+         << /Masked
+           << /SMask << /S /Luminosity /G 5 0 R /BC [0.25] /TR /Identity >> >>
+         >>
+      >>
+      """
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        fixture(
+          content: "/Masked gs 0 0 10 10 re f",
+          resources: resources,
+          extraObjects: [group]
+        )
+      )
+    )
+    let page = try await document.page(at: 0)
+    var events: [GraphicsEvent] = []
+    let handler = PDFGraphicsInstructionHandler(
+      device: .letter,
+      resources: PDFGraphicsResourceResolver(
+        document: document,
+        revision: document.latestRevision.identifier,
+        resources: page.resources.value,
+        limits: .init()
+      ),
+      limits: .init(),
+      emit: { events.append($0) }
+    )
+    try await executor(document: document, page: page, handler: handler).execute()
+
+    let fill = events.first { if case .paint(.fill) = $0.operation { true } else { false } }
+    let mask = fill?.before.transparency.softMask
+    #expect(mask?.subtype == .luminosity)
+    #expect(mask?.backdrop == [0.25])
+    #expect(mask?.transferFunction == .identity)
+    #expect(mask?.group.isolated == true)
+    #expect(mask?.group.displayList.effects.count == 1)
+    await document.close()
+  }
+
+  @Test
+  func capturesTransparencyGroupAsOneSemanticEffect() async throws {
+    let group = transparencyGroupObject(content: "1 0 0 rg 0 0 10 10 re f", knockout: true)
+    let resources = "<< /XObject << /Group 5 0 R >> >>"
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        fixture(
+          content: "/Group Do",
+          resources: resources,
+          extraObjects: [group]
+        )
+      )
+    )
+    let page = try await document.page(at: 0)
+    var events: [GraphicsEvent] = []
+    let handler = PDFGraphicsInstructionHandler(
+      device: .letter,
+      resources: PDFGraphicsResourceResolver(
+        document: document,
+        revision: document.latestRevision.identifier,
+        resources: page.resources.value,
+        limits: .init()
+      ),
+      limits: .init(),
+      emit: { events.append($0) }
+    )
+    try await executor(document: document, page: page, handler: handler).execute()
+
+    let effect = events.first { if case .paint(.transparencyGroup) = $0.operation { true } else { false } }
+    guard case .paint(.transparencyGroup(let captured))? = effect?.operation else {
+      Issue.record("Expected one transparency-group event")
+      await document.close()
+      return
     }
+    #expect(captured.knockout == true)
+    #expect(captured.displayList.effects.count == 1)
+    #expect(effect?.origin?.resourceIdentifier != .anonymous)
     await document.close()
   }
 
@@ -238,6 +325,21 @@ struct PDFGraphicsStateTests {
     }
     data.append(Data("trailer\n<< /Size \(objects.count + 1) /Root 1 0 R >>\nstartxref\n\(xref)\n%%EOF\n".utf8))
     return data
+  }
+
+  private func transparencyGroupObject(
+    content: String,
+    isolated: Bool = false,
+    knockout: Bool = false
+  ) -> String {
+    """
+    << /Type /XObject /Subtype /Form /BBox [0 0 10 10]
+       /Group << /S /Transparency /I \(isolated) /K \(knockout) >>
+       /Resources << >> /Length \(content.utf8.count) >>
+    stream
+    \(content)
+    endstream
+    """
   }
 }
 

@@ -4,7 +4,8 @@ import SolidPDF
 import SolidPDFGraphics
 import SolidPostScript
 #if canImport(CoreGraphics)
-import SolidPostScriptCoreGraphics
+  import CoreGraphics
+  import SolidPostScriptCoreGraphics
 #endif
 import SolidPostScriptPDF
 import SolidPostScriptPlutoVG
@@ -149,6 +150,107 @@ struct PDFGraphicsRenderingTests {
   }
 
   @Test
+  func rendersBlendModesAndConstantAlphaThroughNativeRaster() async throws {
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        fixture(
+          content: "0 0 1 rg 0 0 100 100 re f /Blend gs 1 0 0 rg 0 0 100 100 re f",
+          resources: "<< /ExtGState << /Blend << /BM /Multiply /ca 0.5 >> >> >>"
+        )
+      )
+    )
+    let recording = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    let fills = recording.output.pages[0].effects
+      .compactMap { effect -> GraphicsStateSnapshot? in
+        if case .fill(_, _, let state) = effect { return state }
+        return nil
+      }
+    #expect(fills.last?.transparency.blendMode == .multiply)
+    #expect(fills.last?.transparency.constantAlpha == 0.5)
+
+    let raster = try await document.render(
+      page: 0,
+      to: RasterImageTarget(pixelWidth: 100, pixelHeight: 100)
+    )
+    let image = try #require(raster.output.first)
+    let offset = 50 * image.bytesPerRow + 50 * 4
+    #expect(image.data[offset] < 8)
+    #expect(image.data[offset + 1] < 8)
+    #expect(abs(Int(image.data[offset + 2]) - 128) < 8)
+
+    let pluto = try await document.render(
+      page: 0,
+      to: PlutoVGImageTarget(pixelWidth: 100, pixelHeight: 100)
+    )
+    let plutoImage = try #require(pluto.output.first)
+    #expect(abs(Int(plutoImage.data[offset]) - Int(image.data[offset])) < 8)
+    #expect(abs(Int(plutoImage.data[offset + 1]) - Int(image.data[offset + 1])) < 8)
+    #expect(abs(Int(plutoImage.data[offset + 2]) - Int(image.data[offset + 2])) < 8)
+    #if canImport(CoreGraphics)
+      let coreGraphics = try await document.render(
+        page: 0,
+        to: CoreGraphicsImageTarget(pixelWidth: 100, pixelHeight: 100)
+      )
+      let coreGraphicsPixel = try coreGraphicsRGB(atX: 50, y: 50, in: #require(coreGraphics.output.first))
+      #expect(abs(coreGraphicsPixel.red - Double(image.data[offset]) / 255) < 0.04)
+      #expect(abs(coreGraphicsPixel.green - Double(image.data[offset + 1]) / 255) < 0.04)
+      #expect(abs(coreGraphicsPixel.blue - Double(image.data[offset + 2]) / 255) < 0.04)
+    #endif
+    await document.close()
+  }
+
+  @Test
+  func rendersLuminositySoftMasksThroughNativeRaster() async throws {
+    let maskContent = "0.5 g 0 0 100 100 re f"
+    let maskGroup = """
+      << /Type /XObject /Subtype /Form /BBox [0 0 100 100]
+         /Group << /S /Transparency /I true /CS /DeviceGray >>
+         /Resources << >> /Length \(maskContent.utf8.count) >>
+      stream
+      \(maskContent)
+      endstream
+      """
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        fixture(
+          content: "0 0 1 rg 0 0 100 100 re f /Mask gs 1 0 0 rg 0 0 100 100 re f",
+          resources: "<< /ExtGState << /Mask << /SMask << /S /Luminosity /G 5 0 R >> >> >> >>",
+          extraObjects: [Data(maskGroup.utf8)]
+        )
+      )
+    )
+    let raster = try await document.render(
+      page: 0,
+      to: RasterImageTarget(pixelWidth: 100, pixelHeight: 100)
+    )
+    let image = try #require(raster.output.first)
+    let offset = 50 * image.bytesPerRow + 50 * 4
+    #expect(abs(Int(image.data[offset]) - 128) < 8)
+    #expect(image.data[offset + 1] < 8)
+    #expect(abs(Int(image.data[offset + 2]) - 128) < 8)
+
+    let pluto = try await document.render(
+      page: 0,
+      to: PlutoVGImageTarget(pixelWidth: 100, pixelHeight: 100)
+    )
+    let plutoImage = try #require(pluto.output.first)
+    #expect(abs(Int(plutoImage.data[offset]) - Int(image.data[offset])) < 8)
+    #expect(abs(Int(plutoImage.data[offset + 1]) - Int(image.data[offset + 1])) < 8)
+    #expect(abs(Int(plutoImage.data[offset + 2]) - Int(image.data[offset + 2])) < 8)
+    #if canImport(CoreGraphics)
+      let coreGraphics = try await document.render(
+        page: 0,
+        to: CoreGraphicsImageTarget(pixelWidth: 100, pixelHeight: 100)
+      )
+      let coreGraphicsPixel = try coreGraphicsRGB(atX: 50, y: 50, in: #require(coreGraphics.output.first))
+      #expect(abs(coreGraphicsPixel.red - Double(image.data[offset]) / 255) < 0.04)
+      #expect(abs(coreGraphicsPixel.green - Double(image.data[offset + 1]) / 255) < 0.04)
+      #expect(abs(coreGraphicsPixel.blue - Double(image.data[offset + 2]) / 255) < 0.04)
+    #endif
+    await document.close()
+  }
+
+  @Test
   func rejectsTextPaintingAndReturnsNoResult() async throws {
     let document = try await PDFDocument(source: PDFDataInputSource(fixture(content: "BT (text) Tj ET")))
     await #expect(throws: PDFGraphicsError.self) {
@@ -251,19 +353,27 @@ struct PDFGraphicsRenderingTests {
       << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic
         /FirstChar 65 /LastChar 65 /Widths [600] /Encoding /WinAnsiEncoding >> >> >>
       """
-    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
-      content: "BT /F1 12 Tf \(rawMode) Tr (A) Tj ET",
-      resources: resources
-    )))
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        fixture(
+          content: "BT /F1 12 Tf \(rawMode) Tr (A) Tj ET",
+          resources: resources
+        )
+      )
+    )
     let result = try await document.render(
       page: 0,
       to: RecordingGraphicsTarget(),
       fontEnvironment: PDFGraphicsFontEnvironment(providers: [SyntheticPDFFontProvider()])
     )
-    let run = try #require(result.output.pages[0].effects.compactMap { effect -> GraphicsGlyphRun? in
-      if case .text(let run, _) = effect { return run }
-      return nil
-    }.first)
+    let run = try #require(
+      result.output.pages[0].effects
+        .compactMap { effect -> GraphicsGlyphRun? in
+          if case .text(let run, _) = effect { return run }
+          return nil
+        }
+        .first
+    )
     #expect(run.renderingMode.rawValue == rawMode)
     #expect(run.style?.fill.colorSpace == .deviceGray)
     #expect(run.style?.stroke.colorSpace == .deviceGray)
@@ -271,13 +381,51 @@ struct PDFGraphicsRenderingTests {
   }
 
   @Test
+  func preservesIndependentTextFillAndStrokeAlpha() async throws {
+    let resources = """
+      << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic
+        /FirstChar 65 /LastChar 65 /Widths [600] /Encoding /WinAnsiEncoding >> >>
+         /ExtGState << /Alpha << /ca 0.25 /CA 0.75 /BM /Multiply >> >> >>
+      """
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        fixture(
+          content: "/Alpha gs BT /F1 12 Tf 2 Tr (A) Tj ET",
+          resources: resources
+        )
+      )
+    )
+    let result = try await document.render(
+      page: 0,
+      to: RecordingGraphicsTarget(),
+      fontEnvironment: PDFGraphicsFontEnvironment(providers: [SyntheticPDFFontProvider()])
+    )
+    let run = try #require(
+      result.output.pages[0].effects
+        .compactMap { effect -> GraphicsGlyphRun? in
+          if case .text(let run, _) = effect { return run }
+          return nil
+        }
+        .first
+    )
+    #expect(run.style?.fillTransparency.constantAlpha == 0.25)
+    #expect(run.style?.strokeTransparency.constantAlpha == 0.75)
+    #expect(run.style?.fillTransparency.blendMode == .multiply)
+    #expect(run.style?.strokeTransparency.blendMode == .multiply)
+    await document.close()
+  }
+
+  @Test
   func decodesCompositeCodesAndPrefersToUnicodeMetadata() async throws {
     let toUnicode = streamObject(
       dictionary: "",
-      data: Data("""
+      data: Data(
+        """
         1 begincodespacerange <0000> <ffff> endcodespacerange
         1 beginbfchar <002a> <D83DDE00> endbfchar
-        """.utf8)
+        """
+        .utf8
+      )
     )
     let resources = """
       << /Font << /F0 << /Type /Font /Subtype /Type0 /BaseFont /SyntheticCID
@@ -790,14 +938,103 @@ struct PDFGraphicsRenderingTests {
   }
 
   @Test
+  func rendersSampledImageSoftMasks() async throws {
+    let image = streamObject(
+      dictionary:
+        "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask 6 0 R",
+      data: Data([255, 0, 0])
+    )
+    let mask = streamObject(
+      dictionary: "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8",
+      data: Data([128])
+    )
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        fixture(
+          content: "0 0 1 rg 0 0 100 100 re f 100 0 0 100 0 0 cm /Im Do",
+          resources: "<< /XObject << /Im 5 0 R >> >>",
+          extraObjects: [image, mask]
+        )
+      )
+    )
+    let recording = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    guard case .image(let captured, _)? = recording.output.pages[0].effects.last else {
+      Issue.record("Expected a sampled image effect")
+      await document.close()
+      return
+    }
+    #expect(captured.descriptor.sourceType == .softMask)
+    #expect(captured.mask?.opacities == [Float(128) / 255])
+
+    let raster = try await document.render(
+      page: 0,
+      to: RasterImageTarget(pixelWidth: 100, pixelHeight: 100)
+    )
+    let rendered = try #require(raster.output.first)
+    let offset = 50 * rendered.bytesPerRow + 50 * 4
+    #expect(abs(Int(rendered.data[offset]) - 128) < 8)
+    #expect(rendered.data[offset + 1] < 8)
+    #expect(abs(Int(rendered.data[offset + 2]) - 127) < 8)
+    await document.close()
+  }
+
+  @Test
+  func unblendsSampledImageMatteBeforeColorConversion() async throws {
+    let image = streamObject(
+      dictionary:
+        "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask 6 0 R",
+      data: Data([255, 127, 127])
+    )
+    let mask = streamObject(
+      dictionary:
+        "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Matte [1 1 1]",
+      data: Data([128])
+    )
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        fixture(
+          content: "0 0 1 rg 0 0 100 100 re f 100 0 0 100 0 0 cm /Im Do",
+          resources: "<< /XObject << /Im 5 0 R >> >>",
+          extraObjects: [image, mask]
+        )
+      )
+    )
+    let recording = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    guard case .image(let captured, _)? = recording.output.pages[0].effects.last else {
+      Issue.record("Expected a sampled image effect")
+      await document.close()
+      return
+    }
+    #expect(abs(captured.components[0] - 1) < 0.000_001)
+    #expect(abs(captured.components[1]) < 0.000_001)
+    #expect(abs(captured.components[2]) < 0.000_001)
+    #expect(captured.rawSamples == Data([0, 255, 0, 127, 0, 127]))
+
+    let raster = try await document.render(
+      page: 0,
+      to: RasterImageTarget(pixelWidth: 100, pixelHeight: 100)
+    )
+    let rendered = try #require(raster.output.first)
+    let offset = 50 * rendered.bytesPerRow + 50 * 4
+    #expect(abs(Int(rendered.data[offset]) - 128) < 8)
+    #expect(rendered.data[offset + 1] < 8)
+    #expect(abs(Int(rendered.data[offset + 2]) - 127) < 8)
+    await document.close()
+  }
+
+  @Test
   func rejectsMalformedICCProfileBeforePainting() async throws {
     let profile = streamObject(dictionary: "/N 3 /Alternate /DeviceRGB", data: Data(repeating: 0, count: 128))
     let resources = "<< /ColorSpace << /ICC [/ICCBased 5 0 R] >> >>"
-    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
-      content: "/ICC cs 0 0 0 sc 0 0 1 1 re f",
-      resources: resources,
-      extraObjects: [profile]
-    )))
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        fixture(
+          content: "/ICC cs 0 0 0 sc 0 0 1 1 re f",
+          resources: resources,
+          extraObjects: [profile]
+        )
+      )
+    )
     await #expect(throws: PDFGraphicsError.self) {
       try await document.render(page: 0, to: RecordingGraphicsTarget())
     }
@@ -943,6 +1180,24 @@ struct PDFGraphicsRenderingTests {
     result.append(UInt8(truncatingIfNeeded: length >> 24))
     result.append(bytes)
   }
+
+  #if canImport(CoreGraphics)
+    private func coreGraphicsRGB(
+      atX x: Int,
+      y: Int,
+      in image: CGImage
+    ) throws -> (red: Double, green: Double, blue: Double) {
+      let provider = try #require(image.dataProvider)
+      let data = try #require(provider.data)
+      let bytes = try #require(CFDataGetBytePtr(data))
+      let offset = y * image.bytesPerRow + x * 4
+      return (
+        Double(bytes[offset]) / 255,
+        Double(bytes[offset + 1]) / 255,
+        Double(bytes[offset + 2]) / 255
+      )
+    }
+  #endif
 }
 
 private struct SyntheticPDFFontProvider: FontResourceProvider {

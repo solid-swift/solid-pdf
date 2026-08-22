@@ -401,23 +401,38 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
     try operands(instruction, count: 0)
     if shouldClose { try close(PDFContentInstruction(operands: [], name: "h", location: instruction.location)) }
     let path = GraphicsPath(elements: state.pathElements)
-    if let fill {
+    if let fill, stroke {
+      let fillSnapshot = state.snapshot(stroking: false, path: path)
+      let strokeSnapshot = state.snapshot(stroking: true, path: path)
+      try emit(
+        GraphicsEvent(
+          operation: .paint(.fillAndStroke(fill)),
+          before: fillSnapshot,
+          after: strokeSnapshot,
+          origin: origin(instruction.location)
+        )
+      )
+    } else if let fill {
       let snapshot = state.snapshot(stroking: false, path: path)
-      try emit(GraphicsEvent(
-        operation: .paint(.fill(fill)),
-        before: snapshot,
-        after: snapshot,
-        origin: origin(instruction.location)
-      ))
+      try emit(
+        GraphicsEvent(
+          operation: .paint(.fill(fill)),
+          before: snapshot,
+          after: snapshot,
+          origin: origin(instruction.location)
+        )
+      )
     }
-    if stroke {
+    if stroke, fill == nil {
       let snapshot = state.snapshot(stroking: true, path: path)
-      try emit(GraphicsEvent(
-        operation: .paint(.stroke),
-        before: snapshot,
-        after: snapshot,
-        origin: origin(instruction.location)
-      ))
+      try emit(
+        GraphicsEvent(
+          operation: .paint(.stroke),
+          before: snapshot,
+          after: snapshot,
+          origin: origin(instruction.location)
+        )
+      )
     }
     try clearPath(applyingClipFrom: path, instruction)
   }
@@ -562,124 +577,175 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
     guard let resource = try await resources.resource(category: "ExtGState", name: name),
       case .value(.dictionary(let dictionary)) = resource.value
     else { throw malformed("Missing ExtGState resource.", instruction) }
-    if let blend = dictionary["BM"] {
-      let blendName: PDFName
-      switch blend {
-      case .name(let name): blendName = name
-      case .array(let values): blendName = try PDFObjectAccess.name(values.first ?? .null)
-      default: throw malformed("Invalid blend mode.", instruction)
+    let savedState = state
+    do {
+      if let blend = dictionary["BM"] { state.blendMode = try blendMode(blend, instruction: instruction) }
+      if let alpha = dictionary["ca"] { state.nonstrokingAlpha = try alphaValue(alpha, instruction: instruction) }
+      if let alpha = dictionary["CA"] { state.strokingAlpha = try alphaValue(alpha, instruction: instruction) }
+      if let softMask = dictionary["SMask"] {
+        state.softMask = try await compileSoftMask(softMask, instruction: instruction)
       }
-      guard blendName.pdfGraphicsString == "Normal" || blendName.pdfGraphicsString == "Compatible" else {
-        throw PDFGraphicsError.unsupported(.transparency(blendName), location: instruction.location)
+      if let alphaSource = dictionary["AIS"] {
+        guard case .boolean(let value) = alphaSource else { throw malformed("Invalid alpha-source flag.", instruction) }
+        state.alphaIsShape = value
       }
-    }
-    for key in [PDFName("ca"), PDFName("CA")] {
-      if let alpha = dictionary[key], try PDFObjectAccess.number(alpha) != 1 {
-        throw PDFGraphicsError.unsupported(.transparency(key), location: instruction.location)
+      if let knockout = dictionary["TK"] {
+        guard case .boolean(let value) = knockout else { throw malformed("Invalid text-knockout flag.", instruction) }
+        state.textKnockout = value
       }
-    }
-    if let softMask = dictionary["SMask"], softMask != .name("None") {
-      throw PDFGraphicsError.unsupported(.transparency("SMask"), location: instruction.location)
-    }
-    if let alphaSource = dictionary["AIS"], alphaSource != .boolean(false) {
-      throw PDFGraphicsError.unsupported(.transparency("AIS"), location: instruction.location)
-    }
-    if let mode = dictionary["OPM"], try PDFObjectAccess.integer(mode) == 1 {
-      throw PDFGraphicsError.unsupported(.overprintModeOne, location: instruction.location)
-    }
-    if let value = dictionary["OP"] {
-      guard case .boolean(let enabled) = value else { throw malformed("Invalid stroking overprint.", instruction) }
-      state.strokingOverprint = enabled
-    }
-    if let value = dictionary["op"] {
-      guard case .boolean(let enabled) = value else { throw malformed("Invalid nonstroking overprint.", instruction) }
-      state.nonstrokingOverprint = enabled
-    }
-    if let value = dictionary["LW"] { state.lineWidth = try PDFObjectAccess.number(value) }
-    if let value = dictionary["LC"], let cap = GraphicsLineCap(rawValue: Int32(try PDFObjectAccess.integer(value))) {
-      state.lineCap = cap
-    }
-    if let value = dictionary["LJ"], let join = GraphicsLineJoin(rawValue: Int32(try PDFObjectAccess.integer(value))) {
-      state.lineJoin = join
-    }
-    if let value = dictionary["ML"] { state.miterLimit = try PDFObjectAccess.number(value) }
-    if let value = dictionary["D"] {
-      let values = try PDFObjectAccess.array(value)
-      guard values.count == 2 else { throw malformed("Invalid ExtGState dash pattern.", instruction) }
-      state.dash = GraphicsDash(
-        pattern: try PDFObjectAccess.numbers(values[0]),
-        phase: try PDFObjectAccess.number(values[1])
-      )
-    }
-    if let value = dictionary["RI"] {
-      guard let intent = Self.renderingIntent(try PDFObjectAccess.name(value).pdfGraphicsString) else {
-        throw malformed("Invalid rendering intent.", instruction)
+      if let mode = dictionary["OPM"], try PDFObjectAccess.integer(mode) == 1 {
+        throw PDFGraphicsError.unsupported(.overprintModeOne, location: instruction.location)
       }
-      state.renderingIntent = intent
-    }
-    if let value = dictionary["FL"] { state.flatness = try PDFObjectAccess.number(value) }
-    if let value = dictionary["SA"] {
-      guard case .boolean(let enabled) = value else { throw malformed("Invalid stroke adjustment.", instruction) }
-      state.strokeAdjustment = enabled
-    }
-    if let value = dictionary["SM"] { state.smoothness = try PDFObjectAccess.number(value) }
-    if let value = dictionary["TR2"] ?? dictionary["TR"] {
-      let functions: GraphicsTransferFunctions
-      if case .array(let values) = value {
-        guard values.count == 4 else { throw malformed("Invalid transfer function array.", instruction) }
-        functions = try await GraphicsTransferFunctions(
-          red: resources.componentFunction(values[0]),
-          green: resources.componentFunction(values[1]),
-          blue: resources.componentFunction(values[2]),
-          gray: resources.componentFunction(values[3])
+      if let value = dictionary["OP"] {
+        guard case .boolean(let enabled) = value else { throw malformed("Invalid stroking overprint.", instruction) }
+        state.strokingOverprint = enabled
+      }
+      if let value = dictionary["op"] {
+        guard case .boolean(let enabled) = value else { throw malformed("Invalid nonstroking overprint.", instruction) }
+        state.nonstrokingOverprint = enabled
+      }
+      if let value = dictionary["LW"] { state.lineWidth = try PDFObjectAccess.number(value) }
+      if let value = dictionary["LC"], let cap = GraphicsLineCap(rawValue: Int32(try PDFObjectAccess.integer(value))) {
+        state.lineCap = cap
+      }
+      if let value = dictionary["LJ"], let join = GraphicsLineJoin(rawValue: Int32(try PDFObjectAccess.integer(value)))
+      {
+        state.lineJoin = join
+      }
+      if let value = dictionary["ML"] { state.miterLimit = try PDFObjectAccess.number(value) }
+      if let value = dictionary["D"] {
+        let values = try PDFObjectAccess.array(value)
+        guard values.count == 2 else { throw malformed("Invalid ExtGState dash pattern.", instruction) }
+        state.dash = GraphicsDash(
+          pattern: try PDFObjectAccess.numbers(values[0]),
+          phase: try PDFObjectAccess.number(values[1])
         )
-      } else {
-        let function = try await resources.componentFunction(value)
-        functions = GraphicsTransferFunctions(red: function, green: function, blue: function, gray: function)
       }
-      replaceDeviceRendering(transferFunctions: functions)
-    }
-    if let value = dictionary["BG2"] ?? dictionary["BG"] {
-      if case .name(let name) = value, name.pdfGraphicsString == "Default" {
-        replaceDeviceRendering(blackGeneration: .zero)
-      } else {
-        replaceDeviceRendering(blackGeneration: try await resources.componentFunction(value))
+      if let value = dictionary["RI"] {
+        guard let intent = Self.renderingIntent(try PDFObjectAccess.name(value).pdfGraphicsString) else {
+          throw malformed("Invalid rendering intent.", instruction)
+        }
+        state.renderingIntent = intent
       }
-    }
-    if let value = dictionary["UCR2"] ?? dictionary["UCR"] {
-      if case .name(let name) = value, name.pdfGraphicsString == "Default" {
-        replaceDeviceRendering(undercolorRemoval: .zero)
-      } else {
-        replaceDeviceRendering(undercolorRemoval: try await resources.componentFunction(value))
+      if let value = dictionary["FL"] { state.flatness = try PDFObjectAccess.number(value) }
+      if let value = dictionary["SA"] {
+        guard case .boolean(let enabled) = value else { throw malformed("Invalid stroke adjustment.", instruction) }
+        state.strokeAdjustment = enabled
       }
-    }
-    if let value = dictionary["HT"] {
-      if case .name(let name) = value, name.pdfGraphicsString == "Default" {
-        replaceDeviceRendering(halftone: state.device.descriptor.deviceRendering.defaultState.halftone)
-      } else {
-        do {
-          replaceDeviceRendering(halftone: try await resources.halftone(
-            value,
-            device: state.device.descriptor,
-            maximumBytes: limits.maximumScratchBytes
-          ))
-        } catch PDFGraphicsError.limitExceeded(let message, location: nil) {
-          throw PDFGraphicsError.limitExceeded(message, location: instruction.location)
+      if let value = dictionary["SM"] { state.smoothness = try PDFObjectAccess.number(value) }
+      if let value = dictionary["TR2"] ?? dictionary["TR"] {
+        let functions: GraphicsTransferFunctions
+        if case .array(let values) = value {
+          guard values.count == 4 else { throw malformed("Invalid transfer function array.", instruction) }
+          functions = try await GraphicsTransferFunctions(
+            red: resources.componentFunction(values[0]),
+            green: resources.componentFunction(values[1]),
+            blue: resources.componentFunction(values[2]),
+            gray: resources.componentFunction(values[3])
+          )
+        } else {
+          let function = try await resources.componentFunction(value)
+          functions = GraphicsTransferFunctions(red: function, green: function, blue: function, gray: function)
+        }
+        replaceDeviceRendering(transferFunctions: functions)
+      }
+      if let value = dictionary["BG2"] ?? dictionary["BG"] {
+        if case .name(let name) = value, name.pdfGraphicsString == "Default" {
+          replaceDeviceRendering(blackGeneration: .zero)
+        } else {
+          replaceDeviceRendering(blackGeneration: try await resources.componentFunction(value))
         }
       }
+      if let value = dictionary["UCR2"] ?? dictionary["UCR"] {
+        if case .name(let name) = value, name.pdfGraphicsString == "Default" {
+          replaceDeviceRendering(undercolorRemoval: .zero)
+        } else {
+          replaceDeviceRendering(undercolorRemoval: try await resources.componentFunction(value))
+        }
+      }
+      if let value = dictionary["HT"] {
+        if case .name(let name) = value, name.pdfGraphicsString == "Default" {
+          replaceDeviceRendering(halftone: state.device.descriptor.deviceRendering.defaultState.halftone)
+        } else {
+          do {
+            replaceDeviceRendering(
+              halftone: try await resources.halftone(
+                value,
+                device: state.device.descriptor,
+                maximumBytes: limits.maximumScratchBytes
+              )
+            )
+          } catch PDFGraphicsError.limitExceeded(let message, location: nil) {
+            throw PDFGraphicsError.limitExceeded(message, location: instruction.location)
+          }
+        }
+      }
+      if let value = dictionary["HTP"] {
+        let phase = try PDFObjectAccess.numbers(value)
+        guard phase.count == 2 else { throw malformed("Invalid halftone phase.", instruction) }
+        replaceDeviceRendering(halftonePhase: GraphicsPoint(x: phase[0], y: phase[1]))
+      }
+      let snapshot = state.snapshot(stroking: false)
+      try emit(
+        GraphicsEvent(
+          operation: .state(.setTransparency(snapshot.transparency)),
+          before: savedState.snapshot(stroking: false),
+          after: snapshot,
+          origin: origin(instruction.location)
+        )
+      )
+    } catch {
+      state = savedState
+      throw error
     }
-    if let value = dictionary["HTP"] {
-      let phase = try PDFObjectAccess.numbers(value)
-      guard phase.count == 2 else { throw malformed("Invalid halftone phase.", instruction) }
-      replaceDeviceRendering(halftonePhase: GraphicsPoint(x: phase[0], y: phase[1]))
+  }
+
+  private func alphaValue(
+    _ object: PDFObject,
+    instruction: PDFContentInstruction
+  ) throws -> Double {
+    let value = try PDFObjectAccess.number(object)
+    guard (0...1).contains(value) else { throw malformed("Invalid constant alpha.", instruction) }
+    return value
+  }
+
+  private func blendMode(
+    _ object: PDFObject,
+    instruction: PDFContentInstruction
+  ) throws -> GraphicsBlendMode {
+    let names: [PDFName]
+    switch object {
+    case .name(let name): names = [name]
+    case .array(let values): names = try values.map(PDFObjectAccess.name)
+    default: throw malformed("Invalid blend mode.", instruction)
     }
-    let snapshot = state.snapshot(stroking: false)
-    try emit(GraphicsEvent(
-      operation: .state(.setColorRendering),
-      before: snapshot,
-      after: snapshot,
-      origin: origin(instruction.location)
-    ))
+    guard !names.isEmpty else { throw malformed("Empty blend-mode array.", instruction) }
+    for name in names {
+      if let mode = Self.blendModes[name.pdfGraphicsString] { return mode }
+    }
+    throw malformed("Unsupported blend mode array.", instruction)
+  }
+
+  private static var blendModes: [String: GraphicsBlendMode] {
+    [
+      "Normal": .normal,
+      "Compatible": .normal,
+      "Multiply": .multiply,
+      "Screen": .screen,
+      "Overlay": .overlay,
+      "Darken": .darken,
+      "Lighten": .lighten,
+      "ColorDodge": .colorDodge,
+      "ColorBurn": .colorBurn,
+      "HardLight": .hardLight,
+      "SoftLight": .softLight,
+      "Difference": .difference,
+      "Exclusion": .exclusion,
+      "Hue": .hue,
+      "Saturation": .saturation,
+      "Color": .color,
+      "Luminosity": .luminosity,
+    ]
   }
 
   private func interpretMarkedContent(_ instruction: PDFContentInstruction) async throws {
@@ -759,11 +825,17 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
         context: resources.optionalContentContext,
         in: resources.revision
       )
-      visibility = result.isVisible ? .visible : .hidden(result.controllingGroups.map {
-        GraphicsResourceIdentifier(
-          rawValue: "pdf:r\(resources.revision.ordinal):o\($0.reference.objectNumber):\($0.reference.generationNumber)"
+      visibility =
+        result.isVisible
+        ? .visible
+        : .hidden(
+          result.controllingGroups.map {
+            GraphicsResourceIdentifier(
+              rawValue:
+                "pdf:r\(resources.revision.ordinal):o\($0.reference.objectNumber):\($0.reference.generationNumber)"
+            )
+          }
         )
-      })
     } else {
       visibility = .visible
     }
@@ -787,10 +859,13 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
       let value = try PDFObjectAccess.integer(object)
       guard value >= 0 else { throw PDFObjectAccess.TypeMismatch.number }
       identifier = .init(owner: owner, value: value)
-    } else { identifier = nil }
-    let replacement = try textProperty(dictionary["ActualText"], allowsUTF8: allowsUTF8).map {
-      GraphicsTextReplacement(text: $0, provenance: .markedContent)
+    } else {
+      identifier = nil
     }
+    let replacement = try textProperty(dictionary["ActualText"], allowsUTF8: allowsUTF8)
+      .map {
+        GraphicsTextReplacement(text: $0, provenance: .markedContent)
+      }
     let artifact: GraphicsArtifactDescription?
     if tag == PDFName("Artifact") {
       artifact = GraphicsArtifactDescription(

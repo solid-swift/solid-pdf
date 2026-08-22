@@ -467,7 +467,9 @@ extension PDFGraphicsInstructionHandler {
   private var textStyle: GraphicsTextStyle {
     GraphicsTextStyle(
       fill: textPaint(state.nonstroking, overprint: state.nonstrokingOverprint),
-      stroke: textPaint(state.stroking, overprint: state.strokingOverprint)
+      stroke: textPaint(state.stroking, overprint: state.strokingOverprint),
+      fillTransparency: state.snapshot(stroking: false).transparency,
+      strokeTransparency: state.snapshot(stroking: true).transparency
     )
   }
 

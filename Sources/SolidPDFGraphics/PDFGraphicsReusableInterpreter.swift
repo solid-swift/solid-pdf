@@ -4,6 +4,181 @@ import SolidPDF
 import SolidPostScript
 
 extension PDFGraphicsInstructionHandler {
+  func compileSoftMask(
+    _ object: PDFObject,
+    instruction: PDFContentInstruction
+  ) async throws -> GraphicsSoftMask? {
+    if case .name(let name) = object, name.pdfGraphicsString == "None" { return nil }
+    let dictionary = try PDFObjectAccess.dictionary(try await resources.resolvedObject(object))
+    let subtypeName = try PDFObjectAccess.name(dictionary["S"] ?? .null).pdfGraphicsString
+    let subtype: GraphicsSoftMaskSubtype
+    switch subtypeName {
+    case "Alpha": subtype = .alpha
+    case "Luminosity": subtype = .luminosity
+    default: throw malformed("Invalid soft-mask subtype.", instruction)
+    }
+    guard case .reference(let reference) = dictionary["G"] else {
+      throw malformed("Soft-mask group must be an indirect stream.", instruction)
+    }
+    let resolved = try await resources.document.resolve(reference, in: resources.revision)
+    guard case .stream(let stream) = resolved.value else {
+      throw malformed("Soft-mask group is not a stream.", instruction)
+    }
+    let group = try await compileTransparencyGroup(
+      stream,
+      reference: reference,
+      instruction: instruction,
+      requiresGroup: true
+    )
+    let backdrop =
+      try dictionary["BC"].map(PDFObjectAccess.numbers)
+      ?? group.colorSpace.map { [Double](repeating: 0, count: $0.componentCount) }
+      ?? []
+    if !backdrop.isEmpty, let colorSpace = group.colorSpace,
+      backdrop.count != colorSpace.componentCount
+    {
+      throw malformed("Soft-mask backdrop has the wrong component count.", instruction)
+    }
+    let transfer: GraphicsComponentFunction?
+    if let object = dictionary["TR"] {
+      transfer = try await resources.componentFunction(object)
+    } else {
+      transfer = nil
+    }
+    return GraphicsSoftMask(
+      subtype: subtype,
+      group: group,
+      backdrop: backdrop,
+      transferFunction: transfer,
+      resourceIdentifier: resourceIdentifier(reference)
+    )
+  }
+
+  func compileTransparencyGroup(
+    _ stream: PDFStreamObject,
+    reference: PDFObjectReference,
+    instruction: PDFContentInstruction,
+    requiresGroup: Bool = false
+  ) async throws -> GraphicsTransparencyGroup {
+    let groupObject = stream.dictionary["Group"]
+    if requiresGroup, groupObject == nil { throw malformed("Soft-mask form lacks a transparency group.", instruction) }
+    let groupDictionary: [PDFName: PDFObject]?
+    if let groupObject {
+      groupDictionary = try PDFObjectAccess.dictionary(try await resources.resolvedObject(groupObject))
+    } else {
+      groupDictionary = nil
+    }
+    if let groupDictionary {
+      guard try PDFObjectAccess.name(groupDictionary["S"] ?? .null).pdfGraphicsString == "Transparency" else {
+        throw malformed("Invalid transparency-group subtype.", instruction)
+      }
+    }
+    let isolated = try groupDictionary?["I"].map { try booleanValue($0, default: false) } ?? false
+    let knockout = try groupDictionary?["K"].map { try booleanValue($0, default: false) } ?? false
+    let colorSpace: PDFGraphicsResourceResolver<Source>.ResolvedColorSpace?
+    if let object = groupDictionary?["CS"] {
+      colorSpace = try await resources.colorSpace(object)
+    } else {
+      colorSpace = nil
+    }
+    let bounds = try graphicsRect(PDFObjectAccess.numbers(stream.dictionary["BBox"] ?? .null))
+    let matrix = try stream.dictionary["Matrix"].map(PDFObjectAccess.numbers).map(graphicsMatrix) ?? .identity
+    let localResources: [PDFName: PDFObject]?
+    if let resourceObject = stream.dictionary["Resources"] {
+      localResources = try PDFObjectAccess.dictionary(try await resources.resolvedObject(resourceObject))
+    } else {
+      localResources = nil
+    }
+    try resources.enter(reference)
+    try resources.push(resources: localResources)
+    do {
+      let page = try await resources.document.page(at: instruction.location.pageIndex, in: resources.revision)
+      var childState = state
+      childState.pathElements = []
+      childState.pendingClip = nil
+      childState.softMask = nil
+      childState.blendMode = .normal
+      childState.strokingAlpha = 1
+      childState.nonstrokingAlpha = 1
+      childState.matrix = matrix.concatenated(with: state.matrix)
+      let clipPath = rectanglePath(bounds).transformed(by: childState.matrix)
+      childState.clip = try childState.clip.appending(.init(path: clipPath, rule: .winding))
+      let collector = PDFGraphicsCollectorOutput()
+      let handler = PDFGraphicsInstructionHandler(
+        device: state.device,
+        resources: resources,
+        limits: limits,
+        output: collector,
+        initialState: childState,
+        type3Capture: type3Capture,
+        type3Depth: type3Depth
+      )
+      let input = PDFContentInput(streams: [stream]) { [document = resources.document] stream in
+        try await document.decodedStream(of: stream)
+      }
+      let parser = PDFContentParser(
+        input: input,
+        revision: resources.revision,
+        page: page,
+        maximumScratchBytes: limits.maximumScratchBytes,
+        resourceStack: instruction.location.resourceStack + [reference]
+      )
+      try await PDFContentExecutor(
+        parser: parser,
+        handler: handler,
+        maximumOperators: limits.maximumOperatorsPerPage
+      )
+      .execute()
+      let points = clipPath.elements.flatMap { element -> [GraphicsPoint] in
+        switch element {
+        case .move(let point), .line(let point): [point]
+        case .curve(let first, let second, let end): [first, second, end]
+        case .close: []
+        }
+      }
+      let minimumX = points.map(\.x).min() ?? 0
+      let minimumY = points.map(\.y).min() ?? 0
+      let maximumX = points.map(\.x).max() ?? minimumX
+      let maximumY = points.map(\.y).max() ?? minimumY
+      let identifier = resourceIdentifier(reference)
+      let displayList = GraphicsDisplayList(
+        effects: collector.collector.effects,
+        resourceIdentifier: identifier
+      )
+      let footprint = displayList.storageFootprint(maximumDepth: limits.maximumResourceDepth)
+      guard let footprint,
+        footprint.displayBytes <= limits.maximumScratchBytes,
+        footprint.sourceBytes <= limits.maximumScratchBytes - footprint.displayBytes
+      else {
+        throw PDFGraphicsError.limitExceeded(
+          "PDF transparency-group display list exceeds interpretation scratch.",
+          location: instruction.location
+        )
+      }
+      let result = GraphicsTransparencyGroup(
+        bounds: GraphicsRect(
+          x: minimumX,
+          y: minimumY,
+          width: maximumX - minimumX,
+          height: maximumY - minimumY
+        ),
+        isolated: isolated,
+        knockout: knockout,
+        colorSpace: colorSpace?.description,
+        colorRealization: colorSpace?.realization,
+        displayList: displayList,
+        resourceIdentifier: identifier
+      )
+      resources.pop()
+      resources.leave(reference)
+      return result
+    } catch {
+      resources.pop()
+      resources.leave(reference)
+      throw error
+    }
+  }
+
   func compilePattern(
     named name: PDFName,
     underlying: GraphicsPaint?,
@@ -136,7 +311,20 @@ extension PDFGraphicsInstructionHandler {
       throw PDFGraphicsError.unsupported(.referenceXObject, location: instruction.location)
     }
     if stream.dictionary["Group"] != nil {
-      throw PDFGraphicsError.unsupported(.transparencyGroup, location: instruction.location)
+      let group = try await compileTransparencyGroup(
+        stream,
+        reference: reference,
+        instruction: instruction
+      )
+      try emit(
+        GraphicsEvent(
+          operation: .paint(.transparencyGroup(group)),
+          before: state.snapshot(stroking: false),
+          after: state.snapshot(stroking: false),
+          origin: origin(instruction.location, resource: group.resourceIdentifier)
+        )
+      )
+      return
     }
     let bounds = try graphicsRect(PDFObjectAccess.numbers(stream.dictionary["BBox"] ?? .null))
     let matrix = try stream.dictionary["Matrix"].map(PDFObjectAccess.numbers).map(graphicsMatrix) ?? .identity
