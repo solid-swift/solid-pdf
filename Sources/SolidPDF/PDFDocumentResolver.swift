@@ -17,6 +17,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   private let index: PDFCrossReferenceIndex
   private let options: PDFParsingOptions
   private let externalStreamProvider: (any PDFExternalStreamProvider)?
+  private let securityContext: PDFSecurityContext?
   private let streamRegistry = PDFDecodedStreamRegistry()
   private var objectCache = [ResolutionKey: PDFIndirectObject]()
   private var decodedObjectStreams = [ResolutionKey: DecodedObjectStream]()
@@ -33,12 +34,14 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
     reader: PDFSourceReader<Session>,
     index: PDFCrossReferenceIndex,
     options: PDFParsingOptions,
-    externalStreamProvider: (any PDFExternalStreamProvider)?
+    externalStreamProvider: (any PDFExternalStreamProvider)?,
+    securityContext: PDFSecurityContext?
   ) {
     self.reader = reader
     self.index = index
     self.options = options
     self.externalStreamProvider = externalStreamProvider
+    self.securityContext = securityContext
   }
 
   func resolve(_ reference: PDFObjectReference) async throws -> PDFIndirectObject {

@@ -6,6 +6,12 @@ public struct PDFParsingLimits: Sendable, Hashable {
   public var maximumObjectCount: Int
   /// Maximum number of incremental revisions.
   public var maximumRevisions: Int
+  /// Maximum password candidates requested from a provider.
+  public var maximumPasswordAttempts: Int
+  /// Maximum named crypt filters in one security dictionary.
+  public var maximumCryptFilters: Int
+  /// Maximum temporary security-handler storage.
+  public var maximumSecurityScratchBytes: Int
   /// Maximum nested array, dictionary, or string depth.
   public var maximumNesting: Int
   /// Maximum lexical token size.
@@ -38,6 +44,9 @@ public struct PDFParsingLimits: Sendable, Hashable {
     maximumInputBytes: Int64 = 4 * 1_024 * 1_024 * 1_024,
     maximumObjectCount: Int = 1_000_000,
     maximumRevisions: Int = 1_024,
+    maximumPasswordAttempts: Int = 8,
+    maximumCryptFilters: Int = 64,
+    maximumSecurityScratchBytes: Int = 1 * 1_024 * 1_024,
     maximumNesting: Int = 128,
     maximumTokenBytes: Int = 16 * 1_024 * 1_024,
     maximumStringBytes: Int = 64 * 1_024 * 1_024,
@@ -55,6 +64,9 @@ public struct PDFParsingLimits: Sendable, Hashable {
     self.maximumInputBytes = maximumInputBytes
     self.maximumObjectCount = maximumObjectCount
     self.maximumRevisions = maximumRevisions
+    self.maximumPasswordAttempts = maximumPasswordAttempts
+    self.maximumCryptFilters = maximumCryptFilters
+    self.maximumSecurityScratchBytes = maximumSecurityScratchBytes
     self.maximumNesting = maximumNesting
     self.maximumTokenBytes = maximumTokenBytes
     self.maximumStringBytes = maximumStringBytes

@@ -16,8 +16,10 @@ public struct PDFDocumentRevision: Sendable, Hashable {
   public let info: PDFObjectReference?
   /// The optional two-part file identifier effective for this revision.
   public let fileIdentifier: [PDFString]?
-  /// The encryption dictionary value effective for this revision.
-  public let encryption: PDFObject?
+  /// The encryption dictionary location effective for this revision.
+  public let encryptionLocator: PDFEncryptionLocator?
+
+  package let encryptionObject: PDFObject?
 
   package init(
     identifier: PDFRevisionIdentifier,
@@ -34,10 +36,17 @@ public struct PDFDocumentRevision: Sendable, Hashable {
     self.representation = representation
     self.startCrossReferenceOffset = startCrossReferenceOffset
     self.endOffset = endOffset
-    self.trailer = trailer
+    var publicTrailer = trailer
+    if case .dictionary = encryption { publicTrailer["Encrypt"] = nil }
+    self.trailer = publicTrailer
     self.root = root
     self.info = info
     self.fileIdentifier = fileIdentifier
-    self.encryption = encryption
+    encryptionLocator = switch encryption {
+    case .dictionary: .direct
+    case .reference(let reference): .indirect(reference)
+    default: nil
+    }
+    encryptionObject = encryption
   }
 }

@@ -14,6 +14,8 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
   public let revisions: [PDFDocumentRevision]
   /// The latest document revision.
   public var latestRevision: PDFDocumentRevision { revisions[revisions.count - 1] }
+  /// Authenticated security metadata, or `nil` for an unencrypted document.
+  public let security: PDFDocumentSecurity?
 
   private let resolver: PDFDocumentResolver<Source.Session>
 
@@ -21,27 +23,51 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
   public init(
     source: Source,
     options: PDFParsingOptions = .init(),
-    externalStreamProvider: (any PDFExternalStreamProvider)? = nil
+    externalStreamProvider: (any PDFExternalStreamProvider)? = nil,
+    passwordProvider: (any PDFPasswordProvider)? = nil
   ) async throws {
     let session = try await source.makeSession()
     do {
       let reader = try await PDFSourceReader(session: session, options: options)
       let index = try await PDFCrossReferenceParser(reader: reader, options: options).parse()
+      let securityContext = try await PDFSecurityContext.open(
+        reader: reader,
+        index: index,
+        options: options,
+        passwordProvider: passwordProvider
+      )
       version = index.version
       root = index.root
       info = index.info
       identifier = index.identifier
       revisions = index.revisions
+      security = securityContext?.security
       resolver = PDFDocumentResolver(
         reader: reader,
         index: index,
         options: options,
-        externalStreamProvider: externalStreamProvider
+        externalStreamProvider: externalStreamProvider,
+        securityContext: securityContext
       )
     } catch {
       await session.close()
       throw error
     }
+  }
+
+  /// Opens a document using one fixed noninteractive password candidate.
+  public convenience init(
+    source: Source,
+    options: PDFParsingOptions = .init(),
+    externalStreamProvider: (any PDFExternalStreamProvider)? = nil,
+    password: PDFPassword
+  ) async throws {
+    try await self.init(
+      source: source,
+      options: options,
+      externalStreamProvider: externalStreamProvider,
+      passwordProvider: PDFFixedPasswordProvider(password)
+    )
   }
 
   deinit {

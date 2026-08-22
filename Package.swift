@@ -47,6 +47,7 @@ let package = Package(
   dependencies: [
     foundationDependency,
     imageDependency,
+    .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "4.2.0")),
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.0"),
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
   ],
@@ -56,6 +57,8 @@ let package = Package(
       dependencies: [
         .product(name: "SolidImageIO", package: "solid-image"),
         .product(name: "SolidIO", package: "solid-foundation"),
+        .product(name: "Crypto", package: "swift-crypto"),
+        .product(name: "CryptoExtras", package: "swift-crypto"),
       ],
       plugins: lintPlugins
     ),
