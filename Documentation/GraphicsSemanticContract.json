@@ -37,7 +37,8 @@
     "graphics-state-before-and-after", "device-space-geometry", "page-coordinate-mapping",
     "source-color-and-realization", "resource-identity", "image-source-description",
     "text-source-bytes", "glyph-source-range", "glyph-selector", "font-and-descendant-identity",
-    "glyph-metrics-and-transform", "unicode-provenance", "page-transmission", "device-snapshot"
+    "glyph-metrics-and-transform", "unicode-provenance", "page-transmission", "device-snapshot",
+    "optional-format-neutral-origin", "rendering-intent", "halftone-phase"
   ],
   "imageTransaction": ["event", "begin", "ordered-color-rows", "ordered-mask-rows", "end-or-abandon"],
   "compatibility": {

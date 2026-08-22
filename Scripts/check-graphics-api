@@ -82,7 +82,7 @@ fi
 readonly -a C_MODULE_ARGUMENTS
 
 readonly MODULES=(
-  SolidPDF SolidFont SolidPostScript
+  SolidPDF SolidPDFGraphics SolidFont SolidPostScript
   SolidPostScriptDocument SolidPostScriptPDF SolidPostScriptRaster
   SolidPostScriptCoreGraphics SolidPostScriptCoreText SolidPostScriptFreeType
   SolidPostScriptPlutoVG

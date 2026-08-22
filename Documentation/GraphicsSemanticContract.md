@@ -40,6 +40,12 @@ positioning, callbacks, or rendering. Styling is the placement plus the captured
 including paint, original color space and components, color realization, overprint, device-rendering
 controls, clipping, CTM, and device snapshot.
 
+Every event may additionally identify a format-neutral source origin. An origin correlates a source
+resource and one or more exact byte segments without changing operation semantics. PDF content uses
+this additive metadata to retain page, content-stream, and nested-resource provenance. Captured
+graphics state also preserves rendering intent and device-rendering state preserves halftone phase;
+legacy producers receive the documented defaults.
+
 ## Streaming order
 
 Device activation precedes its events. Every image event is followed by one begin callback, ordered
