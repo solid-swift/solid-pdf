@@ -60,6 +60,20 @@ public struct PDFParsingLimits: Sendable, Hashable {
   public var maximumStructureChildren: Int
   /// Maximum scratch retained while auditing logical structure.
   public var maximumStructureScratchBytes: Int
+  /// Maximum annotations associated with one page.
+  public var maximumAnnotationsPerPage: Int
+  /// Maximum fields in one AcroForm field tree.
+  public var maximumFormFields: Int
+  /// Maximum AcroForm field-tree depth.
+  public var maximumFormFieldDepth: Int
+  /// Maximum actions reachable through one `/Next` chain.
+  public var maximumActionChainLength: Int
+  /// Maximum named states in one annotation appearance dictionary.
+  public var maximumAnnotationAppearanceStates: Int
+  /// Maximum pairs in one signature byte range.
+  public var maximumSignatureByteRanges: Int
+  /// Maximum scratch retained while resolving annotations and forms.
+  public var maximumInteractiveStructureScratchBytes: Int
 
   /// Creates parsing limits.
   public init(
@@ -92,7 +106,14 @@ public struct PDFParsingLimits: Sendable, Hashable {
     maximumStructureElements: Int = 1_000_000,
     maximumStructureDepth: Int = 256,
     maximumStructureChildren: Int = 1_000_000,
-    maximumStructureScratchBytes: Int = 64 * 1_024 * 1_024
+    maximumStructureScratchBytes: Int = 64 * 1_024 * 1_024,
+    maximumAnnotationsPerPage: Int = 65_536,
+    maximumFormFields: Int = 1_000_000,
+    maximumFormFieldDepth: Int = 256,
+    maximumActionChainLength: Int = 1_024,
+    maximumAnnotationAppearanceStates: Int = 4_096,
+    maximumSignatureByteRanges: Int = 1_024,
+    maximumInteractiveStructureScratchBytes: Int = 64 * 1_024 * 1_024
   ) {
     self.maximumInputBytes = maximumInputBytes
     self.maximumObjectCount = maximumObjectCount
@@ -124,5 +145,12 @@ public struct PDFParsingLimits: Sendable, Hashable {
     self.maximumStructureDepth = maximumStructureDepth
     self.maximumStructureChildren = maximumStructureChildren
     self.maximumStructureScratchBytes = maximumStructureScratchBytes
+    self.maximumAnnotationsPerPage = maximumAnnotationsPerPage
+    self.maximumFormFields = maximumFormFields
+    self.maximumFormFieldDepth = maximumFormFieldDepth
+    self.maximumActionChainLength = maximumActionChainLength
+    self.maximumAnnotationAppearanceStates = maximumAnnotationAppearanceStates
+    self.maximumSignatureByteRanges = maximumSignatureByteRanges
+    self.maximumInteractiveStructureScratchBytes = maximumInteractiveStructureScratchBytes
   }
 }
