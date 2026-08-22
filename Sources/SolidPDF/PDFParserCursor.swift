@@ -53,6 +53,17 @@ struct PDFParserCursor<Session: PDFInputSourceSession> {
     return data
   }
 
+  mutating func seek(to position: Int64) async throws {
+    let length = try await reader.length()
+    guard position >= 0, position <= length else {
+      throw PDFParsingError.sourceFailure(
+        .init(offset: position, message: "The parser seek is outside the document.")
+      )
+    }
+    self.position = position
+    window = nil
+  }
+
   mutating func atomically<Result>(
     _ operation: (inout PDFParserCursor<Session>) async throws -> Result
   ) async throws -> Result {

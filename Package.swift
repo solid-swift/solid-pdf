@@ -60,7 +60,10 @@ let package = Package(
     ),
     .testTarget(
       name: "SolidPDFTests",
-      dependencies: ["SolidPDF"],
+      dependencies: [
+        "SolidPDF",
+        .product(name: "SolidIO", package: "solid-foundation"),
+      ],
       plugins: lintPlugins
     ),
     .target(

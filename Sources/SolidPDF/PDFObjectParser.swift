@@ -126,6 +126,8 @@ struct PDFObjectParser<Session: PDFInputSourceSession> {
     do {
       try await requireKeyword(keyword)
       return true
+    } catch is CancellationError {
+      throw CancellationError()
     } catch {
       cursor = original
       return false
@@ -177,6 +179,16 @@ struct PDFObjectParser<Session: PDFInputSourceSession> {
           generationNumber: Int(generation)
         )
       )
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch let error as PDFParsingError {
+      switch error {
+      case .sourceFailure, .documentClosed:
+        throw error
+      default:
+        cursor = afterNumber
+        return .number(number)
+      }
     } catch {
       cursor = afterNumber
       return .number(number)
