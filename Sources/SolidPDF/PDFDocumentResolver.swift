@@ -78,7 +78,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
 
   func originalSourceData(maximumBytes: Int64) async throws -> Data {
     guard !closed else { throw PDFIncrementalUpdateError.documentClosed }
-    let currentLength = try await reader.length()
+    let currentLength = try await reader.currentSourceLength()
     guard currentLength == openedSourceLength else { throw PDFIncrementalUpdateError.sourceChanged }
     guard currentLength >= 0,
       currentLength <= maximumBytes,

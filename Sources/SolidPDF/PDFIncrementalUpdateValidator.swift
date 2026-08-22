@@ -1,12 +1,17 @@
 import Foundation
 
 enum PDFIncrementalUpdateValidator {
+  struct Result {
+    let pageCount: Int
+    let signatureModifications: [PDFSignatureIdentifier: PDFSignatureModificationStatus]
+  }
+
   static func validate(
     _ data: Data,
     expectedRevisionCount: Int,
     securityContext: PDFSecurityContext?,
     limits updateLimits: PDFIncrementalWritingLimits
-  ) async throws -> Int {
+  ) async throws -> Result {
     var parsingLimits = PDFParsingLimits()
     parsingLimits.maximumInputBytes = updateLimits.maximumStagedDocumentBytes
     parsingLimits.maximumAuthenticityScratchBytes = updateLimits.maximumValidationScratchBytes
@@ -45,16 +50,42 @@ enum PDFIncrementalUpdateValidator {
         revisions: index.revisions,
         limits: parsingLimits
       )
+      let authenticity = PDFDocumentAuthenticity(
+        resolver: resolver,
+        structure: structure,
+        interactive: interactive,
+        revisions: index.revisions,
+        limits: parsingLimits
+      )
       do {
         _ = try await structure.catalog(in: index.latestRevision.identifier)
         try await interactive.validateAcroForm(in: index.latestRevision.identifier)
         let pageCount = try await structure.pageCount(in: index.latestRevision.identifier)
+        let signatures = try await authenticity.signatures(in: index.latestRevision.identifier)
+        var signatureModifications = [
+          PDFSignatureIdentifier: PDFSignatureModificationStatus
+        ]()
+        for signature in signatures {
+          let validation = try await authenticity.validate(
+            signature,
+            in: index.latestRevision.identifier,
+            options: .init()
+          )
+          if let identifier = validation.signature {
+            signatureModifications[identifier] = validation.modifications
+          }
+        }
+        await authenticity.close()
         await interactive.close()
         await assets.close()
         await structure.close()
         await resolver.close()
-        return pageCount
+        return Result(
+          pageCount: pageCount,
+          signatureModifications: signatureModifications
+        )
       } catch {
+        await authenticity.close()
         await interactive.close()
         await assets.close()
         await structure.close()

@@ -32,6 +32,22 @@ public struct PDFDataOutputSink: PDFOutputSink, Sendable {
       )
     }
 
+    public func finishIncrementalUpdate(
+      fileVersion: PDFFileVersion,
+      pageCount: Int,
+      diagnostics: [PDFDiagnostic]
+    ) throws -> sending PDFEncodedDocument {
+      guard !finished else { throw PDFError.writerFinished }
+      finished = true
+      return PDFEncodedDocument(
+        data: data,
+        version: fileVersion == .v2_0 ? .v2_0 : .v1_7,
+        pageCount: pageCount,
+        diagnostics: diagnostics,
+        fileVersion: fileVersion
+      )
+    }
+
     public func abort() {
       data.removeAll(keepingCapacity: false)
       finished = true

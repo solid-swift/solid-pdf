@@ -238,6 +238,36 @@ public enum PDFParsingBenchmarkFixtures {
     return try writer.finish(root: catalog, pageCount: pageCount).data
   }
 
+  /// Creates a one-page AcroForm document suitable for incremental-update benchmarks.
+  public static func formDocument() -> Data {
+    let objects = [
+      "<< /Type /Catalog /Pages 2 0 R /AcroForm 5 0 R >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources <<>> /Annots [4 0 R] >>",
+      "<< /Type /Annot /Subtype /Widget /Parent 6 0 R /P 3 0 R /Rect [72 700 540 728] >>",
+      "<< /Fields [6 0 R] /DR << /Font << /Helv << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >> >> /DA (/Helv 10 Tf 0 g) /NeedAppearances true >>",
+      "<< /T (Customer.Name) /FT /Tx /MaxLen 128 /V (Original) /Kids [4 0 R] >>",
+    ]
+    var data = Data("%PDF-1.7\n".utf8)
+    var offsets = [Int]()
+    for (index, object) in objects.enumerated() {
+      offsets.append(data.count)
+      data.append(Data("\(index + 1) 0 obj\n\(object)\nendobj\n".utf8))
+    }
+    let xref = data.count
+    data.append(Data("xref\n0 \(objects.count + 1)\n0000000000 65535 f \n".utf8))
+    for offset in offsets {
+      data.append(Data(String(format: "%010d 00000 n \n", offset).utf8))
+    }
+    data.append(
+      Data(
+        ("trailer\n<< /Size \(objects.count + 1) /Root 1 0 R >>\n"
+          + "startxref\n\(xref)\n%%EOF\n").utf8
+      )
+    )
+    return data
+  }
+
   /// A qpdf-authored R4 RC4 interoperability fixture with password `user`.
   public static let r4RC4Document = decodedFixture(
     "JVBERi0xLjcKJb/3ov4KMSAwIG9iago8PCAvUGFnZXMgMiAwIFIgL1R5cGUgL0NhdGFsb2cgPj4K"

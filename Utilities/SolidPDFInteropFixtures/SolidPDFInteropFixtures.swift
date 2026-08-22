@@ -16,11 +16,32 @@ enum SolidPDFInteropFixtures {
         at: CommandLine.arguments[2],
         password: CommandLine.arguments[3]
       )
+    case "create-form-update":
+      guard CommandLine.arguments.count == 3 else { usage() }
+      try await createFormUpdate(at: CommandLine.arguments[2])
     case let directory? where CommandLine.arguments.count == 2:
       try createFixtures(in: directory)
     default:
       usage()
     }
+  }
+
+  private static func createFormUpdate(at path: String) async throws {
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(PDFParsingBenchmarkFixtures.formDocument())
+    )
+    let fields = try await document.formFields()
+    guard let field = fields.first else {
+      throw PDFParsingError.malformed(
+        .init(offset: 0, message: "The form interoperability fixture has no field.")
+      )
+    }
+    _ = try await document.writeIncrementalUpdate(
+      .init(updates: [.init(field: field.identifier, value: .text("Interop Renée"))]),
+      to: URL(fileURLWithPath: path),
+      replacingExisting: true
+    )
+    await document.close()
   }
 
   private static func createFixtures(in path: String) throws {
@@ -77,6 +98,7 @@ enum SolidPDFInteropFixtures {
     FileHandle.standardError.write(
       Data(
         ("usage: SolidPDFInteropFixtures [create] OUTPUT_DIRECTORY\n"
+          + "       SolidPDFInteropFixtures create-form-update OUTPUT_PDF\n"
           + "       SolidPDFInteropFixtures verify-security INPUT_PDF PASSWORD\n").utf8
       )
     )

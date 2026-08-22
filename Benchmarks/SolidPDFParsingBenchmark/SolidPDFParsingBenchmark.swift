@@ -30,6 +30,7 @@ let benchmarks: @Sendable () -> Void = {
   )
   let incremental = PDFParsingBenchmarkFixtures.incrementalDocument(revisionCount: 256)
   let pageTree = try! PDFParsingBenchmarkFixtures.pageTreeDocument()
+  let form = PDFParsingBenchmarkFixtures.formDocument()
   let coldFile = FileManager.default.temporaryDirectory
     .appendingPathComponent("SolidPDFParsingBenchmark-(UUID().uuidString).pdf")
   try! classic.write(to: coldFile)
@@ -212,6 +213,18 @@ let benchmarks: @Sendable () -> Void = {
     for _ in benchmark.scaledIterations { blackHole(try await document.authenticityReport()) }
     benchmark.stopMeasurement()
     await document.close()
+  }
+
+  Benchmark("AcroForm Incremental Update", configuration: configuration) { benchmark in
+    benchmark.startMeasurement()
+    for iteration in benchmark.scaledIterations {
+      let document = try await PDFDocument(source: PDFDataInputSource(form))
+      let field = try await document.formFields()[0]
+      blackHole(try await document.incrementallyUpdatedData(.init(updates: [
+        .init(field: field.identifier, value: .text("Benchmark \(iteration)"))
+      ])))
+      await document.close()
+    }
   }
 }
 

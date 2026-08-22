@@ -84,6 +84,19 @@ struct PDFParsingBenchmarkFixturesTests {
     }
   }
 
+  @Test
+  func formFixtureSupportsIncrementalUpdates() async throws {
+    let data = PDFParsingBenchmarkFixtures.formDocument()
+    let document = try await PDFDocument(source: PDFDataInputSource(data))
+    let field = try #require(try await document.formFields().first)
+    let result = try await document.incrementallyUpdatedData(.init(updates: [
+      .init(field: field.identifier, value: .text("Benchmark"))
+    ]))
+    #expect(result.output.data.prefix(data.count) == data)
+    #expect(result.appendedRevision.ordinal == 1)
+    await document.close()
+  }
+
   private func pageContent<Source: PDFInputSource>(
     in document: PDFDocument<Source>
   ) async throws -> Data {

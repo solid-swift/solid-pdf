@@ -15,6 +15,7 @@ struct PDFFormIncrementalUpdateTests {
 
     #expect(result.output.data.prefix(original.count) == original)
     #expect(result.appendedRevision.ordinal == 1)
+    #expect(result.output.fileVersion == .v1_7)
     #expect(result.changedReferences.contains(field.identifier.reference))
     #expect(result.newReferences.count == 1)
 
@@ -35,6 +36,110 @@ struct PDFFormIncrementalUpdateTests {
     }
     #expect(historicalValue.bytes == Data("Alice".utf8))
     await updated.close()
+    await document.close()
+  }
+
+  @Test
+  func appendsIndependentSequentialRevisions() async throws {
+    let original = fixture()
+    let firstDocument = try await PDFDocument(source: PDFDataInputSource(original))
+    let field = try #require(try await firstDocument.formFields().first)
+    let first = try await firstDocument.incrementallyUpdatedData(.init(updates: [
+      .init(field: field.identifier, value: .text("First"))
+    ]))
+    await firstDocument.close()
+
+    let secondDocument = try await PDFDocument(source: PDFDataInputSource(first.output.data))
+    let second = try await secondDocument.incrementallyUpdatedData(.init(updates: [
+      .init(field: field.identifier, value: .text("Second"))
+    ]))
+    #expect(second.output.data.prefix(first.output.data.count) == first.output.data)
+    #expect(second.appendedRevision.ordinal == 2)
+
+    let updated = try await PDFDocument(source: PDFDataInputSource(second.output.data))
+    #expect(updated.revisions.count == 3)
+    guard case .string(let currentValue)? = try await updated.formField(field.identifier).value,
+      case .string(let firstValue)? = try await updated.formField(
+        field.identifier,
+        in: updated.revisions[1].identifier
+      ).value,
+      case .string(let originalValue)? = try await updated.formField(
+        field.identifier,
+        in: updated.revisions[0].identifier
+      ).value
+    else {
+      Issue.record("Expected text values in every revision")
+      return
+    }
+    #expect(try PDFTextStringDecoder.decode(currentValue, allowsUTF8: true) == "Second")
+    #expect(try PDFTextStringDecoder.decode(firstValue, allowsUTF8: true) == "First")
+    #expect(try PDFTextStringDecoder.decode(originalValue, allowsUTF8: true) == "Alice")
+    await updated.close()
+    await secondDocument.close()
+  }
+
+  @Test
+  func publishesFilesAtomicallyAndHonorsReplacementPolicy() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "SolidPDFIncrementalUpdateTests-\(UUID().uuidString)"
+    )
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let destination = directory.appendingPathComponent("updated.pdf")
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture()))
+    let field = try #require(try await document.formFields().first)
+    let transaction = PDFFormUpdateTransaction(updates: [
+      .init(field: field.identifier, value: .text("Published"))
+    ])
+
+    let result = try await document.writeIncrementalUpdate(transaction, to: destination)
+    #expect(result.output == destination)
+    let published = try Data(contentsOf: destination)
+    let reopened = try await PDFDocument(source: PDFDataInputSource(published))
+    #expect(reopened.revisions.count == 2)
+    await reopened.close()
+
+    await #expect(throws: PDFError.outputExists) {
+      try await document.writeIncrementalUpdate(transaction, to: destination)
+    }
+    _ = try await document.writeIncrementalUpdate(
+      transaction,
+      to: destination,
+      replacingExisting: true
+    )
+    let replaced = try await PDFDocument(
+      source: PDFDataInputSource(try Data(contentsOf: destination))
+    )
+    #expect(replaced.revisions.count == 2)
+    await replaced.close()
+    await document.close()
+  }
+
+  @Test
+  func adaptsIncrementalFinalizationForLegacySinks() async throws {
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture()))
+    let field = try #require(try await document.formFields().first)
+    let result = try await document.writeIncrementalUpdate(
+      .init(updates: [.init(field: field.identifier, value: .text("Legacy"))]),
+      to: LegacyPDFOutputSink()
+    )
+    #expect(result.output == .v1_7)
+    #expect(result.effectiveVersion == .v1_7)
+    await document.close()
+  }
+
+  @Test
+  func rejectsAChangedSourceBeforePublication() async throws {
+    let session = MutablePDFInputSession(data: fixture())
+    let document = try await PDFDocument(source: MutablePDFInputSource(session: session))
+    let field = try #require(try await document.formFields().first)
+    await session.append(Data("% changed\n".utf8))
+
+    await #expect(throws: PDFIncrementalUpdateError.sourceChanged) {
+      try await document.incrementallyUpdatedData(.init(updates: [
+        .init(field: field.identifier, value: .text("Changed"))
+      ]))
+    }
     await document.close()
   }
 
@@ -154,4 +259,45 @@ struct PDFFormIncrementalUpdateTests {
     data.append(Data("trailer\n<< /Size \(objects.count + 1) /Root 1 0 R >>\nstartxref\n\(xref)\n%%EOF\n".utf8))
     return data
   }
+}
+
+private struct LegacyPDFOutputSink: PDFOutputSink {
+  func makeSession() -> sending Session { Session() }
+
+  final class Session: PDFOutputSinkSession {
+    func write(_ data: borrowing Data) throws {}
+
+    func finish(
+      version: PDFVersion,
+      pageCount: Int,
+      diagnostics: [PDFDiagnostic]
+    ) throws -> sending PDFVersion {
+      version
+    }
+
+    func abort() {}
+  }
+}
+
+private struct MutablePDFInputSource: PDFInputSource {
+  let session: MutablePDFInputSession
+
+  func makeSession() async throws -> sending MutablePDFInputSession { session }
+}
+
+private actor MutablePDFInputSession: PDFInputSourceSession {
+  private var data: Data
+
+  init(data: Data) { self.data = data }
+
+  func length() async throws -> Int64 { Int64(data.count) }
+
+  func read(_ range: PDFSourceRange) async throws -> Data {
+    let lower = Int(range.offset)
+    return data.subdata(in: lower..<(lower + range.length))
+  }
+
+  func close() async {}
+
+  func append(_ bytes: Data) { data.append(bytes) }
 }

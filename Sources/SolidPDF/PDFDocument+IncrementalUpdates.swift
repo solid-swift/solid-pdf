@@ -53,7 +53,7 @@ extension PDFDocument {
       limits: options.limits,
       securityContext: securityContext
     ).encode()
-    let pageCount = try await PDFIncrementalUpdateValidator.validate(
+    let validation = try await PDFIncrementalUpdateValidator.validate(
       encoded.data,
       expectedRevisionCount: revisions.count + 1,
       securityContext: securityContext,
@@ -63,15 +63,13 @@ extension PDFDocument {
       let session = try sink.makeSession()
       do {
         try session.write(encoded.data)
-        let output = try session.finish(
-          version: effectiveVersion == .v2_0 ? .v2_0 : .v1_7,
-          pageCount: pageCount,
+        let output = try session.finishIncrementalUpdate(
+          fileVersion: effectiveVersion,
+          pageCount: validation.pageCount,
           diagnostics: plan.diagnostics.map {
             PDFDiagnostic(kind: .rendering, message: $0.message)
           }
         )
-        let changed = plan.changedReferences + plan.newReferences
-        let signatureStatuses = authorization.modificationStatuses(changed: changed)
         return PDFIncrementalUpdateResult(
           output: output,
           sourceRevision: latestRevision.identifier,
@@ -92,7 +90,7 @@ extension PDFDocument {
               )
             }
           },
-          signatureModifications: signatureStatuses
+          signatureModifications: validation.signatureModifications
         )
       } catch {
         session.abort()

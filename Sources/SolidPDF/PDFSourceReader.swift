@@ -54,6 +54,11 @@ actor PDFSourceReader<Session: PDFInputSourceSession> {
     return byteCount
   }
 
+  func currentSourceLength() async throws -> Int64 {
+    guard !closed else { throw PDFParsingError.documentClosed }
+    return try await session.length()
+  }
+
   func window(containing position: Int64) async throws -> PDFSourceWindow? {
     guard !closed else { throw PDFParsingError.documentClosed }
     guard position >= 0, position <= byteCount else {
