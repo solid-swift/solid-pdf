@@ -29,6 +29,7 @@ let benchmarks: @Sendable () -> Void = {
     compressed: true
   )
   let incremental = PDFParsingBenchmarkFixtures.incrementalDocument(revisionCount: 256)
+  let pageTree = try! PDFParsingBenchmarkFixtures.pageTreeDocument()
   let coldFile = FileManager.default.temporaryDirectory
     .appendingPathComponent("SolidPDFParsingBenchmark-(UUID().uuidString).pdf")
   try! classic.write(to: coldFile)
@@ -144,6 +145,58 @@ let benchmarks: @Sendable () -> Void = {
     data: PDFParsingBenchmarkFixtures.r6AESDocument,
     configuration: configuration
   )
+
+  Benchmark("Balanced Page Tree Validation", configuration: configuration) { benchmark in
+    let document = try await PDFDocument(source: PDFDataInputSource(pageTree))
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations { blackHole(try await document.pageCount()) }
+    benchmark.stopMeasurement()
+    await document.close()
+  }
+
+  Benchmark("Random Page Lookup", configuration: configuration) { benchmark in
+    let document = try await PDFDocument(source: PDFDataInputSource(pageTree))
+    benchmark.startMeasurement()
+    for iteration in benchmark.scaledIterations {
+      blackHole(try await document.page(at: iteration % 4_096))
+    }
+    benchmark.stopMeasurement()
+    await document.close()
+  }
+
+  Benchmark("Sequential Page Traversal", configuration: configuration) { benchmark in
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      let document = try await PDFDocument(source: PDFDataInputSource(pageTree))
+      let pages = try await document.pages()
+      var count = 0
+      for try await _ in pages { count += 1 }
+      blackHole(count)
+      await document.close()
+    }
+  }
+
+  Benchmark("Page Label Ranges", configuration: configuration) { benchmark in
+    let document = try await PDFDocument(source: PDFDataInputSource(pageTree))
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations { blackHole(try await document.pageLabelRanges()) }
+    benchmark.stopMeasurement()
+    await document.close()
+  }
+
+  Benchmark("Chained Page Content", configuration: configuration) { benchmark in
+    let document = try await PDFDocument(source: PDFDataInputSource(pageTree))
+    let page = try await document.page(at: 0)
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      let content = document.decodedContent(of: page)
+      var count = 0
+      for try await chunk in content { count += chunk.count }
+      blackHole(count)
+    }
+    benchmark.stopMeasurement()
+    await document.close()
+  }
 }
 
 private func registerOpen(

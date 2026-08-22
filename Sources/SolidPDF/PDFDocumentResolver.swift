@@ -2,6 +2,7 @@ import Foundation
 import SolidIO
 
 actor PDFDocumentResolver<Session: PDFInputSourceSession> {
+  nonisolated var parsingLimits: PDFParsingLimits { options.limits }
   private struct ResolutionKey: Sendable, Hashable {
     let reference: PDFObjectReference
     let revision: PDFRevisionIdentifier

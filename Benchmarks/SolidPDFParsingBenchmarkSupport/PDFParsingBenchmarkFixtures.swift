@@ -110,10 +110,17 @@ public enum PDFParsingBenchmarkFixtures {
       options: .init(version: .v1_7)
     )
     let catalog = try writer.reserveObject()
+    let pages = try writer.reserveObject()
     let stream = try writer.reserveObject()
     try writer.write(
-      .dictionary(["Type": .name("Catalog"), "Stream": .reference(stream)]),
+      .dictionary([
+        "Type": .name("Catalog"), "Pages": .reference(pages), "Stream": .reference(stream),
+      ]),
       to: catalog
+    )
+    try writer.write(
+      .dictionary(["Type": .name("Pages"), "Count": .integer(0), "Kids": .array([])]),
+      to: pages
     )
     try writer.writeStream(chunks: [bytes], compressed: compressed, to: stream)
     return try writer.finish(root: catalog, pageCount: 0).data
@@ -124,14 +131,17 @@ public enum PDFParsingBenchmarkFixtures {
     precondition(revisionCount > 0)
     var data = Data("%PDF-1.7\n".utf8)
     let rootOffset = data.count
-    data.append(Data("1 0 obj\n<< /Type /Catalog /Value 2 0 R >>\nendobj\n".utf8))
+    data.append(Data("1 0 obj\n<< /Type /Catalog /Pages 3 0 R /Value 2 0 R >>\nendobj\n".utf8))
     var valueOffset = data.count
     data.append(Data("2 0 obj\n0\nendobj\n".utf8))
+    let pagesOffset = data.count
+    data.append(Data("3 0 obj\n<< /Type /Pages /Count 0 /Kids [] >>\nendobj\n".utf8))
     var previousXRefOffset = data.count
-    data.append(Data("xref\n0 3\n0000000000 65535 f \n".utf8))
+    data.append(Data("xref\n0 4\n0000000000 65535 f \n".utf8))
     data.append(Data(String(format: "%010d 00000 n \n", rootOffset).utf8))
     data.append(Data(String(format: "%010d 00000 n \n", valueOffset).utf8))
-    data.append(Data("trailer\n<< /Size 3 /Root 1 0 R >>\n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", pagesOffset).utf8))
+    data.append(Data("trailer\n<< /Size 4 /Root 1 0 R >>\n".utf8))
     data.append(Data("startxref\n\(previousXRefOffset)\n%%EOF\n".utf8))
 
     for revision in 1..<revisionCount {
@@ -142,13 +152,90 @@ public enum PDFParsingBenchmarkFixtures {
       data.append(Data(String(format: "%010d 00000 n \n", valueOffset).utf8))
       data.append(
         Data(
-          ("trailer\n<< /Size 3 /Root 1 0 R /Prev \(previousXRefOffset) >>\n"
+          ("trailer\n<< /Size 4 /Root 1 0 R /Prev \(previousXRefOffset) >>\n"
             + "startxref\n\(xrefOffset)\n%%EOF\n").utf8
         )
       )
       previousXRefOffset = xrefOffset
     }
     return data
+  }
+
+  /// Creates a balanced page tree with inherited resources, labels, and shared content.
+  public static func pageTreeDocument(pageCount: Int = 4_096, branchSize: Int = 32) throws -> Data {
+    precondition(pageCount > 0 && branchSize > 1)
+    var writer = try PDFDocumentWriter(
+      sink: PDFDataOutputSink(),
+      options: .init(version: .v2_0, compressionLevel: 0)
+    )
+    let catalog = try writer.reserveObject()
+    let content = try writer.reserveObject()
+    var pageReferences = [PDFObjectReference]()
+    pageReferences.reserveCapacity(pageCount)
+    for _ in 0..<pageCount { pageReferences.append(try writer.reserveObject()) }
+
+    struct Node {
+      let reference: PDFObjectReference
+      let kids: [PDFObjectReference]
+      let count: Int
+    }
+    var nodes = [Node]()
+    var parentByChild = [PDFObjectReference: PDFObjectReference]()
+    var level = pageReferences.map { ($0, 1) }
+    while level.count > 1 || nodes.isEmpty {
+      var next = [(PDFObjectReference, Int)]()
+      for start in stride(from: 0, to: level.count, by: branchSize) {
+        let slice = Array(level[start..<min(level.count, start + branchSize)])
+        let reference = try writer.reserveObject()
+        let kids = slice.map(\.0)
+        let count = slice.reduce(0) { $0 + $1.1 }
+        for child in kids { parentByChild[child] = reference }
+        nodes.append(Node(reference: reference, kids: kids, count: count))
+        next.append((reference, count))
+      }
+      level = next
+      if level.count == 1 { break }
+    }
+    let root = level[0].0
+    try writer.write(
+      .dictionary([
+        "Type": .name("Catalog"),
+        "Pages": .reference(root),
+        "PageLabels": .dictionary([
+          "Nums": .array([
+            .integer(0),
+            .dictionary(["S": .name("D"), "P": .string("Page ")]),
+          ])
+        ]),
+      ]),
+      to: catalog
+    )
+    try writer.writeStream(chunks: [Data("q Q\n".utf8)], compressed: false, to: content)
+    for page in pageReferences {
+      try writer.write(
+        .dictionary([
+          "Type": .name("Page"),
+          "Parent": .reference(parentByChild[page]!),
+          "Contents": .reference(content),
+        ]),
+        to: page
+      )
+    }
+    for node in nodes {
+      var dictionary: [PDFName: PDFObject] = [
+        "Type": .name("Pages"),
+        "Count": .integer(node.count),
+        "Kids": .array(node.kids.map(PDFObject.reference)),
+      ]
+      if let parent = parentByChild[node.reference] {
+        dictionary["Parent"] = .reference(parent)
+      } else {
+        dictionary["MediaBox"] = .array([.integer(0), .integer(0), .integer(612), .integer(792)])
+        dictionary["Resources"] = .dictionary([:])
+      }
+      try writer.write(.dictionary(dictionary), to: node.reference)
+    }
+    return try writer.finish(root: catalog, pageCount: pageCount).data
   }
 
   /// A qpdf-authored R4 RC4 interoperability fixture with password `user`.

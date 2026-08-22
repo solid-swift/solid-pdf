@@ -5,6 +5,18 @@ import Testing
 
 @Suite
 struct PDFParsingBenchmarkFixturesTests {
+  @Test
+  func pageTreeFixtureSupportsTypedTraversal() async throws {
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        try PDFParsingBenchmarkFixtures.pageTreeDocument(pageCount: 64, branchSize: 8)
+      )
+    )
+    #expect(try await document.pageCount() == 64)
+    #expect((try await document.page(at: 63)).label?.text == "Page 64")
+    await document.close()
+  }
+
   @Test(arguments: PDFVersion.allCases)
   func writerFixturesOpenAndResolveTheirCatalog(_ version: PDFVersion) async throws {
     let data = try PDFParsingBenchmarkFixtures.document(

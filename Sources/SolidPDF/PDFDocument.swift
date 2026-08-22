@@ -154,6 +154,29 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     try await structure.validatePageTree(in: revision)
   }
 
+  /// Returns the explicit page-label ranges for the latest revision.
+  public func pageLabelRanges() async throws -> [PDFPageLabelRange]? {
+    try await structure.pageLabelRanges(in: latestRevision.identifier)
+  }
+
+  /// Returns the explicit page-label ranges for a selected revision.
+  public func pageLabelRanges(
+    in revision: PDFRevisionIdentifier
+  ) async throws -> [PDFPageLabelRange]? {
+    try await structure.pageLabelRanges(in: revision)
+  }
+
+  /// Opens the exact ordered concatenation of a page's decoded content streams.
+  public func decodedContent(of page: PDFPage) -> PDFDecodedPageContent {
+    PDFDecodedPageContent(
+      state: PDFDecodedPageContentState(
+        streams: page.contentStreams,
+        maximumBytes: resolver.parsingLimits.maximumDecodedPageContentBytes,
+        open: { [resolver] stream in try await resolver.decodedStream(stream) }
+      )
+    )
+  }
+
   /// Reads the exact encoded bytes of a resolved stream.
   public func encodedBytes(of stream: PDFStreamObject) async throws -> Data {
     try await resolver.readStream(stream)

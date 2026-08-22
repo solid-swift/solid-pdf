@@ -67,7 +67,8 @@ struct PDFDocumentResolutionTests {
     let document = try await PDFDocument(
       source: PDFDataInputSource(streamWithoutTrailingLineEndingFixture())
     )
-    guard case .stream(let stream) = try await document.resolve(document.root).value else {
+    let streamReference = try PDFObjectReference(objectNumber: 1, generationNumber: 0)
+    guard case .stream(let stream) = try await document.resolve(streamReference).value else {
       Issue.record("Expected the root object to be a stream")
       return
     }
@@ -196,14 +197,18 @@ struct PDFDocumentResolutionTests {
   private func incrementalFixture() -> Data {
     var data = Data("%PDF-1.7\n".utf8)
     let rootOffset = data.count
-    data.append(Data("1 0 obj\n<< /Type /Catalog /Value 2 0 R >>\nendobj\n".utf8))
+    data.append(Data("1 0 obj\n<< /Type /Catalog /Pages 4 0 R /Value 2 0 R >>\nendobj\n".utf8))
     let originalValueOffset = data.count
     data.append(Data("2 0 obj\n(Original)\nendobj\n".utf8))
+    let pagesOffset = data.count
+    data.append(Data("4 0 obj\n<< /Type /Pages /Count 0 /Kids [] >>\nendobj\n".utf8))
     let originalXRefOffset = data.count
-    data.append(Data("xref\n0 3\n0000000000 65535 f \n".utf8))
+    data.append(Data("xref\n0 5\n0000000000 65535 f \n".utf8))
     data.append(Data(String(format: "%010d 00000 n \n", rootOffset).utf8))
     data.append(Data(String(format: "%010d 00000 n \n", originalValueOffset).utf8))
-    data.append(Data("trailer\n<< /Size 3 /Root 1 0 R >>\n".utf8))
+    data.append(Data("0000000000 00000 f \n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", pagesOffset).utf8))
+    data.append(Data("trailer\n<< /Size 5 /Root 1 0 R >>\n".utf8))
     data.append(Data("startxref\n\(originalXRefOffset)\n%%EOF\n".utf8))
 
     let updatedValueOffset = data.count
@@ -216,7 +221,7 @@ struct PDFDocumentResolutionTests {
     data.append(Data(String(format: "%010d 00000 n \n", addedValueOffset).utf8))
     data.append(
       Data(
-        ("trailer\n<< /Size 4 /Root 1 0 R /Prev \(originalXRefOffset) >>\n"
+        ("trailer\n<< /Size 5 /Root 1 0 R /Prev \(originalXRefOffset) >>\n"
           + "startxref\n\(updatedXRefOffset)\n%%EOF\n").utf8
       )
     )
@@ -226,7 +231,7 @@ struct PDFDocumentResolutionTests {
   private func objectStreamFixture() -> Data {
     var data = Data("%PDF-1.7\n".utf8)
     let rootOffset = data.count
-    data.append(Data("1 0 obj\n<< /Type /Catalog /Member 3 0 R >>\nendobj\n".utf8))
+    data.append(Data("1 0 obj\n<< /Type /Catalog /Pages 5 0 R /Member 3 0 R >>\nendobj\n".utf8))
     let objectStreamOffset = data.count
     let objectStream = Data("3 0 << /Value 42 >>".utf8)
     data.append(
@@ -237,16 +242,20 @@ struct PDFDocumentResolutionTests {
     )
     data.append(objectStream)
     data.append(Data("\nendstream\nendobj\n".utf8))
+    let pagesOffset = data.count
+    data.append(Data("5 0 obj\n<< /Type /Pages /Count 0 /Kids [] >>\nendobj\n".utf8))
     let xrefOffset = data.count
     var entries = Data()
     appendEntry(type: 0, field2: 0, field3: 65_535, to: &entries)
     appendEntry(type: 1, field2: rootOffset, field3: 0, to: &entries)
     appendEntry(type: 1, field2: objectStreamOffset, field3: 0, to: &entries)
     appendEntry(type: 2, field2: 2, field3: 0, to: &entries)
+    appendEntry(type: 0, field2: 0, field3: 0, to: &entries)
+    appendEntry(type: 1, field2: pagesOffset, field3: 0, to: &entries)
     appendEntry(type: 1, field2: xrefOffset, field3: 0, to: &entries)
     data.append(
       Data(
-        ("4 0 obj\n<< /Type /XRef /Size 5 /Root 1 0 R /W [1 4 2] "
+        ("6 0 obj\n<< /Type /XRef /Size 7 /Root 1 0 R /W [1 4 2] "
           + "/Length \(entries.count) >>\nstream\n").utf8
       )
     )
@@ -263,27 +272,35 @@ struct PDFDocumentResolutionTests {
     offsets.append(data.count)
     data.append(Data("2 0 obj\n<< /Length 1 0 R >>\nstream\n\nendstream\nendobj\n".utf8))
     offsets.append(data.count)
-    data.append(Data("3 0 obj\n<< /Type /Catalog >>\nendobj\n".utf8))
+    data.append(Data("3 0 obj\n<< /Type /Catalog /Pages 4 0 R >>\nendobj\n".utf8))
+    offsets.append(data.count)
+    data.append(Data("4 0 obj\n<< /Type /Pages /Count 0 /Kids [] >>\nendobj\n".utf8))
     let xrefOffset = data.count
-    data.append(Data("xref\n0 4\n0000000000 65535 f \n".utf8))
+    data.append(Data("xref\n0 5\n0000000000 65535 f \n".utf8))
     for offset in offsets.dropFirst() {
       data.append(Data(String(format: "%010d 00000 n \n", offset).utf8))
     }
-    data.append(Data("trailer\n<< /Size 4 /Root 3 0 R >>\n".utf8))
+    data.append(Data("trailer\n<< /Size 5 /Root 3 0 R >>\n".utf8))
     data.append(Data("startxref\n\(xrefOffset)\n%%EOF\n".utf8))
     return data
   }
 
   private func streamWithoutTrailingLineEndingFixture() -> Data {
     var data = Data("%PDF-1.7\n".utf8)
-    let rootOffset = data.count
+    let streamOffset = data.count
     data.append(Data("1 0 obj\n<< /Length 3 >>\nstream\n".utf8))
     data.append(contentsOf: [0x00, 0xFF, 0x0D])
     data.append(Data("endstream\nendobj\n".utf8))
+    let rootOffset = data.count
+    data.append(Data("2 0 obj\n<< /Type /Catalog /Pages 3 0 R >>\nendobj\n".utf8))
+    let pagesOffset = data.count
+    data.append(Data("3 0 obj\n<< /Type /Pages /Count 0 /Kids [] >>\nendobj\n".utf8))
     let xrefOffset = data.count
-    data.append(Data("xref\n0 2\n0000000000 65535 f \n".utf8))
+    data.append(Data("xref\n0 4\n0000000000 65535 f \n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", streamOffset).utf8))
     data.append(Data(String(format: "%010d 00000 n \n", rootOffset).utf8))
-    data.append(Data("trailer\n<< /Size 2 /Root 1 0 R >>\n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", pagesOffset).utf8))
+    data.append(Data("trailer\n<< /Size 4 /Root 2 0 R >>\n".utf8))
     data.append(Data("startxref\n\(xrefOffset)\n%%EOF\n".utf8))
     return data
   }

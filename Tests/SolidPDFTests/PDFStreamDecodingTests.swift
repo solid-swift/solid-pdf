@@ -390,8 +390,18 @@ struct PDFStreamDecodingTests {
       options: .init(version: .v1_7)
     )
     let catalog = try writer.reserveObject()
+    let pages = try writer.reserveObject()
     let stream = try writer.reserveObject()
-    try writer.write(.dictionary(["Type": .name("Catalog"), "Stream": .reference(stream)]), to: catalog)
+    try writer.write(
+      .dictionary([
+        "Type": .name("Catalog"), "Pages": .reference(pages), "Stream": .reference(stream),
+      ]),
+      to: catalog
+    )
+    try writer.write(
+      .dictionary(["Type": .name("Pages"), "Count": .integer(0), "Kids": .array([])]),
+      to: pages
+    )
     try writer.writeStream(
       dictionary: dictionary,
       chunks: [data],

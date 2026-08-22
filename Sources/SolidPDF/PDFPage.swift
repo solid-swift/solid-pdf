@@ -16,6 +16,8 @@ public struct PDFPage: Sendable, Hashable {
   public let geometry: PDFPageGeometry
   /// Ordered content streams. Empty represents an empty page.
   public let contentStreams: [PDFStreamObject]
+  /// The explicit label effective for this page, when the catalog defines page labels.
+  public let label: PDFPageLabel?
 
   package init(
     index: Int,
@@ -25,7 +27,8 @@ public struct PDFPage: Sendable, Hashable {
     ancestorReferences: [PDFObjectReference],
     resources: PDFPageAttribute<[PDFName: PDFObject]>,
     geometry: PDFPageGeometry,
-    contentStreams: [PDFStreamObject] = []
+    contentStreams: [PDFStreamObject] = [],
+    label: PDFPageLabel? = nil
   ) {
     self.index = index
     self.reference = reference
@@ -35,5 +38,6 @@ public struct PDFPage: Sendable, Hashable {
     self.resources = resources
     self.geometry = geometry
     self.contentStreams = contentStreams
+    self.label = label
   }
 }

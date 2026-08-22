@@ -32,6 +32,8 @@ enum SolidPDFInteropFixtures {
       .write(to: directory.appendingPathComponent("writer-2.0.pdf"))
     try PDFParsingBenchmarkFixtures.objectStreamDocument(containedObjectCount: 8)
       .write(to: directory.appendingPathComponent("object-stream.pdf"))
+    try PDFParsingBenchmarkFixtures.pageTreeDocument(pageCount: 64, branchSize: 8)
+      .write(to: directory.appendingPathComponent("page-tree.pdf"))
     let expected = Data((0..<65_537).map { UInt8(truncatingIfNeeded: $0 * 37) })
     try expected.write(to: directory.appendingPathComponent("mixed-filter.expected"))
     try mixedFilterDocument(expected)

@@ -6,6 +6,7 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
   private var catalogs = [PDFRevisionIdentifier: PDFDocumentCatalog]()
   private var validatedPageCounts = [PDFRevisionIdentifier: Int]()
   private var pendingPageValidations = [PDFRevisionIdentifier: Task<Int, Error>]()
+  private var pageLabelRangeCache = [PDFRevisionIdentifier: [PDFPageLabelRange]?]()
   private var closed = false
 
   init(
@@ -63,6 +64,7 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
     pendingPageValidations.removeAll()
     catalogs.removeAll()
     validatedPageCounts.removeAll()
+    pageLabelRangeCache.removeAll()
   }
 
   func pageCount(in revision: PDFRevisionIdentifier) async throws -> Int {
@@ -123,6 +125,61 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
       }
     )
     return PDFPageSequence(state: state)
+  }
+
+  func pageLabelRanges(in revision: PDFRevisionIdentifier) async throws -> [PDFPageLabelRange]? {
+    if let cached = pageLabelRangeCache[revision] { return cached }
+    let catalog = try await catalog(in: revision)
+    guard let root = catalog.rawDictionary["PageLabels"] else {
+      pageLabelRangeCache[revision] = .some(nil)
+      return nil
+    }
+    let entries = try await PDFCollectionTreeReader(
+      kind: .number,
+      limits: limits,
+      resolve: { [resolver] reference in try await resolver.resolve(reference, in: revision) }
+    ).read(root)
+    guard !entries.isEmpty, entries.first?.key == .number(0) else {
+      throw malformed("A PageLabels number tree must begin at page index zero.")
+    }
+    var ranges = [PDFPageLabelRange]()
+    for entry in entries {
+      guard case .number(let rawIndex) = entry.key,
+        rawIndex >= 0,
+        rawIndex < Int64(catalog.declaredPageCount)
+      else { throw malformed("A page-label range index is outside the page tree.") }
+      let value = try await resolveDirect(entry.value, in: revision, visited: [])
+      guard case .dictionary(let dictionary) = value else {
+        throw malformed("A page-label range value must be a dictionary.")
+      }
+      let prefix: String
+      if let prefixValue = dictionary["P"] {
+        guard case .string(let string) = prefixValue else {
+          throw malformed("A page-label prefix must be a text string.")
+        }
+        prefix = try PDFTextStringDecoder.decode(
+          string,
+          allowsUTF8: catalog.effectiveVersion == .v2_0
+        )
+      } else {
+        prefix = ""
+      }
+      let style = try pageLabelStyle(dictionary["S"])
+      let start = dictionary.pdfInteger(named: "St") ?? 1
+      guard start >= 1, start <= Int64(Int.max) else {
+        throw malformed("A page-label starting number must be at least one.")
+      }
+      let range = PDFPageLabelRange(
+        startPageIndex: Int(rawIndex),
+        prefix: prefix,
+        style: style,
+        startNumber: Int(start)
+      )
+      _ = try renderedLabel(range: range, pageIndex: Int(rawIndex))
+      ranges.append(range)
+    }
+    pageLabelRangeCache[revision] = ranges
+    return ranges
   }
 
   private final class PageWalkState {
@@ -321,6 +378,8 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
       rotation: rotation,
       userUnit: userUnit
     )
+    let contents = try await resolveContents(dictionary["Contents"], in: revision)
+    let label = try await pageLabel(for: index, in: revision)
     return PDFPage(
       index: index,
       reference: reference,
@@ -328,8 +387,136 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
       definingRevision: object.definitionRevision ?? revision,
       ancestorReferences: ancestors,
       resources: resources,
-      geometry: geometry
+      geometry: geometry,
+      contentStreams: contents,
+      label: label
     )
+  }
+
+  private func resolveContents(
+    _ value: PDFObject?,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> [PDFStreamObject] {
+    guard let value else { return [] }
+    let references: [PDFObjectReference]
+    switch value {
+    case .reference(let reference):
+      references = [reference]
+    case .array(let values):
+      guard !values.isEmpty else { throw malformed("A Contents array cannot be empty.") }
+      references = try values.map {
+        guard case .reference(let reference) = $0 else {
+          throw malformed("Contents arrays must contain indirect stream references.")
+        }
+        return reference
+      }
+    default:
+      throw malformed("Contents must be an indirect stream or an array of indirect streams.")
+    }
+    guard references.count <= limits.maximumPageContentStreams else {
+      throw PDFParsingError.limitExceeded(
+        .init(offset: 0, message: "A page contains too many content streams.")
+      )
+    }
+    var streams = [PDFStreamObject]()
+    streams.reserveCapacity(references.count)
+    for reference in references {
+      let object = try await resolver.resolve(reference, in: revision)
+      guard case .stream(let stream) = object.value, stream.revision == revision else {
+        throw malformed("A Contents reference must resolve to a stream in the selected revision.")
+      }
+      streams.append(stream)
+    }
+    return streams
+  }
+
+  private func pageLabel(
+    for pageIndex: Int,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFPageLabel? {
+    guard let ranges = try await pageLabelRanges(in: revision),
+      let range = ranges.last(where: { $0.startPageIndex <= pageIndex })
+    else { return nil }
+    return PDFPageLabel(
+      pageIndex: pageIndex,
+      text: try renderedLabel(range: range, pageIndex: pageIndex),
+      range: range
+    )
+  }
+
+  private func pageLabelStyle(_ object: PDFObject?) throws -> PDFPageLabelStyle {
+    guard let object else { return .none }
+    guard case .name(let name) = object else {
+      throw malformed("A page-label style must be a name.")
+    }
+    return switch name {
+    case PDFName("D"): .decimal
+    case PDFName("R"): .uppercaseRoman
+    case PDFName("r"): .lowercaseRoman
+    case PDFName("A"): .uppercaseLetters
+    case PDFName("a"): .lowercaseLetters
+    default: throw malformed("A page-label style is unsupported.")
+    }
+  }
+
+  private func renderedLabel(range: PDFPageLabelRange, pageIndex: Int) throws -> String {
+    let offset = pageIndex - range.startPageIndex
+    let (number, overflow) = range.startNumber.addingReportingOverflow(offset)
+    guard !overflow, number > 0 else { throw malformed("A page-label number overflows.") }
+    if range.style == .uppercaseRoman || range.style == .lowercaseRoman {
+      guard number <= limits.maximumGeneratedPageLabelBytes * 1_000 else {
+        throw PDFParsingError.limitExceeded(
+          .init(offset: 0, message: "Generated Roman page-label text exceeds its limit.")
+        )
+      }
+    }
+    if range.style == .uppercaseLetters || range.style == .lowercaseLetters {
+      guard (number - 1) / 26 + 1 <= limits.maximumGeneratedPageLabelBytes else {
+        throw PDFParsingError.limitExceeded(
+          .init(offset: 0, message: "Generated letter page-label text exceeds its limit.")
+        )
+      }
+    }
+    let suffix: String
+    switch range.style {
+    case .none: suffix = ""
+    case .decimal: suffix = String(number)
+    case .uppercaseRoman: suffix = roman(number)
+    case .lowercaseRoman: suffix = roman(number).lowercased()
+    case .uppercaseLetters: suffix = repeatedLetter(number, uppercase: true)
+    case .lowercaseLetters: suffix = repeatedLetter(number, uppercase: false)
+    }
+    let value = range.prefix + suffix
+    guard value.utf8.count <= limits.maximumGeneratedPageLabelBytes else {
+      throw PDFParsingError.limitExceeded(
+        .init(offset: 0, message: "Generated page-label text exceeds its limit.")
+      )
+    }
+    return value
+  }
+
+  private func roman(_ number: Int) -> String {
+    let values = [
+      (1_000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+      (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+      (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+    ]
+    var remainder = number
+    var result = ""
+    for (value, symbol) in values {
+      while remainder >= value {
+        result += symbol
+        remainder -= value
+      }
+    }
+    return result
+  }
+
+  private func repeatedLetter(_ number: Int, uppercase: Bool) -> String {
+    let index = (number - 1) % 26
+    let count = (number - 1) / 26 + 1
+    let base = uppercase ? 65 : 97
+    return String(repeating: String(UnicodeScalar(base + index)!), count: count)
   }
 
   private func resolveDictionary(

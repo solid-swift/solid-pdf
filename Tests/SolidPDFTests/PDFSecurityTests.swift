@@ -425,7 +425,7 @@ struct PDFSecurityTests {
 
     var data = Data("%PDF-1.7\n".utf8)
     let rootOffset = data.count
-    data.append(Data("1 0 obj\n<< /Type /Catalog /Secret 3 0 R /Contents 4 0 R >>\nendobj\n".utf8))
+    data.append(Data("1 0 obj\n<< /Type /Catalog /Pages 5 0 R /Secret 3 0 R /Contents 4 0 R >>\nendobj\n".utf8))
     let encryptionOffset = data.count
     data.append(Data("2 0 obj\n\(encryptionDictionary)\nendobj\n".utf8))
     let stringOffset = data.count
@@ -440,15 +440,18 @@ struct PDFSecurityTests {
     data.append(Data("4 0 obj\n<< \(streamEntries)/Length \(streamPayload.count) >>\nstream\n".utf8))
     data.append(streamPayload)
     data.append(Data("\nendstream\nendobj\n".utf8))
+    let pagesOffset = data.count
+    data.append(Data("5 0 obj\n<< /Type /Pages /Count 0 /Kids [] >>\nendobj\n".utf8))
     let xrefOffset = data.count
-    data.append(Data("xref\n0 5\n0000000000 65535 f \n".utf8))
+    data.append(Data("xref\n0 6\n0000000000 65535 f \n".utf8))
     data.append(Data(String(format: "%010d 00000 n \n", rootOffset).utf8))
     data.append(Data(String(format: "%010d 00000 n \n", encryptionOffset).utf8))
     data.append(Data(String(format: "%010d 00000 n \n", stringOffset).utf8))
     data.append(Data(String(format: "%010d 00000 n \n", streamOffset).utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", pagesOffset).utf8))
     data.append(
       Data(
-        ("trailer\n<< /Size 5 /Root 1 0 R /Encrypt 2 0 R /ID [<\(identifier.hex)> <\(identifier.hex)>] >>\n"
+        ("trailer\n<< /Size 6 /Root 1 0 R /Encrypt 2 0 R /ID [<\(identifier.hex)> <\(identifier.hex)>] >>\n"
           + "startxref\n\(xrefOffset)\n%%EOF\n").utf8
       )
     )
@@ -508,9 +511,11 @@ struct PDFSecurityTests {
     let encryptionDictionary = "<< /Filter /Standard /V 4 /R 4 /Length 128 /O <\(values.owner.hex)> /U <\(values.user.hex)> /P -4 /CF << /StdCF << /CFM /AESV2 /Length 16 >> >> /StmF /StdCF /StrF /StdCF /EncryptMetadata false >>"
     var data = Data("%PDF-1.7\n".utf8)
     let rootOffset = data.count
-    data.append(Data("1 0 obj\n<< /Type /Catalog /Member 6 0 R >>\nendobj\n".utf8))
+    data.append(Data("1 0 obj\n<< /Type /Catalog /Pages 3 0 R /Member 6 0 R >>\nendobj\n".utf8))
     let encryptionOffset = data.count
     data.append(Data("2 0 obj\n\(encryptionDictionary)\nendobj\n".utf8))
+    let pagesOffset = data.count
+    data.append(Data("3 0 obj\n<< /Type /Pages /Count 0 /Kids [] >>\nendobj\n".utf8))
     let objectStreamOffset = data.count
     let decodedObjectStream = Data("6 0 << /Secret (Inside object stream) >>".utf8)
     let encodedObjectStream = try encryptObjectData(
@@ -532,7 +537,7 @@ struct PDFSecurityTests {
     appendEntry(type: 0, field2: 0, field3: 65_535, to: &entries)
     appendEntry(type: 1, field2: rootOffset, field3: 0, to: &entries)
     appendEntry(type: 1, field2: encryptionOffset, field3: 0, to: &entries)
-    appendEntry(type: 0, field2: 0, field3: 0, to: &entries)
+    appendEntry(type: 1, field2: pagesOffset, field3: 0, to: &entries)
     appendEntry(type: 0, field2: 0, field3: 0, to: &entries)
     appendEntry(type: 1, field2: objectStreamOffset, field3: 0, to: &entries)
     appendEntry(type: 2, field2: 5, field3: 0, to: &entries)
@@ -574,7 +579,7 @@ struct PDFSecurityTests {
     data.append(Data(String(format: "%010d 00000 n \n", objectOffset).utf8))
     data.append(
       Data(
-        ("trailer\n<< /Size 5 /Root 1 0 R /Encrypt 2 0 R /Prev \(previousOffset) "
+        ("trailer\n<< /Size 6 /Root 1 0 R /Encrypt 2 0 R /Prev \(previousOffset) "
           + "/ID [<\(identifier.hex)> <\(identifier.hex)>] >>\n"
           + "startxref\n\(xrefOffset)\n%%EOF\n").utf8
       )
@@ -642,7 +647,7 @@ struct PDFSecurityTests {
     data.append(Data(String(format: "%010d 00000 n \n", encryptionOffset).utf8))
     data.append(
       Data(
-        ("trailer\n<< /Size 5 /Root 1 0 R /Encrypt 2 0 R /Prev \(previousOffset) "
+        ("trailer\n<< /Size 6 /Root 1 0 R /Encrypt 2 0 R /Prev \(previousOffset) "
           + "/ID [<30313233343536373839616263646566> <30313233343536373839616263646566>] >>\n"
           + "startxref\n\(xrefOffset)\n%%EOF\n").utf8
       )
