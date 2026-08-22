@@ -76,7 +76,9 @@ final class PDFContentExecutor {
       guard !inTextObject else {
         throw malformed("Inline image inside a text object.", operatorName: name, at: location)
       }
-      let image = try await parser.parseInlineImage(startingAt: location)
+      let image = try await parser.parseInlineImage(startingAt: location) { [handler] dictionary in
+        try await handler.inlineImageByteCount(dictionary: dictionary, location: location)
+      }
       try await handler.executeInlineImage(image)
       return
     }

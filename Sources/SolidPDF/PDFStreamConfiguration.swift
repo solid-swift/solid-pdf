@@ -2,12 +2,12 @@ import Foundation
 import SolidIO
 import SolidImageIO
 
-struct PDFStreamFilterSpecification: Sendable {
+package struct PDFStreamFilterSpecification: Sendable {
   let name: PDFName
   let parameters: [PDFName: PDFObject]?
   let implementation: (any IncrementalFilter)?
 
-  init(
+  package init(
     name: PDFName,
     parameters: [PDFName: PDFObject]?,
     implementation: (any IncrementalFilter)? = nil
@@ -174,8 +174,8 @@ struct PDFStreamConfiguration: Sendable {
   }
 }
 
-struct PDFStreamFilterFactory {
-  static func make(
+package struct PDFStreamFilterFactory {
+  package static func make(
     _ specification: PDFStreamFilterSpecification,
     diagnostic: PDFParsingDiagnostic,
     maximumDecodedBytes: Int

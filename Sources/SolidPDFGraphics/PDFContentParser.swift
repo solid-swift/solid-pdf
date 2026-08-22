@@ -35,7 +35,10 @@ final class PDFContentParser {
 
   func close() async { await input.close() }
 
-  func parseInlineImage(startingAt start: PDFContentLocation) async throws -> PDFInlineImage {
+  func parseInlineImage(
+    startingAt start: PDFContentLocation,
+    rawByteCount: ([PDFName: PDFObject]) async throws -> Int
+  ) async throws -> PDFInlineImage {
     var dictionary: [PDFName: PDFObject] = [:]
     while let key = try await next() {
       if case .keyword("ID") = key.value { break }
@@ -51,21 +54,54 @@ final class PDFContentParser {
     if separator.value == 0x0D, let lineFeed = try await input.peek(), lineFeed.value == 0x0A {
       _ = try await input.read()
     }
-    let length = try inlineImageByteCount(dictionary, at: inlineByte(start))
-    guard length <= maximumScratchBytes else {
-      throw PDFGraphicsError.limitExceeded("Inline image exceeds interpretation scratch.", location: start)
-    }
-    var data = Data(capacity: length)
     var last = inlineByte(start)
-    for _ in 0..<length {
-      guard let byte = try await input.read() else { throw malformed("Truncated inline-image data.", at: last) }
-      data.append(byte.value)
-      last = byte
+    var data = Data()
+    if Self.hasInlineFilters(dictionary) {
+      let decoder = try PDFInlineStreamDecoder(
+        dictionary: dictionary,
+        maximumFilters: 16,
+        maximumDecodedBytes: maximumScratchBytes,
+        diagnostic: .init(
+          offset: start.decodedOffset,
+          object: start.pageReference,
+          message: "The inline-image filter configuration is invalid."
+        )
+      )
+      var finished = false
+      while !finished {
+        guard let byte = try await input.read() else {
+          throw malformed("Truncated filtered inline-image data.", at: last)
+        }
+        last = byte
+        let result = try decoder.process(Data([byte.value]))
+        let total = data.count.addingReportingOverflow(result.output.count)
+        guard !total.overflow, total.partialValue <= maximumScratchBytes else {
+          throw PDFGraphicsError.limitExceeded("Inline image exceeds interpretation scratch.", location: start)
+        }
+        data.append(result.output)
+        finished = result.finished
+      }
+    } else {
+      let length = try await rawByteCount(dictionary)
+      guard length <= maximumScratchBytes else {
+        throw PDFGraphicsError.limitExceeded("Inline image exceeds interpretation scratch.", location: start)
+      }
+      data.reserveCapacity(length)
+      for _ in 0..<length {
+        guard let byte = try await input.read() else { throw malformed("Truncated inline-image data.", at: last) }
+        data.append(byte.value)
+        last = byte
+      }
     }
-    guard let whitespace = try await input.read(), Self.isWhitespace(whitespace.value),
-      let e = try await input.read(), e.value == 0x45,
+    guard let whitespace = try await input.read(), Self.isWhitespace(whitespace.value) else {
+      throw malformed("Inline-image data lacks required trailing whitespace.", at: last)
+    }
+    while let following = try await input.peek(), Self.isWhitespace(following.value) {
+      _ = try await input.read()
+    }
+    guard let e = try await input.read(), e.value == 0x45,
       let i = try await input.read(), i.value == 0x49,
-      let delimiter = try await input.peek(), Self.isWhitespace(delimiter.value)
+      try await inlineImageTerminatorEndsToken()
     else { throw malformed("Inline-image EI terminator is invalid.", at: last) }
     return PDFInlineImage(
       dictionary: dictionary,
@@ -348,48 +384,9 @@ final class PDFContentParser {
     }
   }
 
-  private func inlineImageByteCount(
-    _ dictionary: [PDFName: PDFObject],
-    at byte: PDFContentInput.Byte
-  ) throws -> Int {
-    if let filter = dictionary["Filter"] ?? dictionary["F"] {
-      let name = (try? PDFObjectAccess.name(filter)) ?? PDFName("Unknown")
-      throw PDFGraphicsError.unsupported(.imageFilter(name), location: makeLocation(first: byte, last: byte))
-    }
-    let width = try PDFObjectAccess.integer(dictionary["Width"] ?? dictionary["W"] ?? .null)
-    let height = try PDFObjectAccess.integer(dictionary["Height"] ?? dictionary["H"] ?? .null)
-    let mask: Bool
-    switch dictionary["ImageMask"] ?? dictionary["IM"] {
-    case .boolean(let value): mask = value
-    case nil: mask = false
-    default: throw malformed("Invalid inline-image mask flag.", at: byte)
-    }
-    let bits = mask ? 1 : try PDFObjectAccess.integer(dictionary["BitsPerComponent"] ?? dictionary["BPC"] ?? .null)
-    let components: Int
-    if mask {
-      components = 1
-    } else {
-      let color = try PDFObjectAccess.name(dictionary["ColorSpace"] ?? dictionary["CS"] ?? .null).pdfGraphicsString
-      switch color {
-      case "G", "DeviceGray": components = 1
-      case "RGB", "DeviceRGB": components = 3
-      case "CMYK", "DeviceCMYK": components = 4
-      default:
-        throw PDFGraphicsError.unsupported(.operatorName("inline-image named ColorSpace"), location: makeLocation(first: byte, last: byte))
-      }
-    }
-    guard width > 0, height > 0, [1, 2, 4, 8, 16].contains(bits) else {
-      throw malformed("Invalid inline-image dimensions or precision.", at: byte)
-    }
-    let componentBits = width.multipliedReportingOverflow(by: components)
-    let rowBits = componentBits.partialValue.multipliedReportingOverflow(by: bits)
-    guard !componentBits.overflow, !rowBits.overflow else {
-      throw malformed("Inline-image row overflow.", at: byte)
-    }
-    let rowBytes = (rowBits.partialValue + 7) / 8
-    let total = rowBytes.multipliedReportingOverflow(by: height)
-    guard !total.overflow else { throw malformed("Inline-image size overflow.", at: byte) }
-    return total.partialValue
+  private func inlineImageTerminatorEndsToken() async throws -> Bool {
+    guard let delimiter = try await input.peek() else { return true }
+    return Self.isDelimiterOrWhitespace(delimiter.value)
   }
 
   private func inlineByte(_ location: PDFContentLocation) -> PDFContentInput.Byte {
@@ -410,6 +407,14 @@ final class PDFContentParser {
     case 0x41...0x46: byte - 0x41 + 10
     case 0x61...0x66: byte - 0x61 + 10
     default: nil
+    }
+  }
+
+  private static func hasInlineFilters(_ dictionary: [PDFName: PDFObject]) -> Bool {
+    switch dictionary["Filter"] ?? dictionary["F"] {
+    case nil, .null: false
+    case .array(let filters): !filters.isEmpty
+    default: true
     }
   }
 }

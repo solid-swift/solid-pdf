@@ -61,7 +61,7 @@ struct PDFGraphicsRenderingTests {
   @Test
   func parsesRawInlineImageWithoutScanningForEI() async throws {
     let document = try await PDFDocument(source: PDFDataInputSource(fixture(
-      content: "BI /W 1 /H 1 /CS /G /BPC 8 ID A EI "
+      content: "BI /W 4 /H 1 /CS /G /BPC 8 ID A EI EI "
     )))
     let result = try await document.render(page: 0, to: RecordingGraphicsTarget())
     guard case .image(let image, _)? = result.output.pages.first?.effects.first else {
@@ -69,7 +69,103 @@ struct PDFGraphicsRenderingTests {
       await document.close()
       return
     }
+    #expect(image.components == [0x41, 0x20, 0x45, 0x49].map { Float($0) / 255 })
+    await document.close()
+  }
+
+  @Test
+  func decodesFilteredInlineImageAtItsExactEndMarker() async throws {
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BI /W 1 /H 1 /CS /G /BPC 8 /F [/AHx /RL] ID 004180> EI 0 0 1 1 re f"
+    )))
+    let result = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    guard case .image(let image, _)? = result.output.pages.first?.effects.first else {
+      Issue.record("Expected a filtered inline image")
+      await document.close()
+      return
+    }
     #expect(image.components == [Float(0x41) / 255])
+    #expect(result.output.pages[0].effects.contains { if case .fill = $0 { true } else { false } })
+    await document.close()
+  }
+
+  @Test
+  func rejectsFilteredInlineImageWithoutEITerminator() async throws {
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BI /W 1 /H 1 /CS /G /BPC 8 /F /AHx ID 41>"
+    )))
+    await #expect(throws: PDFGraphicsError.self) {
+      try await document.render(page: 0, to: RecordingGraphicsTarget())
+    }
+    await document.close()
+  }
+
+  @Test
+  func rawInlineImageResolvesNamedColorSpaceForItsExactLength() async throws {
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BI /W 1 /H 1 /CS /Mono /BPC 8 ID A EI ",
+      resources: "<< /ColorSpace << /Mono /DeviceGray >> >>"
+    )))
+    let result = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    guard case .image(let image, _)? = result.output.pages.first?.effects.first else {
+      Issue.record("Expected a named-color-space inline image")
+      await document.close()
+      return
+    }
+    #expect(image.components == [Float(0x41) / 255])
+    await document.close()
+  }
+
+  @Test
+  func streamsExplicitImageMaskRowsInThePrimaryImageTransaction() async throws {
+    let image = streamObject(
+      dictionary: "/Type /XObject /Subtype /Image /Width 2 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Mask 6 0 R",
+      data: Data([255, 0, 0, 0, 0, 255])
+    )
+    let mask = streamObject(
+      dictionary: "/Type /XObject /Subtype /Image /Width 2 /Height 1 /ImageMask true /Decode [0 1]",
+      data: Data([0x40])
+    )
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "/Im Do",
+      resources: "<< /XObject << /Im 5 0 R >> >>",
+      extraObjects: [image, mask]
+    )))
+
+    let result = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    guard case .image(let captured, _)? = result.output.pages.first?.effects.first else {
+      Issue.record("Expected a masked image")
+      await document.close()
+      return
+    }
+    #expect(captured.descriptor.sourceType == .explicitMask)
+    #expect(captured.mask?.opacities == [1, 0])
+    await document.close()
+  }
+
+  @Test
+  func reversesExplicitImageMaskDecode() async throws {
+    let image = streamObject(
+      dictionary: "/Type /XObject /Subtype /Image /Width 2 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Mask 6 0 R",
+      data: Data([255, 0, 0, 0, 0, 255])
+    )
+    let mask = streamObject(
+      dictionary: "/Type /XObject /Subtype /Image /Width 2 /Height 1 /ImageMask true /Decode [1 0]",
+      data: Data([0x40])
+    )
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "/Im Do",
+      resources: "<< /XObject << /Im 5 0 R >> >>",
+      extraObjects: [image, mask]
+    )))
+
+    let result = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    guard case .image(let captured, _)? = result.output.pages.first?.effects.first else {
+      Issue.record("Expected a masked image")
+      await document.close()
+      return
+    }
+    #expect(captured.mask?.opacities == [0, 1])
     await document.close()
   }
 
@@ -121,5 +217,70 @@ struct PDFGraphicsRenderingTests {
     for offset in offsets { data.append(Data(String(format: "%010d 00000 n \n", offset).utf8)) }
     data.append(Data("trailer\n<< /Size \(objects.count + 1) /Root 1 0 R >>\nstartxref\n\(xref)\n%%EOF\n".utf8))
     return data
+  }
+
+  private func streamObject(dictionary: String, data: Data) -> Data {
+    var result = Data("<< \(dictionary) /Length \(data.count) >>\nstream\n".utf8)
+    result.append(data)
+    result.append(Data("\nendstream".utf8))
+    return result
+  }
+
+  private func iccProfile(componentSignature: String) -> Data {
+    var data = Data(repeating: 0, count: 128)
+    data.replaceSubrange(0..<4, with: [0, 0, 0, 128])
+    data.replaceSubrange(16..<20, with: componentSignature.utf8)
+    data.replaceSubrange(36..<40, with: "acsp".utf8)
+    return data
+  }
+
+  private func patchShading(
+    type: Int,
+    continuationFlag: Int?,
+    includeInitialPatch: Bool = true
+  ) -> Data {
+    let boundary: [(UInt8, UInt8)] = [
+      (0, 0), (0, 85), (0, 170), (0, 255),
+      (85, 255), (170, 255), (255, 255),
+      (255, 170), (255, 85), (255, 0),
+      (170, 0), (85, 0),
+    ]
+    let interior: [(UInt8, UInt8)] = [(85, 85), (85, 170), (170, 170), (170, 85)]
+    let colors: [[UInt8]] = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 255]]
+    var data = Data()
+    if includeInitialPatch {
+      data.append(0)
+      for point in boundary + (type == 7 ? interior : []) { data.append(contentsOf: [point.0, point.1]) }
+      colors.forEach { data.append(contentsOf: $0) }
+    }
+    if let continuationFlag {
+      data.append(UInt8(continuationFlag))
+      let count = type == 6 ? 8 : 12
+      for point in (boundary + interior).prefix(count) { data.append(contentsOf: [point.0, point.1]) }
+      data.append(contentsOf: colors[2])
+      data.append(contentsOf: colors[3])
+    }
+    return streamObject(
+      dictionary: "/ShadingType \(type) /ColorSpace /DeviceRGB /BitsPerCoordinate 8 /BitsPerComponent 8 /BitsPerFlag 8 /Decode [0 100 0 100 0 1 0 1 0 1]",
+      data: data
+    )
+  }
+
+  private func expectTensorCornerTopology(_ shading: GraphicsShading) {
+    let vertices = shading.mesh.triangles.flatMap { [$0.first, $0.second, $0.third] }
+    let red = vertices.first { $0.paint == .deviceRGB(red: 1, green: 0, blue: 0) }
+    let green = vertices.first { $0.paint == .deviceRGB(red: 0, green: 1, blue: 0) }
+    let blue = vertices.first { $0.paint == .deviceRGB(red: 0, green: 0, blue: 1) }
+    let white = vertices.first { $0.paint == .deviceRGB(red: 1, green: 1, blue: 1) }
+    #expect(red != nil)
+    #expect(green != nil)
+    #expect(blue != nil)
+    #expect(white != nil)
+    if let red, let green, let blue, let white {
+      #expect(red.position.x == green.position.x)
+      #expect(green.position.y == blue.position.y)
+      #expect(blue.position.x == white.position.x)
+      #expect(white.position.y == red.position.y)
+    }
   }
 }
