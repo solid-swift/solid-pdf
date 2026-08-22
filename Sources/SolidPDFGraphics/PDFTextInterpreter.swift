@@ -278,7 +278,12 @@ extension PDFGraphicsInstructionHandler {
         }
         resolved = try await provider.glyph(providerSelector, in: face)
       case .type3:
-        throw PDFGraphicsError.unsupportedFont(subtype: "Type3", location: instruction.location)
+        return try await realizeType3(
+          selection,
+          font: font,
+          transform: try type3GlyphTransform(font: font, instruction: instruction),
+          instruction: instruction
+        )
       case .unavailable:
         throw PDFGraphicsError.fontProgramUnavailable(
           name: font.description.postScriptName ?? font.resourceName,
@@ -379,6 +384,25 @@ extension PDFGraphicsInstructionHandler {
       textClipElements.append(contentsOf: outline.transformed(by: transform).elements)
     }
     return PDFPositionedGlyph(placement: placement, textAdvance: textAdvance)
+  }
+
+  private func type3GlyphTransform(
+    font: PDFResolvedFont,
+    instruction: PDFContentInstruction
+  ) throws -> GraphicsMatrix {
+    guard let textMatrix else { throw malformed("Missing PDF text matrix.", instruction) }
+    let textScale = GraphicsMatrix(
+      a: state.text.fontSize * state.text.horizontalScale,
+      b: 0,
+      c: 0,
+      d: state.text.fontSize,
+      tx: 0,
+      ty: state.text.rise
+    )
+    return font.fontMatrix
+      .concatenated(with: textScale)
+      .concatenated(with: textMatrix)
+      .concatenated(with: state.matrix)
   }
 
   private func unicodeMapping(
@@ -485,7 +509,7 @@ private enum PDFTextElement {
   case adjustment(Double)
 }
 
-private struct PDFGlyphSelection {
+struct PDFGlyphSelection {
   let bytes: Data
   let code: UInt32?
   let cid: UInt32?

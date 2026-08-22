@@ -48,6 +48,9 @@ extension PDFGraphicsInstructionHandler {
       let width = try PDFObjectAccess.integer(dictionary["Width"] ?? .null)
       let height = try PDFObjectAccess.integer(dictionary["Height"] ?? .null)
       let imageMask = try boolean(dictionary["ImageMask"], default: false)
+      if type3Capture?.mode == .uncolored, !imageMask {
+        throw malformed("A d1 Type 3 CharProc contains a color image.", instruction)
+      }
       let bits = imageMask ? 1 : try PDFObjectAccess.integer(dictionary["BitsPerComponent"] ?? .null)
       guard width > 0, height > 0, [1, 2, 4, 8, 16].contains(bits),
         width <= limits.maximumImagePixels / height,
@@ -169,6 +172,9 @@ extension PDFGraphicsInstructionHandler {
       width * height <= limits.maximumImagePixels
     else { throw PDFGraphicsError.limitExceeded("PDF image pixel limit exceeded.", location: instruction.location) }
     let imageMask = try boolean(dictionary["ImageMask"], default: false)
+    if type3Capture?.mode == .uncolored, !imageMask {
+      throw malformed("A d1 Type 3 CharProc contains a color image.", instruction)
+    }
     let bits = imageMask ? 1 : try PDFObjectAccess.integer(dictionary["BitsPerComponent"] ?? .null)
     guard [1, 2, 4, 8, 16].contains(bits) else { throw malformed("Unsupported image sample precision.", instruction) }
     let colorSpace: PDFGraphicsResourceResolver<Source>.ResolvedColorSpace?

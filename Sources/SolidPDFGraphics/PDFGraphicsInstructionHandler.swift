@@ -17,6 +17,8 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
   var textLineMatrix: GraphicsMatrix?
   var textClipElements: [GraphicsPath.Element] = []
   var interpretedGlyphCount = 0
+  let type3Capture: PDFType3GlyphCapture?
+  let type3Depth: Int
 
   var diagnostics: [PDFGraphicsDiagnostic] { diagnosticsStorage + resources.diagnostics }
   var currentSnapshot: GraphicsStateSnapshot { state.snapshot(stroking: false) }
@@ -40,12 +42,16 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
     resources: PDFGraphicsResourceResolver<Source>,
     limits: PDFGraphicsLimits,
     output: PDFGraphicsEventOutput,
-    initialState: PDFGraphicsState? = nil
+    initialState: PDFGraphicsState? = nil,
+    type3Capture: PDFType3GlyphCapture? = nil,
+    type3Depth: Int = 0
   ) {
     state = initialState ?? PDFGraphicsState(device: device)
     self.resources = resources
     self.limits = limits
     self.output = output
+    self.type3Capture = type3Capture
+    self.type3Depth = type3Depth
   }
 
   private func emit(_ event: GraphicsEvent) throws { try output.process(event) }
@@ -56,6 +62,7 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
 
   func execute(_ instruction: PDFContentInstruction) async throws {
     do {
+      try validateType3Instruction(instruction)
       switch instruction.name {
       case "q":
         try operands(instruction, count: 0)
@@ -173,7 +180,8 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
       case "Do": try await paintXObject(instruction)
       case "sh": try await paintShading(instruction)
       case "BI": throw PDFGraphicsError.unsupported(.operatorName("BI"), location: instruction.location)
-      case "d0", "d1": throw PDFGraphicsError.unsupported(.operatorName(instruction.name), location: instruction.location)
+      case "d0": try setType3Width(instruction)
+      case "d1": try setType3CacheDevice(instruction)
       case "ID", "EI": throw malformed("Inline-image delimiter outside an inline image.", instruction)
       default: throw malformed("Unimplemented known operator.", instruction)
       }
@@ -185,6 +193,13 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
   }
 
   func finish(at location: PDFContentLocation?) async throws {
+    if let type3Capture, type3Capture.metrics == nil {
+      throw PDFGraphicsError.malformedContent(
+        message: "Type 3 CharProc did not begin with d0 or d1.",
+        operatorName: nil,
+        location: location ?? type3Capture.location
+      )
+    }
     guard stack.isEmpty else {
       throw PDFGraphicsError.malformedContent(
         message: "PDF graphics-state stack is not balanced.",
@@ -192,6 +207,55 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
         location: location!
       )
     }
+  }
+
+  private func validateType3Instruction(_ instruction: PDFContentInstruction) throws {
+    guard let capture = type3Capture else { return }
+    if capture.metrics == nil, instruction.name != "d0", instruction.name != "d1" {
+      throw malformed("Type 3 CharProc artwork precedes d0 or d1.", instruction)
+    }
+    guard capture.mode == .uncolored else { return }
+    let colorDependent = [
+      "G", "g", "RG", "rg", "K", "k", "CS", "cs", "SC", "SCN", "sc", "scn", "sh",
+    ]
+    if colorDependent.contains(instruction.name) {
+      throw malformed("A d1 Type 3 CharProc contains color-dependent artwork.", instruction)
+    }
+  }
+
+  private func setType3Width(_ instruction: PDFContentInstruction) throws {
+    guard let capture = type3Capture else {
+      throw PDFGraphicsError.unsupported(.operatorName("d0"), location: instruction.location)
+    }
+    let values = try numbers(instruction, count: 2)
+    try capture.establish(
+      mode: .colorized,
+      metrics: GraphicsGlyphMetrics(horizontalAdvance: .init(x: values[0], y: values[1])),
+      instruction: instruction
+    )
+  }
+
+  private func setType3CacheDevice(_ instruction: PDFContentInstruction) throws {
+    guard let capture = type3Capture else {
+      throw PDFGraphicsError.unsupported(.operatorName("d1"), location: instruction.location)
+    }
+    let values = try numbers(instruction, count: 6)
+    let bounds = GraphicsRect(
+      x: min(values[2], values[4]),
+      y: min(values[3], values[5]),
+      width: abs(values[4] - values[2]),
+      height: abs(values[5] - values[3])
+    )
+    try capture.establish(
+      mode: .uncolored,
+      metrics: GraphicsGlyphMetrics(
+        horizontalAdvance: .init(x: values[0], y: values[1]),
+        bounds: bounds
+      ),
+      instruction: instruction
+    )
+    // An uncolored Type 3 glyph paints exclusively with the caller's nonstroking color.
+    state.stroking = state.nonstroking
   }
 
   private func move(_ instruction: PDFContentInstruction) throws {

@@ -161,6 +161,92 @@ struct PDFGraphicsRenderingTests {
   }
 
   @Test
+  func executesAndCachesType3GlyphDisplayLists() async throws {
+    let charProc = streamObject(
+      dictionary: "",
+      data: Data("500 0 0 0 500 700 d1 0 0 500 700 re f".utf8)
+    )
+    let resources = """
+      << /Font << /F3 << /Type /Font /Subtype /Type3
+        /FontBBox [0 0 500 700] /FontMatrix [0.001 0 0 0.001 0 0]
+        /CharProcs << /A 5 0 R >>
+        /Encoding << /Type /Encoding /Differences [65 /A] >>
+        /FirstChar 65 /LastChar 65 /Widths [500] /Resources << >> >> >> >>
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BT /F3 20 Tf 1 Tr (AA) Tj ET",
+      resources: resources,
+      extraObjects: [charProc]
+    )))
+
+    let result = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    let run = try #require(result.output.pages[0].effects.compactMap { effect -> GraphicsGlyphRun? in
+      if case .text(let run, _) = effect { return run }
+      return nil
+    }.first)
+    #expect(run.rootFont.technology == .type3)
+    #expect(run.renderingMode == .stroke)
+    #expect(run.glyphs.count == 2)
+    #expect(run.glyphs[0].glyph.resourceIdentifier == run.glyphs[1].glyph.resourceIdentifier)
+    guard case .displayList(let list) = run.glyphs[0].glyph.program else {
+      Issue.record("Expected a captured Type 3 display list")
+      await document.close()
+      return
+    }
+    #expect(list.effects.contains { if case .fill = $0 { true } else { false } })
+    #expect(run.glyphs[0].glyph.metrics.horizontalAdvance.x == 500)
+    #expect(run.glyphs[0].glyph.metrics.bounds == GraphicsRect(x: 0, y: 0, width: 500, height: 700))
+    await document.close()
+  }
+
+  @Test
+  func suppressesInvisibleType3GlyphExecution() async throws {
+    let charProc = streamObject(dictionary: "", data: Data("invalid-charproc-operator".utf8))
+    let resources = """
+      << /Font << /F3 << /Type /Font /Subtype /Type3
+        /FontBBox [0 0 500 700] /FontMatrix [0.001 0 0 0.001 0 0]
+        /CharProcs << /A 5 0 R >>
+        /Encoding << /Type /Encoding /Differences [65 /A] >>
+        /FirstChar 65 /LastChar 65 /Widths [500] /Resources << >> >> >> >>
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BT /F3 20 Tf 3 Tr (A) Tj ET",
+      resources: resources,
+      extraObjects: [charProc]
+    )))
+
+    let result = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    let run = try #require(result.output.pages[0].effects.compactMap { effect -> GraphicsGlyphRun? in
+      if case .text(let run, _) = effect { return run }
+      return nil
+    }.first)
+    #expect(run.renderingMode == .invisible)
+    #expect(run.glyphs[0].glyph.program == .empty)
+    await document.close()
+  }
+
+  @Test
+  func rejectsType3ArtworkBeforeMetrics() async throws {
+    let charProc = streamObject(dictionary: "", data: Data("0 0 1 1 re f 500 0 d0".utf8))
+    let resources = """
+      << /Font << /F3 << /Type /Font /Subtype /Type3
+        /FontBBox [0 0 500 700] /FontMatrix [0.001 0 0 0.001 0 0]
+        /CharProcs << /A 5 0 R >>
+        /Encoding << /Type /Encoding /Differences [65 /A] >>
+        /FirstChar 65 /LastChar 65 /Widths [500] /Resources << >> >> >> >>
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BT /F3 20 Tf (A) Tj ET",
+      resources: resources,
+      extraObjects: [charProc]
+    )))
+    await #expect(throws: PDFGraphicsError.self) {
+      try await document.render(page: 0, to: RecordingGraphicsTarget())
+    }
+    await document.close()
+  }
+
+  @Test
   func parsesRawInlineImageWithoutScanningForEI() async throws {
     let document = try await PDFDocument(source: PDFDataInputSource(fixture(
       content: "BI /W 4 /H 1 /CS /G /BPC 8 ID A EI EI "

@@ -20,6 +20,8 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
   private var scopes: [[PDFName: PDFObject]]
   private var colorSpaceCache: [PDFName: ResolvedColorSpace] = [:]
   var fontCache: [FontCacheKey: PDFResolvedFont] = [:]
+  var type3GlyphCache: [PDFType3GlyphCacheKey: GraphicsGlyphDescription] = [:]
+  var type3Modes: [PDFObjectReference: PDFType3GlyphCapture.Mode] = [:]
   private var activeReusableResources: Set<PDFObjectReference> = []
   private var diagnosedICCProfiles: Set<PDFObjectReference> = []
   var diagnostics: [PDFGraphicsDiagnostic] = []

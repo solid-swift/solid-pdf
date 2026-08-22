@@ -62,6 +62,7 @@ final class PDFResolvedFont {
   let widths: [UInt32: Double]
   let firstCharacter: Int
   let fontMatrix: GraphicsMatrix
+  let fontBounds: GraphicsRect?
 
   init(
     resourceName: String,
@@ -74,7 +75,8 @@ final class PDFResolvedFont {
     defaultWidth: Double,
     widths: [UInt32: Double],
     firstCharacter: Int,
-    fontMatrix: GraphicsMatrix
+    fontMatrix: GraphicsMatrix,
+    fontBounds: GraphicsRect? = nil
   ) {
     self.resourceName = resourceName
     self.reference = reference
@@ -87,6 +89,7 @@ final class PDFResolvedFont {
     self.widths = widths
     self.firstCharacter = firstCharacter
     self.fontMatrix = fontMatrix
+    self.fontBounds = fontBounds
   }
 
   func horizontalWidth(code: UInt32, cid: UInt32?) -> Double {
@@ -175,6 +178,7 @@ extension PDFGraphicsResourceResolver {
     let matrix = subtype == "Type3"
       ? try graphicsMatrix(dictionary["FontMatrix"] ?? .null)
       : GraphicsMatrix(a: 0.001, b: 0, c: 0, d: 0.001, tx: 0, ty: 0)
+    let fontBounds = try dictionary["FontBBox"].map(PDFObjectAccess.numbers).map(Self.graphicsRect)
     let technology: GraphicsFontTechnology = switch subtype {
     case "TrueType": .trueType
     case "Type3": .type3
@@ -225,7 +229,8 @@ extension PDFGraphicsResourceResolver {
       defaultWidth: missingWidth,
       widths: widths,
       firstCharacter: first,
-      fontMatrix: matrix
+      fontMatrix: matrix,
+      fontBounds: fontBounds
     )
   }
 
@@ -303,6 +308,16 @@ extension PDFGraphicsResourceResolver {
       widths: widths,
       firstCharacter: 0,
       fontMatrix: GraphicsMatrix(a: 0.001, b: 0, c: 0, d: 0.001, tx: 0, ty: 0)
+    )
+  }
+
+  private static func graphicsRect(_ values: [Double]) throws -> GraphicsRect {
+    guard values.count == 4, values.allSatisfy(\.isFinite) else { throw PDFObjectAccess.TypeMismatch.array }
+    return GraphicsRect(
+      x: min(values[0], values[2]),
+      y: min(values[1], values[3]),
+      width: abs(values[2] - values[0]),
+      height: abs(values[3] - values[1])
     )
   }
 

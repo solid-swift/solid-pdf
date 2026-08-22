@@ -72,7 +72,9 @@ extension PDFGraphicsInstructionHandler {
           resources: resources,
           limits: limits,
           output: collector,
-          initialState: childState
+          initialState: childState,
+          type3Capture: type3Capture,
+          type3Depth: type3Depth
         )
         let input = PDFContentInput(streams: [stream]) { [document = resources.document] stream in
           try await document.decodedStream(of: stream)
@@ -160,7 +162,9 @@ extension PDFGraphicsInstructionHandler {
         resources: resources,
         limits: limits,
         output: collector,
-        initialState: childState
+        initialState: childState,
+        type3Capture: type3Capture,
+        type3Depth: type3Depth
       )
       let input = PDFContentInput(streams: [stream]) { [document = resources.document] stream in
         try await document.decodedStream(of: stream)
