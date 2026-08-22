@@ -54,6 +54,15 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
       case .paint(.fill(let rule)):
         try append(.fill(path: event.before.path, rule: rule, state: event.before))
       case .paint(.stroke): try append(.stroke(path: event.before.path, state: event.before))
+      case .paint(.fillAndStroke(let rule)):
+        try append(
+          .fillAndStroke(
+            path: event.before.path,
+            rule: rule,
+            fillState: event.before,
+            strokeState: event.after
+          )
+        )
       case .paint(.userPathFill(let rule)):
         try append(.userPathFill(path: event.before.path, rule: rule, state: event.before))
       case .paint(.userPathStroke):
@@ -66,6 +75,8 @@ public struct PDFGraphicsTarget<Sink: PDFOutputSink>: GraphicsTarget, Sendable {
         try append(.shading(shading, state: event.before))
       case .paint(.form(let form)):
         try append(.form(form, state: event.before))
+      case .paint(.transparencyGroup(let group)):
+        try append(.transparencyGroup(group, state: event.before))
       case .paint(.text(let run)):
         try append(.text(run, state: event.before))
       case .page(.show), .page(.copy):

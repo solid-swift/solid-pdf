@@ -72,6 +72,44 @@ enum PDFGraphicsContentEncoder {
         writer: &writer,
         paintOverride: paintOverride
       )
+    case .fillAndStroke(let path, let rule, let fillState, let strokeState):
+      guard let inverse = strokeState.matrix.inverted else { return }
+      try beginClip(fillState, in: &builder)
+      let transparency = try resources.ensureTransparency(
+        fillState.transparency,
+        strokingAlpha: strokeState.transparency.constantAlpha,
+        nonstrokingAlpha: fillState.transparency.constantAlpha,
+        writer: &writer
+      )
+      builder.command("/\(String(decoding: transparency.bytes, as: UTF8.self)) gs")
+      try appendPaint(
+        fillState,
+        stroking: false,
+        to: &builder,
+        resources: resources,
+        writer: &writer,
+        paintOverride: paintOverride,
+        includeTransparency: false
+      )
+      try appendPaint(
+        strokeState,
+        stroking: true,
+        to: &builder,
+        resources: resources,
+        writer: &writer,
+        paintOverride: paintOverride,
+        includeTransparency: false
+      )
+      builder.command("\(builder.matrix(strokeState.matrix)) cm")
+      builder.command("\(builder.number(strokeState.lineWidth)) w")
+      builder.command("\(strokeState.lineCap.rawValue) J")
+      builder.command("\(strokeState.lineJoin.rawValue) j")
+      builder.command("\(builder.number(strokeState.miterLimit)) M")
+      let dash = strokeState.dash.pattern.map(builder.number).joined(separator: " ")
+      builder.command("[\(dash)] \(builder.number(strokeState.dash.phase)) d")
+      builder.path(path, transformedBy: inverse)
+      builder.command(rule == .evenOdd ? "B*" : "B")
+      builder.command("Q")
     case .fillRectangles(let paths, let state):
       guard !isEmptyPattern(state.paint, override: paintOverride) else { return }
       try begin(
@@ -126,9 +164,22 @@ enum PDFGraphicsContentEncoder {
       let name = try resources.ensureForm(form, writer: &writer)
       builder.command("/\(String(decoding: name.bytes, as: UTF8.self)) Do")
       builder.command("Q")
+    case .transparencyGroup(let group, let state):
+      try beginClip(state, in: &builder)
+      let transparency = try resources.ensureTransparency(state.transparency, writer: &writer)
+      builder.command("/\(String(decoding: transparency.bytes, as: UTF8.self)) gs")
+      let name = try resources.ensureTransparencyGroup(group, writer: &writer)
+      builder.command("/\(String(decoding: name.bytes, as: UTF8.self)) Do")
+      builder.command("Q")
     case .text(let run, let state):
-      let fillState = run.style.map { state.replacingColor(with: $0.fill) } ?? state
-      let strokeState = run.style.map { state.replacingColor(with: $0.stroke) } ?? state
+      let fillState =
+        run.style.map {
+          state.replacingColor(with: $0.fill).replacingTransparency($0.fillTransparency)
+        } ?? state
+      let strokeState =
+        run.style.map {
+          state.replacingColor(with: $0.stroke).replacingTransparency($0.strokeTransparency)
+        } ?? state
       for placement in run.glyphs {
         switch placement.glyph.program {
         case .outline(let path):
@@ -137,15 +188,32 @@ enum PDFGraphicsContentEncoder {
             try beginClip(state, in: &builder)
             if run.renderingMode.fills {
               try appendPaint(
-                fillState, stroking: false, to: &builder, resources: resources,
-                writer: &writer, paintOverride: paintOverride
+                fillState,
+                stroking: false,
+                to: &builder,
+                resources: resources,
+                writer: &writer,
+                paintOverride: paintOverride
               )
             }
             if run.renderingMode.strokes {
               try appendPaint(
-                strokeState, stroking: true, to: &builder, resources: resources,
-                writer: &writer, paintOverride: paintOverride
+                strokeState,
+                stroking: true,
+                to: &builder,
+                resources: resources,
+                writer: &writer,
+                paintOverride: paintOverride
               )
+            }
+            if let style = run.style {
+              let transparency = try resources.ensureTransparency(
+                style.fillTransparency,
+                strokingAlpha: style.strokeTransparency.constantAlpha,
+                nonstrokingAlpha: style.fillTransparency.constantAlpha,
+                writer: &writer
+              )
+              builder.command("/\(String(decoding: transparency.bytes, as: UTF8.self)) gs")
             }
             builder.command("BT")
             builder.command(
@@ -317,10 +385,15 @@ enum PDFGraphicsContentEncoder {
     to builder: inout PDFContentBuilder,
     resources: PDFResourceManager<Sink>,
     writer: inout PDFDocumentWriter<Sink>,
-    paintOverride: GraphicsPaint?
+    paintOverride: GraphicsPaint?,
+    includeTransparency: Bool = true
   ) throws {
     let overprint = try resources.ensureOverprint(state.overprint, writer: &writer)
     builder.command("/\(String(decoding: overprint.bytes, as: UTF8.self)) gs")
+    if includeTransparency {
+      let transparency = try resources.ensureTransparency(state.transparency, writer: &writer)
+      builder.command("/\(String(decoding: transparency.bytes, as: UTF8.self)) gs")
+    }
     let suffix = stroking ? "" : "g"
     let rgbSuffix = stroking ? "RG" : "rg"
     let cmykSuffix = stroking ? "K" : "k"

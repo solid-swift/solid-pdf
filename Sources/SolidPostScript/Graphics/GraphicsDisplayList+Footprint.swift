@@ -44,8 +44,9 @@ package extension GraphicsDisplayList {
 private extension GraphicsEffect {
   func storageFootprint(depth: Int, maximumDepth: Int) -> GraphicsStorageFootprint? {
     switch self {
-    case .fill(let path, _, _), .stroke(let path, _), .userPathFill(let path, _, _),
-         .userPathStroke(let path, _):
+    case .fill(let path, _, _), .stroke(let path, _), .fillAndStroke(let path, _, _, _),
+      .userPathFill(let path, _, _),
+      .userPathStroke(let path, _):
       guard let elements = checkedProduct(path.elements.count, 56) else { return nil }
       return GraphicsStorageFootprint(displayBytes: elements + 256, sourceBytes: 0)
     case .fillRectangles(let paths, _), .strokeRectangles(let paths, _, _):
@@ -76,6 +77,16 @@ private extension GraphicsEffect {
     case .form:
       // Cached form bodies are governed by MaxFormCache. A page display list retains only a reference.
       return GraphicsStorageFootprint(displayBytes: 128, sourceBytes: 0)
+    case .transparencyGroup(let group, _):
+      guard depth < maximumDepth else { return nil }
+      return group.displayList.effects.reduce(GraphicsStorageFootprint(displayBytes: 256, sourceBytes: 0)) {
+        partial,
+        effect in
+        guard let next = effect.storageFootprint(depth: depth + 1, maximumDepth: maximumDepth) else {
+          return GraphicsStorageFootprint(displayBytes: .max, sourceBytes: .max)
+        }
+        return partial.adding(next) ?? GraphicsStorageFootprint(displayBytes: .max, sourceBytes: .max)
+      }
     case .text(let run, _):
       var result = GraphicsStorageFootprint(displayBytes: 256, sourceBytes: 0)
       for placement in run.glyphs {
@@ -111,8 +122,9 @@ private extension GraphicsEffect {
 
   func checkedFootprint(depth: Int, maximumDepth: Int) -> Int? {
     switch self {
-    case .fill(let path, _, _), .stroke(let path, _), .userPathFill(let path, _, _),
-         .userPathStroke(let path, _):
+    case .fill(let path, _, _), .stroke(let path, _), .fillAndStroke(let path, _, _, _),
+      .userPathFill(let path, _, _),
+      .userPathStroke(let path, _):
       guard let elementBytes = checkedProduct(path.elements.count, 56) else { return nil }
       let result = elementBytes.addingReportingOverflow(256)
       return result.overflow ? nil : result.partialValue
@@ -148,6 +160,9 @@ private extension GraphicsEffect {
     case .form(let form, _):
       guard depth < maximumDepth else { return nil }
       return form.displayList.checkedFootprint(depth: depth + 1, maximumDepth: maximumDepth)
+    case .transparencyGroup(let group, _):
+      guard depth < maximumDepth else { return nil }
+      return group.displayList.checkedFootprint(depth: depth + 1, maximumDepth: maximumDepth)
     case .text(let run, _):
       return run.glyphs.reduce(256) { partial, placement in
         let bytes: Int

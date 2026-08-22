@@ -9600,6 +9600,23 @@
         ]
       },
       {
+        "kind": "TypeAlias",
+        "name": "GraphicsBlendMode",
+        "printedName": "GraphicsBlendMode",
+        "children": [
+          {
+            "kind": "TypeNominal",
+            "name": "ColorBlendMode",
+            "printedName": "SolidColor.ColorBlendMode",
+            "usr": "s:10SolidColor0B9BlendModeO"
+          }
+        ],
+        "declKind": "TypeAlias",
+        "usr": "s:15SolidPostScript17GraphicsBlendModea",
+        "mangledName": "$s15SolidPostScript17GraphicsBlendModea",
+        "moduleName": "SolidPostScript"
+      },
+      {
         "kind": "TypeDecl",
         "name": "GraphicsColorDeviceDescriptor",
         "printedName": "GraphicsColorDeviceDescriptor",
@@ -22218,6 +22235,81 @@
           },
           {
             "kind": "Var",
+            "name": "fillAndStroke",
+            "printedName": "fillAndStroke",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPostScript.GraphicsEffect.Type) -> (SolidPostScript.GraphicsPath, SolidPostScript.GraphicsFillRule, SolidPostScript.GraphicsStateSnapshot, SolidPostScript.GraphicsStateSnapshot) -> SolidPostScript.GraphicsEffect",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(SolidPostScript.GraphicsPath, SolidPostScript.GraphicsFillRule, SolidPostScript.GraphicsStateSnapshot, SolidPostScript.GraphicsStateSnapshot) -> SolidPostScript.GraphicsEffect",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsEffect",
+                        "printedName": "SolidPostScript.GraphicsEffect",
+                        "usr": "s:15SolidPostScript14GraphicsEffectO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Tuple",
+                        "printedName": "(path: SolidPostScript.GraphicsPath, rule: SolidPostScript.GraphicsFillRule, fillState: SolidPostScript.GraphicsStateSnapshot, strokeState: SolidPostScript.GraphicsStateSnapshot)",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "GraphicsPath",
+                            "printedName": "SolidPostScript.GraphicsPath",
+                            "usr": "s:15SolidPostScript12GraphicsPathV"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "GraphicsFillRule",
+                            "printedName": "SolidPostScript.GraphicsFillRule",
+                            "usr": "s:15SolidPostScript16GraphicsFillRuleO"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "GraphicsStateSnapshot",
+                            "printedName": "SolidPostScript.GraphicsStateSnapshot",
+                            "usr": "s:15SolidPostScript21GraphicsStateSnapshotV"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "GraphicsStateSnapshot",
+                            "printedName": "SolidPostScript.GraphicsStateSnapshot",
+                            "usr": "s:15SolidPostScript21GraphicsStateSnapshotV"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPostScript.GraphicsEffect.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsEffect",
+                        "printedName": "SolidPostScript.GraphicsEffect",
+                        "usr": "s:15SolidPostScript14GraphicsEffectO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:15SolidPostScript14GraphicsEffectO13fillAndStrokeyAcA0D4PathV_AA0D8FillRuleOAA0D13StateSnapshotVAJtcACmF",
+            "mangledName": "$s15SolidPostScript14GraphicsEffectO13fillAndStrokeyAcA0D4PathV_AA0D8FillRuleOAA0D13StateSnapshotVAJtcACmF",
+            "moduleName": "SolidPostScript"
+          },
+          {
+            "kind": "Var",
             "name": "userPathFill",
             "printedName": "userPathFill",
             "children": [
@@ -22748,6 +22840,69 @@
             "declKind": "EnumElement",
             "usr": "s:15SolidPostScript14GraphicsEffectO4formyAcA0D4FormV_AA0D13StateSnapshotVtcACmF",
             "mangledName": "$s15SolidPostScript14GraphicsEffectO4formyAcA0D4FormV_AA0D13StateSnapshotVtcACmF",
+            "moduleName": "SolidPostScript"
+          },
+          {
+            "kind": "Var",
+            "name": "transparencyGroup",
+            "printedName": "transparencyGroup",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPostScript.GraphicsEffect.Type) -> (SolidPostScript.GraphicsTransparencyGroup, SolidPostScript.GraphicsStateSnapshot) -> SolidPostScript.GraphicsEffect",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(SolidPostScript.GraphicsTransparencyGroup, SolidPostScript.GraphicsStateSnapshot) -> SolidPostScript.GraphicsEffect",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsEffect",
+                        "printedName": "SolidPostScript.GraphicsEffect",
+                        "usr": "s:15SolidPostScript14GraphicsEffectO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Tuple",
+                        "printedName": "(SolidPostScript.GraphicsTransparencyGroup, state: SolidPostScript.GraphicsStateSnapshot)",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "GraphicsTransparencyGroup",
+                            "printedName": "SolidPostScript.GraphicsTransparencyGroup",
+                            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "GraphicsStateSnapshot",
+                            "printedName": "SolidPostScript.GraphicsStateSnapshot",
+                            "usr": "s:15SolidPostScript21GraphicsStateSnapshotV"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPostScript.GraphicsEffect.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsEffect",
+                        "printedName": "SolidPostScript.GraphicsEffect",
+                        "usr": "s:15SolidPostScript14GraphicsEffectO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:15SolidPostScript14GraphicsEffectO17transparencyGroupyAcA0d12TransparencyG0V_AA0D13StateSnapshotVtcACmF",
+            "mangledName": "$s15SolidPostScript14GraphicsEffectO17transparencyGroupyAcA0d12TransparencyG0V_AA0D13StateSnapshotVtcACmF",
             "moduleName": "SolidPostScript"
           },
           {
@@ -33415,6 +33570,43 @@
             "declKind": "EnumElement",
             "usr": "s:15SolidPostScript23GraphicsImageSourceTypeO12colorKeyMaskyA2CmF",
             "mangledName": "$s15SolidPostScript23GraphicsImageSourceTypeO12colorKeyMaskyA2CmF",
+            "moduleName": "SolidPostScript"
+          },
+          {
+            "kind": "Var",
+            "name": "softMask",
+            "printedName": "softMask",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPostScript.GraphicsImageSourceType.Type) -> SolidPostScript.GraphicsImageSourceType",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsImageSourceType",
+                    "printedName": "SolidPostScript.GraphicsImageSourceType",
+                    "usr": "s:15SolidPostScript23GraphicsImageSourceTypeO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPostScript.GraphicsImageSourceType.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsImageSourceType",
+                        "printedName": "SolidPostScript.GraphicsImageSourceType",
+                        "usr": "s:15SolidPostScript23GraphicsImageSourceTypeO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:15SolidPostScript23GraphicsImageSourceTypeO8softMaskyA2CmF",
+            "mangledName": "$s15SolidPostScript23GraphicsImageSourceTypeO8softMaskyA2CmF",
             "moduleName": "SolidPostScript"
           },
           {
@@ -45347,6 +45539,56 @@
               },
               {
                 "kind": "Var",
+                "name": "setTransparency",
+                "printedName": "setTransparency",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(SolidPostScript.GraphicsOperation.State.Type) -> (SolidPostScript.GraphicsTransparencyState) -> SolidPostScript.GraphicsOperation.State",
+                    "children": [
+                      {
+                        "kind": "TypeFunc",
+                        "name": "Function",
+                        "printedName": "(SolidPostScript.GraphicsTransparencyState) -> SolidPostScript.GraphicsOperation.State",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "State",
+                            "printedName": "SolidPostScript.GraphicsOperation.State",
+                            "usr": "s:15SolidPostScript17GraphicsOperationO5StateO"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "GraphicsTransparencyState",
+                            "printedName": "SolidPostScript.GraphicsTransparencyState",
+                            "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+                          }
+                        ]
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Metatype",
+                        "printedName": "SolidPostScript.GraphicsOperation.State.Type",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "State",
+                            "printedName": "SolidPostScript.GraphicsOperation.State",
+                            "usr": "s:15SolidPostScript17GraphicsOperationO5StateO"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "declKind": "EnumElement",
+                "usr": "s:15SolidPostScript17GraphicsOperationO5StateO15setTransparencyyAeA0dhF0VcAEmF",
+                "mangledName": "$s15SolidPostScript17GraphicsOperationO5StateO15setTransparencyyAeA0dhF0VcAEmF",
+                "moduleName": "SolidPostScript"
+              },
+              {
+                "kind": "Var",
                 "name": "setTrappingParameters",
                 "printedName": "setTrappingParameters",
                 "children": [
@@ -47603,6 +47845,56 @@
               },
               {
                 "kind": "Var",
+                "name": "fillAndStroke",
+                "printedName": "fillAndStroke",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(SolidPostScript.GraphicsOperation.Paint.Type) -> (SolidPostScript.GraphicsFillRule) -> SolidPostScript.GraphicsOperation.Paint",
+                    "children": [
+                      {
+                        "kind": "TypeFunc",
+                        "name": "Function",
+                        "printedName": "(SolidPostScript.GraphicsFillRule) -> SolidPostScript.GraphicsOperation.Paint",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Paint",
+                            "printedName": "SolidPostScript.GraphicsOperation.Paint",
+                            "usr": "s:15SolidPostScript17GraphicsOperationO5PaintO"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "GraphicsFillRule",
+                            "printedName": "SolidPostScript.GraphicsFillRule",
+                            "usr": "s:15SolidPostScript16GraphicsFillRuleO"
+                          }
+                        ]
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Metatype",
+                        "printedName": "SolidPostScript.GraphicsOperation.Paint.Type",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Paint",
+                            "printedName": "SolidPostScript.GraphicsOperation.Paint",
+                            "usr": "s:15SolidPostScript17GraphicsOperationO5PaintO"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "declKind": "EnumElement",
+                "usr": "s:15SolidPostScript17GraphicsOperationO5PaintO13fillAndStrokeyAeA0D8FillRuleOcAEmF",
+                "mangledName": "$s15SolidPostScript17GraphicsOperationO5PaintO13fillAndStrokeyAeA0D8FillRuleOcAEmF",
+                "moduleName": "SolidPostScript"
+              },
+              {
+                "kind": "Var",
                 "name": "fillRectangles",
                 "printedName": "fillRectangles",
                 "children": [
@@ -47973,6 +48265,56 @@
                 "declKind": "EnumElement",
                 "usr": "s:15SolidPostScript17GraphicsOperationO5PaintO4formyAeA0D4FormVcAEmF",
                 "mangledName": "$s15SolidPostScript17GraphicsOperationO5PaintO4formyAeA0D4FormVcAEmF",
+                "moduleName": "SolidPostScript"
+              },
+              {
+                "kind": "Var",
+                "name": "transparencyGroup",
+                "printedName": "transparencyGroup",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(SolidPostScript.GraphicsOperation.Paint.Type) -> (SolidPostScript.GraphicsTransparencyGroup) -> SolidPostScript.GraphicsOperation.Paint",
+                    "children": [
+                      {
+                        "kind": "TypeFunc",
+                        "name": "Function",
+                        "printedName": "(SolidPostScript.GraphicsTransparencyGroup) -> SolidPostScript.GraphicsOperation.Paint",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Paint",
+                            "printedName": "SolidPostScript.GraphicsOperation.Paint",
+                            "usr": "s:15SolidPostScript17GraphicsOperationO5PaintO"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "GraphicsTransparencyGroup",
+                            "printedName": "SolidPostScript.GraphicsTransparencyGroup",
+                            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV"
+                          }
+                        ]
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Metatype",
+                        "printedName": "SolidPostScript.GraphicsOperation.Paint.Type",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Paint",
+                            "printedName": "SolidPostScript.GraphicsOperation.Paint",
+                            "usr": "s:15SolidPostScript17GraphicsOperationO5PaintO"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "declKind": "EnumElement",
+                "usr": "s:15SolidPostScript17GraphicsOperationO5PaintO17transparencyGroupyAeA0d12TransparencyH0VcAEmF",
+                "mangledName": "$s15SolidPostScript17GraphicsOperationO5PaintO17transparencyGroupyAeA0d12TransparencyH0VcAEmF",
                 "moduleName": "SolidPostScript"
               },
               {
@@ -66335,6 +66677,55 @@
           },
           {
             "kind": "Var",
+            "name": "v4",
+            "printedName": "v4",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsSemanticContractVersion",
+                "printedName": "SolidPostScript.GraphicsSemanticContractVersion",
+                "usr": "s:15SolidPostScript31GraphicsSemanticContractVersionV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript31GraphicsSemanticContractVersionV2v4ACvpZ",
+            "mangledName": "$s15SolidPostScript31GraphicsSemanticContractVersionV2v4ACvpZ",
+            "moduleName": "SolidPostScript",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsSemanticContractVersion",
+                    "printedName": "SolidPostScript.GraphicsSemanticContractVersion",
+                    "usr": "s:15SolidPostScript31GraphicsSemanticContractVersionV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript31GraphicsSemanticContractVersionV2v4ACvgZ",
+                "mangledName": "$s15SolidPostScript31GraphicsSemanticContractVersionV2v4ACvgZ",
+                "moduleName": "SolidPostScript",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
             "name": "current",
             "printedName": "current",
             "children": [
@@ -70617,6 +71008,719 @@
       },
       {
         "kind": "TypeDecl",
+        "name": "GraphicsSoftMaskSubtype",
+        "printedName": "GraphicsSoftMaskSubtype",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "alpha",
+            "printedName": "alpha",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPostScript.GraphicsSoftMaskSubtype.Type) -> SolidPostScript.GraphicsSoftMaskSubtype",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsSoftMaskSubtype",
+                    "printedName": "SolidPostScript.GraphicsSoftMaskSubtype",
+                    "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPostScript.GraphicsSoftMaskSubtype.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsSoftMaskSubtype",
+                        "printedName": "SolidPostScript.GraphicsSoftMaskSubtype",
+                        "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO5alphayA2CmF",
+            "mangledName": "$s15SolidPostScript23GraphicsSoftMaskSubtypeO5alphayA2CmF",
+            "moduleName": "SolidPostScript"
+          },
+          {
+            "kind": "Var",
+            "name": "luminosity",
+            "printedName": "luminosity",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPostScript.GraphicsSoftMaskSubtype.Type) -> SolidPostScript.GraphicsSoftMaskSubtype",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsSoftMaskSubtype",
+                    "printedName": "SolidPostScript.GraphicsSoftMaskSubtype",
+                    "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPostScript.GraphicsSoftMaskSubtype.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsSoftMaskSubtype",
+                        "printedName": "SolidPostScript.GraphicsSoftMaskSubtype",
+                        "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO10luminosityyA2CmF",
+            "mangledName": "$s15SolidPostScript23GraphicsSoftMaskSubtypeO10luminosityyA2CmF",
+            "moduleName": "SolidPostScript"
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_enum_equals",
+            "printedName": "__derived_enum_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsSoftMaskSubtype",
+                "printedName": "SolidPostScript.GraphicsSoftMaskSubtype",
+                "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsSoftMaskSubtype",
+                "printedName": "SolidPostScript.GraphicsSoftMaskSubtype",
+                "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO21__derived_enum_equalsySbAC_ACtFZ",
+            "mangledName": "$s15SolidPostScript23GraphicsSoftMaskSubtypeO21__derived_enum_equalsySbAC_ACtFZ",
+            "moduleName": "SolidPostScript",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements",
+              "Semantics"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO4hash4intoys6HasherVz_tF",
+            "mangledName": "$s15SolidPostScript23GraphicsSoftMaskSubtypeO4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidPostScript",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO9hashValueSivp",
+            "mangledName": "$s15SolidPostScript23GraphicsSoftMaskSubtypeO9hashValueSivp",
+            "moduleName": "SolidPostScript",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO9hashValueSivg",
+                "mangledName": "$s15SolidPostScript23GraphicsSoftMaskSubtypeO9hashValueSivg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO",
+        "mangledName": "$s15SolidPostScript23GraphicsSoftMaskSubtypeO",
+        "moduleName": "SolidPostScript",
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "GraphicsSoftMask",
+        "printedName": "GraphicsSoftMask",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "subtype",
+            "printedName": "subtype",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsSoftMaskSubtype",
+                "printedName": "SolidPostScript.GraphicsSoftMaskSubtype",
+                "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript16GraphicsSoftMaskV7subtypeAA0deF7SubtypeOvp",
+            "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV7subtypeAA0deF7SubtypeOvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsSoftMaskSubtype",
+                    "printedName": "SolidPostScript.GraphicsSoftMaskSubtype",
+                    "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript16GraphicsSoftMaskV7subtypeAA0deF7SubtypeOvg",
+                "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV7subtypeAA0deF7SubtypeOvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "group",
+            "printedName": "group",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyGroup",
+                "printedName": "SolidPostScript.GraphicsTransparencyGroup",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript16GraphicsSoftMaskV5groupAA0D17TransparencyGroupVvp",
+            "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV5groupAA0D17TransparencyGroupVvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsTransparencyGroup",
+                    "printedName": "SolidPostScript.GraphicsTransparencyGroup",
+                    "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript16GraphicsSoftMaskV5groupAA0D17TransparencyGroupVvg",
+                "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV5groupAA0D17TransparencyGroupVvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "backdrop",
+            "printedName": "backdrop",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[Swift.Double]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Double",
+                    "printedName": "Swift.Double",
+                    "usr": "s:Sd"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript16GraphicsSoftMaskV8backdropSaySdGvp",
+            "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV8backdropSaySdGvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[Swift.Double]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Double",
+                        "printedName": "Swift.Double",
+                        "usr": "s:Sd"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript16GraphicsSoftMaskV8backdropSaySdGvg",
+                "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV8backdropSaySdGvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "transferFunction",
+            "printedName": "transferFunction",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsComponentFunction?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsComponentFunction",
+                    "printedName": "SolidPostScript.GraphicsComponentFunction",
+                    "usr": "s:15SolidPostScript25GraphicsComponentFunctionV"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript16GraphicsSoftMaskV16transferFunctionAA0d9ComponentH0VSgvp",
+            "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV16transferFunctionAA0d9ComponentH0VSgvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "SolidPostScript.GraphicsComponentFunction?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsComponentFunction",
+                        "printedName": "SolidPostScript.GraphicsComponentFunction",
+                        "usr": "s:15SolidPostScript25GraphicsComponentFunctionV"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript16GraphicsSoftMaskV16transferFunctionAA0d9ComponentH0VSgvg",
+                "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV16transferFunctionAA0d9ComponentH0VSgvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "resourceIdentifier",
+            "printedName": "resourceIdentifier",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsResourceIdentifier",
+                "printedName": "SolidPostScript.GraphicsResourceIdentifier",
+                "usr": "s:15SolidPostScript26GraphicsResourceIdentifierV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript16GraphicsSoftMaskV18resourceIdentifierAA0d8ResourceH0Vvp",
+            "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV18resourceIdentifierAA0d8ResourceH0Vvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsResourceIdentifier",
+                    "printedName": "SolidPostScript.GraphicsResourceIdentifier",
+                    "usr": "s:15SolidPostScript26GraphicsResourceIdentifierV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript16GraphicsSoftMaskV18resourceIdentifierAA0d8ResourceH0Vvg",
+                "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV18resourceIdentifierAA0d8ResourceH0Vvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(subtype:group:backdrop:transferFunction:resourceIdentifier:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsSoftMask",
+                "printedName": "SolidPostScript.GraphicsSoftMask",
+                "usr": "s:15SolidPostScript16GraphicsSoftMaskV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsSoftMaskSubtype",
+                "printedName": "SolidPostScript.GraphicsSoftMaskSubtype",
+                "usr": "s:15SolidPostScript23GraphicsSoftMaskSubtypeO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyGroup",
+                "printedName": "SolidPostScript.GraphicsTransparencyGroup",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[Swift.Double]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Double",
+                    "printedName": "Swift.Double",
+                    "usr": "s:Sd"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sa"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsComponentFunction?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsComponentFunction",
+                    "printedName": "SolidPostScript.GraphicsComponentFunction",
+                    "usr": "s:15SolidPostScript25GraphicsComponentFunctionV"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsResourceIdentifier",
+                "printedName": "SolidPostScript.GraphicsResourceIdentifier",
+                "hasDefaultArg": true,
+                "usr": "s:15SolidPostScript26GraphicsResourceIdentifierV"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:15SolidPostScript16GraphicsSoftMaskV7subtype5group8backdrop16transferFunction18resourceIdentifierAcA0deF7SubtypeO_AA0D17TransparencyGroupVSaySdGAA0d9ComponentK0VSgAA0d8ResourceM0Vtcfc",
+            "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV7subtype5group8backdrop16transferFunction18resourceIdentifierAcA0deF7SubtypeO_AA0D17TransparencyGroupVSaySdGAA0d9ComponentK0VSgAA0d8ResourceM0Vtcfc",
+            "moduleName": "SolidPostScript",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_struct_equals",
+            "printedName": "__derived_struct_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsSoftMask",
+                "printedName": "SolidPostScript.GraphicsSoftMask",
+                "usr": "s:15SolidPostScript16GraphicsSoftMaskV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsSoftMask",
+                "printedName": "SolidPostScript.GraphicsSoftMask",
+                "usr": "s:15SolidPostScript16GraphicsSoftMaskV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript16GraphicsSoftMaskV23__derived_struct_equalsySbAC_ACtFZ",
+            "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV23__derived_struct_equalsySbAC_ACtFZ",
+            "moduleName": "SolidPostScript",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript16GraphicsSoftMaskV4hash4intoys6HasherVz_tF",
+            "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidPostScript",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript16GraphicsSoftMaskV9hashValueSivp",
+            "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV9hashValueSivp",
+            "moduleName": "SolidPostScript",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript16GraphicsSoftMaskV9hashValueSivg",
+                "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV9hashValueSivg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:15SolidPostScript16GraphicsSoftMaskV",
+        "mangledName": "$s15SolidPostScript16GraphicsSoftMaskV",
+        "moduleName": "SolidPostScript",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
         "name": "GraphicsSpotScreen",
         "printedName": "GraphicsSpotScreen",
         "children": [
@@ -72273,9 +73377,55 @@
             ]
           },
           {
+            "kind": "Var",
+            "name": "transparency",
+            "printedName": "transparency",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyState",
+                "printedName": "SolidPostScript.GraphicsTransparencyState",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript21GraphicsStateSnapshotV12transparencyAA0d12TransparencyE0Vvp",
+            "mangledName": "$s15SolidPostScript21GraphicsStateSnapshotV12transparencyAA0d12TransparencyE0Vvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsTransparencyState",
+                    "printedName": "SolidPostScript.GraphicsTransparencyState",
+                    "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript21GraphicsStateSnapshotV12transparencyAA0d12TransparencyE0Vvg",
+                "mangledName": "$s15SolidPostScript21GraphicsStateSnapshotV12transparencyAA0d12TransparencyE0Vvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
             "kind": "Constructor",
             "name": "init",
-            "printedName": "init(matrix:path:clip:paint:colorSpace:colorRealization:colorComponents:overprint:lineWidth:lineCap:lineJoin:miterLimit:dash:flatness:strokeAdjustment:smoothness:pathBoundingBox:device:deviceRendering:font:renderingIntent:)",
+            "printedName": "init(matrix:path:clip:paint:colorSpace:colorRealization:colorComponents:overprint:lineWidth:lineCap:lineJoin:miterLimit:dash:flatness:strokeAdjustment:smoothness:pathBoundingBox:device:deviceRendering:font:renderingIntent:transparency:)",
             "children": [
               {
                 "kind": "TypeNominal",
@@ -72444,11 +73594,18 @@
                 "printedName": "SolidColor.ColorRenderingIntent",
                 "hasDefaultArg": true,
                 "usr": "s:10SolidColor0B15RenderingIntentO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyState",
+                "printedName": "SolidPostScript.GraphicsTransparencyState",
+                "hasDefaultArg": true,
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
               }
             ],
             "declKind": "Constructor",
-            "usr": "s:15SolidPostScript21GraphicsStateSnapshotV6matrix4path4clip5paint10colorSpace0K11Realization0K10Components9overprint9lineWidth0P3Cap0P4Join10miterLimit4dash8flatness16strokeAdjustment10smoothness0H11BoundingBox6device15deviceRendering4font15renderingIntentAcA0D6MatrixV_AA0D4PathVAA0D4ClipVAA0D5PaintOAA0d5ColorL11DescriptionOAA0d5ColorlM0VSgSaySdGSbSdAA0d4LineR0OAA0d4LineS0OSdAA0D4DashVSdSbSdAA0D4RectVSgAA0d6DeviceF0VAA0d15DeviceRenderingF0VAA0D15FontDescriptionV0A5Color20ColorRenderingIntentOtcfc",
-            "mangledName": "$s15SolidPostScript21GraphicsStateSnapshotV6matrix4path4clip5paint10colorSpace0K11Realization0K10Components9overprint9lineWidth0P3Cap0P4Join10miterLimit4dash8flatness16strokeAdjustment10smoothness0H11BoundingBox6device15deviceRendering4font15renderingIntentAcA0D6MatrixV_AA0D4PathVAA0D4ClipVAA0D5PaintOAA0d5ColorL11DescriptionOAA0d5ColorlM0VSgSaySdGSbSdAA0d4LineR0OAA0d4LineS0OSdAA0D4DashVSdSbSdAA0D4RectVSgAA0d6DeviceF0VAA0d15DeviceRenderingF0VAA0D15FontDescriptionV0A5Color20ColorRenderingIntentOtcfc",
+            "usr": "s:15SolidPostScript21GraphicsStateSnapshotV6matrix4path4clip5paint10colorSpace0K11Realization0K10Components9overprint9lineWidth0P3Cap0P4Join10miterLimit4dash8flatness16strokeAdjustment10smoothness0H11BoundingBox6device15deviceRendering4font15renderingIntent12transparencyAcA0D6MatrixV_AA0D4PathVAA0D4ClipVAA0D5PaintOAA0d5ColorL11DescriptionOAA0d5ColorlM0VSgSaySdGSbSdAA0d4LineR0OAA0d4LineS0OSdAA0D4DashVSdSbSdAA0D4RectVSgAA0d6DeviceF0VAA0d15DeviceRenderingF0VAA0D15FontDescriptionV0A5Color20ColorRenderingIntentOAA0d12TransparencyE0Vtcfc",
+            "mangledName": "$s15SolidPostScript21GraphicsStateSnapshotV6matrix4path4clip5paint10colorSpace0K11Realization0K10Components9overprint9lineWidth0P3Cap0P4Join10miterLimit4dash8flatness16strokeAdjustment10smoothness0H11BoundingBox6device15deviceRendering4font15renderingIntent12transparencyAcA0D6MatrixV_AA0D4PathVAA0D4ClipVAA0D5PaintOAA0d5ColorL11DescriptionOAA0d5ColorlM0VSgSaySdGSbSdAA0d4LineR0OAA0d4LineS0OSdAA0D4DashVSdSbSdAA0D4RectVSgAA0d6DeviceF0VAA0d15DeviceRenderingF0VAA0D15FontDescriptionV0A5Color20ColorRenderingIntentOAA0d12TransparencyE0Vtcfc",
             "moduleName": "SolidPostScript",
             "init_kind": "Designated"
           },
@@ -72497,6 +73654,54 @@
             "declKind": "Func",
             "usr": "s:15SolidPostScript21GraphicsStateSnapshotV14replacingColor4withAcA0D9TextPaintV_tF",
             "mangledName": "$s15SolidPostScript21GraphicsStateSnapshotV14replacingColor4withAcA0D9TextPaintV_tF",
+            "moduleName": "SolidPostScript",
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "replacingClip",
+            "printedName": "replacingClip(_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsStateSnapshot",
+                "printedName": "SolidPostScript.GraphicsStateSnapshot",
+                "usr": "s:15SolidPostScript21GraphicsStateSnapshotV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsClip",
+                "printedName": "SolidPostScript.GraphicsClip",
+                "usr": "s:15SolidPostScript12GraphicsClipV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript21GraphicsStateSnapshotV13replacingClipyAcA0dH0VF",
+            "mangledName": "$s15SolidPostScript21GraphicsStateSnapshotV13replacingClipyAcA0dH0VF",
+            "moduleName": "SolidPostScript",
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "replacingTransparency",
+            "printedName": "replacingTransparency(_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsStateSnapshot",
+                "printedName": "SolidPostScript.GraphicsStateSnapshot",
+                "usr": "s:15SolidPostScript21GraphicsStateSnapshotV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyState",
+                "printedName": "SolidPostScript.GraphicsTransparencyState",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript21GraphicsStateSnapshotV21replacingTransparencyyAcA0dhE0VF",
+            "mangledName": "$s15SolidPostScript21GraphicsStateSnapshotV21replacingTransparencyyAcA0dhE0VF",
             "moduleName": "SolidPostScript",
             "funcSelfKind": "NonMutating"
           },
@@ -79142,9 +80347,101 @@
             ]
           },
           {
+            "kind": "Var",
+            "name": "fillTransparency",
+            "printedName": "fillTransparency",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyState",
+                "printedName": "SolidPostScript.GraphicsTransparencyState",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript17GraphicsTextStyleV16fillTransparencyAA0dH5StateVvp",
+            "mangledName": "$s15SolidPostScript17GraphicsTextStyleV16fillTransparencyAA0dH5StateVvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsTransparencyState",
+                    "printedName": "SolidPostScript.GraphicsTransparencyState",
+                    "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript17GraphicsTextStyleV16fillTransparencyAA0dH5StateVvg",
+                "mangledName": "$s15SolidPostScript17GraphicsTextStyleV16fillTransparencyAA0dH5StateVvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "strokeTransparency",
+            "printedName": "strokeTransparency",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyState",
+                "printedName": "SolidPostScript.GraphicsTransparencyState",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript17GraphicsTextStyleV18strokeTransparencyAA0dH5StateVvp",
+            "mangledName": "$s15SolidPostScript17GraphicsTextStyleV18strokeTransparencyAA0dH5StateVvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsTransparencyState",
+                    "printedName": "SolidPostScript.GraphicsTransparencyState",
+                    "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript17GraphicsTextStyleV18strokeTransparencyAA0dH5StateVvg",
+                "mangledName": "$s15SolidPostScript17GraphicsTextStyleV18strokeTransparencyAA0dH5StateVvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
             "kind": "Constructor",
             "name": "init",
-            "printedName": "init(fill:stroke:)",
+            "printedName": "init(fill:stroke:fillTransparency:strokeTransparency:)",
             "children": [
               {
                 "kind": "TypeNominal",
@@ -79163,11 +80460,25 @@
                 "name": "GraphicsTextPaint",
                 "printedName": "SolidPostScript.GraphicsTextPaint",
                 "usr": "s:15SolidPostScript17GraphicsTextPaintV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyState",
+                "printedName": "SolidPostScript.GraphicsTransparencyState",
+                "hasDefaultArg": true,
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyState",
+                "printedName": "SolidPostScript.GraphicsTransparencyState",
+                "hasDefaultArg": true,
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
               }
             ],
             "declKind": "Constructor",
-            "usr": "s:15SolidPostScript17GraphicsTextStyleV4fill6strokeAcA0dE5PaintV_AGtcfc",
-            "mangledName": "$s15SolidPostScript17GraphicsTextStyleV4fill6strokeAcA0dE5PaintV_AGtcfc",
+            "usr": "s:15SolidPostScript17GraphicsTextStyleV4fill6stroke0G12Transparency0hI0AcA0dE5PaintV_AiA0dI5StateVAKtcfc",
+            "mangledName": "$s15SolidPostScript17GraphicsTextStyleV4fill6stroke0G12Transparency0hI0AcA0dE5PaintV_AiA0dI5StateVAKtcfc",
             "moduleName": "SolidPostScript",
             "init_kind": "Designated"
           },
@@ -80986,6 +82297,1124 @@
         "declKind": "Struct",
         "usr": "s:15SolidPostScript25GraphicsTransferFunctionsV",
         "mangledName": "$s15SolidPostScript25GraphicsTransferFunctionsV",
+        "moduleName": "SolidPostScript",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "GraphicsTransparencyGroup",
+        "printedName": "GraphicsTransparencyGroup",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "bounds",
+            "printedName": "bounds",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsRect",
+                "printedName": "SolidPostScript.GraphicsRect",
+                "usr": "s:15SolidPostScript12GraphicsRectV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV6boundsAA0D4RectVvp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV6boundsAA0D4RectVvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsRect",
+                    "printedName": "SolidPostScript.GraphicsRect",
+                    "usr": "s:15SolidPostScript12GraphicsRectV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV6boundsAA0D4RectVvg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV6boundsAA0D4RectVvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "isolated",
+            "printedName": "isolated",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV8isolatedSbvp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV8isolatedSbvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV8isolatedSbvg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV8isolatedSbvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "knockout",
+            "printedName": "knockout",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV8knockoutSbvp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV8knockoutSbvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV8knockoutSbvg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV8knockoutSbvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "colorSpace",
+            "printedName": "colorSpace",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsColorSpaceDescription?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsColorSpaceDescription",
+                    "printedName": "SolidPostScript.GraphicsColorSpaceDescription",
+                    "usr": "s:15SolidPostScript29GraphicsColorSpaceDescriptionO"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV10colorSpaceAA0d5ColorH11DescriptionOSgvp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV10colorSpaceAA0d5ColorH11DescriptionOSgvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "SolidPostScript.GraphicsColorSpaceDescription?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsColorSpaceDescription",
+                        "printedName": "SolidPostScript.GraphicsColorSpaceDescription",
+                        "usr": "s:15SolidPostScript29GraphicsColorSpaceDescriptionO"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV10colorSpaceAA0d5ColorH11DescriptionOSgvg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV10colorSpaceAA0d5ColorH11DescriptionOSgvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "colorRealization",
+            "printedName": "colorRealization",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsColorSpaceRealization?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsColorSpaceRealization",
+                    "printedName": "SolidPostScript.GraphicsColorSpaceRealization",
+                    "usr": "s:15SolidPostScript29GraphicsColorSpaceRealizationV"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV16colorRealizationAA0d10ColorSpaceH0VSgvp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV16colorRealizationAA0d10ColorSpaceH0VSgvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "SolidPostScript.GraphicsColorSpaceRealization?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsColorSpaceRealization",
+                        "printedName": "SolidPostScript.GraphicsColorSpaceRealization",
+                        "usr": "s:15SolidPostScript29GraphicsColorSpaceRealizationV"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV16colorRealizationAA0d10ColorSpaceH0VSgvg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV16colorRealizationAA0d10ColorSpaceH0VSgvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "displayList",
+            "printedName": "displayList",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDisplayList",
+                "printedName": "SolidPostScript.GraphicsDisplayList",
+                "usr": "s:15SolidPostScript19GraphicsDisplayListV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV11displayListAA0d7DisplayH0Vvp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV11displayListAA0d7DisplayH0Vvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsDisplayList",
+                    "printedName": "SolidPostScript.GraphicsDisplayList",
+                    "usr": "s:15SolidPostScript19GraphicsDisplayListV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV11displayListAA0d7DisplayH0Vvg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV11displayListAA0d7DisplayH0Vvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "resourceIdentifier",
+            "printedName": "resourceIdentifier",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsResourceIdentifier",
+                "printedName": "SolidPostScript.GraphicsResourceIdentifier",
+                "usr": "s:15SolidPostScript26GraphicsResourceIdentifierV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV18resourceIdentifierAA0d8ResourceH0Vvp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV18resourceIdentifierAA0d8ResourceH0Vvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsResourceIdentifier",
+                    "printedName": "SolidPostScript.GraphicsResourceIdentifier",
+                    "usr": "s:15SolidPostScript26GraphicsResourceIdentifierV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV18resourceIdentifierAA0d8ResourceH0Vvg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV18resourceIdentifierAA0d8ResourceH0Vvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(bounds:isolated:knockout:colorSpace:colorRealization:displayList:resourceIdentifier:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyGroup",
+                "printedName": "SolidPostScript.GraphicsTransparencyGroup",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsRect",
+                "printedName": "SolidPostScript.GraphicsRect",
+                "usr": "s:15SolidPostScript12GraphicsRectV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsColorSpaceDescription?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsColorSpaceDescription",
+                    "printedName": "SolidPostScript.GraphicsColorSpaceDescription",
+                    "usr": "s:15SolidPostScript29GraphicsColorSpaceDescriptionO"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsColorSpaceRealization?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsColorSpaceRealization",
+                    "printedName": "SolidPostScript.GraphicsColorSpaceRealization",
+                    "usr": "s:15SolidPostScript29GraphicsColorSpaceRealizationV"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsDisplayList",
+                "printedName": "SolidPostScript.GraphicsDisplayList",
+                "usr": "s:15SolidPostScript19GraphicsDisplayListV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsResourceIdentifier",
+                "printedName": "SolidPostScript.GraphicsResourceIdentifier",
+                "hasDefaultArg": true,
+                "usr": "s:15SolidPostScript26GraphicsResourceIdentifierV"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV6bounds8isolated8knockout10colorSpace0J11Realization11displayList18resourceIdentifierAcA0D4RectV_S2bAA0d5ColorK11DescriptionOSgAA0drkL0VSgAA0d7DisplayN0VAA0d8ResourceP0Vtcfc",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV6bounds8isolated8knockout10colorSpace0J11Realization11displayList18resourceIdentifierAcA0D4RectV_S2bAA0d5ColorK11DescriptionOSgAA0drkL0VSgAA0d7DisplayN0VAA0d8ResourceP0Vtcfc",
+            "moduleName": "SolidPostScript",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_struct_equals",
+            "printedName": "__derived_struct_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyGroup",
+                "printedName": "SolidPostScript.GraphicsTransparencyGroup",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyGroup",
+                "printedName": "SolidPostScript.GraphicsTransparencyGroup",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV23__derived_struct_equalsySbAC_ACtFZ",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV23__derived_struct_equalsySbAC_ACtFZ",
+            "moduleName": "SolidPostScript",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV4hash4intoys6HasherVz_tF",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidPostScript",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV9hashValueSivp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV9hashValueSivp",
+            "moduleName": "SolidPostScript",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV9hashValueSivg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV9hashValueSivg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:15SolidPostScript25GraphicsTransparencyGroupV",
+        "mangledName": "$s15SolidPostScript25GraphicsTransparencyGroupV",
+        "moduleName": "SolidPostScript",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "GraphicsTransparencyState",
+        "printedName": "GraphicsTransparencyState",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "blendMode",
+            "printedName": "blendMode",
+            "children": [
+              {
+                "kind": "TypeNameAlias",
+                "name": "GraphicsBlendMode",
+                "printedName": "SolidPostScript.GraphicsBlendMode",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "ColorBlendMode",
+                    "printedName": "SolidColor.ColorBlendMode",
+                    "usr": "s:10SolidColor0B9BlendModeO"
+                  }
+                ]
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyStateV9blendMode0A5Color0i5BlendH0Ovp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV9blendMode0A5Color0i5BlendH0Ovp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "GraphicsBlendMode",
+                    "printedName": "SolidPostScript.GraphicsBlendMode",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "ColorBlendMode",
+                        "printedName": "SolidColor.ColorBlendMode",
+                        "usr": "s:10SolidColor0B9BlendModeO"
+                      }
+                    ]
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV9blendMode0A5Color0i5BlendH0Ovg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV9blendMode0A5Color0i5BlendH0Ovg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "constantAlpha",
+            "printedName": "constantAlpha",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Double",
+                "printedName": "Swift.Double",
+                "usr": "s:Sd"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyStateV13constantAlphaSdvp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV13constantAlphaSdvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Double",
+                    "printedName": "Swift.Double",
+                    "usr": "s:Sd"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV13constantAlphaSdvg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV13constantAlphaSdvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "alphaIsShape",
+            "printedName": "alphaIsShape",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyStateV12alphaIsShapeSbvp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV12alphaIsShapeSbvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV12alphaIsShapeSbvg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV12alphaIsShapeSbvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "softMask",
+            "printedName": "softMask",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsSoftMask?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsSoftMask",
+                    "printedName": "SolidPostScript.GraphicsSoftMask",
+                    "usr": "s:15SolidPostScript16GraphicsSoftMaskV"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyStateV8softMaskAA0d4SoftH0VSgvp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV8softMaskAA0d4SoftH0VSgvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "SolidPostScript.GraphicsSoftMask?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsSoftMask",
+                        "printedName": "SolidPostScript.GraphicsSoftMask",
+                        "usr": "s:15SolidPostScript16GraphicsSoftMaskV"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV8softMaskAA0d4SoftH0VSgvg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV8softMaskAA0d4SoftH0VSgvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "textKnockout",
+            "printedName": "textKnockout",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyStateV12textKnockoutSbvp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV12textKnockoutSbvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV12textKnockoutSbvg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV12textKnockoutSbvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(blendMode:constantAlpha:alphaIsShape:softMask:textKnockout:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyState",
+                "printedName": "SolidPostScript.GraphicsTransparencyState",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+              },
+              {
+                "kind": "TypeNameAlias",
+                "name": "GraphicsBlendMode",
+                "printedName": "SolidPostScript.GraphicsBlendMode",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "ColorBlendMode",
+                    "printedName": "SolidColor.ColorBlendMode",
+                    "usr": "s:10SolidColor0B9BlendModeO"
+                  }
+                ],
+                "hasDefaultArg": true
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Double",
+                "printedName": "Swift.Double",
+                "hasDefaultArg": true,
+                "usr": "s:Sd"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "hasDefaultArg": true,
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsSoftMask?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsSoftMask",
+                    "printedName": "SolidPostScript.GraphicsSoftMask",
+                    "usr": "s:15SolidPostScript16GraphicsSoftMaskV"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "hasDefaultArg": true,
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyStateV9blendMode13constantAlpha12alphaIsShape8softMask12textKnockoutAC0A5Color0r5BlendH0O_SdSbAA0d4SoftO0VSgSbtcfc",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV9blendMode13constantAlpha12alphaIsShape8softMask12textKnockoutAC0A5Color0r5BlendH0O_SdSbAA0d4SoftO0VSgSbtcfc",
+            "moduleName": "SolidPostScript",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Var",
+            "name": "opaque",
+            "printedName": "opaque",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyState",
+                "printedName": "SolidPostScript.GraphicsTransparencyState",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyStateV6opaqueACvpZ",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV6opaqueACvpZ",
+            "moduleName": "SolidPostScript",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsTransparencyState",
+                    "printedName": "SolidPostScript.GraphicsTransparencyState",
+                    "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV6opaqueACvgZ",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV6opaqueACvgZ",
+                "moduleName": "SolidPostScript",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_struct_equals",
+            "printedName": "__derived_struct_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyState",
+                "printedName": "SolidPostScript.GraphicsTransparencyState",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsTransparencyState",
+                "printedName": "SolidPostScript.GraphicsTransparencyState",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyStateV23__derived_struct_equalsySbAC_ACtFZ",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV23__derived_struct_equalsySbAC_ACtFZ",
+            "moduleName": "SolidPostScript",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyStateV4hash4intoys6HasherVz_tF",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidPostScript",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript25GraphicsTransparencyStateV9hashValueSivp",
+            "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV9hashValueSivp",
+            "moduleName": "SolidPostScript",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript25GraphicsTransparencyStateV9hashValueSivg",
+                "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV9hashValueSivg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:15SolidPostScript25GraphicsTransparencyStateV",
+        "mangledName": "$s15SolidPostScript25GraphicsTransparencyStateV",
         "moduleName": "SolidPostScript",
         "conformances": [
           {

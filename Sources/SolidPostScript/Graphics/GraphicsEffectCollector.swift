@@ -20,6 +20,15 @@ package final class GraphicsEffectCollector {
     case .paint(.fill(let rule)):
       effects.append(.fill(path: event.before.path, rule: rule, state: event.before))
     case .paint(.stroke): effects.append(.stroke(path: event.before.path, state: event.before))
+    case .paint(.fillAndStroke(let rule)):
+      effects.append(
+        .fillAndStroke(
+          path: event.before.path,
+          rule: rule,
+          fillState: event.before,
+          strokeState: event.after
+        )
+      )
     case .paint(.userPathFill(let rule)):
       effects.append(.userPathFill(path: event.before.path, rule: rule, state: event.before))
     case .paint(.userPathStroke):
@@ -30,6 +39,8 @@ package final class GraphicsEffectCollector {
       effects.append(.strokeRectangles(paths: paths, matrix: matrix, state: event.before))
     case .paint(.shading(let shading)): effects.append(.shading(shading, state: event.before))
     case .paint(.form(let form)): effects.append(.form(form, state: event.before))
+    case .paint(.transparencyGroup(let group)):
+      effects.append(.transparencyGroup(group, state: event.before))
     case .paint(.text(let run)): effects.append(.text(run, state: event.before))
     case .content(.markedContent(let operation)):
       effects.append(.markedContent(operation, state: event.before))

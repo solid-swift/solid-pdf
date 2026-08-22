@@ -253,6 +253,35 @@ private struct Writer {
     deviceSnapshot(value.device)
     rendering(value.deviceRendering)
     font(value.font)
+    token(String(describing: value.renderingIntent))
+    transparency(value.transparency, depth: depth)
+  }
+
+  mutating func transparency(_ value: GraphicsTransparencyState, depth: Int) {
+    token(value.blendMode.rawValue)
+    double(value.constantAlpha)
+    boolean(value.alphaIsShape)
+    boolean(value.textKnockout)
+    guard let mask = value.softMask else {
+      token("nil")
+      return
+    }
+    token(mask.subtype == .alpha ? "alpha" : "luminosity")
+    resource(mask.resourceIdentifier)
+    doubles(mask.backdrop)
+    if let function = mask.transferFunction { componentFunction(function) } else { token("nil") }
+    transparencyGroup(mask.group, depth: depth + 1)
+  }
+
+  mutating func transparencyGroup(_ value: GraphicsTransparencyGroup, depth: Int) {
+    rectangle(value.bounds)
+    boolean(value.isolated)
+    boolean(value.knockout)
+    if let colorSpaceValue = value.colorSpace { colorSpace(colorSpaceValue) } else { token("nil") }
+    colorRealization(value.colorRealization)
+    resource(value.resourceIdentifier)
+    resource(value.displayList.resourceIdentifier)
+    effects(value.displayList.effects, depth: depth + 1)
   }
 
   mutating func colorRealization(_ value: GraphicsColorSpaceRealization?) {
@@ -487,6 +516,12 @@ private struct Writer {
       token("stroke")
       path(pathValue)
       state(stateValue, depth: depth)
+    case .fillAndStroke(let pathValue, let rule, let fillState, let strokeState):
+      token("fillAndStroke")
+      path(pathValue)
+      token(rule == .winding ? "winding" : "evenOdd")
+      state(fillState, depth: depth)
+      state(strokeState, depth: depth)
     case .userPathFill(let pathValue, let rule, let stateValue):
       token("userPathFill")
       path(pathValue)
@@ -525,6 +560,10 @@ private struct Writer {
       matrix(form.matrix)
       resource(form.displayList.resourceIdentifier)
       effects(form.displayList.effects, depth: depth + 1)
+      state(stateValue, depth: depth)
+    case .transparencyGroup(let group, let stateValue):
+      token("transparencyGroup")
+      transparencyGroup(group, depth: depth)
       state(stateValue, depth: depth)
     case .text(let run, let stateValue):
       token("text")
@@ -722,6 +761,8 @@ private struct Writer {
     if let style = value.style {
       textPaint(style.fill, depth: depth)
       textPaint(style.stroke, depth: depth)
+      transparency(style.fillTransparency, depth: depth)
+      transparency(style.strokeTransparency, depth: depth)
     } else {
       token("nil")
     }

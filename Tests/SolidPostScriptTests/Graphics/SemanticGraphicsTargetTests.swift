@@ -9,7 +9,7 @@ import Testing
       to: SemanticGraphicsTarget(sink: TestSink())
     )
 
-    #expect(result.output.contractVersion == .v3)
+    #expect(result.output.contractVersion == .v4)
     #expect(result.output.activated.count == 1)
     #expect(result.output.deactivated.count == 1)
     #expect(result.output.events.count == 2)

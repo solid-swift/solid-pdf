@@ -113,12 +113,58 @@ import Testing
     #expect(abs(try gray(x: 10, y: 10, image: image) - 0.75) < 0.01)
   }
 
+  @Test func nativeRasterCompositesBlendModeAndConstantAlpha() throws {
+    let target = RasterImageTarget(pixelWidth: 2, pixelHeight: 2)
+    let renderer = try target.makeRenderer()
+    let bounds = target.deviceDescriptor.mediaBounds
+    let path = GraphicsPath(elements: [
+      .move(to: .init(x: bounds.x, y: bounds.y)),
+      .line(to: .init(x: bounds.maxX, y: bounds.y)),
+      .line(to: .init(x: bounds.maxX, y: bounds.maxY)),
+      .line(to: .init(x: bounds.x, y: bounds.maxY)),
+      .close,
+    ])
+    let clip = GraphicsClip(imageableBounds: target.deviceDescriptor.imageableBounds)
+    let blue = GraphicsStateSnapshot(
+      matrix: .identity,
+      path: path,
+      clip: clip,
+      paint: .deviceRGB(red: 0, green: 0, blue: 1),
+      lineWidth: 1,
+      lineCap: .butt,
+      lineJoin: .miter,
+      miterLimit: 10,
+      dash: .init()
+    )
+    let red = GraphicsStateSnapshot(
+      matrix: .identity,
+      path: path,
+      clip: clip,
+      paint: .deviceRGB(red: 1, green: 0, blue: 0),
+      lineWidth: 1,
+      lineCap: .butt,
+      lineJoin: .miter,
+      miterLimit: 10,
+      dash: .init(),
+      transparency: .init(blendMode: .multiply, constantAlpha: 0.5)
+    )
+    try renderer.process(.init(operation: .paint(.fill(.winding)), before: blue, after: blue))
+    try renderer.process(.init(operation: .paint(.fill(.winding)), before: red, after: red))
+    try renderer.process(.init(operation: .page(.show), before: red, after: red))
+
+    let image = try #require(renderer.finish().first)
+    let color = try rgb(x: 1, y: 1, image: image)
+    #expect(color.red < 0.02)
+    #expect(color.green < 0.02)
+    #expect(abs(color.blue - 0.5) < 0.03)
+  }
+
   @Test func adaptivePageDevicesProduceMixedRasterDimensions() async throws {
     let result = try await Interpreter.render(
       content: """
-        << /PageSize [10 20] >> setpagedevice showpage
-        << /PageSize [30 15] >> setpagedevice showpage
-      """,
+          << /PageSize [10 20] >> setpagedevice showpage
+          << /PageSize [30 15] >> setpagedevice showpage
+        """,
       to: RasterImageTarget(pixelWidth: 20, pixelHeight: 20)
     )
 

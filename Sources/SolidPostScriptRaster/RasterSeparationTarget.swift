@@ -73,6 +73,9 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
         try fill(event.before.path, rule: rule, state: event.before)
       case .paint(.stroke):
         try stroke(event.before.path, matrix: event.before.matrix, state: event.before)
+      case .paint(.fillAndStroke(let rule)):
+        try fill(event.before.path, rule: rule, state: event.before)
+        try stroke(event.after.path, matrix: event.after.matrix, state: event.after)
       case .paint(.userPathStroke):
         try fill(event.before.path, rule: .winding, state: event.before)
       case .paint(.fillRectangles(let paths)):
@@ -87,6 +90,8 @@ public struct RasterSeparationTarget: GraphicsTarget, Sendable {
         try paintShading(shading, clip: event.before.clip, state: event.before)
       case .paint(.form(let form)):
         try paintForm(form, depth: 0)
+      case .paint(.transparencyGroup(let group)):
+        try paintTransparencyGroup(group, depth: 0)
       case .paint(.text(let run)):
         try paintText(run, state: event.before, depth: 0)
       default:
@@ -580,12 +585,20 @@ private extension RasterSeparationTarget.Renderer {
     for effect in form.displayList.effects { try replayFormEffect(effect, depth: depth + 1) }
   }
 
+  func paintTransparencyGroup(_ group: GraphicsTransparencyGroup, depth: Int) throws {
+    guard depth < 16 else { throw SolidPostScript.Error.ioError }
+    for effect in group.displayList.effects { try replayFormEffect(effect, depth: depth + 1) }
+  }
+
   func replayFormEffect(_ effect: GraphicsEffect, depth: Int) throws {
     switch effect {
     case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
       try fill(path, rule: rule, state: state, depth: depth)
     case .stroke(let path, let state):
       try stroke(path, matrix: state.matrix, state: state)
+    case .fillAndStroke(let path, let rule, let fillState, let strokeState):
+      try fill(path, rule: rule, state: fillState, depth: depth)
+      try stroke(path, matrix: strokeState.matrix, state: strokeState)
     case .userPathStroke(let outline, let state):
       try fill(outline, rule: .winding, state: state, depth: depth)
     case .erase(let state):
@@ -604,6 +617,8 @@ private extension RasterSeparationTarget.Renderer {
       try paintShading(shading, clip: state.clip, state: state)
     case .form(let form, _):
       try paintForm(form, depth: depth)
+    case .transparencyGroup(let group, _):
+      try paintTransparencyGroup(group, depth: depth)
     case .text(let run, let state):
       try paintText(run, state: state, depth: depth)
     case .markedContent:
@@ -614,8 +629,14 @@ private extension RasterSeparationTarget.Renderer {
   func paintText(_ run: GraphicsGlyphRun, state: GraphicsStateSnapshot, depth: Int) throws {
     let state = state.replacingDevice(activeDevice)
     guard depth < 16 else { throw SolidPostScript.Error.ioError }
-    let fillState = run.style.map { state.replacingColor(with: $0.fill) } ?? state
-    let strokeState = run.style.map { state.replacingColor(with: $0.stroke) } ?? state
+    let fillState =
+      run.style.map {
+        state.replacingColor(with: $0.fill).replacingTransparency($0.fillTransparency)
+      } ?? state
+    let strokeState =
+      run.style.map {
+        state.replacingColor(with: $0.stroke).replacingTransparency($0.strokeTransparency)
+      } ?? state
     for placement in run.glyphs {
       switch placement.glyph.program {
       case .outline(let path):
@@ -700,6 +721,41 @@ private extension RasterSeparationTarget.Renderer {
           depth: depth + 1
         )
       }
+      return
+    }
+    if case .transparencyGroup(let group, _) = effect {
+      for nested in group.displayList.effects {
+        try replayPatternEffect(
+          nested,
+          translatedBy: translation,
+          underlying: underlying,
+          through: paintedPath,
+          rule: paintedRule,
+          clip: clip,
+          depth: depth + 1
+        )
+      }
+      return
+    }
+    if case .fillAndStroke(let path, let rule, let fillState, let strokeState) = effect {
+      try replayPatternEffect(
+        .fill(path: path, rule: rule, state: fillState),
+        translatedBy: translation,
+        underlying: underlying,
+        through: paintedPath,
+        rule: paintedRule,
+        clip: clip,
+        depth: depth
+      )
+      try replayPatternEffect(
+        .stroke(path: path, state: strokeState),
+        translatedBy: translation,
+        underlying: underlying,
+        through: paintedPath,
+        rule: paintedRule,
+        clip: clip,
+        depth: depth
+      )
       return
     }
     if case .image(let image, let imageState) = effect {
@@ -843,7 +899,7 @@ private extension RasterSeparationTarget.Renderer {
         state: state
       )
       return
-    case .image, .form:
+    case .image, .form, .transparencyGroup, .fillAndStroke:
       preconditionFailure("Handled before vector replay")
     case .text:
       preconditionFailure("Text effects are handled before vector replay")
@@ -938,26 +994,7 @@ private extension RasterSeparationTarget.Renderer {
     in state: GraphicsStateSnapshot,
     with clip: GraphicsClip
   ) -> GraphicsStateSnapshot {
-    GraphicsStateSnapshot(
-      matrix: state.matrix,
-      path: state.path,
-      clip: clip,
-      paint: state.paint,
-      colorSpace: state.colorSpace,
-      colorComponents: state.colorComponents,
-      overprint: state.overprint,
-      lineWidth: state.lineWidth,
-      lineCap: state.lineCap,
-      lineJoin: state.lineJoin,
-      miterLimit: state.miterLimit,
-      dash: state.dash,
-      flatness: state.flatness,
-      strokeAdjustment: state.strokeAdjustment,
-      smoothness: state.smoothness,
-      pathBoundingBox: state.pathBoundingBox,
-      device: state.device,
-      deviceRendering: state.deviceRendering
-    )
+    state.replacingClip(clip)
   }
 }
 
@@ -1127,24 +1164,28 @@ private extension RasterSeparationTarget.Renderer {
       return (planes, try RasterMask(width: width, height: rowCount, bytesPerRow: width, data: opacity))
     case .color(let colorSpace):
       let available = Set(descriptor.colorants.availableColorants.map(\.name))
-      let direct: (names: [String], components: [Float])? = if let source = image.descriptor.sourceColorSpace,
-        let sourceComponents = image.sourceComponents
-      {
-        switch source {
-        case .separation(let name, _) where name == "All" || name == "None" || available.contains(name):
-          ([name], sourceComponents)
-        case .deviceN(let names, _) where names.allSatisfy(available.contains):
-          (names, sourceComponents)
-        default:
+      let direct: (names: [String], components: [Float])? =
+        if let source = image.descriptor.sourceColorSpace,
+          let sourceComponents = image.sourceComponents
+        {
+          switch source {
+          case .separation(let name, _) where name == "All" || name == "None" || available.contains(name):
+            ([name], sourceComponents)
+          case .deviceN(let names, _) where names.allSatisfy(available.contains):
+            (names, sourceComponents)
+          default:
+            nil
+          }
+        } else {
           nil
         }
-      } else {
-        nil
-      }
       let names = direct?.names ?? descriptor.colorants.availableColorants.map(\.name)
-      var data = Dictionary(uniqueKeysWithValues: names.filter { $0 != "None" }.map {
-        ($0, Data(repeating: 0, count: pixelCount))
-      })
+      var data = Dictionary(
+        uniqueKeysWithValues: names.filter { $0 != "None" }
+          .map {
+            ($0, Data(repeating: 0, count: pixelCount))
+          }
+      )
       if let direct {
         if direct.names == ["All"] {
           let targetNames = descriptor.colorants.availableColorants.map(\.name)

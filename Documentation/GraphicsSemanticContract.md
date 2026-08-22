@@ -1,13 +1,13 @@
 # PostScript Semantic Graphics Contract
 
-`GraphicsSemanticContractVersion.v3` is the stable document-processing boundary emitted by
+`GraphicsSemanticContractVersion.v4` is the stable document-processing boundary emitted by
 SolidPostScript. `SemanticGraphicsTarget` is the bounded streaming interface;
 `RecordingGraphicsTarget` is its materialized counterpart. Neither interface exposes PostScript VM
 objects, executable callbacks, renderer sessions, or platform-native handles.
 
 The contract is frozen at the PostScript graphics closeout milestone. Native PDF parsing is the next
 product stage. A parser may consume this contract and the shared SolidImage products, but it may not
-change version 3 coordinate, identity, ordering, text, or lifetime semantics without the major-version
+change version 4 coordinate, identity, ordering, text, or lifetime semantics without the major-version
 process described below.
 
 ## Coordinates
@@ -58,6 +58,17 @@ visibility. Semantic and recording targets retain hidden paint for analysis. Vis
 its state and path transitions but omit hidden painting operations and image transfers. Nested
 visibility is conjunctive: content is visible only when every enclosing optional-content scope is
 visible.
+
+Version 4 adds the PDF transparent imaging model. Graphics state retains the standard blend mode,
+separate stroking and nonstroking constant alpha, alpha-source selection, soft mask, and text
+knockout. A transparency group preserves its isolated and knockout flags, blend color space,
+backdrop color, transfer function, bounds, and immutable nested display list. Shape and opacity are
+separate throughout portable realization. Combined fill-and-stroke painting is one atomic effect so
+the common interior is composited once, while its fill and stroke paints remain independently
+observable. Soft masks and groups carry stable resource identity and never retain PDF objects or
+target-native storage. PDF text styling retains independent fill and stroke transparency so a
+fill-stroke text operation preserves both `ca` and `CA` without splitting glyph selection or
+placement metadata.
 
 The native PDF extraction layer may expose either physical content-stream order or structure-tree
 order. Each extracted span retains its glyph runs, marked-content and structure paths, optional

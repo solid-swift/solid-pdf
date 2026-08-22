@@ -44,7 +44,7 @@ import Testing
       style: .init(fill: fill, stroke: stroke)
     )
 
-    #expect(GraphicsSemanticContractVersion.current == .v3)
+    #expect(GraphicsSemanticContractVersion.current == .v4)
     #expect(run.renderingMode.fills)
     #expect(run.renderingMode.strokes)
     #expect(run.renderingMode.clips)
@@ -53,13 +53,13 @@ import Testing
   }
 
   private static let paintCases = [
-    "erasePage", "fill", "stroke", "fillRectangles", "strokeRectangles", "image",
-    "userPathFill", "userPathStroke", "shading", "form", "text",
+    "erasePage", "fill", "stroke", "fillAndStroke", "fillRectangles", "strokeRectangles", "image",
+    "userPathFill", "userPathStroke", "shading", "form", "transparencyGroup", "text",
   ]
 
   private static let effectCases = [
-    "fill", "stroke", "userPathFill", "userPathStroke", "erase", "fillRectangles",
-    "strokeRectangles", "image", "shading", "form", "text", "markedContent",
+    "fill", "stroke", "fillAndStroke", "userPathFill", "userPathStroke", "erase", "fillRectangles",
+    "strokeRectangles", "image", "shading", "form", "transparencyGroup", "text", "markedContent",
   ]
 
   private var manifestURL: URL {

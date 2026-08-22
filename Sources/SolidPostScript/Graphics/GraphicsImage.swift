@@ -8,6 +8,8 @@ public enum GraphicsImageSourceType: Int, Sendable, Hashable {
   case explicitMask = 3
   /// A sampled image with color-key masking.
   case colorKeyMask = 4
+  /// A sampled image with an associated PDF soft-mask image.
+  case softMask = 5
 }
 
 /// A standard device color space used by sampled image data.
