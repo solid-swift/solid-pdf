@@ -111,6 +111,38 @@ struct PDFDocumentResolutionTests {
     await document.close()
   }
 
+  @Test
+  func resolvesObjectsAsOfHistoricalRevisions() async throws {
+    let document = try await PDFDocument(source: PDFDataInputSource(incrementalFixture()))
+    #expect(document.revisions.count == 2)
+    let reference = try PDFObjectReference(objectNumber: 2, generationNumber: 0)
+    let original = try await document.resolve(reference, in: document.revisions[0].identifier)
+    let updated = try await document.resolve(reference)
+    guard case .value(.string(let originalString)) = original.value,
+      case .value(.string(let updatedString)) = updated.value
+    else {
+      Issue.record("Expected both historical values to be strings")
+      return
+    }
+    #expect(originalString.bytes == Data("Original".utf8))
+    #expect(updatedString.bytes == Data("Updated".utf8))
+    #expect(original.definitionRevision == document.revisions[0].identifier)
+    #expect(updated.definitionRevision == document.revisions[1].identifier)
+
+    let added = try PDFObjectReference(objectNumber: 3, generationNumber: 0)
+    await #expect(throws: PDFParsingError.unresolvedReference(added)) {
+      _ = try await document.resolve(added, in: document.revisions[0].identifier)
+    }
+    #expect(try await document.resolve(added).value == .value(.integer(42)))
+
+    let otherDocument = try await PDFDocument(source: PDFDataInputSource(incrementalFixture()))
+    await #expect(throws: PDFParsingError.self) {
+      _ = try await otherDocument.resolve(reference, in: document.revisions[0].identifier)
+    }
+    await otherDocument.close()
+    await document.close()
+  }
+
   private func makeWriterDocument(version: PDFVersion) throws -> PDFEncodedDocument {
     var writer = try PDFDocumentWriter(
       sink: PDFDataOutputSink(),
@@ -146,6 +178,36 @@ struct PDFDocumentResolutionTests {
       to: contents
     )
     return try writer.finish(root: catalog, pageCount: 1)
+  }
+
+  private func incrementalFixture() -> Data {
+    var data = Data("%PDF-1.7\n".utf8)
+    let rootOffset = data.count
+    data.append(Data("1 0 obj\n<< /Type /Catalog /Value 2 0 R >>\nendobj\n".utf8))
+    let originalValueOffset = data.count
+    data.append(Data("2 0 obj\n(Original)\nendobj\n".utf8))
+    let originalXRefOffset = data.count
+    data.append(Data("xref\n0 3\n0000000000 65535 f \n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", rootOffset).utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", originalValueOffset).utf8))
+    data.append(Data("trailer\n<< /Size 3 /Root 1 0 R >>\n".utf8))
+    data.append(Data("startxref\n\(originalXRefOffset)\n%%EOF\n".utf8))
+
+    let updatedValueOffset = data.count
+    data.append(Data("2 0 obj\n(Updated)\nendobj\n".utf8))
+    let addedValueOffset = data.count
+    data.append(Data("3 0 obj\n42\nendobj\n".utf8))
+    let updatedXRefOffset = data.count
+    data.append(Data("xref\n2 2\n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", updatedValueOffset).utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", addedValueOffset).utf8))
+    data.append(
+      Data(
+        ("trailer\n<< /Size 4 /Root 1 0 R /Prev \(originalXRefOffset) >>\n"
+          + "startxref\n\(updatedXRefOffset)\n%%EOF\n").utf8
+      )
+    )
+    return data
   }
 
   private func objectStreamFixture() -> Data {

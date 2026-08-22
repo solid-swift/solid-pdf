@@ -34,6 +34,8 @@ public enum PDFParsingError: Error, Sendable, Hashable {
   case referenceCycle([PDFObjectReference])
   /// A requested indirect reference is absent or has the wrong generation.
   case unresolvedReference(PDFObjectReference)
+  /// A revision identifier does not belong to the document.
+  case unknownRevision(PDFRevisionIdentifier)
   /// The document has already been closed.
   case documentClosed
 }

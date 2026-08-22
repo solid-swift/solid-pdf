@@ -34,13 +34,7 @@ struct PDFCrossReferenceTests {
   }
 
   @Test
-  func rejectsIncrementalEncryptedAndOverlappingTables() async throws {
-    let incremental = classicFixture(extraTrailer: "/Prev 1")
-    await #expect(throws: PDFParsingError.self) { _ = try await parse(incremental) }
-
-    let encrypted = classicFixture(extraTrailer: "/Encrypt 2 0 R")
-    await #expect(throws: PDFParsingError.self) { _ = try await parse(encrypted) }
-
+  func rejectsOverlappingTables() async throws {
     let overlap = Data(
       ("%PDF-1.7\n"
         + "1 0 obj\n<< /Type /Catalog >>\nendobj\n"
@@ -50,6 +44,26 @@ struct PDFCrossReferenceTests {
         + "startxref\n45\n%%EOF\n").utf8
     )
     await #expect(throws: PDFParsingError.self) { _ = try await parse(overlap) }
+  }
+
+  @Test
+  func parsesIncrementalRevisionMetadataChronologically() async throws {
+    let index = try await parse(incrementalFixture())
+    #expect(index.revisions.count == 2)
+    #expect(index.revisions.map(\.representation) == [.classic, .classic])
+    #expect(index.revisions.map(\.identifier.ordinal) == [0, 1])
+    #expect(index.latestRevision.startCrossReferenceOffset > index.revisions[0].endOffset)
+    #expect(index.entries[2] != nil)
+    #expect(index.entries[3] != nil)
+  }
+
+  @Test
+  func rejectsInvalidPreviousRevisionChains() async throws {
+    let invalidType = classicFixture(extraTrailer: "/Prev /Earlier")
+    await #expect(throws: PDFParsingError.self) { _ = try await parse(invalidType) }
+
+    let cycle = classicFixture(extraTrailer: "/Prev 45")
+    await #expect(throws: PDFParsingError.self) { _ = try await parse(cycle) }
   }
 
   @Test
@@ -127,6 +141,36 @@ struct PDFCrossReferenceTests {
     )
     data.append(compressed)
     data.append(Data("\nendstream\nendobj\nstartxref\n\(xrefOffset)\n%%EOF\n".utf8))
+    return data
+  }
+
+  private func incrementalFixture() -> Data {
+    var data = Data("%PDF-1.7\n".utf8)
+    let rootOffset = data.count
+    data.append(Data("1 0 obj\n<< /Type /Catalog /Value 2 0 R >>\nendobj\n".utf8))
+    let originalValueOffset = data.count
+    data.append(Data("2 0 obj\n(Original)\nendobj\n".utf8))
+    let originalXRefOffset = data.count
+    data.append(Data("xref\n0 3\n0000000000 65535 f \n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", rootOffset).utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", originalValueOffset).utf8))
+    data.append(Data("trailer\n<< /Size 3 /Root 1 0 R >>\n".utf8))
+    data.append(Data("startxref\n\(originalXRefOffset)\n%%EOF\n".utf8))
+
+    let updatedValueOffset = data.count
+    data.append(Data("2 0 obj\n(Updated)\nendobj\n".utf8))
+    let addedValueOffset = data.count
+    data.append(Data("3 0 obj\n42\nendobj\n".utf8))
+    let updatedXRefOffset = data.count
+    data.append(Data("xref\n2 2\n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", updatedValueOffset).utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", addedValueOffset).utf8))
+    data.append(
+      Data(
+        ("trailer\n<< /Size 4 /Root 1 0 R /Prev \(originalXRefOffset) >>\n"
+          + "startxref\n\(updatedXRefOffset)\n%%EOF\n").utf8
+      )
+    )
     return data
   }
 

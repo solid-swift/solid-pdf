@@ -1,6 +1,11 @@
 import Foundation
 
 actor PDFDocumentResolver<Session: PDFInputSourceSession> {
+  private struct ResolutionKey: Sendable, Hashable {
+    let reference: PDFObjectReference
+    let revision: PDFRevisionIdentifier
+  }
+
   private struct DecodedObjectStream: Sendable {
     let data: Data
     let objectNumbers: [Int]
@@ -13,11 +18,11 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   private let options: PDFParsingOptions
   private let externalStreamProvider: (any PDFExternalStreamProvider)?
   private let streamRegistry = PDFDecodedStreamRegistry()
-  private var objectCache = [PDFObjectReference: PDFIndirectObject]()
-  private var decodedObjectStreams = [PDFObjectReference: DecodedObjectStream]()
-  private var recency = [PDFObjectReference]()
+  private var objectCache = [ResolutionKey: PDFIndirectObject]()
+  private var decodedObjectStreams = [ResolutionKey: DecodedObjectStream]()
+  private var recency = [ResolutionKey]()
   private var cacheBytes = 0
-  private var pending = [PDFObjectReference: Task<PDFIndirectObject, Error>]()
+  private var pending = [ResolutionKey: Task<PDFIndirectObject, Error>]()
   private var decodedStreamCache = [PDFStreamCacheKey: Data]()
   private var decodedStreamRecency = [PDFStreamCacheKey]()
   private var decodedStreamCacheBytes = 0
@@ -37,7 +42,14 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   }
 
   func resolve(_ reference: PDFObjectReference) async throws -> PDFIndirectObject {
-    try await resolve(reference, stack: [])
+    try await resolve(reference, in: index.latestRevision.identifier, stack: [])
+  }
+
+  func resolve(
+    _ reference: PDFObjectReference,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFIndirectObject {
+    try await resolve(reference, in: revision, stack: [])
   }
 
   func readStream(_ stream: PDFStreamObject) async throws -> Data {
@@ -120,45 +132,48 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
 
   private func resolve(
     _ reference: PDFObjectReference,
-    stack: [PDFObjectReference]
+    in revision: PDFRevisionIdentifier,
+    stack: [ResolutionKey]
   ) async throws -> PDFIndirectObject {
     guard !closed else { throw PDFParsingError.documentClosed }
     try Task.checkCancellation()
-    if stack.contains(reference) {
-      throw PDFParsingError.referenceCycle(stack + [reference])
+    let key = ResolutionKey(reference: reference, revision: revision)
+    if stack.contains(key) {
+      throw PDFParsingError.referenceCycle((stack + [key]).map(\.reference))
     }
-    if let cached = objectCache[reference] {
-      touch(reference)
+    if let cached = objectCache[key] {
+      touch(key)
       return cached
     }
-    if let task = pending[reference] {
+    if let task = pending[key] {
       return try await task.value
     }
-    let nextStack = stack + [reference]
+    let nextStack = stack + [key]
     let task = Task<PDFIndirectObject, Error> {
-      try await self.resolveUncached(reference, stack: nextStack)
+      try await self.resolveUncached(reference, in: revision, stack: nextStack)
     }
-    pending[reference] = task
+    pending[key] = task
     do {
       let object = try await task.value
-      pending[reference] = nil
-      insert(object)
+      pending[key] = nil
+      insert(object, for: key)
       return object
     } catch {
-      pending[reference] = nil
+      pending[key] = nil
       throw error
     }
   }
 
   private func resolveUncached(
     _ reference: PDFObjectReference,
-    stack: [PDFObjectReference]
+    in revision: PDFRevisionIdentifier,
+    stack: [ResolutionKey]
   ) async throws -> PDFIndirectObject {
     try Task.checkCancellation()
-    guard let entry = index.entries[reference.objectNumber] else {
+    guard let indexed = try index.entry(for: reference.objectNumber, in: revision) else {
       throw PDFParsingError.unresolvedReference(reference)
     }
-    switch entry {
+    switch indexed.entry {
     case .free:
       throw PDFParsingError.unresolvedReference(reference)
     case .uncompressed(let offset, let generation):
@@ -172,7 +187,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
         enclosingObject: reference
       )
       let raw = try await parser.parseRawIndirectObject { lengthReference in
-        let lengthObject = try await self.resolve(lengthReference, stack: stack)
+        let lengthObject = try await self.resolve(lengthReference, in: revision, stack: stack)
         guard case .value(.number(.integer(let length))) = lengthObject.value else {
           throw PDFParsingError.malformed(
             .init(
@@ -204,7 +219,8 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
           PDFStreamObject(
             dictionary: dictionary,
             encodedRange: streamRange,
-            objectReference: reference
+            objectReference: reference,
+            revision: revision
           )
         )
       } else {
@@ -214,14 +230,19 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
         reference: reference,
         value: value,
         sourceRange: raw.sourceRange,
-        provenance: .file
+        provenance: .file,
+        definitionRevision: indexed.definitionRevision
       )
     case .compressed(let objectStreamNumber, let objectIndex):
       guard reference.generationNumber == 0 else {
         throw PDFParsingError.unresolvedReference(reference)
       }
-      let containerReference = try referenceForObject(number: objectStreamNumber)
-      let decoded = try await decodedObjectStream(containerReference, stack: stack)
+      let containerReference = try referenceForObject(number: objectStreamNumber, in: revision)
+      let decoded = try await decodedObjectStream(
+        containerReference,
+        in: revision,
+        stack: stack
+      )
       guard objectIndex >= 0, objectIndex < decoded.objectNumbers.count,
         decoded.objectNumbers[objectIndex] == reference.objectNumber
       else {
@@ -280,7 +301,8 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
           reference: reference,
           value: .value(value),
           sourceRange: nil,
-          provenance: .objectStream(container: containerReference, index: objectIndex)
+          provenance: .objectStream(container: containerReference, index: objectIndex),
+          definitionRevision: indexed.definitionRevision
         )
       } catch {
         await objectReader.close()
@@ -291,13 +313,15 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
 
   private func decodedObjectStream(
     _ reference: PDFObjectReference,
-    stack: [PDFObjectReference]
+    in revision: PDFRevisionIdentifier,
+    stack: [ResolutionKey]
   ) async throws -> DecodedObjectStream {
-    if let cached = decodedObjectStreams[reference] {
-      touch(reference)
+    let key = ResolutionKey(reference: reference, revision: revision)
+    if let cached = decodedObjectStreams[key] {
+      touch(key)
       return cached
     }
-    let container = try await resolve(reference, stack: stack)
+    let container = try await resolve(reference, in: revision, stack: stack)
     guard case .stream(let stream) = container.value,
       stream.dictionary.pdfName(named: "Type") == PDFName("ObjStm"),
       let countValue = stream.dictionary.pdfInteger(named: "N"),
@@ -361,7 +385,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
         offsets: offsets,
         firstObjectOffset: first
       )
-      insertDecodedObjectStream(result, for: reference)
+      insertDecodedObjectStream(result, for: key)
       return result
     } catch {
       await headerReader.close()
@@ -369,13 +393,16 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
     }
   }
 
-  private func referenceForObject(number: Int) throws -> PDFObjectReference {
-    guard let entry = index.entries[number] else {
+  private func referenceForObject(
+    number: Int,
+    in revision: PDFRevisionIdentifier
+  ) throws -> PDFObjectReference {
+    guard let indexed = try index.entry(for: number, in: revision) else {
       throw PDFParsingError.unresolvedReference(
         PDFObjectReference(uncheckedObjectNumber: number, generationNumber: 0)
       )
     }
-    switch entry {
+    switch indexed.entry {
     case .uncompressed(_, let generation):
       return PDFObjectReference(uncheckedObjectNumber: number, generationNumber: generation)
     case .compressed:
@@ -387,25 +414,25 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
     }
   }
 
-  private func insert(_ object: PDFIndirectObject) {
+  private func insert(_ object: PDFIndirectObject, for key: ResolutionKey) {
     let size = estimatedFootprint(of: object)
     guard size <= options.limits.maximumCachedObjectBytes else { return }
     evict(untilAdding: size)
-    objectCache[object.reference] = object
+    objectCache[key] = object
     cacheBytes += size
-    touch(object.reference)
+    touch(key)
   }
 
   private func insertDecodedObjectStream(
     _ stream: DecodedObjectStream,
-    for reference: PDFObjectReference
+    for key: ResolutionKey
   ) {
     let size = stream.data.count + stream.objectNumbers.count * MemoryLayout<Int>.stride * 2
     guard size <= options.limits.maximumCachedObjectBytes else { return }
     evict(untilAdding: size)
-    decodedObjectStreams[reference] = stream
+    decodedObjectStreams[key] = stream
     cacheBytes += size
-    touch(reference)
+    touch(key)
   }
 
   private func evict(untilAdding size: Int) {
@@ -422,9 +449,9 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
     }
   }
 
-  private func touch(_ reference: PDFObjectReference) {
-    recency.removeAll { $0 == reference }
-    recency.append(reference)
+  private func touch(_ key: ResolutionKey) {
+    recency.removeAll { $0 == key }
+    recency.append(key)
   }
 
   private func estimatedFootprint(of object: PDFIndirectObject) -> Int {
@@ -433,11 +460,12 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   }
 
   private func makeDecodedStream(_ stream: PDFStreamObject) async throws -> PDFDecodedStream {
+    let revision = stream.revision ?? index.latestRevision.identifier
     let configuration = try await PDFStreamConfiguration.resolve(
       stream: stream,
       options: options,
       resolve: { reference in
-        let resolved = try await self.resolve(reference)
+        let resolved = try await self.resolve(reference, in: revision)
         guard case .value(let value) = resolved.value else {
           throw PDFParsingError.malformed(
             .init(

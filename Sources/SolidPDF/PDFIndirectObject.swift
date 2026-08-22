@@ -8,18 +8,22 @@ public struct PDFIndirectObject: Sendable, Hashable {
   public let sourceRange: PDFSourceRange?
   /// The object's direct-file or object-stream provenance.
   public let provenance: PDFObjectProvenance
+  /// The revision in which the effective object definition was introduced.
+  public let definitionRevision: PDFRevisionIdentifier?
 
   /// Creates a resolved indirect object.
   public init(
     reference: PDFObjectReference,
     value: PDFResolvedObject,
     sourceRange: PDFSourceRange?,
-    provenance: PDFObjectProvenance
+    provenance: PDFObjectProvenance,
+    definitionRevision: PDFRevisionIdentifier? = nil
   ) {
     self.reference = reference
     self.value = value
     self.sourceRange = sourceRange
     self.provenance = provenance
+    self.definitionRevision = definitionRevision
   }
 }
 

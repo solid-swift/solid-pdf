@@ -10,6 +10,10 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
   public let info: PDFObjectReference?
   /// The optional two-part file identifier.
   public let identifier: [PDFString]?
+  /// The document revisions in chronological order.
+  public let revisions: [PDFDocumentRevision]
+  /// The latest document revision.
+  public var latestRevision: PDFDocumentRevision { revisions[revisions.count - 1] }
 
   private let resolver: PDFDocumentResolver<Source.Session>
 
@@ -27,6 +31,7 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
       root = index.root
       info = index.info
       identifier = index.identifier
+      revisions = index.revisions
       resolver = PDFDocumentResolver(
         reader: reader,
         index: index,
@@ -47,6 +52,14 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
   /// Resolves an indirect object on demand.
   public func resolve(_ reference: PDFObjectReference) async throws -> PDFIndirectObject {
     try await resolver.resolve(reference)
+  }
+
+  /// Resolves an indirect object as it existed at the end of a selected revision.
+  public func resolve(
+    _ reference: PDFObjectReference,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFIndirectObject {
+    try await resolver.resolve(reference, in: revision)
   }
 
   /// Reads the exact encoded bytes of a resolved stream.

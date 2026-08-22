@@ -4,6 +4,8 @@ public struct PDFParsingLimits: Sendable, Hashable {
   public var maximumInputBytes: Int64
   /// Maximum declared object count.
   public var maximumObjectCount: Int
+  /// Maximum number of incremental revisions.
+  public var maximumRevisions: Int
   /// Maximum nested array, dictionary, or string depth.
   public var maximumNesting: Int
   /// Maximum lexical token size.
@@ -35,6 +37,7 @@ public struct PDFParsingLimits: Sendable, Hashable {
   public init(
     maximumInputBytes: Int64 = 4 * 1_024 * 1_024 * 1_024,
     maximumObjectCount: Int = 1_000_000,
+    maximumRevisions: Int = 1_024,
     maximumNesting: Int = 128,
     maximumTokenBytes: Int = 16 * 1_024 * 1_024,
     maximumStringBytes: Int = 64 * 1_024 * 1_024,
@@ -51,6 +54,7 @@ public struct PDFParsingLimits: Sendable, Hashable {
   ) {
     self.maximumInputBytes = maximumInputBytes
     self.maximumObjectCount = maximumObjectCount
+    self.maximumRevisions = maximumRevisions
     self.maximumNesting = maximumNesting
     self.maximumTokenBytes = maximumTokenBytes
     self.maximumStringBytes = maximumStringBytes
