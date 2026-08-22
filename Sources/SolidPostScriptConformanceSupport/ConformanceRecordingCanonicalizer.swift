@@ -612,6 +612,18 @@ private struct Writer {
     if let clipPath = value.clipPath { path(clipPath) } else { token("nil") }
     boolean(value.antialias)
     shadingGeometry(value.geometry)
+    integer(value.sourcePatches.count)
+    for patch in value.sourcePatches {
+      integer(patch.type)
+      integer(patch.continuationFlag)
+      integer(patch.controlPoints.count)
+      patch.controlPoints.forEach { point($0) }
+      integer(patch.cornerComponents.count)
+      for components in patch.cornerComponents {
+        integer(components.count)
+        components.forEach { double($0) }
+      }
+    }
     integer(value.mesh.triangles.count)
     for triangle in value.mesh.triangles {
       for vertex in [triangle.first, triangle.second, triangle.third] {

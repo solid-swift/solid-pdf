@@ -63595,6 +63595,68 @@
             ]
           },
           {
+            "kind": "Var",
+            "name": "sourcePatches",
+            "printedName": "sourcePatches",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[SolidPostScript.GraphicsShadingPatch]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsShadingPatch",
+                    "printedName": "SolidPostScript.GraphicsShadingPatch",
+                    "usr": "s:15SolidPostScript20GraphicsShadingPatchV"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript15GraphicsShadingV13sourcePatchesSayAA0dE5PatchVGvp",
+            "mangledName": "$s15SolidPostScript15GraphicsShadingV13sourcePatchesSayAA0dE5PatchVGvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[SolidPostScript.GraphicsShadingPatch]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsShadingPatch",
+                        "printedName": "SolidPostScript.GraphicsShadingPatch",
+                        "usr": "s:15SolidPostScript20GraphicsShadingPatchV"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript15GraphicsShadingV13sourcePatchesSayAA0dE5PatchVGvg",
+                "mangledName": "$s15SolidPostScript15GraphicsShadingV13sourcePatchesSayAA0dE5PatchVGvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
             "kind": "Constructor",
             "name": "init",
             "printedName": "init(type:colorSpace:colorRealization:background:bounds:clipPath:antialias:geometry:mesh:resourceIdentifier:)",
@@ -63707,6 +63769,136 @@
             "declKind": "Constructor",
             "usr": "s:15SolidPostScript15GraphicsShadingV4type10colorSpace0G11Realization10background6bounds8clipPath9antialias8geometry4mesh18resourceIdentifierACSi_AA0d5ColorH11DescriptionOAA0dshI0VSgAA0D5PaintOSgAA0D4RectVSgAA0dM0VSgSbAA0dE8GeometryOAA0dE4MeshVAA0d8ResourceR0Vtcfc",
             "mangledName": "$s15SolidPostScript15GraphicsShadingV4type10colorSpace0G11Realization10background6bounds8clipPath9antialias8geometry4mesh18resourceIdentifierACSi_AA0d5ColorH11DescriptionOAA0dshI0VSgAA0D5PaintOSgAA0D4RectVSgAA0dM0VSgSbAA0dE8GeometryOAA0dE4MeshVAA0d8ResourceR0Vtcfc",
+            "moduleName": "SolidPostScript",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(type:colorSpace:colorRealization:background:bounds:clipPath:antialias:geometry:mesh:sourcePatches:resourceIdentifier:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsShading",
+                "printedName": "SolidPostScript.GraphicsShading",
+                "usr": "s:15SolidPostScript15GraphicsShadingV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsColorSpaceDescription",
+                "printedName": "SolidPostScript.GraphicsColorSpaceDescription",
+                "usr": "s:15SolidPostScript29GraphicsColorSpaceDescriptionO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsColorSpaceRealization?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsColorSpaceRealization",
+                    "printedName": "SolidPostScript.GraphicsColorSpaceRealization",
+                    "usr": "s:15SolidPostScript29GraphicsColorSpaceRealizationV"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsPaint?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsPaint",
+                    "printedName": "SolidPostScript.GraphicsPaint",
+                    "usr": "s:15SolidPostScript13GraphicsPaintO"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsRect?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsRect",
+                    "printedName": "SolidPostScript.GraphicsRect",
+                    "usr": "s:15SolidPostScript12GraphicsRectV"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPostScript.GraphicsPath?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsPath",
+                    "printedName": "SolidPostScript.GraphicsPath",
+                    "usr": "s:15SolidPostScript12GraphicsPathV"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "hasDefaultArg": true,
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsShadingGeometry",
+                "printedName": "SolidPostScript.GraphicsShadingGeometry",
+                "usr": "s:15SolidPostScript23GraphicsShadingGeometryO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsShadingMesh",
+                "printedName": "SolidPostScript.GraphicsShadingMesh",
+                "usr": "s:15SolidPostScript19GraphicsShadingMeshV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[SolidPostScript.GraphicsShadingPatch]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsShadingPatch",
+                    "printedName": "SolidPostScript.GraphicsShadingPatch",
+                    "usr": "s:15SolidPostScript20GraphicsShadingPatchV"
+                  }
+                ],
+                "usr": "s:Sa"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsResourceIdentifier",
+                "printedName": "SolidPostScript.GraphicsResourceIdentifier",
+                "hasDefaultArg": true,
+                "usr": "s:15SolidPostScript26GraphicsResourceIdentifierV"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:15SolidPostScript15GraphicsShadingV4type10colorSpace0G11Realization10background6bounds8clipPath9antialias8geometry4mesh13sourcePatches18resourceIdentifierACSi_AA0d5ColorH11DescriptionOAA0duhI0VSgAA0D5PaintOSgAA0D4RectVSgAA0dM0VSgSbAA0dE8GeometryOAA0dE4MeshVSayAA0dE5PatchVGAA0d8ResourceT0Vtcfc",
+            "mangledName": "$s15SolidPostScript15GraphicsShadingV4type10colorSpace0G11Realization10background6bounds8clipPath9antialias8geometry4mesh13sourcePatches18resourceIdentifierACSi_AA0d5ColorH11DescriptionOAA0duhI0VSgAA0D5PaintOSgAA0D4RectVSgAA0dM0VSgSbAA0dE8GeometryOAA0dE4MeshVSayAA0dE5PatchVGAA0d8ResourceT0Vtcfc",
             "moduleName": "SolidPostScript",
             "init_kind": "Designated"
           },
@@ -64665,6 +64857,458 @@
         "declKind": "Struct",
         "usr": "s:15SolidPostScript19GraphicsShadingMeshV",
         "mangledName": "$s15SolidPostScript19GraphicsShadingMeshV",
+        "moduleName": "SolidPostScript",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "GraphicsShadingPatch",
+        "printedName": "GraphicsShadingPatch",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "type",
+            "printedName": "type",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript20GraphicsShadingPatchV4typeSivp",
+            "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV4typeSivp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript20GraphicsShadingPatchV4typeSivg",
+                "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV4typeSivg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "continuationFlag",
+            "printedName": "continuationFlag",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript20GraphicsShadingPatchV16continuationFlagSivp",
+            "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV16continuationFlagSivp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript20GraphicsShadingPatchV16continuationFlagSivg",
+                "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV16continuationFlagSivg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "controlPoints",
+            "printedName": "controlPoints",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[SolidPostScript.GraphicsPoint]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsPoint",
+                    "printedName": "SolidPostScript.GraphicsPoint",
+                    "usr": "s:15SolidPostScript13GraphicsPointV"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript20GraphicsShadingPatchV13controlPointsSayAA0D5PointVGvp",
+            "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV13controlPointsSayAA0D5PointVGvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[SolidPostScript.GraphicsPoint]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GraphicsPoint",
+                        "printedName": "SolidPostScript.GraphicsPoint",
+                        "usr": "s:15SolidPostScript13GraphicsPointV"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript20GraphicsShadingPatchV13controlPointsSayAA0D5PointVGvg",
+                "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV13controlPointsSayAA0D5PointVGvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "cornerComponents",
+            "printedName": "cornerComponents",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[[Swift.Double]]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[Swift.Double]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Double",
+                        "printedName": "Swift.Double",
+                        "usr": "s:Sd"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript20GraphicsShadingPatchV16cornerComponentsSaySaySdGGvp",
+            "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV16cornerComponentsSaySaySdGGvp",
+            "moduleName": "SolidPostScript",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[[Swift.Double]]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Array",
+                        "printedName": "[Swift.Double]",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Double",
+                            "printedName": "Swift.Double",
+                            "usr": "s:Sd"
+                          }
+                        ],
+                        "usr": "s:Sa"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript20GraphicsShadingPatchV16cornerComponentsSaySaySdGGvg",
+                "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV16cornerComponentsSaySaySdGGvg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(type:continuationFlag:controlPoints:cornerComponents:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsShadingPatch",
+                "printedName": "SolidPostScript.GraphicsShadingPatch",
+                "usr": "s:15SolidPostScript20GraphicsShadingPatchV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[SolidPostScript.GraphicsPoint]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GraphicsPoint",
+                    "printedName": "SolidPostScript.GraphicsPoint",
+                    "usr": "s:15SolidPostScript13GraphicsPointV"
+                  }
+                ],
+                "usr": "s:Sa"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[[Swift.Double]]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[Swift.Double]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Double",
+                        "printedName": "Swift.Double",
+                        "usr": "s:Sd"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:15SolidPostScript20GraphicsShadingPatchV4type16continuationFlag13controlPoints16cornerComponentsACSi_SiSayAA0D5PointVGSaySaySdGGtcfc",
+            "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV4type16continuationFlag13controlPoints16cornerComponentsACSi_SiSayAA0D5PointVGSaySaySdGGtcfc",
+            "moduleName": "SolidPostScript",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_struct_equals",
+            "printedName": "__derived_struct_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsShadingPatch",
+                "printedName": "SolidPostScript.GraphicsShadingPatch",
+                "usr": "s:15SolidPostScript20GraphicsShadingPatchV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsShadingPatch",
+                "printedName": "SolidPostScript.GraphicsShadingPatch",
+                "usr": "s:15SolidPostScript20GraphicsShadingPatchV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript20GraphicsShadingPatchV23__derived_struct_equalsySbAC_ACtFZ",
+            "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV23__derived_struct_equalsySbAC_ACtFZ",
+            "moduleName": "SolidPostScript",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript20GraphicsShadingPatchV4hash4intoys6HasherVz_tF",
+            "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidPostScript",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:15SolidPostScript20GraphicsShadingPatchV9hashValueSivp",
+            "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV9hashValueSivp",
+            "moduleName": "SolidPostScript",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:15SolidPostScript20GraphicsShadingPatchV9hashValueSivg",
+                "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV9hashValueSivg",
+                "moduleName": "SolidPostScript",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:15SolidPostScript20GraphicsShadingPatchV",
+        "mangledName": "$s15SolidPostScript20GraphicsShadingPatchV",
         "moduleName": "SolidPostScript",
         "conformances": [
           {

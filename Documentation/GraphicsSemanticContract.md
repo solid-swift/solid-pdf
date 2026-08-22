@@ -46,6 +46,11 @@ this additive metadata to retain page, content-stream, and nested-resource prove
 graphics state also preserves rendering intent and device-rendering state preserves halftone phase;
 legacy producers receive the documented defaults.
 
+Type 6 and Type 7 shadings retain their exact reconstructed source patches, including the original
+continuation flags, ordered control points, and corner components before function or color-space
+realization. The accompanying triangle mesh is a deterministic portable fallback and does not
+replace the authoritative patch representation.
+
 ## Streaming order
 
 Device activation precedes its events. Every image event is followed by one begin callback, ordered

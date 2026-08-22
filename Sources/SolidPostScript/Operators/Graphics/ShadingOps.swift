@@ -110,6 +110,7 @@ extension Operators {
   }
 
   private struct ShadingPatchData {
+    let flag: Int
     let controlPoints: [GraphicsPoint]
     let colors: [[Double]]
   }
@@ -687,6 +688,7 @@ extension Operators {
     }
     let componentCount = function == nil ? common.colorSpace.componentCount : 1
     let source = try dictionary.object(forKey: "DataSource")
+    let sourcePatches: [ShadingPatchData]
     let patches: [ShadingPatchData]
     let functionInputRange: ClosedRange<Double>
     if source.value is ArrayValue || source.value is PackedArrayValue {
@@ -695,8 +697,10 @@ extension Operators {
         type: common.type,
         componentCount: componentCount
       )
+      sourcePatches = decoded
       patches = function == nil ? decoded : decoded.map { patch in
         ShadingPatchData(
+          flag: patch.flag,
           controlPoints: patch.controlPoints,
           colors: patch.colors.map { $0.map { min(1, max(0, $0)) } }
         )
@@ -723,7 +727,7 @@ extension Operators {
         reusableRequired: reusableDataRequired,
         context: context
       )
-      patches = try patchesFromBits(
+      sourcePatches = try patchesFromBits(
         data,
         type: common.type,
         componentCount: componentCount,
@@ -732,6 +736,7 @@ extension Operators {
         bitsPerComponent: bitsPerComponent,
         decode: decode
       )
+      patches = sourcePatches
     }
     try function?.validateDomain(functionInputRange)
     guard patches.allSatisfy({ patch in
@@ -776,6 +781,14 @@ extension Operators {
       antialias: common.antialias,
       geometry: .patches(type: common.type, patchCount: patches.count),
       mesh: .init(triangles: triangles),
+      sourcePatches: sourcePatches.map {
+        GraphicsShadingPatch(
+          type: common.type,
+          continuationFlag: $0.flag,
+          controlPoints: $0.controlPoints,
+          cornerComponents: $0.colors
+        )
+      },
       resourceIdentifier: context.environment.graphicsResourceIdentities.next()
     )
   }
@@ -807,7 +820,7 @@ extension Operators {
         colors.append(Array(values[offset..<(offset + componentCount)]))
         offset += componentCount
       }
-      let patch = ShadingPatchData(controlPoints: points, colors: colors)
+      let patch = ShadingPatchData(flag: flag, controlPoints: points, colors: colors)
       result.append(patch)
       previous = patch
     }
@@ -853,7 +866,7 @@ extension Operators {
         colors.append(components)
       }
       reader.alignToByte()
-      let patch = ShadingPatchData(controlPoints: points, colors: colors)
+      let patch = ShadingPatchData(flag: flag, controlPoints: points, colors: colors)
       result.append(patch)
       previous = patch
     }

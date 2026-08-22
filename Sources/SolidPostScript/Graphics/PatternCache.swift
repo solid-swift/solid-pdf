@@ -88,7 +88,27 @@ final class PatternCache: Sendable {
       by: MemoryLayout<GraphicsShadingTriangle>.stride
     )
     guard !multiplication.overflow else { return }
-    let addition = multiplication.partialValue.addingReportingOverflow(512)
+    let patchValues = shading.sourcePatches.reduce(0) { partial, patch in
+      let componentCount = patch.cornerComponents.reduce(0) { count, values in
+        let sum = count.addingReportingOverflow(values.count)
+        return sum.overflow ? .max : sum.partialValue
+      }
+      guard componentCount != .max else { return .max }
+      let pointValues = patch.controlPoints.count.multipliedReportingOverflow(by: 2)
+      guard !pointValues.overflow else { return .max }
+      let values = pointValues.partialValue.addingReportingOverflow(componentCount)
+      guard !values.overflow else { return .max }
+      let product = values.partialValue.multipliedReportingOverflow(by: MemoryLayout<Double>.stride)
+      guard !product.overflow else { return .max }
+      let overhead = product.partialValue.addingReportingOverflow(64)
+      guard !overhead.overflow else { return .max }
+      let sum = partial.addingReportingOverflow(overhead.partialValue)
+      return sum.overflow ? .max : sum.partialValue
+    }
+    guard patchValues != .max else { return }
+    let retained = multiplication.partialValue.addingReportingOverflow(patchValues)
+    guard !retained.overflow else { return }
+    let addition = retained.partialValue.addingReportingOverflow(512)
     guard !addition.overflow else { return }
     let bytes = addition.partialValue
     let itemLimit = min(max(0, maximumItemBytes), Self.maximumItemBytes)

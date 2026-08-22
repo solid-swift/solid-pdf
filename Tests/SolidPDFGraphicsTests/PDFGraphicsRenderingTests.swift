@@ -192,6 +192,53 @@ struct PDFGraphicsRenderingTests {
     await document.close()
   }
 
+  @Test(arguments: [6, 7])
+  func compilesPatchMeshShadingsAndPreservesSourcePatches(type: Int) async throws {
+    let sharedPointIndices = [1: [3, 4, 5, 6], 2: [6, 7, 8, 9], 3: [9, 10, 11, 0]]
+    let sharedColorIndices = [1: [1, 2], 2: [2, 3], 3: [3, 0]]
+    for flag in 1...3 {
+      let shading = patchShading(type: type, continuationFlag: flag)
+      let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+        content: "/Sh sh",
+        resources: "<< /Shading << /Sh 5 0 R >> >>",
+        extraObjects: [shading]
+      )))
+
+      let result = try await document.render(page: 0, to: RecordingGraphicsTarget())
+      guard case .shading(let captured, _)? = result.output.pages.first?.effects.first else {
+        Issue.record("Expected a patch shading")
+        await document.close()
+        return
+      }
+      #expect(captured.type == type)
+      #expect(captured.sourcePatches.count == 2)
+      #expect(captured.sourcePatches[0].continuationFlag == 0)
+      #expect(captured.sourcePatches[1].continuationFlag == flag)
+      #expect(captured.sourcePatches[0].controlPoints.count == (type == 6 ? 12 : 16))
+      let expectedPoints = sharedPointIndices[flag]!.map { captured.sourcePatches[0].controlPoints[$0] }
+      #expect(Array(captured.sourcePatches[1].controlPoints.prefix(4)) == expectedPoints)
+      let expectedColors = sharedColorIndices[flag]!.map { captured.sourcePatches[0].cornerComponents[$0] }
+      #expect(Array(captured.sourcePatches[1].cornerComponents.prefix(2)) == expectedColors)
+      #expect(!captured.mesh.triangles.isEmpty)
+      if type == 7, flag == 1 { expectTensorCornerTopology(captured) }
+      await document.close()
+    }
+  }
+
+  @Test(arguments: [6, 7])
+  func rejectsPatchContinuationWithoutPriorPatch(type: Int) async throws {
+    let shading = patchShading(type: type, continuationFlag: 1, includeInitialPatch: false)
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "/Sh sh",
+      resources: "<< /Shading << /Sh 5 0 R >> >>",
+      extraObjects: [shading]
+    )))
+    await #expect(throws: PDFGraphicsError.self) {
+      try await document.render(page: 0, to: RecordingGraphicsTarget())
+    }
+    await document.close()
+  }
+
   private func fixture(
     content: String,
     resources: String = "<< >>",

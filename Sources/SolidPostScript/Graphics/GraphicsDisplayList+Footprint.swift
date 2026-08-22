@@ -68,8 +68,11 @@ private extension GraphicsEffect {
       guard let triangles = checkedProduct(
         shading.mesh.triangles.count,
         MemoryLayout<GraphicsShadingTriangle>.stride
-      ) else { return nil }
-      return GraphicsStorageFootprint(displayBytes: triangles + 256, sourceBytes: 0)
+      ), let patches = shadingPatchBytes(shading.sourcePatches)
+      else { return nil }
+      let displayBytes = triangles.addingReportingOverflow(256)
+      guard !displayBytes.overflow else { return nil }
+      return GraphicsStorageFootprint(displayBytes: displayBytes.partialValue, sourceBytes: patches)
     case .form:
       // Cached form bodies are governed by MaxFormCache. A page display list retains only a reference.
       return GraphicsStorageFootprint(displayBytes: 128, sourceBytes: 0)
@@ -134,8 +137,11 @@ private extension GraphicsEffect {
       guard let triangleBytes = checkedProduct(
         shading.mesh.triangles.count,
         MemoryLayout<GraphicsShadingTriangle>.stride
-      ) else { return nil }
-      let result = triangleBytes.addingReportingOverflow(256)
+      ), let patchBytes = shadingPatchBytes(shading.sourcePatches)
+      else { return nil }
+      let retained = triangleBytes.addingReportingOverflow(patchBytes)
+      guard !retained.overflow else { return nil }
+      let result = retained.partialValue.addingReportingOverflow(256)
       return result.overflow ? nil : result.partialValue
     case .form(let form, _):
       guard depth < maximumDepth else { return nil }
@@ -165,5 +171,28 @@ private extension GraphicsEffect {
   func checkedProduct(_ lhs: Int, _ rhs: Int) -> Int? {
     let product = lhs.multipliedReportingOverflow(by: rhs)
     return product.overflow ? nil : product.partialValue
+  }
+
+  private func shadingPatchBytes(_ patches: [GraphicsShadingPatch]) -> Int? {
+    var result = 0
+    for patch in patches {
+      guard let points = checkedProduct(patch.controlPoints.count, MemoryLayout<GraphicsPoint>.stride)
+      else { return nil }
+      let components = patch.cornerComponents.reduce(0) { partial, values in
+        let product = values.count.multipliedReportingOverflow(by: MemoryLayout<Double>.stride)
+        guard !product.overflow else { return .max }
+        let sum = partial.addingReportingOverflow(product.partialValue)
+        return sum.overflow ? .max : sum.partialValue
+      }
+      guard components != .max else { return nil }
+      let retained = points.addingReportingOverflow(components)
+      guard !retained.overflow else { return nil }
+      let overhead = retained.partialValue.addingReportingOverflow(64)
+      guard !overhead.overflow else { return nil }
+      let total = result.addingReportingOverflow(overhead.partialValue)
+      guard !total.overflow else { return nil }
+      result = total.partialValue
+    }
+    return result
   }
 }

@@ -432,7 +432,29 @@ extension PDFGraphicsInstructionHandler {
         resourceIdentifier: identifier
       )
     case 6, 7:
-      throw PDFGraphicsError.unsupported(.operatorName("ShadingType\(type)"), location: instruction.location)
+      guard let stream else { throw malformed("Patch shading is not a stream.", instruction) }
+      let data = try await resources.document.decodedBytes(of: stream)
+      let patches = try patchMesh(
+        type: type,
+        dictionary: dictionary,
+        data: data,
+        colorSpace: colorSpace,
+        functions: functions,
+        instruction: instruction
+      )
+      return GraphicsShading(
+        type: type,
+        colorSpace: colorSpace.description,
+        colorRealization: colorSpace.realization,
+        background: background,
+        bounds: bounds,
+        clipPath: clip,
+        antialias: antialias,
+        geometry: .patches(type: type, patchCount: patches.source.count),
+        mesh: .init(triangles: patches.triangles),
+        sourcePatches: patches.source,
+        resourceIdentifier: identifier
+      )
     default: throw malformed("Invalid shading type.", instruction)
     }
   }
@@ -583,5 +605,230 @@ extension PDFGraphicsInstructionHandler {
       result = triangles(rows)
     }
     return (records.count, result)
+  }
+
+  private struct PatchData {
+    let flag: Int
+    let controlPoints: [GraphicsPoint]
+    let colors: [[Double]]
+  }
+
+  private func patchMesh(
+    type: Int,
+    dictionary: [PDFName: PDFObject],
+    data: Data,
+    colorSpace: PDFGraphicsResourceResolver<Source>.ResolvedColorSpace,
+    functions: [ColorFunction],
+    instruction: PDFContentInstruction
+  ) throws -> (source: [GraphicsShadingPatch], triangles: [GraphicsShadingTriangle]) {
+    let coordinateBits = try PDFObjectAccess.integer(dictionary["BitsPerCoordinate"] ?? .null)
+    let componentBits = try PDFObjectAccess.integer(dictionary["BitsPerComponent"] ?? .null)
+    let flagBits = try PDFObjectAccess.integer(dictionary["BitsPerFlag"] ?? .null)
+    guard [1, 2, 4, 8, 12, 16, 24, 32].contains(coordinateBits),
+      [1, 2, 4, 8, 12, 16].contains(componentBits),
+      [2, 4, 8].contains(flagBits)
+    else { throw malformed("Invalid patch-mesh bit widths.", instruction) }
+    let componentCount = functions.isEmpty ? colorSpace.description.componentCount : 1
+    let decode = try PDFObjectAccess.numbers(dictionary["Decode"] ?? .null)
+    guard decode.count == 4 + componentCount * 2 else {
+      throw malformed("Invalid patch-mesh Decode array.", instruction)
+    }
+    var reader = PDFShadingBitReader(data)
+    var decoded: [PatchData] = []
+    var previous: PatchData?
+    while reader.remainingBits >= flagBits {
+      let flag = Int(try reader.read(flagBits))
+      guard (0...3).contains(flag) else { throw malformed("Invalid patch continuation flag.", instruction) }
+      let pointCount = flag == 0 ? (type == 6 ? 12 : 16) : (type == 6 ? 8 : 12)
+      let colorCount = flag == 0 ? 4 : 2
+      let pointBits = pointCount.multipliedReportingOverflow(by: coordinateBits * 2)
+      let colorBits = colorCount.multipliedReportingOverflow(by: componentCount * componentBits)
+      let required = pointBits.partialValue.addingReportingOverflow(colorBits.partialValue)
+      guard !pointBits.overflow, !colorBits.overflow, !required.overflow,
+        reader.remainingBits >= required.partialValue
+      else { throw malformed("Truncated patch-mesh record.", instruction) }
+      var points = try implicitPatchPoints(previous, flag: flag, type: type, instruction: instruction)
+      for _ in 0..<pointCount {
+        points.append(.init(
+          x: try reader.decode(coordinateBits, lower: decode[0], upper: decode[1]),
+          y: try reader.decode(coordinateBits, lower: decode[2], upper: decode[3])
+        ))
+      }
+      var colors = try implicitPatchColors(previous, flag: flag, instruction: instruction)
+      for _ in 0..<colorCount {
+        var values: [Double] = []
+        values.reserveCapacity(componentCount)
+        for component in 0..<componentCount {
+          values.append(try reader.decode(
+            componentBits,
+            lower: decode[4 + component * 2],
+            upper: decode[5 + component * 2]
+          ))
+        }
+        colors.append(values)
+      }
+      reader.alignToByte()
+      let patch = PatchData(flag: flag, controlPoints: points, colors: colors)
+      decoded.append(patch)
+      previous = patch
+      guard decoded.count <= 65_536 else {
+        throw PDFGraphicsError.limitExceeded("PDF shading patch limit exceeded.", location: instruction.location)
+      }
+    }
+    guard reader.remainingBits == 0, !decoded.isEmpty else {
+      throw malformed("Truncated or empty patch mesh.", instruction)
+    }
+
+    let divisions = shadingSubdivision(smoothness: state.smoothness)
+    let perPatch = divisions.multipliedReportingOverflow(by: divisions * 2)
+    let total = decoded.count.multipliedReportingOverflow(by: perPatch.partialValue)
+    guard !perPatch.overflow, !total.overflow, total.partialValue <= 1_000_000 else {
+      throw PDFGraphicsError.limitExceeded("PDF shading triangle limit exceeded.", location: instruction.location)
+    }
+    var triangles: [GraphicsShadingTriangle] = []
+    triangles.reserveCapacity(total.partialValue)
+    for patch in decoded {
+      var grid: [[GraphicsShadingVertex]] = []
+      grid.reserveCapacity(divisions + 1)
+      for row in 0...divisions {
+        let v = Double(row) / Double(divisions)
+        var vertices: [GraphicsShadingVertex] = []
+        vertices.reserveCapacity(divisions + 1)
+        for column in 0...divisions {
+          let u = Double(column) / Double(divisions)
+          let point = type == 6
+            ? coonsPoint(patch.controlPoints, u: u, v: v)
+            : tensorPoint(patch.controlPoints, u: u, v: v)
+          let input = bilinearComponents(patch.colors, u: u, v: v)
+          let components = functions.isEmpty ? input : try evaluate(functions, input: input)
+          vertices.append(.init(
+            position: state.matrix.transform(point),
+            paint: try colorSpace.makePaint(components)
+          ))
+        }
+        grid.append(vertices)
+      }
+      triangles.append(contentsOf: self.triangles(grid))
+    }
+    return (
+      decoded.map {
+        GraphicsShadingPatch(
+          type: type,
+          continuationFlag: $0.flag,
+          controlPoints: $0.controlPoints,
+          cornerComponents: $0.colors
+        )
+      },
+      triangles
+    )
+  }
+
+  private func implicitPatchPoints(
+    _ previous: PatchData?,
+    flag: Int,
+    type: Int,
+    instruction: PDFContentInstruction
+  ) throws -> [GraphicsPoint] {
+    guard flag != 0 else { return [] }
+    guard let previous, previous.controlPoints.count == (type == 6 ? 12 : 16) else {
+      throw malformed("Patch continuation lacks a prior patch.", instruction)
+    }
+    let indices: [Int] = switch flag {
+    case 1: [3, 4, 5, 6]
+    case 2: [6, 7, 8, 9]
+    case 3: [9, 10, 11, 0]
+    default: throw malformed("Invalid patch continuation flag.", instruction)
+    }
+    return indices.map { previous.controlPoints[$0] }
+  }
+
+  private func implicitPatchColors(
+    _ previous: PatchData?,
+    flag: Int,
+    instruction: PDFContentInstruction
+  ) throws -> [[Double]] {
+    guard flag != 0 else { return [] }
+    guard let previous, previous.colors.count == 4 else {
+      throw malformed("Patch continuation lacks prior colors.", instruction)
+    }
+    return switch flag {
+    case 1: [previous.colors[1], previous.colors[2]]
+    case 2: [previous.colors[2], previous.colors[3]]
+    case 3: [previous.colors[3], previous.colors[0]]
+    default: throw malformed("Invalid patch continuation flag.", instruction)
+    }
+  }
+
+  private func coonsPoint(_ points: [GraphicsPoint], u: Double, v: Double) -> GraphicsPoint {
+    precondition(points.count == 12)
+    let bottom = cubic(points[0], points[11], points[10], points[9], at: u)
+    let top = cubic(points[3], points[4], points[5], points[6], at: u)
+    let left = cubic(points[0], points[1], points[2], points[3], at: v)
+    let right = cubic(points[9], points[8], points[7], points[6], at: v)
+    let bilinear = GraphicsPoint(
+      x: (1 - u) * (1 - v) * points[0].x + (1 - u) * v * points[3].x
+        + u * v * points[6].x + u * (1 - v) * points[9].x,
+      y: (1 - u) * (1 - v) * points[0].y + (1 - u) * v * points[3].y
+        + u * v * points[6].y + u * (1 - v) * points[9].y
+    )
+    return .init(
+      x: (1 - v) * bottom.x + v * top.x + (1 - u) * left.x + u * right.x - bilinear.x,
+      y: (1 - v) * bottom.y + v * top.y + (1 - u) * left.y + u * right.y - bilinear.y
+    )
+  }
+
+  private func tensorPoint(_ points: [GraphicsPoint], u: Double, v: Double) -> GraphicsPoint {
+    precondition(points.count == 16)
+    let storedToGrid = [0, 11, 10, 9, 1, 12, 15, 8, 2, 13, 14, 7, 3, 4, 5, 6]
+    let horizontal = bernstein(u)
+    let vertical = bernstein(v)
+    var result = GraphicsPoint(x: 0, y: 0)
+    for row in 0..<4 {
+      for column in 0..<4 {
+        let point = points[storedToGrid[row * 4 + column]]
+        let weight = horizontal[column] * vertical[row]
+        result.x += point.x * weight
+        result.y += point.y * weight
+      }
+    }
+    return result
+  }
+
+  private func cubic(
+    _ first: GraphicsPoint,
+    _ control1: GraphicsPoint,
+    _ control2: GraphicsPoint,
+    _ last: GraphicsPoint,
+    at value: Double
+  ) -> GraphicsPoint {
+    let weights = bernstein(value)
+    return .init(
+      x: first.x * weights[0] + control1.x * weights[1] + control2.x * weights[2] + last.x * weights[3],
+      y: first.y * weights[0] + control1.y * weights[1] + control2.y * weights[2] + last.y * weights[3]
+    )
+  }
+
+  private func bernstein(_ value: Double) -> [Double] {
+    let inverse = 1 - value
+    return [
+      inverse * inverse * inverse,
+      3 * value * inverse * inverse,
+      3 * value * value * inverse,
+      value * value * value,
+    ]
+  }
+
+  private func bilinearComponents(_ colors: [[Double]], u: Double, v: Double) -> [Double] {
+    precondition(colors.count == 4)
+    return colors[0].indices.map { component in
+      (1 - u) * (1 - v) * colors[0][component]
+        + (1 - u) * v * colors[1][component]
+        + u * v * colors[2][component]
+        + u * (1 - v) * colors[3][component]
+    }
+  }
+
+  private func shadingSubdivision(smoothness: Double) -> Int {
+    min(32, max(4, Int(ceil(1 / sqrt(max(smoothness, 1e-6))))))
   }
 }
