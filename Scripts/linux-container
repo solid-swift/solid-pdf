@@ -7,7 +7,7 @@ readonly SCRIPT_DIRECTORY
 REPOSITORY_ROOT="$(cd "${SCRIPT_DIRECTORY}/.." && pwd -P)"
 readonly REPOSITORY_ROOT
 readonly SWIFT_IMAGE="${SOLIDPDF_LINUX_SWIFT_IMAGE:-swift:6.3.3}"
-readonly SCRIPT_SCHEMA_VERSION="${SOLIDPDF_LINUX_SCRIPT_SCHEMA_VERSION:-7}"
+readonly SCRIPT_SCHEMA_VERSION="${SOLIDPDF_LINUX_SCRIPT_SCHEMA_VERSION:-8}"
 readonly DEPENDENCY_GENERATION="${SOLIDPDF_LINUX_DEPENDENCY_GENERATION:-7}"
 
 function fail() {
@@ -57,11 +57,11 @@ readonly BUILD_VOLUME="${CONTAINER_NAME}-build"
 readonly CACHE_VOLUME="${CONTAINER_NAME}-cache"
 readonly BENCHMARK_VOLUME="${CONTAINER_NAME}-benchmarks"
 readonly PACKAGE_STATE_DIRECTORY="${REPOSITORY_ROOT}/.cache/linux-container/${PLATFORM_IDENTIFIER}"
-readonly RESOLVED_FILE="${PACKAGE_STATE_DIRECTORY}/Package.resolved"
+readonly STAGED_WORKSPACE="${PACKAGE_STATE_DIRECTORY}/workspace"
 readonly LOCK_DIRECTORY="${REPOSITORY_ROOT}/.cache/linux-container/.lifecycle-${PLATFORM_IDENTIFIER}.lock"
 readonly DEPENDENCY_SENTINEL="/var/lib/solidpdf-system-dependencies-v${DEPENDENCY_GENERATION}"
 readonly CONFIGURATION_FINGERPRINT="$(checksum "${SWIFT_IMAGE}|${LINUX_PLATFORM}|${DEPENDENCY_GENERATION}|${SCRIPT_SCHEMA_VERSION}")"
-readonly MOUNT_FINGERPRINT="$(checksum "${REPOSITORY_ROOT}|${RESOLVED_FILE}|${BUILD_VOLUME}|${CACHE_VOLUME}|${BENCHMARK_VOLUME}")"
+readonly MOUNT_FINGERPRINT="$(checksum "${REPOSITORY_ROOT}|${STAGED_WORKSPACE}|${BUILD_VOLUME}|${CACHE_VOLUME}|${BENCHMARK_VOLUME}")"
 
 LOCK_HELD=0
 
@@ -126,8 +126,7 @@ function container_mounts_match() {
 
   local mounts
   mounts="$(docker container inspect --format '{{range .Mounts}}{{if eq .Type "bind"}}bind|{{.Source}}|{{.Destination}}|{{.RW}}{{else}}volume|{{.Name}}|{{.Destination}}|{{.RW}}{{end}}{{println}}{{end}}' "${CONTAINER_NAME}")"
-  grep -Fq "bind|${REPOSITORY_ROOT}|/workspace|false" <<<"${mounts}" &&
-    grep -Fq "bind|${RESOLVED_FILE}|/workspace/Package.resolved|true" <<<"${mounts}" &&
+  grep -Fq "bind|${STAGED_WORKSPACE}|/workspace|true" <<<"${mounts}" &&
     grep -Fq "volume|${BUILD_VOLUME}|/build|true" <<<"${mounts}" &&
     grep -Fq "volume|${CACHE_VOLUME}|/root/.cache|true" <<<"${mounts}" &&
     grep -Fq "volume|${BENCHMARK_VOLUME}|/workspace/.benchmarkBaselines|true" <<<"${mounts}"
@@ -138,11 +137,36 @@ function container_matches_configuration() {
     container_mounts_match
 }
 
-function refresh_resolved_file() {
-  mkdir -p "${PACKAGE_STATE_DIRECTORY}"
-  if [[ ! -f "${RESOLVED_FILE}" ]] || ! cmp -s "${REPOSITORY_ROOT}/Package.resolved" "${RESOLVED_FILE}"; then
-    cp "${REPOSITORY_ROOT}/Package.resolved" "${RESOLVED_FILE}"
+function workspace_changes() {
+  local dry_run=
+  if [[ "${1:-}" == "--dry-run" ]]; then
+    dry_run=--dry-run
   fi
+  mkdir -p "${PACKAGE_STATE_DIRECTORY}"
+  mkdir -p "${STAGED_WORKSPACE}"
+  rsync --archive --delete --itemize-changes ${dry_run:+"${dry_run}"} \
+    --exclude .benchmarkBaselines/ \
+    --exclude .build/ \
+    --exclude .cache/ \
+    --exclude .git/ \
+    --exclude Reference/ \
+    "${REPOSITORY_ROOT}/" "${STAGED_WORKSPACE}/"
+}
+
+function refresh_staged_workspace() {
+  command -v rsync >/dev/null 2>&1 || fail "rsync is required to stage the writable Linux workspace"
+  local exec_count=0
+  if container_exists; then
+    exec_count="$(active_exec_count "${CONTAINER_NAME}")"
+  fi
+  if [[ "${exec_count}" != "0" ]]; then
+    local changes
+    changes="$(workspace_changes --dry-run)"
+    [[ -z "${changes}" ]] || fail \
+      "cannot refresh ${STAGED_WORKSPACE}: ${exec_count} Docker exec session(s) are active"
+    return
+  fi
+  workspace_changes >/dev/null
 }
 
 function legacy_container_names() {
@@ -196,8 +220,7 @@ function create_container() {
     --label "com.solidpdf.script-schema=${SCRIPT_SCHEMA_VERSION}" \
     --label "com.solidpdf.configuration-fingerprint=${CONFIGURATION_FINGERPRINT}" \
     --label "com.solidpdf.mount-fingerprint=${MOUNT_FINGERPRINT}" \
-    --mount "type=bind,source=${REPOSITORY_ROOT},target=/workspace,readonly" \
-    --mount "type=bind,source=${RESOLVED_FILE},target=/workspace/Package.resolved" \
+    --mount "type=bind,source=${STAGED_WORKSPACE},target=/workspace" \
     --mount "type=volume,source=${BUILD_VOLUME},target=/build" \
     --mount "type=volume,source=${CACHE_VOLUME},target=/root/.cache" \
     --mount "type=volume,source=${BENCHMARK_VOLUME},target=/workspace/.benchmarkBaselines" \
@@ -218,7 +241,7 @@ function install_dependencies() {
 }
 
 function ensure_container_locked() {
-  refresh_resolved_file
+  refresh_staged_workspace
   migrate_legacy_containers
   if container_exists && ! container_matches_configuration; then
     remove_replaceable_container "${CONTAINER_NAME}" "configuration or mounts changed"
@@ -248,15 +271,16 @@ function replacement_reason() {
 }
 
 function print_status() {
-  refresh_resolved_file
+  refresh_staged_workspace
   echo "Container:   ${CONTAINER_NAME}"
   echo "Image:       ${SWIFT_IMAGE}"
   echo "Platform:    ${LINUX_PLATFORM}"
-  echo "Workspace:   ${REPOSITORY_ROOT} (read-only at /workspace)"
+  echo "Source:      ${REPOSITORY_ROOT}"
+  echo "Workspace:   ${STAGED_WORKSPACE} (writable at /workspace)"
   echo "Build:       ${BUILD_VOLUME} (at /build)"
   echo "Cache:       ${CACHE_VOLUME} (at /root/.cache)"
   echo "Benchmarks:  ${BENCHMARK_VOLUME} (at /workspace/.benchmarkBaselines)"
-  echo "Resolution:  ${RESOLVED_FILE} (at /workspace/Package.resolved)"
+  echo "Resolution:  ${STAGED_WORKSPACE}/Package.resolved (at /workspace/Package.resolved)"
   echo "Requested:   ${CONFIGURATION_FINGERPRINT}"
   if container_exists; then
     echo "Installed:   $(container_label "${CONTAINER_NAME}" "com.solidpdf.configuration-fingerprint")"

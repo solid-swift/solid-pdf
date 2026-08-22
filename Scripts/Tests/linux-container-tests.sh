@@ -64,6 +64,8 @@ readonly CONTAINER_DIRECTORY="${FAKE_DOCKER_STATE}/containers/${CONTAINER_NAME}"
 expect_equal "$(creation_count)" 1
 expect_equal "$(grep -c '^apt-get .*install' "${FAKE_DOCKER_STATE}/log")" 1
 expect_exists "${CONTAINER_DIRECTORY}"
+readonly STAGED_WORKSPACE="${TEST_REPOSITORY}/.cache/linux-container/linux-arm64/workspace"
+expect_exists "${STAGED_WORKSPACE}/Package.resolved"
 
 "${TEST_REPOSITORY}/Scripts/linux-container" ensure >/dev/null
 expect_equal "$(creation_count)" 1
@@ -79,7 +81,7 @@ SOLIDPDF_LINUX_SWIFT_IMAGE=swift:6.3.3-jammy \
 expect_equal "$(creation_count)" 2
 expect_equal "$(cat "${CONTAINER_DIRECTORY}/mounts")" "${ORIGINAL_MOUNTS}"
 
-SOLIDPDF_LINUX_SWIFT_IMAGE=swift:6.3.3-jammy SOLIDPDF_LINUX_SCRIPT_SCHEMA_VERSION=8 \
+SOLIDPDF_LINUX_SWIFT_IMAGE=swift:6.3.3-jammy SOLIDPDF_LINUX_SCRIPT_SCHEMA_VERSION=9 \
   "${TEST_REPOSITORY}/Scripts/linux-container" ensure >/dev/null
 expect_equal "$(creation_count)" 3
 expect_equal "$(cat "${CONTAINER_DIRECTORY}/mounts")" "${ORIGINAL_MOUNTS}"
@@ -108,7 +110,22 @@ expect_exists "${FAKE_DOCKER_STATE}/containers/solidpdf-benchmark-linux-arm64-te
 printf '{"pins":[{"identity":"changed"}]}\n' >"${TEST_REPOSITORY}/Package.resolved"
 "${TEST_REPOSITORY}/Scripts/linux-container" ensure >/dev/null
 cmp "${TEST_REPOSITORY}/Package.resolved" \
-  "${TEST_REPOSITORY}/.cache/linux-container/linux-arm64/Package.resolved"
+  "${STAGED_WORKSPACE}/Package.resolved"
+
+mkdir -p "${TEST_REPOSITORY}/Sources"
+printf 'first\n' >"${TEST_REPOSITORY}/Sources/Example.swift"
+"${TEST_REPOSITORY}/Scripts/linux-container" ensure >/dev/null
+cmp "${TEST_REPOSITORY}/Sources/Example.swift" "${STAGED_WORKSPACE}/Sources/Example.swift"
+
+echo 1 >"${CONTAINER_DIRECTORY}/exec-count"
+printf 'second\n' >"${TEST_REPOSITORY}/Sources/Example.swift"
+if "${TEST_REPOSITORY}/Scripts/linux-container" ensure >/dev/null 2>&1; then
+  fail "an active command should prevent a changed workspace refresh"
+fi
+expect_equal "$(cat "${STAGED_WORKSPACE}/Sources/Example.swift")" first
+echo 0 >"${CONTAINER_DIRECTORY}/exec-count"
+"${TEST_REPOSITORY}/Scripts/linux-container" ensure >/dev/null
+expect_equal "$(cat "${STAGED_WORKSPACE}/Sources/Example.swift")" second
 
 "${TEST_REPOSITORY}/Scripts/linux-container" remove >/dev/null
 readonly BEFORE_CONCURRENT_COUNT="$(creation_count)"
