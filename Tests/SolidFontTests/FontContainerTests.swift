@@ -160,7 +160,12 @@ import Testing
       Issue.record("Expected a portable TrueType outline")
       return
     }
-    #expect(outline.elements.count == 5)
+    #expect(outline.elements == [
+      .move(FontPoint(x: 0, y: 0)),
+      .line(FontPoint(x: 100, y: 0)),
+      .line(FontPoint(x: 0, y: 100)),
+      .close,
+    ])
 
     let composite = try collection.glyph(
       data: data,
@@ -172,8 +177,16 @@ import Testing
       Issue.record("Expected a portable composite TrueType outline")
       return
     }
-    #expect(compositeOutline.elements.count == 10)
-    #expect(compositeOutline.elements[5] == .move(FontPoint(x: 100, y: 0)))
+    #expect(compositeOutline.elements == [
+      .move(FontPoint(x: 0, y: 0)),
+      .line(FontPoint(x: 100, y: 0)),
+      .line(FontPoint(x: 0, y: 100)),
+      .close,
+      .move(FontPoint(x: 100, y: 0)),
+      .line(FontPoint(x: 200, y: 0)),
+      .line(FontPoint(x: 100, y: 100)),
+      .close,
+    ])
   }
 
   @Test func decodesEncryptedPFBType1GlyphsPortably() throws {
