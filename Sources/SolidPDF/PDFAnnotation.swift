@@ -14,6 +14,8 @@ public struct PDFAnnotationPayload: Sendable, Hashable {
   public let replyTo: PDFAnnotationIdentifier?
   /// The reply relationship name.
   public let replyType: PDFName?
+  /// The inert file specification associated with an attachment annotation.
+  public let fileSpecification: PDFFileSpecification?
   /// Subtype-specific entries not normalized by this release.
   public let extensions: [PDFName: PDFObject]
 
@@ -25,6 +27,7 @@ public struct PDFAnnotationPayload: Sendable, Hashable {
     popup: PDFAnnotationIdentifier? = nil,
     replyTo: PDFAnnotationIdentifier? = nil,
     replyType: PDFName? = nil,
+    fileSpecification: PDFFileSpecification? = nil,
     extensions: [PDFName: PDFObject] = [:]
   ) {
     self.points = points
@@ -34,6 +37,7 @@ public struct PDFAnnotationPayload: Sendable, Hashable {
     self.popup = popup
     self.replyTo = replyTo
     self.replyType = replyType
+    self.fileSpecification = fileSpecification
     self.extensions = extensions
   }
 }
@@ -69,6 +73,20 @@ public enum PDFAnnotationDetails: Sendable, Hashable {
   case projection(PDFAnnotationPayload)
   case richMedia(PDFAnnotationPayload)
   case unknown(PDFName, PDFAnnotationPayload)
+
+  /// Common payload fields independent of annotation subtype.
+  public var payload: PDFAnnotationPayload {
+    switch self {
+    case .text(let value), .link(let value), .freeText(let value), .line(let value),
+      .square(let value), .circle(let value), .polygon(let value), .polyLine(let value),
+      .highlight(let value), .underline(let value), .squiggly(let value), .strikeOut(let value),
+      .stamp(let value), .caret(let value), .ink(let value), .popup(let value),
+      .fileAttachment(let value), .sound(let value), .movie(let value), .widget(let value),
+      .screen(let value), .printerMark(let value), .trapNet(let value), .watermark(let value),
+      .threeD(let value), .redact(let value), .projection(let value), .richMedia(let value),
+      .unknown(_, let value): value
+    }
+  }
 }
 
 /// One lazily resolved page annotation.

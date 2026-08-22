@@ -7,6 +7,8 @@ actor PDFDocumentAssets<Session: PDFInputSourceSession> {
   private let limits: PDFParsingLimits
   private var metadataCache = [PDFRevisionIdentifier: PDFMetadata]()
   private var fileSpecificationCache = [FileKey: PDFFileSpecification]()
+  private var embeddedFileCache = [PDFRevisionIdentifier: [PDFEmbeddedFile]]()
+  private var collectionCache = [PDFRevisionIdentifier: PDFCollection?]()
   private var closed = false
 
   init(
@@ -25,6 +27,8 @@ actor PDFDocumentAssets<Session: PDFInputSourceSession> {
     closed = true
     metadataCache.removeAll()
     fileSpecificationCache.removeAll()
+    embeddedFileCache.removeAll()
+    collectionCache.removeAll()
   }
 
   func metadata(in revision: PDFRevisionIdentifier) async throws -> PDFMetadata {
@@ -82,6 +86,119 @@ actor PDFDocumentAssets<Session: PDFInputSourceSession> {
       }
       fileSpecificationCache[FileKey(revision: revision, reference: reference)] = result
     }
+    return result
+  }
+
+  func embeddedFiles(in revision: PDFRevisionIdentifier) async throws -> [PDFEmbeddedFile] {
+    try ensureOpen(revision)
+    if let cached = embeddedFileCache[revision] { return cached }
+    let catalog = try await structure.catalog(in: revision)
+    guard let rawNames = catalog.rawDictionary["Names"] else {
+      embeddedFileCache[revision] = []
+      return []
+    }
+    let names = try await requiredDictionary(rawNames, revision: revision, description: "Catalog Names")
+    guard let tree = names["EmbeddedFiles"] else {
+      embeddedFileCache[revision] = []
+      return []
+    }
+    let entries = try await PDFCollectionTreeReader(
+      kind: .name,
+      limits: limits,
+      resolve: { [resolver] reference in try await resolver.resolve(reference, in: revision) }
+    ).read(tree)
+    guard entries.count <= limits.maximumEmbeddedFileEntries else {
+      throw limit("The EmbeddedFiles tree exceeds its configured entry limit.")
+    }
+    var files = [PDFEmbeddedFile]()
+    files.reserveCapacity(entries.count)
+    var seenSpecifications = Set<PDFFileSpecificationIdentifier>()
+    for entry in entries {
+      guard case .name(let key) = entry.key else { continue }
+      let specification = try await fileSpecification(entry.value, in: revision)
+      guard seenSpecifications.insert(specification.identifier).inserted else {
+        throw malformed("The EmbeddedFiles tree contains a duplicate file specification.")
+      }
+      files.append(try await embeddedFile(
+        for: specification,
+        nameTreeKey: .init(bytes: key),
+        revision: revision
+      ))
+    }
+    embeddedFileCache[revision] = files
+    return files
+  }
+
+  func associatedFiles(
+    owner: PDFAssociatedFileOwner,
+    objects: [PDFObject],
+    in revision: PDFRevisionIdentifier
+  ) async throws -> [PDFAssociatedFile] {
+    guard objects.count <= limits.maximumFileSpecifications else {
+      throw limit("An associated-file array exceeds its configured limit.")
+    }
+    var result = [PDFAssociatedFile]()
+    result.reserveCapacity(objects.count)
+    for object in objects {
+      let specification = try await fileSpecification(object, in: revision)
+      let relationship: PDFAssociatedFileRelationship
+      if case .dictionary(let dictionary) = specification.rawObject {
+        relationship = .init(dictionary.pdfName(named: "AFRelationship"))
+      } else {
+        relationship = .unspecified
+      }
+      result.append(.init(
+        fileSpecification: specification,
+        relationship: relationship,
+        owner: owner,
+        revision: revision
+      ))
+    }
+    return result
+  }
+
+  func catalogAssociatedFiles(in revision: PDFRevisionIdentifier) async throws -> [PDFAssociatedFile] {
+    let catalog = try await structure.catalog(in: revision)
+    guard let object = catalog.rawDictionary["AF"] else { return [] }
+    let direct = try await resolveDirect(object, revision: revision, visited: [])
+    guard case .array(let values) = direct else {
+      throw malformed("Catalog AF must be an array of file specifications.")
+    }
+    return try await associatedFiles(owner: .catalog(catalog.reference), objects: values, in: revision)
+  }
+
+  func collection(in revision: PDFRevisionIdentifier) async throws -> PDFCollection? {
+    try ensureOpen(revision)
+    if let cached = collectionCache[revision] { return cached }
+    let catalog = try await structure.catalog(in: revision)
+    guard let raw = catalog.rawDictionary["Collection"] else {
+      collectionCache[revision] = .some(nil)
+      return nil
+    }
+    let (dictionary, definingRevision) = try await resolvedDictionary(
+      raw,
+      revision: revision,
+      description: "Catalog Collection"
+    )
+    let schema = try await collectionSchema(dictionary["Schema"], revision: revision)
+    let files = try await embeddedFiles(in: revision)
+    var items = [PDFCollectionItem]()
+    for file in files where file.fileSpecification.collectionItem != nil {
+      items.append(.init(
+        fileSpecification: file.fileSpecification.identifier,
+        values: file.fileSpecification.collectionItem ?? [:]
+      ))
+    }
+    let result = PDFCollection(
+      view: collectionView(dictionary.pdfName(named: "View")),
+      initialDocument: try optionalString(dictionary["D"], name: "D"),
+      schema: schema,
+      items: items,
+      sort: try await collectionSort(dictionary["Sort"], schema: schema, revision: revision),
+      rawDictionary: dictionary,
+      definingRevision: definingRevision
+    )
+    collectionCache[revision] = result
     return result
   }
 
@@ -270,6 +387,186 @@ actor PDFDocumentAssets<Session: PDFInputSourceSession> {
       rawObject: object,
       definingRevision: definingRevision
     )
+  }
+
+  private func embeddedFile(
+    for specification: PDFFileSpecification,
+    nameTreeKey: PDFString?,
+    revision: PDFRevisionIdentifier
+  ) async throws -> PDFEmbeddedFile {
+    guard !specification.embeddedFileEntries.isEmpty else {
+      throw malformed("An EmbeddedFiles entry does not provide an EF stream.")
+    }
+    let preferredKeys: [PDFName] = specification.unicodeFilename == nil
+      ? ["F", "UF", "DOS", "Mac", "Unix"]
+      : ["UF", "F", "DOS", "Mac", "Unix"]
+    guard let object = preferredKeys.lazy.compactMap({ specification.embeddedFileEntries[$0] }).first,
+      case .reference(let reference) = object
+    else { throw malformed("An embedded-file entry must identify an indirect stream.") }
+    let resolved = try await resolver.resolve(reference, in: revision)
+    guard case .stream(let stream) = resolved.value,
+      stream.dictionary.pdfName(named: "Type").map({ $0 == PDFName("EmbeddedFile") }) ?? true
+    else { throw malformed("An EF entry must identify an EmbeddedFile stream.") }
+    let parameters: [PDFName: PDFObject]
+    if let raw = stream.dictionary["Params"] {
+      parameters = try await requiredDictionary(raw, revision: revision, description: "EmbeddedFile Params")
+    } else { parameters = [:] }
+    let declaredSize: Int?
+    if let rawSize = parameters["Size"] {
+      guard case .number(.integer(let size)) = rawSize, size >= 0, size <= Int64(Int.max) else {
+        throw malformed("An embedded-file Size is outside its supported range.")
+      }
+      declaredSize = Int(size)
+    } else { declaredSize = nil }
+    let checksum: Data?
+    if let rawChecksum = parameters["CheckSum"] {
+      guard case .string(let value) = rawChecksum, value.bytes.count == 16 else {
+        throw malformed("An embedded-file CheckSum must contain a 16-byte MD5 digest.")
+      }
+      checksum = value.bytes
+    } else { checksum = nil }
+    return PDFEmbeddedFile(
+      nameTreeKey: nameTreeKey,
+      fileSpecification: specification,
+      stream: stream,
+      subtype: stream.dictionary.pdfName(named: "Subtype"),
+      declaredSize: declaredSize,
+      checksum: checksum,
+      creationDate: try optionalDate(parameters["CreationDate"]),
+      modificationDate: try optionalDate(parameters["ModDate"]),
+      parameters: parameters,
+      definingRevision: resolved.definitionRevision ?? revision
+    )
+  }
+
+  private func collectionSchema(
+    _ object: PDFObject?,
+    revision: PDFRevisionIdentifier
+  ) async throws -> [PDFName: PDFCollectionSchemaField] {
+    guard let object else { return [:] }
+    let dictionary = try await requiredDictionary(object, revision: revision, description: "Collection Schema")
+    guard dictionary.count <= limits.maximumCollectionFields else {
+      throw limit("A collection schema exceeds its configured field limit.")
+    }
+    var result = [PDFName: PDFCollectionSchemaField]()
+    for (name, rawField) in dictionary {
+      let field = try await requiredDictionary(rawField, revision: revision, description: "Collection field")
+      guard let subtype = field.pdfName(named: "Subtype"),
+        let display = try optionalString(field["N"], name: "N")
+      else { throw malformed("A collection field requires Subtype and N entries.") }
+      let orderValue = field.pdfInteger(named: "O") ?? 0
+      guard orderValue >= Int64(Int.min), orderValue <= Int64(Int.max) else {
+        throw malformed("A collection field order is outside its supported range.")
+      }
+      let isVisible: Bool = if case .boolean(let value)? = field["V"] { value } else { true }
+      let isEditable: Bool = if case .boolean(let value)? = field["E"] { value } else { false }
+      result[name] = .init(
+        name: name,
+        subtype: subtype,
+        displayName: try PDFTextStringDecoder.decode(display, allowsUTF8: true),
+        order: Int(orderValue),
+        isVisible: isVisible,
+        isEditable: isEditable,
+        rawDictionary: field
+      )
+    }
+    return result
+  }
+
+  private func collectionSort(
+    _ object: PDFObject?,
+    schema: [PDFName: PDFCollectionSchemaField],
+    revision: PDFRevisionIdentifier
+  ) async throws -> PDFCollectionSort? {
+    guard let object else { return nil }
+    let dictionary = try await requiredDictionary(object, revision: revision, description: "Collection Sort")
+    let fields: [PDFName]
+    switch dictionary["S"] {
+    case .name(let value): fields = [value]
+    case .array(let values):
+      fields = try values.map {
+        guard case .name(let name) = $0 else { throw malformed("Collection sort fields must be names.") }
+        return name
+      }
+    default: throw malformed("A collection Sort dictionary requires S.")
+    }
+    guard fields.allSatisfy({ schema[$0] != nil }) else {
+      throw malformed("A collection sort references an unknown schema field.")
+    }
+    let ascending: [Bool]
+    switch dictionary["A"] {
+    case nil: ascending = Array(repeating: true, count: fields.count)
+    case .boolean(let value): ascending = Array(repeating: value, count: fields.count)
+    case .array(let values):
+      ascending = try values.map {
+        guard case .boolean(let value) = $0 else { throw malformed("Collection sort directions must be Boolean.") }
+        return value
+      }
+      guard ascending.count == fields.count else {
+        throw malformed("Collection sort directions must match its fields.")
+      }
+    default: throw malformed("Collection sort direction has the wrong type.")
+    }
+    return .init(fields: fields, ascending: ascending)
+  }
+
+  private func collectionView(_ name: PDFName?) -> PDFCollectionView {
+    switch name {
+    case "D", nil: .details
+    case "T": .tile
+    case "H": .hidden
+    case .some(let value): .unknown(value)
+    }
+  }
+
+  private func optionalDate(_ object: PDFObject?) throws -> PDFDate? {
+    guard let object else { return nil }
+    guard case .string(let string) = object else {
+      throw malformed("An embedded-file date must be a string.")
+    }
+    return try PDFDate(string)
+  }
+
+  private func resolvedDictionary(
+    _ object: PDFObject,
+    revision: PDFRevisionIdentifier,
+    description: String
+  ) async throws -> ([PDFName: PDFObject], PDFRevisionIdentifier) {
+    if case .reference(let reference) = object {
+      let resolved = try await resolver.resolve(reference, in: revision)
+      guard case .value(.dictionary(let dictionary)) = resolved.value else {
+        throw malformed("\(description) must identify an ordinary dictionary.")
+      }
+      return (dictionary, resolved.definitionRevision ?? revision)
+    }
+    guard case .dictionary(let dictionary) = object else {
+      throw malformed("\(description) must be a dictionary.")
+    }
+    return (dictionary, revision)
+  }
+
+  private func requiredDictionary(
+    _ object: PDFObject,
+    revision: PDFRevisionIdentifier,
+    description: String
+  ) async throws -> [PDFName: PDFObject] {
+    try await resolvedDictionary(object, revision: revision, description: description).0
+  }
+
+  private func resolveDirect(
+    _ object: PDFObject,
+    revision: PDFRevisionIdentifier,
+    visited: Set<PDFObjectReference>
+  ) async throws -> PDFObject {
+    guard case .reference(let reference) = object else { return object }
+    guard !visited.contains(reference) else {
+      throw PDFParsingError.referenceCycle(Array(visited) + [reference])
+    }
+    let resolved = try await resolver.resolve(reference, in: revision)
+    guard case .value(let value) = resolved.value else {
+      throw malformed("A direct value unexpectedly resolves to a stream.")
+    }
+    return try await resolveDirect(value, revision: revision, visited: visited.union([reference]))
   }
 
   private func optionalString(_ object: PDFObject?, name: PDFName) throws -> PDFString? {

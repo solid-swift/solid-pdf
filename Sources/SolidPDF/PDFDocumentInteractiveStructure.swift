@@ -3,6 +3,7 @@ import Foundation
 actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
   private let resolver: PDFDocumentResolver<Session>
   private let structure: PDFDocumentStructure<Session>
+  private let assets: PDFDocumentAssets<Session>
   private let revisions: [PDFDocumentRevision]
   private let limits: PDFParsingLimits
   private var annotationsByPage = [PageKey: [PDFAnnotation]]()
@@ -16,11 +17,13 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
   init(
     resolver: PDFDocumentResolver<Session>,
     structure: PDFDocumentStructure<Session>,
+    assets: PDFDocumentAssets<Session>,
     revisions: [PDFDocumentRevision],
     limits: PDFParsingLimits
   ) {
     self.resolver = resolver
     self.structure = structure
+    self.assets = assets
     self.revisions = revisions
     self.limits = limits
   }
@@ -553,6 +556,12 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
   ) async throws -> PDFAnnotationPayload {
     let action = try await parseOptionalAction(dictionary["A"], revision: revision)
     let destination = try await parseOptionalDestination(dictionary["Dest"], revision: revision)
+    let fileSpecification: PDFFileSpecification?
+    if let object = dictionary["FS"] {
+      fileSpecification = try await assets.fileSpecification(object, in: revision)
+    } else {
+      fileSpecification = nil
+    }
     return PDFAnnotationPayload(
       points: try numberArray(dictionary["QuadPoints"] ?? dictionary["Vertices"] ?? dictionary["L"]),
       inkLists: try numberArrays(dictionary["InkList"]),
@@ -561,6 +570,7 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
       popup: dictionary.pdfReference(named: "Popup").map(PDFAnnotationIdentifier.init(reference:)),
       replyTo: dictionary.pdfReference(named: "IRT").map(PDFAnnotationIdentifier.init(reference:)),
       replyType: dictionary.pdfName(named: "RT"),
+      fileSpecification: fileSpecification,
       extensions: dictionary
     )
   }
@@ -945,19 +955,4 @@ private struct FieldInheritance {
   let defaultAppearance: PDFString?
   let justification: Int
   let resources: [PDFName: PDFObject]?
-}
-
-private extension PDFAnnotationDetails {
-  var payload: PDFAnnotationPayload {
-    switch self {
-    case .text(let value), .link(let value), .freeText(let value), .line(let value),
-      .square(let value), .circle(let value), .polygon(let value), .polyLine(let value),
-      .highlight(let value), .underline(let value), .squiggly(let value), .strikeOut(let value),
-      .stamp(let value), .caret(let value), .ink(let value), .popup(let value),
-      .fileAttachment(let value), .sound(let value), .movie(let value), .widget(let value),
-      .screen(let value), .printerMark(let value), .trapNet(let value), .watermark(let value),
-      .threeD(let value), .redact(let value), .projection(let value), .richMedia(let value),
-      .unknown(_, let value): value
-    }
-  }
 }

@@ -64,15 +64,17 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
       )
       resolver = documentResolver
       structure = documentStructure
-      interactiveStructure = PDFDocumentInteractiveStructure(
+      let documentAssets = PDFDocumentAssets(
         resolver: documentResolver,
         structure: documentStructure,
         revisions: index.revisions,
         limits: options.limits
       )
-      assets = PDFDocumentAssets(
+      assets = documentAssets
+      interactiveStructure = PDFDocumentInteractiveStructure(
         resolver: documentResolver,
         structure: documentStructure,
+        assets: documentAssets,
         revisions: index.revisions,
         limits: options.limits
       )
@@ -334,6 +336,83 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     in revision: PDFRevisionIdentifier
   ) async throws -> PDFFileSpecification {
     try await assets.fileSpecification(object, in: revision)
+  }
+
+  /// Opens deterministic metadata-only enumeration of the latest embedded files.
+  public func embeddedFiles() async throws -> PDFEmbeddedFileSequence {
+    PDFEmbeddedFileSequence(files: try await assets.embeddedFiles(in: latestRevision.identifier))
+  }
+
+  /// Opens deterministic metadata-only enumeration of embedded files in a selected revision.
+  public func embeddedFiles(in revision: PDFRevisionIdentifier) async throws -> PDFEmbeddedFileSequence {
+    PDFEmbeddedFileSequence(files: try await assets.embeddedFiles(in: revision))
+  }
+
+  /// Returns every catalog and annotation associated-file declaration in the latest revision.
+  public func associatedFiles() async throws -> [PDFAssociatedFile] {
+    try await associatedFiles(in: latestRevision.identifier)
+  }
+
+  /// Returns every catalog and annotation associated-file declaration in a selected revision.
+  public func associatedFiles(in revision: PDFRevisionIdentifier) async throws -> [PDFAssociatedFile] {
+    var result = try await assets.catalogAssociatedFiles(in: revision)
+    let pageCount = try await structure.pageCount(in: revision)
+    for pageIndex in 0..<pageCount {
+      let page = try await structure.page(at: pageIndex, in: revision)
+      for annotation in try await interactiveStructure.annotations(on: page, in: revision) {
+        guard let specification = annotation.details.payload.fileSpecification else { continue }
+        let relationship: PDFAssociatedFileRelationship
+        if case .dictionary(let dictionary) = specification.rawObject {
+          relationship = .init(dictionary.pdfName(named: "AFRelationship"))
+        } else { relationship = .unspecified }
+        result.append(.init(
+          fileSpecification: specification,
+          relationship: relationship,
+          owner: .annotation(annotation.identifier),
+          revision: revision
+        ))
+      }
+    }
+    return result
+  }
+
+  /// Returns inert portable-collection metadata for the latest revision.
+  public func collection() async throws -> PDFCollection? {
+    try await assets.collection(in: latestRevision.identifier)
+  }
+
+  /// Returns inert portable-collection metadata for a selected revision.
+  public func collection(in revision: PDFRevisionIdentifier) async throws -> PDFCollection? {
+    try await assets.collection(in: revision)
+  }
+
+  /// Opens a validated, bounded stream over an embedded file's decoded bytes.
+  public func decodedStream(of file: PDFEmbeddedFile) async throws -> PDFDecodedStream {
+    let stream = try await resolver.decodedStream(file.stream)
+    return PDFDecodedStream(state: PDFEmbeddedFileStreamState(
+      stream: stream,
+      declaredSize: file.declaredSize,
+      checksum: file.checksum
+    ))
+  }
+
+  /// Materializes and validates an embedded file within the configured stream limit.
+  public func decodedBytes(of file: PDFEmbeddedFile) async throws -> Data {
+    let stream = try await decodedStream(of: file)
+    var result = Data()
+    do {
+      for try await chunk in stream {
+        let (size, overflow) = result.count.addingReportingOverflow(chunk.count)
+        guard !overflow, size <= resolver.parsingLimits.maximumDecodedStreamBytes else {
+          throw PDFParsingError.limitExceeded(.init(offset: 0, message: "An embedded file exceeds its decoded byte limit."))
+        }
+        result.append(chunk)
+      }
+      return result
+    } catch {
+      await stream.close()
+      throw error
+    }
   }
 
   /// Resolves one logical structure element in the latest revision.
