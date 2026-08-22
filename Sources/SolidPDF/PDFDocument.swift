@@ -21,11 +21,11 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
   /// The effective version after applying the catalog's optional `/Version`.
   public var effectiveVersion: PDFFileVersion { catalog.effectiveVersion }
 
-  private let resolver: PDFDocumentResolver<Source.Session>
+  let resolver: PDFDocumentResolver<Source.Session>
   private let structure: PDFDocumentStructure<Source.Session>
-  private let interactiveStructure: PDFDocumentInteractiveStructure<Source.Session>
+  let interactiveStructure: PDFDocumentInteractiveStructure<Source.Session>
   private let assets: PDFDocumentAssets<Source.Session>
-  private let authenticity: PDFDocumentAuthenticity<Source.Session>
+  let authenticity: PDFDocumentAuthenticity<Source.Session>
 
   /// Opens and validates one PDF revision without eagerly resolving its objects.
   public init(
@@ -37,6 +37,7 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     let session = try await source.makeSession()
     do {
       let reader = try await PDFSourceReader(session: session, options: options)
+      let openedSourceLength = try await reader.length()
       let index = try await PDFCrossReferenceParser(reader: reader, options: options).parse()
       let securityContext = try await PDFSecurityContext.open(
         reader: reader,
@@ -55,7 +56,8 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
         index: index,
         options: options,
         externalStreamProvider: externalStreamProvider,
-        securityContext: securityContext
+        securityContext: securityContext,
+        openedSourceLength: openedSourceLength
       )
       let documentStructure = PDFDocumentStructure(
         resolver: documentResolver,

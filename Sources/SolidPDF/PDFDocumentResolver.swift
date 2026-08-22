@@ -20,6 +20,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   private let index: PDFCrossReferenceIndex
   private let options: PDFParsingOptions
   private let externalStreamProvider: (any PDFExternalStreamProvider)?
+  private let openedSourceLength: Int64
   private var securityContext: PDFSecurityContext?
   private let streamRegistry = PDFDecodedStreamRegistry()
   private var objectCache = [ResolutionKey: PDFIndirectObject]()
@@ -38,13 +39,15 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
     index: PDFCrossReferenceIndex,
     options: PDFParsingOptions,
     externalStreamProvider: (any PDFExternalStreamProvider)?,
-    securityContext: PDFSecurityContext?
+    securityContext: PDFSecurityContext?,
+    openedSourceLength: Int64
   ) {
     self.reader = reader
     self.index = index
     self.options = options
     self.externalStreamProvider = externalStreamProvider
     self.securityContext = securityContext
+    self.openedSourceLength = openedSourceLength
   }
 
   func resolve(_ reference: PDFObjectReference) async throws -> PDFIndirectObject {
@@ -71,6 +74,17 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   func sourceLength() async throws -> Int64 {
     guard !closed else { throw PDFParsingError.documentClosed }
     return try await reader.length()
+  }
+
+  func originalSourceData(maximumBytes: Int64) async throws -> Data {
+    guard !closed else { throw PDFIncrementalUpdateError.documentClosed }
+    let currentLength = try await reader.length()
+    guard currentLength == openedSourceLength else { throw PDFIncrementalUpdateError.sourceChanged }
+    guard currentLength >= 0,
+      currentLength <= maximumBytes,
+      currentLength <= Int64(Int.max)
+    else { throw PDFIncrementalUpdateError.limitExceeded }
+    return try await reader.read(try PDFSourceRange(offset: 0, length: Int(currentLength)))
   }
 
   func digest(

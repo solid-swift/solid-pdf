@@ -13,6 +13,10 @@ public struct PDFFormField: Sendable, Hashable {
   public let value: PDFFormValue?
   public let defaultValue: PDFFormValue?
   public let options: [PDFObject]
+  /// The inherited maximum character count, when present.
+  public let maximumLength: Int?
+  /// The selected zero-based choice-option indices declared by this field.
+  public let selectedOptionIndices: [Int]
   public let defaultAppearance: PDFString?
   public let justification: Int
   public let resources: [PDFName: PDFObject]?

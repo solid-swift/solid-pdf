@@ -154,7 +154,9 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
     let defaultResources = try await optionalDictionary(dictionary["DR"], revision: revision)
     let defaultAppearance = try optionalString(dictionary["DA"], name: "DA")
     let justification = try boundedJustification(dictionary.pdfInteger(named: "Q") ?? 0)
+    let reference: PDFObjectReference? = if case .reference(let value) = raw { value } else { nil }
     let form = PDFAcroForm(
+      reference: reference,
       fields: rootIdentifiers,
       defaultResources: defaultResources,
       defaultAppearance: defaultAppearance,
@@ -227,7 +229,8 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
       actions: [:],
       defaultAppearance: form.defaultAppearance,
       justification: form.justification,
-      resources: form.defaultResources
+      resources: form.defaultResources,
+      maximumLength: nil
     )
     for root in form.fields {
       try await parseField(
@@ -320,6 +323,8 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
       value: inherited.value,
       defaultValue: inherited.defaultValue,
       options: try await optionalArray(dictionary["Opt"], revision: revision),
+      maximumLength: inherited.maximumLength,
+      selectedOptionIndices: try choiceIndices(dictionary["I"]),
       defaultAppearance: inherited.defaultAppearance,
       justification: inherited.justification,
       resources: inherited.resources,
@@ -379,8 +384,29 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
       actions: actions,
       defaultAppearance: try optionalString(dictionary["DA"], name: "DA") ?? parent.defaultAppearance,
       justification: try dictionary.pdfInteger(named: "Q").map(boundedJustification) ?? parent.justification,
-      resources: try await optionalDictionary(dictionary["DR"], revision: revision) ?? parent.resources
+      resources: try await optionalDictionary(dictionary["DR"], revision: revision) ?? parent.resources,
+      maximumLength: try dictionary.pdfInteger(named: "MaxLen").map {
+        try nonnegativeInt($0, name: "MaxLen")
+      } ?? parent.maximumLength
     )
+  }
+
+  private func choiceIndices(_ object: PDFObject?) throws -> [Int] {
+    guard let object else { return [] }
+    guard case .array(let values) = object else { throw malformed("A choice field I entry must be an array.") }
+    var result = [Int]()
+    result.reserveCapacity(values.count)
+    for value in values {
+      guard case .number(.integer(let integer)) = value,
+        integer >= 0,
+        integer <= Int64(Int.max)
+      else { throw malformed("A choice field I entry must contain nonnegative integers.") }
+      result.append(Int(integer))
+    }
+    guard result == result.sorted(), Set(result).count == result.count else {
+      throw malformed("A choice field I entry must be sorted and unique.")
+    }
+    return result
   }
 
   private func widget(
@@ -1020,4 +1046,5 @@ private struct FieldInheritance {
   let defaultAppearance: PDFString?
   let justification: Int
   let resources: [PDFName: PDFObject]?
+  let maximumLength: Int?
 }
