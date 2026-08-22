@@ -3,6 +3,7 @@ import Foundation
 struct PDFFormUpdatePlan: Sendable {
   let objects: [PDFObjectReference: PDFIncrementalObjectBody]
   let changedReferences: [PDFObjectReference]
+  let newReferences: [PDFObjectReference]
   let diagnostics: [PDFIncrementalUpdateDiagnostic]
 }
 
@@ -13,6 +14,9 @@ struct PDFFormUpdatePlanner {
   let limits: PDFIncrementalWritingLimits
 
   func plan() throws -> PDFFormUpdatePlan {
+    guard !transaction.updates.isEmpty else {
+      throw PDFIncrementalUpdateError.validationFailed
+    }
     guard transaction.updates.count <= limits.maximumFieldUpdates else {
       throw PDFIncrementalUpdateError.limitExceeded
     }
@@ -72,6 +76,7 @@ struct PDFFormUpdatePlanner {
     return PDFFormUpdatePlan(
       objects: objects,
       changedReferences: objects.keys.sorted(),
+      newReferences: [],
       diagnostics: diagnostics
     )
   }

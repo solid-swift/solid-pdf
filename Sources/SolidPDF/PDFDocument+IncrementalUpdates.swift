@@ -12,10 +12,27 @@ extension PDFDocument {
     guard let form else { throw PDFIncrementalUpdateError.missingAcroForm }
     let fieldValues = try await formFields()
     let fields = Dictionary(uniqueKeysWithValues: fieldValues.map { ($0.identifier, $0) })
-    let plan = try PDFFormUpdatePlanner(
+    let valuePlan = try PDFFormUpdatePlanner(
       form: form,
       fields: fields,
       transaction: transaction,
+      limits: options.limits
+    ).plan()
+    var annotations = [PDFAnnotationIdentifier: PDFAnnotation]()
+    for field in fieldValues {
+      for widget in field.widgets {
+        annotations[widget.annotationIdentifier] = try await annotation(widget.annotationIdentifier)
+      }
+    }
+    let plan = try await PDFFormAppearancePlanner(
+      resolver: resolver,
+      form: form,
+      catalog: catalog,
+      fields: fields,
+      annotations: annotations,
+      transaction: transaction,
+      revision: latestRevision,
+      base: valuePlan,
       limits: options.limits
     ).plan()
     let original = try await resolver.originalSourceData(
@@ -57,7 +74,7 @@ extension PDFDocument {
           ),
           appendedByteCount: encoded.appendedByteCount,
           changedReferences: plan.changedReferences,
-          newReferences: [],
+          newReferences: plan.newReferences,
           effectiveVersion: effectiveVersion,
           diagnostics: plan.diagnostics
         )

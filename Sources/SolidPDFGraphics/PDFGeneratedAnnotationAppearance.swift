@@ -129,49 +129,26 @@ extension PDFGraphicsInstructionHandler {
     location: PDFContentLocation
   ) async throws {
     guard let appearance = field.defaultAppearance,
-      let description = parseDefaultAppearance(appearance)
+      let description = PDFVariableTextAppearanceSupport.style(from: appearance)
     else { throw malformedGenerated("Generated variable text requires a valid inherited DA.", location) }
+    let fontSize = description.fontSize == 0 ? 12 : description.fontSize
     try await perform("BT", [], location)
-    try await perform("Tf", [.name(description.font), .real(description.size)], location)
-    try await perform(description.colorOperator, description.color.map(PDFObject.real), location)
+    try await perform("Tf", [.name(description.fontName), .real(fontSize)], location)
+    try await perform(
+      description.colorOperator,
+      description.colorComponents.map(PDFObject.real),
+      location
+    )
     let rect = annotation.rectangle
     let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-    let leading = description.size * 1.2
+    let leading = fontSize * 1.2
     for (index, line) in lines.enumerated() {
       let x = rect.minimumX + 2
-      let y = rect.maximumY - description.size - 2 - Double(index) * leading
+      let y = rect.maximumY - fontSize - 2 - Double(index) * leading
       try await perform("Tm", [.real(1), .real(0), .real(0), .real(1), .real(x), .real(y)], location)
       try await perform("Tj", [.string(.init(line))], location)
     }
     try await perform("ET", [], location)
-  }
-
-  private struct DefaultAppearance {
-    let font: PDFName
-    let size: Double
-    let colorOperator: String
-    let color: [Double]
-  }
-
-  private func parseDefaultAppearance(_ string: PDFString) -> DefaultAppearance? {
-    guard let source = String(data: string.bytes, encoding: .utf8) else { return nil }
-    let tokens = source.split(whereSeparator: \Character.isWhitespace).map(String.init)
-    guard let tf = tokens.firstIndex(of: "Tf"), tf >= 2, tokens[tf - 2].first == "/",
-      let size = Double(tokens[tf - 1]), size > 0
-    else { return nil }
-    let font = PDFName(String(tokens[tf - 2].dropFirst()))
-    if let index = tokens.lastIndex(of: "g"), index >= 1, let gray = Double(tokens[index - 1]) {
-      return .init(font: font, size: size, colorOperator: "g", color: [gray])
-    }
-    if let index = tokens.lastIndex(of: "rg"), index >= 3 {
-      let values = tokens[(index - 3)..<index].compactMap(Double.init)
-      if values.count == 3 { return .init(font: font, size: size, colorOperator: "rg", color: values) }
-    }
-    if let index = tokens.lastIndex(of: "k"), index >= 4 {
-      let values = tokens[(index - 4)..<index].compactMap(Double.init)
-      if values.count == 4 { return .init(font: font, size: size, colorOperator: "k", color: values) }
-    }
-    return .init(font: font, size: size, colorOperator: "g", color: [0])
   }
 
   private func annotationColor(_ annotation: PDFAnnotation, location: PDFContentLocation) async throws {
