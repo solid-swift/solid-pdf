@@ -413,10 +413,21 @@ extension PDFGraphicsResourceResolver {
     location: PDFContentLocation
   ) async throws -> PDFCMap? {
     guard let object else { return nil }
-    guard case .reference(let reference) = object else { throw PDFCMapError.malformed }
-    let resolved = try await document.resolve(reference, in: revision)
-    guard case .stream(let stream) = resolved.value else { throw PDFCMapError.malformed }
-    return try await parseCMapStream(stream, location: location)
+    do {
+      guard case .reference(let reference) = object else { throw PDFCMapError.malformed }
+      let resolved = try await document.resolve(reference, in: revision)
+      guard case .stream(let stream) = resolved.value else { throw PDFCMapError.malformed }
+      return try await parseCMapStream(stream, location: location)
+    } catch {
+      guard !strict else { throw error }
+      diagnostics.append(PDFGraphicsDiagnostic(
+        identifier: "pdf.graphics.invalid-to-unicode",
+        message: "Ignored a malformed /ToUnicode CMap and continued with lower-priority mappings.",
+        severity: .warning,
+        location: location
+      ))
+      return nil
+    }
   }
 
   private func parseCMapStream(

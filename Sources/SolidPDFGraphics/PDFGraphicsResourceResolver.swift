@@ -16,6 +16,7 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
   let revision: PDFRevisionIdentifier
   let limits: PDFGraphicsLimits
   let fontEnvironment: PDFGraphicsFontEnvironment
+  let strict: Bool
   private var scopes: [[PDFName: PDFObject]]
   private var colorSpaceCache: [PDFName: ResolvedColorSpace] = [:]
   var fontCache: [FontCacheKey: PDFResolvedFont] = [:]
@@ -28,12 +29,14 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
     revision: PDFRevisionIdentifier,
     resources: [PDFName: PDFObject],
     limits: PDFGraphicsLimits,
-    fontEnvironment: PDFGraphicsFontEnvironment = .portable
+    fontEnvironment: PDFGraphicsFontEnvironment = .portable,
+    strict: Bool = true
   ) {
     self.document = document
     self.revision = revision
     self.limits = limits
     self.fontEnvironment = fontEnvironment
+    self.strict = strict
     scopes = [resources]
   }
 

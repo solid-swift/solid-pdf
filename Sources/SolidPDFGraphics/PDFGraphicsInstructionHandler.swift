@@ -13,6 +13,10 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
   private var currentPoint: GraphicsPoint?
   private var subpathStart: GraphicsPoint?
   private var diagnosticsStorage: [PDFGraphicsDiagnostic] = []
+  var textMatrix: GraphicsMatrix?
+  var textLineMatrix: GraphicsMatrix?
+  var textClipElements: [GraphicsPath.Element] = []
+  var interpretedGlyphCount = 0
 
   var diagnostics: [PDFGraphicsDiagnostic] { diagnosticsStorage + resources.diagnostics }
   var currentSnapshot: GraphicsStateSnapshot { state.snapshot(stroking: false) }
@@ -147,17 +151,23 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
       case "SC", "SCN": try await setColor(instruction, stroking: true)
       case "sc", "scn": try await setColor(instruction, stroking: false)
       case "gs": try await applyExtendedState(instruction)
-      case "BT", "ET": try operands(instruction, count: 0)
-      case "Tc", "Tw", "Tz", "TL", "Tr", "Ts": _ = try numbers(instruction, count: 1)
-      case "Tf":
-        try operands(instruction, count: 2)
-        _ = try PDFObjectAccess.name(instruction.operands[0])
-        _ = try PDFObjectAccess.number(instruction.operands[1])
-      case "Td", "TD": _ = try numbers(instruction, count: 2)
-      case "Tm": _ = try numbers(instruction, count: 6)
-      case "T*": try operands(instruction, count: 0)
-      case "Tj", "TJ", "'", "\"":
-        throw PDFGraphicsError.unsupported(.textPainting, location: instruction.location)
+      case "BT": try beginText(instruction)
+      case "ET": try endText(instruction)
+      case "Tc": try setCharacterSpacing(instruction)
+      case "Tw": try setWordSpacing(instruction)
+      case "Tz": try setHorizontalScaling(instruction)
+      case "TL": try setTextLeading(instruction)
+      case "Tf": try await setTextFont(instruction)
+      case "Tr": try setTextRenderingMode(instruction)
+      case "Ts": try setTextRise(instruction)
+      case "Td": try moveText(instruction, setsLeading: false)
+      case "TD": try moveText(instruction, setsLeading: true)
+      case "Tm": try setTextMatrix(instruction)
+      case "T*": try nextTextLine(instruction)
+      case "Tj": try await showText(instruction)
+      case "TJ": try await showTextArray(instruction)
+      case "'": try await showNextLine(instruction, setsSpacing: false)
+      case "\"": try await showNextLine(instruction, setsSpacing: true)
       case "BMC", "BDC", "EMC", "MP", "DP":
         try validateMarkedContent(instruction)
       case "Do": try await paintXObject(instruction)

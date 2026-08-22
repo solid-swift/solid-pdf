@@ -4,6 +4,8 @@ import SolidPDF
 public enum PDFGraphicsUnsupportedFeature: Sendable, Hashable {
   /// A text-showing operator requires glyph realization.
   case textPainting
+  /// A glyph program cannot supply an exact outline for PDF text clipping.
+  case textClipping
   /// Optional-content configuration can change visibility.
   case optionalContent
   /// A nonidentity transparency feature is active.

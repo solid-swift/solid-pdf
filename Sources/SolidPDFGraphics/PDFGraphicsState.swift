@@ -2,6 +2,17 @@ import SolidColor
 import SolidPostScript
 
 struct PDFGraphicsState {
+  struct TextState {
+    var characterSpacing = 0.0
+    var wordSpacing = 0.0
+    var horizontalScale = 1.0
+    var leading = 0.0
+    var font: PDFResolvedFont?
+    var fontSize = 0.0
+    var renderingMode = GraphicsTextRenderingMode.fill
+    var rise = 0.0
+  }
+
   struct ColorState {
     var space: GraphicsColorSpaceDescription
     var realization: GraphicsColorSpaceRealization?
@@ -45,6 +56,7 @@ struct PDFGraphicsState {
   var smoothness = 0.02
   var renderingIntent = ColorRenderingIntent.relativeColorimetric
   var deviceRendering = GraphicsDeviceRenderingSnapshot.continuousTone
+  var text = TextState()
   let device: GraphicsDeviceSnapshot
 
   init(device: GraphicsDeviceSnapshot) {
@@ -78,6 +90,7 @@ struct PDFGraphicsState {
       smoothness: smoothness,
       device: device,
       deviceRendering: deviceRendering,
+      font: text.font?.description ?? .invalid,
       renderingIntent: renderingIntent
     )
   }

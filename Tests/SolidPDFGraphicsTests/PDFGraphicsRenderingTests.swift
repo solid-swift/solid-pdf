@@ -1,4 +1,5 @@
 import Foundation
+import SolidFont
 import SolidPDF
 import SolidPDFGraphics
 import SolidPostScript
@@ -61,6 +62,101 @@ struct PDFGraphicsRenderingTests {
     await #expect(throws: PDFGraphicsError.self) {
       try await document.render(page: 0, to: RecordingGraphicsTarget())
     }
+    await document.close()
+  }
+
+  @Test
+  func interpretsTextRunsUsingPDFWidthsSpacingAndSourceRanges() async throws {
+    let resources = """
+      << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic
+        /FirstChar 65 /LastChar 66 /Widths [600 700] /Encoding /WinAnsiEncoding >> >> >>
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BT /F1 10 Tf 2 Tc 1 0 0 1 10 20 Tm [(A) 120 (B)] TJ ET",
+      resources: resources
+    )))
+
+    let result = try await document.render(
+      page: 0,
+      to: RecordingGraphicsTarget(),
+      fontEnvironment: PDFGraphicsFontEnvironment(providers: [SyntheticPDFFontProvider()])
+    )
+    let run = try #require(result.output.pages[0].effects.compactMap { effect -> GraphicsGlyphRun? in
+      if case .text(let run, _) = effect { return run }
+      return nil
+    }.first)
+
+    #expect(run.sourceBytes == Data("AB".utf8))
+    #expect(run.glyphs.map(\.sourceRange) == [0..<1, 1..<2])
+    #expect(run.glyphs.map(\.unicodeScalars) == [["A".unicodeScalars.first!], ["B".unicodeScalars.first!]])
+    #expect(run.glyphs.map(\.unicodeProvenance) == [.pdfEncoding, .pdfEncoding])
+    #expect(run.glyphs[0].advance == GraphicsPoint(x: 8, y: 0))
+    #expect(run.glyphs[1].advance == GraphicsPoint(x: 9, y: 0))
+    #expect(abs(run.glyphs[1].origin.x - run.glyphs[0].origin.x - 6.8) < 0.000_001)
+    await document.close()
+  }
+
+  @Test
+  func emitsInvisibleTextWithoutLosingExtractionMetadata() async throws {
+    let resources = """
+      << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic
+        /FirstChar 65 /LastChar 65 /Widths [600] /Encoding /WinAnsiEncoding >> >> >>
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BT /F1 12 Tf 3 Tr (A) Tj ET",
+      resources: resources
+    )))
+
+    let result = try await document.render(
+      page: 0,
+      to: RecordingGraphicsTarget(),
+      fontEnvironment: PDFGraphicsFontEnvironment(providers: [SyntheticPDFFontProvider()])
+    )
+    let run = try #require(result.output.pages[0].effects.compactMap { effect -> GraphicsGlyphRun? in
+      if case .text(let run, _) = effect { return run }
+      return nil
+    }.first)
+    #expect(run.renderingMode == .invisible)
+    #expect(run.glyphs[0].unicodeScalars == ["A".unicodeScalars.first!])
+    await document.close()
+  }
+
+  @Test
+  func decodesCompositeCodesAndPrefersToUnicodeMetadata() async throws {
+    let toUnicode = streamObject(
+      dictionary: "",
+      data: Data("""
+        1 begincodespacerange <0000> <ffff> endcodespacerange
+        1 beginbfchar <002a> <D83DDE00> endbfchar
+        """.utf8)
+    )
+    let resources = """
+      << /Font << /F0 << /Type /Font /Subtype /Type0 /BaseFont /SyntheticCID
+        /Encoding /Identity-H /ToUnicode 5 0 R
+        /DescendantFonts [<< /Type /Font /Subtype /CIDFontType2 /BaseFont /SyntheticCID
+          /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>
+          /DW 1000 /W [42 [500]] /CIDToGIDMap /Identity >>] >> >> >>
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BT /F0 10 Tf <002a> Tj ET",
+      resources: resources,
+      extraObjects: [toUnicode]
+    )))
+
+    let result = try await document.render(
+      page: 0,
+      to: RecordingGraphicsTarget(),
+      fontEnvironment: PDFGraphicsFontEnvironment(providers: [SyntheticPDFFontProvider()])
+    )
+    let run = try #require(result.output.pages[0].effects.compactMap { effect -> GraphicsGlyphRun? in
+      if case .text(let run, _) = effect { return run }
+      return nil
+    }.first)
+    #expect(run.sourceBytes == Data([0, 42]))
+    #expect(run.glyphs[0].glyph.selector == .cid(42))
+    #expect(run.glyphs[0].advance == GraphicsPoint(x: 5, y: 0))
+    #expect(run.glyphs[0].unicodeScalars == ["😀".unicodeScalars.first!])
+    #expect(run.glyphs[0].unicodeProvenance == .pdfToUnicode)
     await document.close()
   }
 
@@ -427,5 +523,48 @@ struct PDFGraphicsRenderingTests {
       #expect(blue.position.x == white.position.x)
       #expect(white.position.y == red.position.y)
     }
+  }
+}
+
+private struct SyntheticPDFFontProvider: FontResourceProvider {
+  let identifier = "tests.synthetic-pdf-font"
+
+  func availableFontNames() async throws -> [String] { ["Synthetic"] }
+
+  func resolve(_ query: FontResourceQuery) async throws -> FontProviderFace? {
+    guard query.name == "Synthetic" || query.name == "SyntheticCID" else { return nil }
+    let descriptor = try FontDescriptor(postScriptName: query.name, unitsPerEm: 1_000)
+    let asset = try FontAsset(
+      descriptor: descriptor,
+      format: .type1,
+      data: Data("%!PS-AdobeFont-1.0: Synthetic".utf8)
+    )
+    return FontProviderFace(
+      providerIdentifier: identifier,
+      faceKey: query.name,
+      asset: asset
+    )
+  }
+
+  func isCompatible(with systemInfo: FontCIDSystemInfo, face: FontProviderFace) async throws -> Bool {
+    systemInfo.registry == "Adobe" && systemInfo.ordering == "Identity"
+  }
+
+  func glyph(_ selector: FontGlyphSelector, in face: FontProviderFace) async throws -> FontGlyph? {
+    FontGlyph(
+      selector: selector,
+      metrics: FontGlyphMetrics(
+        horizontalAdvance: FontPoint(x: 500, y: 0),
+        bounds: FontBounds(minimumX: 0, minimumY: 0, maximumX: 500, maximumY: 700)
+      ),
+      program: .outline(FontOutline(elements: [
+        .move(FontPoint(x: 0, y: 0)),
+        .line(FontPoint(x: 500, y: 0)),
+        .line(FontPoint(x: 500, y: 700)),
+        .line(FontPoint(x: 0, y: 700)),
+        .close,
+      ])),
+      resolvedGlyphIndex: selector == .name("A") ? 1 : 2
+    )
   }
 }
