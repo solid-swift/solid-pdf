@@ -107,7 +107,9 @@ extension PDFDocument {
           resources: page.resources.value,
           limits: options.limits,
           fontEnvironment: fontEnvironment,
-          strict: options.strict
+          strict: options.strict,
+          optionalContentSelection: options.optionalContentSelection,
+          optionalContentContext: options.optionalContentContext
         )
         let handler = PDFGraphicsInstructionHandler(
           device: device,

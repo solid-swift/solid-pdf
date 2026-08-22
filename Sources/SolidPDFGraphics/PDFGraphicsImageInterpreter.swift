@@ -96,7 +96,7 @@ extension PDFGraphicsInstructionHandler {
         after: state.snapshot(stroking: false),
         origin: origin(image.location, resource: identifier)
       )
-      try output.beginImage(event)
+      try output.beginImage(decorated(event))
       do {
         let rowBytes = (try checkedProduct(width, sourceCount, bits) + 7) / 8
         guard image.data.count == (try checkedProduct(rowBytes, height)) else {
@@ -228,7 +228,7 @@ extension PDFGraphicsInstructionHandler {
       after: state.snapshot(stroking: false),
       origin: origin(instruction.location, resource: descriptor.resourceIdentifier)
     )
-    try output.beginImage(event)
+    try output.beginImage(decorated(event))
     do {
       try await streamImageRows(
         stream,

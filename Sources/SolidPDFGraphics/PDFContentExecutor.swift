@@ -8,6 +8,7 @@ final class PDFContentExecutor {
   private var operatorCount = 0
   private var compatibilityDepth = 0
   private var markedContentDepth = 0
+  private var markedContentOwners: [PDFObjectReference?] = []
   private var inTextObject = false
   private var lastLocation: PDFContentLocation?
 
@@ -57,6 +58,15 @@ final class PDFContentExecutor {
     operatorCount += 1
     guard operatorCount <= maximumOperators else {
       throw PDFGraphicsError.limitExceeded("PDF page operator limit exceeded.", location: location)
+    }
+    if let owner = markedContentOwners.last,
+      owner != location.segments.last?.streamReference
+    {
+      throw malformed(
+        "A marked-content sequence crosses a content-stream boundary.",
+        operatorName: name,
+        at: location
+      )
     }
     if name == "BX" {
       try requireOperandCount(0, name: name, location: location)
@@ -122,6 +132,7 @@ final class PDFContentExecutor {
         throw malformed("BMC tag is not a name.", operatorName: name, at: location)
       }
       markedContentDepth += 1
+      markedContentOwners.append(location.segments.last?.streamReference)
     case "BDC":
       try requireOperandCount(2, name: name, location: location)
       guard case .name = operands[0].0 else {
@@ -132,12 +143,14 @@ final class PDFContentExecutor {
       default: throw malformed("BDC properties are invalid.", operatorName: name, at: location)
       }
       markedContentDepth += 1
+      markedContentOwners.append(location.segments.last?.streamReference)
     case "EMC":
       try requireOperandCount(0, name: name, location: location)
       guard markedContentDepth > 0 else {
         throw malformed("Marked-content sequence underflow.", operatorName: name, at: location)
       }
       markedContentDepth -= 1
+      markedContentOwners.removeLast()
     case "MP":
       try requireOperandCount(1, name: name, location: location)
       guard case .name = operands[0].0 else {

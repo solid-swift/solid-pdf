@@ -1,3 +1,4 @@
+import Foundation
 import SolidColor
 import SolidPDF
 import SolidPostScript
@@ -19,6 +20,7 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
   var interpretedGlyphCount = 0
   let type3Capture: PDFType3GlyphCapture?
   let type3Depth: Int
+  private var markedContent: [GraphicsMarkedContentScope] = []
 
   var diagnostics: [PDFGraphicsDiagnostic] { diagnosticsStorage + resources.diagnostics }
   var currentSnapshot: GraphicsStateSnapshot { state.snapshot(stroking: false) }
@@ -54,7 +56,27 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
     self.type3Depth = type3Depth
   }
 
-  private func emit(_ event: GraphicsEvent) throws { try output.process(event) }
+  func emit(_ event: GraphicsEvent) throws { try output.process(decorated(event)) }
+
+  func decorated(_ event: GraphicsEvent) -> GraphicsEvent {
+    let path = markedContent + event.markedContentPath
+    let hidden = path.flatMap { scope -> [GraphicsResourceIdentifier] in
+      if case .hidden(let identifiers) = scope.visibility { return identifiers }
+      return []
+    }
+    return GraphicsEvent(
+      operation: event.operation,
+      before: event.before,
+      after: event.after,
+      origin: event.origin,
+      markedContentPath: path,
+      visibility: hidden.isEmpty ? event.visibility : .hidden(Array(Set(hidden)).sorted { $0.rawValue < $1.rawValue })
+    )
+  }
+
+  var currentTextReplacement: GraphicsTextReplacement? {
+    markedContent.reversed().compactMap(\.properties.replacement).first
+  }
 
   func recordDiagnostic(_ diagnostic: PDFGraphicsDiagnostic) {
     diagnosticsStorage.append(diagnostic)
@@ -176,7 +198,7 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
       case "'": try await showNextLine(instruction, setsSpacing: false)
       case "\"": try await showNextLine(instruction, setsSpacing: true)
       case "BMC", "BDC", "EMC", "MP", "DP":
-        try validateMarkedContent(instruction)
+        try await interpretMarkedContent(instruction)
       case "Do": try await paintXObject(instruction)
       case "sh": try await paintShading(instruction)
       case "BI": throw PDFGraphicsError.unsupported(.operatorName("BI"), location: instruction.location)
@@ -204,6 +226,13 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
       throw PDFGraphicsError.malformedContent(
         message: "PDF graphics-state stack is not balanced.",
         operatorName: "q",
+        location: location!
+      )
+    }
+    guard markedContent.isEmpty else {
+      throw PDFGraphicsError.malformedContent(
+        message: "PDF marked-content stack is not balanced.",
+        operatorName: "BMC",
         location: location!
       )
     }
@@ -653,13 +682,197 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
     ))
   }
 
-  private func validateMarkedContent(_ instruction: PDFContentInstruction) throws {
-    if instruction.name == "BDC" || instruction.name == "DP", instruction.operands.count == 2,
-      case .name(let property) = instruction.operands[1],
-      property.pdfGraphicsString == "OC"
-    {
-      throw PDFGraphicsError.unsupported(.optionalContent, location: instruction.location)
+  private func interpretMarkedContent(_ instruction: PDFContentInstruction) async throws {
+    switch instruction.name {
+    case "BMC":
+      let scope = try await markedContentScope(instruction, hasProperties: false)
+      guard markedContent.count < limits.maximumMarkedContentDepth else {
+        throw PDFGraphicsError.limitExceeded("PDF marked-content depth exceeded.", location: instruction.location)
+      }
+      markedContent.append(scope)
+      try emit(markedContentEvent(.begin(scope), instruction: instruction))
+    case "BDC":
+      let scope = try await markedContentScope(instruction, hasProperties: true)
+      guard markedContent.count < limits.maximumMarkedContentDepth else {
+        throw PDFGraphicsError.limitExceeded("PDF marked-content depth exceeded.", location: instruction.location)
+      }
+      markedContent.append(scope)
+      try emit(markedContentEvent(.begin(scope), instruction: instruction))
+    case "EMC":
+      guard let scope = markedContent.last else { throw malformed("Marked-content stack underflow.", instruction) }
+      try emit(markedContentEvent(.end(scope), instruction: instruction))
+      markedContent.removeLast()
+    case "MP", "DP":
+      let scope = try await markedContentScope(instruction, hasProperties: instruction.name == "DP")
+      try emit(markedContentEvent(.point(scope), instruction: instruction))
+    default:
+      preconditionFailure("Unexpected marked-content operator.")
     }
+  }
+
+  private func markedContentScope(
+    _ instruction: PDFContentInstruction,
+    hasProperties: Bool
+  ) async throws -> GraphicsMarkedContentScope {
+    let tag = try PDFObjectAccess.name(instruction.operands[0])
+    var dictionary: [PDFName: PDFObject] = [:]
+    var visibilityObject: PDFObject?
+    var resourceIdentifier = GraphicsResourceIdentifier(
+      rawValue: "pdf:marked:r\(instruction.location.revision.ordinal):p\(instruction.location.pageIndex):\(instruction.location.decodedOffset)"
+    )
+    if hasProperties {
+      switch instruction.operands[1] {
+      case .dictionary(let value):
+        dictionary = value
+        visibilityObject = instruction.operands[1]
+      case .name(let name):
+        guard let property = try await resources.markedContentProperty(named: name) else {
+          throw malformed("Marked-content property resource is missing.", instruction)
+        }
+        dictionary = property.value
+        visibilityObject = property.source
+        resourceIdentifier = property.identifier
+      default:
+        throw malformed("Marked-content properties are invalid.", instruction)
+      }
+    }
+    guard dictionary.count <= limits.maximumMarkedContentProperties else {
+      throw PDFGraphicsError.limitExceeded("PDF marked-content property limit exceeded.", location: instruction.location)
+    }
+    let ownerReference = instruction.location.segments.first?.streamReference ?? instruction.location.pageReference
+    let owner = GraphicsResourceIdentifier(
+      rawValue: "pdf:r\(instruction.location.revision.ordinal):o\(ownerReference.objectNumber):\(ownerReference.generationNumber)"
+    )
+    let catalog = try await resources.document.catalog(in: resources.revision)
+    let properties = try markedContentProperties(
+      dictionary,
+      tag: tag,
+      owner: owner,
+      resource: resourceIdentifier,
+      allowsUTF8: catalog.effectiveVersion == .v2_0
+    )
+    let visibility: GraphicsContentVisibility
+    if tag == PDFName("OC"), let visibilityObject {
+      let result = try await resources.document.optionalContentVisibility(
+        of: visibilityObject,
+        selection: resources.optionalContentSelection,
+        context: resources.optionalContentContext,
+        in: resources.revision
+      )
+      visibility = result.isVisible ? .visible : .hidden(result.controllingGroups.map {
+        GraphicsResourceIdentifier(
+          rawValue: "pdf:r\(resources.revision.ordinal):o\($0.reference.objectNumber):\($0.reference.generationNumber)"
+        )
+      })
+    } else {
+      visibility = .visible
+    }
+    return GraphicsMarkedContentScope(
+      resourceIdentifier: resourceIdentifier,
+      tag: tag.bytes,
+      properties: properties,
+      visibility: visibility
+    )
+  }
+
+  private func markedContentProperties(
+    _ dictionary: [PDFName: PDFObject],
+    tag: PDFName,
+    owner: GraphicsResourceIdentifier,
+    resource: GraphicsResourceIdentifier,
+    allowsUTF8: Bool
+  ) throws -> GraphicsMarkedContentProperties {
+    let identifier: GraphicsMarkedContentIdentifier?
+    if let object = dictionary["MCID"] {
+      let value = try PDFObjectAccess.integer(object)
+      guard value >= 0 else { throw PDFObjectAccess.TypeMismatch.number }
+      identifier = .init(owner: owner, value: value)
+    } else { identifier = nil }
+    let replacement = try textProperty(dictionary["ActualText"], allowsUTF8: allowsUTF8).map {
+      GraphicsTextReplacement(text: $0, provenance: .markedContent)
+    }
+    let artifact: GraphicsArtifactDescription?
+    if tag == PDFName("Artifact") {
+      artifact = GraphicsArtifactDescription(
+        type: nameBytes(dictionary["Type"]),
+        subtype: nameBytes(dictionary["Subtype"]),
+        bounds: try rectangle(dictionary["BBox"]),
+        attachments: try names(dictionary["Attached"])
+      )
+    } else { artifact = nil }
+    return GraphicsMarkedContentProperties(
+      identifier: identifier,
+      language: try textProperty(dictionary["Lang"], allowsUTF8: allowsUTF8),
+      replacement: replacement,
+      alternateDescription: try textProperty(dictionary["Alt"], allowsUTF8: allowsUTF8),
+      expansion: try textProperty(dictionary["E"], allowsUTF8: allowsUTF8),
+      artifact: artifact,
+      values: try Dictionary(uniqueKeysWithValues: dictionary.map {
+        ($0.key.bytes, try semanticValue($0.value, depth: 0))
+      })
+    )
+  }
+
+  private func textProperty(_ object: PDFObject?, allowsUTF8: Bool) throws -> String? {
+    guard let object else { return nil }
+    guard case .string(let value) = object else { throw PDFObjectAccess.TypeMismatch.string }
+    return try PDFTextStringDecoder.decode(value, allowsUTF8: allowsUTF8)
+  }
+
+  private func nameBytes(_ object: PDFObject?) -> Data? {
+    guard case .name(let name)? = object else { return nil }
+    return name.bytes
+  }
+
+  private func names(_ object: PDFObject?) throws -> [Data] {
+    guard let object else { return [] }
+    if case .name(let name) = object { return [name.bytes] }
+    guard case .array(let values) = object else { throw PDFObjectAccess.TypeMismatch.array }
+    return try values.map { try PDFObjectAccess.name($0).bytes }
+  }
+
+  private func rectangle(_ object: PDFObject?) throws -> GraphicsRect? {
+    guard let object else { return nil }
+    let values = try PDFObjectAccess.numbers(object)
+    guard values.count == 4 else { throw PDFObjectAccess.TypeMismatch.array }
+    return GraphicsRect(
+      x: min(values[0], values[2]), y: min(values[1], values[3]),
+      width: abs(values[2] - values[0]), height: abs(values[3] - values[1])
+    )
+  }
+
+  private func semanticValue(_ object: PDFObject, depth: Int) throws -> GraphicsSemanticValue {
+    guard depth <= limits.maximumMarkedContentDepth else { throw PDFObjectAccess.TypeMismatch.array }
+    switch object {
+    case .null: return .null
+    case .boolean(let value): return .boolean(value)
+    case .number(.integer(let value)): return .integer(value)
+    case .number(.real(let value)): return .real(value)
+    case .name(let value): return .name(value.bytes)
+    case .string(let value): return .string(value.bytes)
+    case .array(let values): return .array(try values.map { try semanticValue($0, depth: depth + 1) })
+    case .dictionary(let values):
+      return .dictionary(try Dictionary(uniqueKeysWithValues: values.map {
+        ($0.key.bytes, try semanticValue($0.value, depth: depth + 1))
+      }))
+    case .reference(let reference):
+      return .resource(GraphicsResourceIdentifier(
+        rawValue: "pdf:r\(resources.revision.ordinal):o\(reference.objectNumber):\(reference.generationNumber)"
+      ))
+    }
+  }
+
+  private func markedContentEvent(
+    _ operation: GraphicsMarkedContentOperation,
+    instruction: PDFContentInstruction
+  ) -> GraphicsEvent {
+    let snapshot = state.snapshot(stroking: false)
+    return GraphicsEvent(
+      operation: .content(.markedContent(operation)),
+      before: snapshot,
+      after: snapshot,
+      origin: origin(instruction.location)
+    )
   }
 
   private func replaceDeviceRendering(

@@ -42,6 +42,7 @@ enum PDFObjectAccess {
     case name
     case array
     case dictionary
+    case string
   }
 }
 

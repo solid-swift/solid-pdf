@@ -190,7 +190,7 @@ extension PDFGraphicsInstructionHandler {
         displayList: GraphicsDisplayList(effects: collector.collector.effects, resourceIdentifier: identifier),
         resourceIdentifier: identifier
       )
-      try output.process(GraphicsEvent(
+      try emit(GraphicsEvent(
         operation: .paint(.form(form)),
         before: state.snapshot(stroking: false),
         after: state.snapshot(stroking: false),
@@ -212,7 +212,7 @@ extension PDFGraphicsInstructionHandler {
       throw malformed("Missing shading resource.", instruction)
     }
     let shading = try await compileShading(object, instruction: instruction)
-    try output.process(GraphicsEvent(
+    try emit(GraphicsEvent(
       operation: .paint(.shading(shading)),
       before: state.snapshot(stroking: false),
       after: state.snapshot(stroking: false),

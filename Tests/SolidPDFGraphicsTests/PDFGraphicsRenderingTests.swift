@@ -36,6 +36,54 @@ struct PDFGraphicsRenderingTests {
   }
 
   @Test
+  func preservesMarkedContentPropertiesAndReplacementText() async throws {
+    let resources = """
+      << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic
+        /FirstChar 65 /LastChar 65 /Widths [600] /Encoding /WinAnsiEncoding >> >> >>
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "/Span << /MCID 7 /Lang (en-US) /ActualText (Logical) >> BDC BT /F1 12 Tf (A) Tj ET EMC",
+      resources: resources
+    )))
+    let result = try await document.render(
+      page: 0,
+      to: RecordingGraphicsTarget(),
+      fontEnvironment: .init(providers: [SyntheticPDFFontProvider()])
+    )
+    let effects = result.output.pages[0].effects
+    guard case .markedContent(.begin(let scope), _)? = effects.first else {
+      Issue.record("Expected a marked-content boundary")
+      return
+    }
+    #expect(scope.properties.identifier?.value == 7)
+    #expect(scope.properties.language == "en-US")
+    let run = try #require(effects.compactMap { effect -> GraphicsGlyphRun? in
+      if case .text(let run, _) = effect { return run }
+      return nil
+    }.first)
+    #expect(run.textReplacement?.text == "Logical")
+    #expect(run.textReplacement?.provenance == .markedContent)
+    await document.close()
+  }
+
+  @Test
+  func evaluatesOptionalContentAndPreservesHiddenScope() async throws {
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "/OC /Layer BDC 0 0 20 20 re f EMC",
+      resources: "<< /Properties << /Layer 5 0 R >> >>",
+      catalogExtras: "/OCProperties << /OCGs [5 0 R] /D << /BaseState /OFF >> >>",
+      extraObjects: [Data("<< /Type /OCG /Name (Layer) >>".utf8)]
+    )))
+    let result = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    guard case .markedContent(.begin(let scope), _)? = result.output.pages[0].effects.first else {
+      Issue.record("Expected an optional-content boundary")
+      return
+    }
+    #expect(!scope.visibility.isVisible)
+    await document.close()
+  }
+
+  @Test
   func streamsImageRowsAndRetainsSourceSamples() async throws {
     let image = "<< /Type /XObject /Subtype /Image /Width 2 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length 6 >>\nstream\n\u{00}\u{00}\u{00}\u{ff}\u{00}\u{00}\nendstream"
     let document = try await PDFDocument(source: PDFDataInputSource(fixture(
@@ -715,10 +763,11 @@ struct PDFGraphicsRenderingTests {
   private func fixture(
     content: String,
     resources: String = "<< >>",
+    catalogExtras: String = "",
     extraObjects: [Data] = []
   ) -> Data {
     var objects = [
-      Data("<< /Type /Catalog /Pages 2 0 R >>".utf8),
+      Data("<< /Type /Catalog /Pages 2 0 R \(catalogExtras) >>".utf8),
       Data("<< /Type /Pages /Kids [3 0 R] /Count 1 >>".utf8),
       Data("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources \(resources) /Contents 4 0 R >>".utf8),
       Data("<< /Length \(content.utf8.count) >>\nstream\n\(content)\nendstream".utf8),

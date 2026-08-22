@@ -10,17 +10,25 @@ public struct PDFGraphicsInterpretationOptions: Sendable, Hashable {
   public let strict: Bool
   /// Resource limits for interpretation.
   public let limits: PDFGraphicsLimits
+  /// The optional-content configuration and caller overrides.
+  public let optionalContentSelection: PDFOptionalContentSelection
+  /// The environment used for optional-content usage applications.
+  public let optionalContentContext: PDFOptionalContentContext
 
   /// Creates interpretation options.
   public init(
     pageBoundary: PDFPageBoundaryKind = .crop,
     accessPurpose: PDFGraphicsAccessPurpose = .viewing,
     strict: Bool = true,
-    limits: PDFGraphicsLimits = .init()
+    limits: PDFGraphicsLimits = .init(),
+    optionalContentSelection: PDFOptionalContentSelection = .documentDefault,
+    optionalContentContext: PDFOptionalContentContext = .init()
   ) {
     self.pageBoundary = pageBoundary
     self.accessPurpose = accessPurpose
     self.strict = strict
     self.limits = limits
+    self.optionalContentSelection = optionalContentSelection
+    self.optionalContentContext = optionalContentContext
   }
 }

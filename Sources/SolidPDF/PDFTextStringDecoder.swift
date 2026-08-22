@@ -1,7 +1,7 @@
 import Foundation
 
-enum PDFTextStringDecoder {
-  static func decode(_ string: PDFString, allowsUTF8: Bool) throws -> String {
+package enum PDFTextStringDecoder {
+  package static func decode(_ string: PDFString, allowsUTF8: Bool) throws -> String {
     let bytes = [UInt8](string.bytes)
     if bytes.starts(with: [0xFE, 0xFF]) {
       return try decodeUTF16(Array(bytes.dropFirst(2)), littleEndian: false)

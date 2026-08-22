@@ -19,7 +19,7 @@ extension PDFGraphicsInstructionHandler {
         path: GraphicsPath(elements: textClipElements),
         rule: .winding
       ))
-      try output.process(GraphicsEvent(
+      try emit(GraphicsEvent(
         operation: .clip(.intersect(.winding)),
         before: before,
         after: state.snapshot(stroking: false),
@@ -54,7 +54,7 @@ extension PDFGraphicsInstructionHandler {
     let before = state.snapshot(stroking: false)
     state.text.font = try await resources.font(named: name, location: instruction.location)
     state.text.fontSize = size
-    try output.process(GraphicsEvent(
+    try emit(GraphicsEvent(
       operation: .state(.setFont(state.text.font!.description)),
       before: before,
       after: state.snapshot(stroking: false),
@@ -187,10 +187,11 @@ extension PDFGraphicsInstructionHandler {
       glyphs: placements.map(\.placement),
       sourceBytes: sourceBytes,
       renderingMode: state.text.renderingMode,
-      style: textStyle
+      style: textStyle,
+      textReplacement: currentTextReplacement
     )
     let snapshot = state.snapshot(stroking: !state.text.renderingMode.fills)
-    try output.process(GraphicsEvent(
+    try emit(GraphicsEvent(
       operation: .paint(.text(run)),
       before: snapshot,
       after: snapshot,

@@ -17,6 +17,8 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
   let limits: PDFGraphicsLimits
   let fontEnvironment: PDFGraphicsFontEnvironment
   let strict: Bool
+  let optionalContentSelection: PDFOptionalContentSelection
+  let optionalContentContext: PDFOptionalContentContext
   private var scopes: [[PDFName: PDFObject]]
   private var colorSpaceCache: [PDFName: ResolvedColorSpace] = [:]
   var fontCache: [FontCacheKey: PDFResolvedFont] = [:]
@@ -32,13 +34,17 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
     resources: [PDFName: PDFObject],
     limits: PDFGraphicsLimits,
     fontEnvironment: PDFGraphicsFontEnvironment = .portable,
-    strict: Bool = true
+    strict: Bool = true,
+    optionalContentSelection: PDFOptionalContentSelection = .documentDefault,
+    optionalContentContext: PDFOptionalContentContext = .init()
   ) {
     self.document = document
     self.revision = revision
     self.limits = limits
     self.fontEnvironment = fontEnvironment
     self.strict = strict
+    self.optionalContentSelection = optionalContentSelection
+    self.optionalContentContext = optionalContentContext
     scopes = [resources]
   }
 
@@ -357,6 +363,25 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
     guard let object = try await resourceObject(category: category, name: name) else { return nil }
     guard case .reference(let reference) = object else { return nil }
     return try await document.resolve(reference, in: revision)
+  }
+
+  func markedContentProperty(
+    named name: PDFName
+  ) async throws -> (source: PDFObject, value: [PDFName: PDFObject], identifier: GraphicsResourceIdentifier)? {
+    guard let source = try await resourceObject(category: "Properties", name: name) else { return nil }
+    let resolved = try await resolvedValue(source)
+    guard case .dictionary(let dictionary) = resolved else {
+      throw PDFObjectAccess.TypeMismatch.dictionary
+    }
+    let identifier: GraphicsResourceIdentifier
+    if case .reference(let reference) = source {
+      identifier = GraphicsResourceIdentifier(
+        rawValue: "pdf:r\(revision.ordinal):o\(reference.objectNumber):\(reference.generationNumber)"
+      )
+    } else {
+      identifier = .anonymous
+    }
+    return (source, dictionary, identifier)
   }
 
   func resolvedObject(_ object: PDFObject) async throws -> PDFObject {
