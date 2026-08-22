@@ -30,6 +30,14 @@ struct PDFEmbeddedAssetTests {
     #expect(collection.items.count == 1)
     #expect(collection.sort == .init(fields: ["Name"], ascending: [true]))
 
+    let inventory = try await document.assetInventory()
+    #expect(inventory.embeddedFiles.count == 1)
+    #expect(inventory.embeddedFiles[0].filename == "asset.txt")
+    #expect(inventory.embeddedFiles[0].declaredSize == 10)
+    #expect(inventory.associatedFiles.count == 2)
+    #expect(inventory.collection?.view == .details)
+    #expect(inventory.signatures.isEmpty)
+
     #expect(try await document.decodedBytes(of: file) == Data("attachment".utf8))
     await document.close()
   }

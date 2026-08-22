@@ -8,7 +8,7 @@ REPOSITORY_ROOT="$(cd "${SCRIPT_DIRECTORY}/.." && pwd -P)"
 readonly REPOSITORY_ROOT
 readonly SWIFT_IMAGE="${SOLIDPDF_LINUX_SWIFT_IMAGE:-swift:6.3.3}"
 readonly SCRIPT_SCHEMA_VERSION="${SOLIDPDF_LINUX_SCRIPT_SCHEMA_VERSION:-8}"
-readonly DEPENDENCY_GENERATION="${SOLIDPDF_LINUX_DEPENDENCY_GENERATION:-7}"
+readonly DEPENDENCY_GENERATION="${SOLIDPDF_LINUX_DEPENDENCY_GENERATION:-8}"
 
 function fail() {
   echo "linux-container: $*" >&2
@@ -235,7 +235,7 @@ function install_dependencies() {
     docker exec "${CONTAINER_NAME}" apt-get update >/dev/null
     docker exec "${CONTAINER_NAME}" apt-get install --yes \
       build-essential curl xz-utils pkg-config libfreetype-dev libfontconfig1-dev \
-      qpdf mupdf-tools poppler-utils >/dev/null
+      qpdf mupdf-tools poppler-utils libimage-exiftool-perl >/dev/null
     docker exec "${CONTAINER_NAME}" touch "${DEPENDENCY_SENTINEL}"
   fi
 }

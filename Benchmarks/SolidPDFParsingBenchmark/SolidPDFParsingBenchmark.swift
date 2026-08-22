@@ -197,6 +197,22 @@ let benchmarks: @Sendable () -> Void = {
     benchmark.stopMeasurement()
     await document.close()
   }
+
+  Benchmark("Document Asset Inventory", configuration: configuration) { benchmark in
+    let document = try await PDFDocument(source: PDFDataInputSource(small))
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations { blackHole(try await document.assetInventory()) }
+    benchmark.stopMeasurement()
+    await document.close()
+  }
+
+  Benchmark("Empty Authenticity Report", configuration: configuration) { benchmark in
+    let document = try await PDFDocument(source: PDFDataInputSource(small))
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations { blackHole(try await document.authenticityReport()) }
+    benchmark.stopMeasurement()
+    await document.close()
+  }
 }
 
 private func registerOpen(

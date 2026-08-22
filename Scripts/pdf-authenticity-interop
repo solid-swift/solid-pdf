@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+for tool in openssl qpdf mutool pdfsig exiftool; do
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    echo "error: ${tool} is required for PDF authenticity interoperability validation" >&2
+    exit 69
+  fi
+done
+
+SOURCE_PDF="${1:-${ROOT_DIRECTORY}/Tests/Fixtures/PDFText/native-text.pdf}"
+WORK_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/solidpdf-authenticity-interop.XXXXXX")"
+trap 'rm -rf "${WORK_DIRECTORY}"' EXIT
+
+"${ROOT_DIRECTORY}/Scripts/generate-pdf-authenticity-fixtures" \
+  "${SOURCE_PDF}" "${WORK_DIRECTORY}/generated"
+
+qpdf --check "${SOURCE_PDF}"
+mutool show "${SOURCE_PDF}" trailer/Root >/dev/null
+pdfsig -v >/dev/null
+exiftool "${SOURCE_PDF}" >/dev/null
+openssl cms -cmsout -print -inform DER \
+  -in "${WORK_DIRECTORY}/generated/detached-sha256.p7s" >/dev/null

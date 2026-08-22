@@ -63,6 +63,13 @@ struct PDFSignatureContainerTests {
     #expect(validation.integrity == .invalid(reason: "The signed byte ranges do not exactly cover the signed revision."))
     #expect(validation.trust == .notEvaluated)
     #expect(validation.modifications == .unchanged)
+    let report = try await document.authenticityReport()
+    #expect(report.signatures.count == 1)
+    #expect(report.validationResults == [validation])
+    #expect(report.documentPermissions == nil)
+    let inventory = try await document.assetInventory()
+    #expect(inventory.signatures.count == 1)
+    #expect(inventory.signatures[0].kind == .certification)
     await document.close()
   }
 

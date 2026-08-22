@@ -43,7 +43,7 @@ SOLIDPDF_LINUX_PLATFORM=linux/amd64 Scripts/linux-build
 SOLIDPDF_LINUX_SWIFT_IMAGE=swift:6.3.3-jammy Scripts/linux-test
 ```
 
-Each checkout and target platform receives distinct stable container and volume names, so worktrees and cross-architecture builds do not share incompatible products or baselines. Swift-image and script updates reuse those volumes after replacing the container. The staged workspace refreshes `Package.resolved` and every tracked source input whenever the checkout changes, while excluding `.git`, host build products, caches, benchmark baselines, and `Reference/`. Container creation also installs the FreeType and Fontconfig development packages required by `SolidPostScriptFreeType`, qpdf, MuPDF, and Poppler for generated-PDF interoperability checks, and the compiler utilities needed by the independent conformance reference.
+Each checkout and target platform receives distinct stable container and volume names, so worktrees and cross-architecture builds do not share incompatible products or baselines. Swift-image and script updates reuse those volumes after replacing the container. The staged workspace refreshes `Package.resolved` and every tracked source input whenever the checkout changes, while excluding `.git`, host build products, caches, benchmark baselines, and `Reference/`. Container creation also installs the FreeType and Fontconfig development packages required by `SolidPostScriptFreeType`, qpdf, MuPDF, Poppler, and ExifTool for generated-PDF interoperability checks, and the compiler utilities needed by the independent conformance reference.
 
 # PostScript conformance
 
@@ -86,3 +86,15 @@ tools are not installed on the host; the reusable Linux container includes all r
 `Scripts/pdf-text-interop` validates the project-authored searchable-text fixture with qpdf, MuPDF,
 Poppler font inventory and extraction, and a 144-dpi raster render. Run
 `Scripts/linux-pdf-text-interop` to use the same reusable Linux container and its pinned tool set.
+
+# PDF assets and authenticity
+
+`Scripts/generate-pdf-authenticity-fixtures SOURCE_PDF OUTPUT_DIRECTORY` creates project-only
+test credentials and a detached CMS signature, then verifies it independently with OpenSSL. The
+output directory must remain outside production resources. SolidPDF signature validation is offline
+and capability-bound: neither this script nor the library grants attachments, actions, certificates,
+or revocation metadata permission to open host files or access the network.
+
+`Scripts/pdf-authenticity-interop [SOURCE_PDF]` checks the generated CMS container and source PDF
+with OpenSSL, qpdf, MuPDF, Poppler `pdfsig`, and ExifTool. Use
+`Scripts/linux-pdf-authenticity-interop` for the reproducible reusable-container tool set.

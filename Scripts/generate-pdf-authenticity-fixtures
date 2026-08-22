@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ "$#" -ne 2 ]]; then
+  echo "usage: generate-pdf-authenticity-fixtures SOURCE_PDF OUTPUT_DIRECTORY" >&2
+  exit 64
+fi
+
+for command in openssl qpdf; do
+  if ! command -v "${command}" >/dev/null 2>&1; then
+    echo "error: ${command} is required" >&2
+    exit 69
+  fi
+done
+
+SOURCE_PDF="$1"
+OUTPUT_DIRECTORY="$2"
+mkdir -p "${OUTPUT_DIRECTORY}"
+
+KEY="${OUTPUT_DIRECTORY}/solidpdf-test-only.key"
+CERTIFICATE="${OUTPUT_DIRECTORY}/solidpdf-test-only.pem"
+
+openssl req -x509 -newkey rsa:2048 -nodes \
+  -subj "/CN=SolidPDF Project Test Signer" \
+  -days 3650 -keyout "${KEY}" -out "${CERTIFICATE}"
+
+openssl cms -sign -binary -md sha256 \
+  -in "${SOURCE_PDF}" -signer "${CERTIFICATE}" -inkey "${KEY}" \
+  -outform DER -out "${OUTPUT_DIRECTORY}/detached-sha256.p7s"
+
+qpdf --check "${SOURCE_PDF}"
+openssl cms -verify -binary -inform DER \
+  -in "${OUTPUT_DIRECTORY}/detached-sha256.p7s" \
+  -content "${SOURCE_PDF}" -CAfile "${CERTIFICATE}" \
+  -out "${OUTPUT_DIRECTORY}/verified-content.bin"
+
+openssl version >"${OUTPUT_DIRECTORY}/openssl-version.txt"
+qpdf --version >"${OUTPUT_DIRECTORY}/qpdf-version.txt"
+
+cat >"${OUTPUT_DIRECTORY}/PROVENANCE.txt" <<EOF
+These credentials and signatures are generated exclusively for SolidPDF tests.
+They are not production keys or trust anchors.
+Source: ${SOURCE_PDF}
+OpenSSL: $(openssl version)
+qpdf: $(qpdf --version | head -1)
+EOF

@@ -424,6 +424,70 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     try await authenticity.validate(signature, in: revision, options: options)
   }
 
+  /// Produces an authenticity report for the latest document revision.
+  public func authenticityReport(
+    options: PDFSignatureValidationOptions = .init()
+  ) async throws -> PDFDocumentAuthenticityReport {
+    try await authenticityReport(in: latestRevision.identifier, options: options)
+  }
+
+  /// Produces an authenticity report as of a selected document revision.
+  public func authenticityReport(
+    in revision: PDFRevisionIdentifier,
+    options: PDFSignatureValidationOptions = .init()
+  ) async throws -> PDFDocumentAuthenticityReport {
+    let signatures = try await authenticity.signatures(in: revision)
+    var results = [PDFSignatureValidationResult]()
+    results.reserveCapacity(signatures.count)
+    for signature in signatures {
+      results.append(try await authenticity.validate(signature, in: revision, options: options))
+    }
+    return PDFDocumentAuthenticityReport(
+      revision: revision,
+      signatures: signatures,
+      validationResults: results,
+      documentPermissions: security?.effectivePermissions,
+      diagnostics: results.flatMap(\.diagnostics)
+    )
+  }
+
+  /// Produces a metadata-only inventory of the latest document's inert assets.
+  public func assetInventory() async throws -> PDFDocumentAssetInventory {
+    try await assetInventory(in: latestRevision.identifier)
+  }
+
+  /// Produces a metadata-only inventory of inert assets in a selected revision.
+  public func assetInventory(in revision: PDFRevisionIdentifier) async throws -> PDFDocumentAssetInventory {
+    let embedded = try await assets.embeddedFiles(in: revision)
+    let signatures = try await authenticity.signatures(in: revision)
+    return PDFDocumentAssetInventory(
+      metadata: try await assets.metadata(in: revision),
+      embeddedFiles: embedded.map { file in
+        PDFEmbeddedFileSummary(
+          identifier: file.fileSpecification.identifier,
+          nameTreeKey: file.nameTreeKey,
+          filename: file.fileSpecification.unicodeFilename,
+          subtype: file.subtype,
+          declaredSize: file.declaredSize,
+          checksum: file.checksum,
+          revision: file.definingRevision
+        )
+      },
+      associatedFiles: try await associatedFiles(in: revision),
+      collection: try await assets.collection(in: revision),
+      signatures: signatures.map { signature in
+        PDFSignatureDescriptor(
+          identifier: signature.identifier,
+          kind: signature.kind,
+          subfilter: signature.subfilter,
+          signedRevision: signature.signedRevision,
+          signerSubjects: signature.signers.compactMap(\.certificate?.subject),
+          transforms: signature.transforms
+        )
+      }
+    )
+  }
+
   /// Opens a validated, bounded stream over an embedded file's decoded bytes.
   public func decodedStream(of file: PDFEmbeddedFile) async throws -> PDFDecodedStream {
     let stream = try await resolver.decodedStream(file.stream)

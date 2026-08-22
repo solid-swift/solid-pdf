@@ -40,6 +40,31 @@ public struct PDFAnnotationPayload: Sendable, Hashable {
     self.fileSpecification = fileSpecification
     self.extensions = extensions
   }
+
+  /// Creates a payload using the pre-attachment metadata surface.
+  @_disfavoredOverload
+  public init(
+    points: [Double] = [],
+    inkLists: [[Double]] = [],
+    destination: PDFDestination? = nil,
+    action: PDFAction? = nil,
+    popup: PDFAnnotationIdentifier? = nil,
+    replyTo: PDFAnnotationIdentifier? = nil,
+    replyType: PDFName? = nil,
+    extensions: [PDFName: PDFObject] = [:]
+  ) {
+    self.init(
+      points: points,
+      inkLists: inkLists,
+      destination: destination,
+      action: action,
+      popup: popup,
+      replyTo: replyTo,
+      replyType: replyType,
+      fileSpecification: nil,
+      extensions: extensions
+    )
+  }
 }
 
 /// Subtype-discriminated annotation semantics.
