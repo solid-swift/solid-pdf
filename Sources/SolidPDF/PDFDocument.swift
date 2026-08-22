@@ -193,6 +193,41 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     )
   }
 
+  /// Returns the latest document's logical structure tree, when present.
+  public func structureTree() async throws -> PDFStructureTree? {
+    try await structure.structureTree(in: latestRevision.identifier)
+  }
+
+  /// Returns the logical structure tree in a selected revision, when present.
+  public func structureTree(in revision: PDFRevisionIdentifier) async throws -> PDFStructureTree? {
+    try await structure.structureTree(in: revision)
+  }
+
+  /// Resolves one logical structure element in the latest revision.
+  public func structureElement(
+    _ identifier: PDFStructureElementIdentifier
+  ) async throws -> PDFStructureElement {
+    try await structure.structureElement(identifier, in: latestRevision.identifier)
+  }
+
+  /// Resolves one logical structure element in a selected revision.
+  public func structureElement(
+    _ identifier: PDFStructureElementIdentifier,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFStructureElement {
+    try await structure.structureElement(identifier, in: revision)
+  }
+
+  /// Audits the complete latest logical structure tree and its parent and ID trees.
+  public func validateStructureTree() async throws {
+    try await structure.validateStructureTree(in: latestRevision.identifier)
+  }
+
+  /// Audits the complete logical structure tree in a selected revision.
+  public func validateStructureTree(in revision: PDFRevisionIdentifier) async throws {
+    try await structure.validateStructureTree(in: revision)
+  }
+
   /// Opens the exact ordered concatenation of a page's decoded content streams.
   public func decodedContent(of page: PDFPage) -> PDFDecodedPageContent {
     PDFDecodedPageContent(

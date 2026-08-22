@@ -1,3 +1,5 @@
+import Foundation
+
 actor PDFDocumentStructure<Session: PDFInputSourceSession> {
   private let resolver: PDFDocumentResolver<Session>
   private let revisions: [PDFDocumentRevision]
@@ -8,6 +10,9 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
   private var pendingPageValidations = [PDFRevisionIdentifier: Task<Int, Error>]()
   private var pageLabelRangeCache = [PDFRevisionIdentifier: [PDFPageLabelRange]?]()
   private var optionalContentCache = [PDFRevisionIdentifier: PDFOptionalContentProperties?]()
+  private var structureTreeCache = [PDFRevisionIdentifier: PDFStructureTree?]()
+  private var structureElementCache = [PDFRevisionIdentifier: [PDFStructureElementIdentifier: PDFStructureElement]]()
+  private var validatedStructureTrees = Set<PDFRevisionIdentifier>()
   private var closed = false
 
   init(
@@ -67,6 +72,9 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
     validatedPageCounts.removeAll()
     pageLabelRangeCache.removeAll()
     optionalContentCache.removeAll()
+    structureTreeCache.removeAll()
+    structureElementCache.removeAll()
+    validatedStructureTrees.removeAll()
   }
 
   func pageCount(in revision: PDFRevisionIdentifier) async throws -> Int {
@@ -285,6 +293,110 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
       depth: 0
     )
     return .init(isVisible: visible, controllingGroups: controlling.sorted())
+  }
+
+  func structureTree(in revision: PDFRevisionIdentifier) async throws -> PDFStructureTree? {
+    if let cached = structureTreeCache[revision] { return cached }
+    let catalog = try await catalog(in: revision)
+    guard let rawRoot = catalog.rawDictionary["StructTreeRoot"] else {
+      structureTreeCache[revision] = .some(nil)
+      return nil
+    }
+    guard case .reference(let reference) = rawRoot else {
+      throw malformed("StructTreeRoot must be an indirect object.")
+    }
+    let resolved = try await resolver.resolve(reference, in: revision)
+    guard case .value(.dictionary(let dictionary)) = resolved.value,
+      dictionary.pdfName(named: "Type") == PDFName("StructTreeRoot")
+    else { throw malformed("StructTreeRoot is not a valid structure-tree root.") }
+    let children = try await structureChildren(
+      dictionary["K"], parent: reference, inheritedPage: nil, revision: revision, depth: 0
+    )
+    guard children.allSatisfy({ if case .element = $0 { true } else { false } }) else {
+      throw malformed("StructTreeRoot children must be structure elements.")
+    }
+    let roleMap = try structureRoleMap(dictionary["RoleMap"])
+    try validateRoleMap(roleMap)
+    let classMap = try structureClassMap(dictionary["ClassMap"])
+    let namespaces = try await structureNamespaces(dictionary["Namespaces"], revision: revision)
+    let nextKey: Int?
+    if let value = dictionary["ParentTreeNextKey"] {
+      let raw = try structureInteger(value)
+      guard raw >= 0 else { throw malformed("ParentTreeNextKey must be nonnegative.") }
+      nextKey = raw
+    } else { nextKey = nil }
+    let tree = PDFStructureTree(
+      reference: reference,
+      children: children,
+      roleMap: roleMap,
+      classMap: classMap,
+      namespaces: namespaces,
+      parentTreeNextKey: nextKey,
+      rawDictionary: dictionary,
+      definingRevision: resolved.definitionRevision ?? revision
+    )
+    structureTreeCache[revision] = tree
+    return tree
+  }
+
+  func structureElement(
+    _ identifier: PDFStructureElementIdentifier,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFStructureElement {
+    if let cached = structureElementCache[revision]?[identifier] { return cached }
+    guard try await structureTree(in: revision) != nil else {
+      throw malformed("The document has no logical structure tree.")
+    }
+    let resolved = try await resolver.resolve(identifier.reference, in: revision)
+    guard case .value(.dictionary(let dictionary)) = resolved.value,
+      dictionary.pdfName(named: "Type") == PDFName("StructElem"),
+      let structureType = dictionary.pdfName(named: "S"),
+      let parent = dictionary.pdfReference(named: "P")
+    else { throw malformed("A structure element dictionary is malformed.") }
+    let page = dictionary.pdfReference(named: "Pg")
+    let children = try await structureChildren(
+      dictionary["K"], parent: identifier.reference, inheritedPage: page,
+      revision: revision, depth: 0
+    )
+    let catalog = try await catalog(in: revision)
+    let element = PDFStructureElement(
+      identifier: identifier,
+      structureType: structureType,
+      namespace: dictionary.pdfReference(named: "NS"),
+      parent: parent,
+      page: page,
+      children: children,
+      identifierBytes: structureStringBytes(dictionary["ID"]),
+      title: try structureText(dictionary["T"], allowsUTF8: catalog.effectiveVersion == .v2_0),
+      language: try structureText(dictionary["Lang"], allowsUTF8: catalog.effectiveVersion == .v2_0),
+      alternateDescription: try structureText(dictionary["Alt"], allowsUTF8: catalog.effectiveVersion == .v2_0),
+      replacementText: try structureText(dictionary["ActualText"], allowsUTF8: catalog.effectiveVersion == .v2_0),
+      expansion: try structureText(dictionary["E"], allowsUTF8: catalog.effectiveVersion == .v2_0),
+      classNames: try structureClassNames(dictionary["C"]),
+      attributes: try structureAttributes(dictionary["A"]),
+      rawDictionary: dictionary,
+      definingRevision: resolved.definitionRevision ?? revision
+    )
+    structureElementCache[revision, default: [:]][identifier] = element
+    return element
+  }
+
+  func validateStructureTree(in revision: PDFRevisionIdentifier) async throws {
+    if validatedStructureTrees.contains(revision) { return }
+    guard let tree = try await structureTree(in: revision) else { return }
+    var visited = Set<PDFStructureElementIdentifier>()
+    var active = Set<PDFStructureElementIdentifier>()
+    var scratch = 0
+    for child in tree.children {
+      guard case .element(let identifier) = child else { continue }
+      try await auditStructureElement(
+        identifier, expectedParent: tree.reference, revision: revision,
+        visited: &visited, active: &active, scratch: &scratch, depth: 0
+      )
+    }
+    try await validateStructureParentTree(tree, revision: revision, elements: visited)
+    try await validateStructureIDTree(tree, revision: revision, elements: visited)
+    validatedStructureTrees.insert(revision)
   }
 
   private final class PageWalkState {
@@ -776,6 +888,295 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
       throw malformed("An optional-content configuration must be a dictionary.")
     }
     return dictionary
+  }
+
+  private func structureChildren(
+    _ object: PDFObject?,
+    parent: PDFObjectReference,
+    inheritedPage: PDFObjectReference?,
+    revision: PDFRevisionIdentifier,
+    depth: Int
+  ) async throws -> [PDFStructureChild] {
+    guard let object else { return [] }
+    guard depth <= limits.maximumStructureDepth else {
+      throw PDFParsingError.limitExceeded(.init(offset: 0, message: "Structure-tree depth exceeds its limit."))
+    }
+    if case .array(let values) = object {
+      guard values.count <= limits.maximumStructureChildren else {
+        throw PDFParsingError.limitExceeded(.init(offset: 0, message: "Structure-element children exceed their limit."))
+      }
+      var result = [PDFStructureChild]()
+      for value in values {
+        result.append(contentsOf: try await structureChildren(
+          value, parent: parent, inheritedPage: inheritedPage,
+          revision: revision, depth: depth + 1
+        ))
+      }
+      return result
+    }
+    if case .number(.integer(let rawMCID)) = object {
+      guard rawMCID >= 0, rawMCID <= Int64(Int.max) else {
+        throw malformed("A structure MCID must be nonnegative.")
+      }
+      return [.markedContent(.init(
+        markedContentIdentifier: Int(rawMCID), page: inheritedPage, stream: nil
+      ))]
+    }
+    let dictionary: [PDFName: PDFObject]
+    let reference: PDFObjectReference?
+    if case .reference(let value) = object {
+      reference = value
+      let resolved = try await resolver.resolve(value, in: revision)
+      guard case .value(.dictionary(let value)) = resolved.value else {
+        throw malformed("A structure kid reference must resolve to a dictionary.")
+      }
+      dictionary = value
+    } else if case .dictionary(let value) = object {
+      reference = nil
+      dictionary = value
+    } else {
+      throw malformed("A structure kid has an invalid type.")
+    }
+    switch dictionary.pdfName(named: "Type") {
+    case PDFName("StructElem"):
+      guard let reference, dictionary.pdfReference(named: "P") == parent else {
+        throw malformed("A structure element must be indirect and name its exact parent.")
+      }
+      return [.element(.init(reference: reference))]
+    case PDFName("MCR"):
+      guard let rawMCID = dictionary.pdfInteger(named: "MCID"), rawMCID >= 0,
+        rawMCID <= Int64(Int.max)
+      else { throw malformed("An MCR dictionary requires a nonnegative MCID.") }
+      return [.markedContent(.init(
+        markedContentIdentifier: Int(rawMCID),
+        page: dictionary.pdfReference(named: "Pg") ?? inheritedPage,
+        stream: dictionary.pdfReference(named: "Stm")
+      ))]
+    case PDFName("OBJR"):
+      guard let object = dictionary.pdfReference(named: "Obj") else {
+        throw malformed("An OBJR dictionary requires an indirect Obj.")
+      }
+      return [.object(.init(
+        object: object,
+        page: dictionary.pdfReference(named: "Pg") ?? inheritedPage
+      ))]
+    default:
+      throw malformed("A structure kid dictionary has an invalid Type.")
+    }
+  }
+
+  private func structureRoleMap(_ object: PDFObject?) throws -> [PDFName: PDFName] {
+    guard let object else { return [:] }
+    guard case .dictionary(let dictionary) = object else {
+      throw malformed("RoleMap must be a dictionary.")
+    }
+    return try Dictionary(uniqueKeysWithValues: dictionary.map {
+      guard case .name(let value) = $0.value else {
+        throw malformed("RoleMap values must be names.")
+      }
+      return ($0.key, value)
+    })
+  }
+
+  private func validateRoleMap(_ roleMap: [PDFName: PDFName]) throws {
+    for start in roleMap.keys {
+      var seen = Set<PDFName>()
+      var current = start
+      while let next = roleMap[current] {
+        guard seen.insert(current).inserted else {
+          throw malformed("RoleMap contains a cycle.")
+        }
+        current = next
+      }
+    }
+  }
+
+  private func structureClassMap(_ object: PDFObject?) throws -> [PDFName: [PDFObject]] {
+    guard let object else { return [:] }
+    guard case .dictionary(let dictionary) = object else {
+      throw malformed("ClassMap must be a dictionary.")
+    }
+    return try Dictionary(uniqueKeysWithValues: dictionary.map { entry in
+      switch entry.value {
+      case .dictionary: return (entry.key, [entry.value])
+      case .array(let values):
+        guard values.allSatisfy({ if case .dictionary = $0 { true } else { false } }) else {
+          throw malformed("ClassMap arrays must contain attribute dictionaries.")
+        }
+        return (entry.key, values)
+      default: throw malformed("ClassMap values must be dictionaries or arrays.")
+      }
+    })
+  }
+
+  private func structureNamespaces(
+    _ object: PDFObject?,
+    revision: PDFRevisionIdentifier
+  ) async throws -> [PDFStructureNamespace] {
+    guard let object else { return [] }
+    guard case .array(let values) = object,
+      values.count <= limits.maximumStructureChildren
+    else { throw malformed("Namespaces must be a bounded array.") }
+    let catalog = try await catalog(in: revision)
+    guard catalog.effectiveVersion == .v2_0 else {
+      throw malformed("Structure namespaces require PDF 2.0.")
+    }
+    var result = [PDFStructureNamespace]()
+    var references = Set<PDFObjectReference>()
+    for value in values {
+      guard case .reference(let reference) = value,
+        references.insert(reference).inserted
+      else { throw malformed("Namespaces must contain unique indirect references.") }
+      let resolved = try await resolver.resolve(reference, in: revision)
+      guard case .value(.dictionary(let dictionary)) = resolved.value,
+        dictionary.pdfName(named: "Type") == PDFName("Namespace"),
+        case .string(let rawNamespace)? = dictionary["NS"]
+      else { throw malformed("A structure namespace dictionary is malformed.") }
+      result.append(.init(
+        reference: reference,
+        namespace: try PDFTextStringDecoder.decode(rawNamespace, allowsUTF8: true),
+        schema: dictionary["Schema"],
+        rawDictionary: dictionary
+      ))
+    }
+    return result
+  }
+
+  private func structureInteger(_ object: PDFObject) throws -> Int {
+    guard case .number(.integer(let value)) = object, let result = Int(exactly: value) else {
+      throw malformed("A structure integer is invalid.")
+    }
+    return result
+  }
+
+  private func structureText(_ object: PDFObject?, allowsUTF8: Bool) throws -> String? {
+    guard let object else { return nil }
+    guard case .string(let value) = object else {
+      throw malformed("A structure text value must be a string.")
+    }
+    return try PDFTextStringDecoder.decode(value, allowsUTF8: allowsUTF8)
+  }
+
+  private func structureStringBytes(_ object: PDFObject?) -> Data? {
+    guard case .string(let value)? = object else { return nil }
+    return value.bytes
+  }
+
+  private func structureClassNames(_ object: PDFObject?) throws -> [PDFName] {
+    guard let object else { return [] }
+    if case .name(let name) = object { return [name] }
+    guard case .array(let values) = object else {
+      throw malformed("A structure class entry must be a name or array.")
+    }
+    return try values.map {
+      guard case .name(let name) = $0 else {
+        throw malformed("A structure class array must contain names.")
+      }
+      return name
+    }
+  }
+
+  private func structureAttributes(_ object: PDFObject?) throws -> [PDFObject] {
+    guard let object else { return [] }
+    if case .dictionary = object { return [object] }
+    guard case .array(let values) = object else {
+      throw malformed("A structure attribute entry must be a dictionary or array.")
+    }
+    var result = [PDFObject]()
+    for value in values {
+      if case .dictionary = value { result.append(value); continue }
+      if case .number = value { continue }
+      throw malformed("A structure attribute array is malformed.")
+    }
+    return result
+  }
+
+  private func auditStructureElement(
+    _ identifier: PDFStructureElementIdentifier,
+    expectedParent: PDFObjectReference,
+    revision: PDFRevisionIdentifier,
+    visited: inout Set<PDFStructureElementIdentifier>,
+    active: inout Set<PDFStructureElementIdentifier>,
+    scratch: inout Int,
+    depth: Int
+  ) async throws {
+    guard depth <= limits.maximumStructureDepth else {
+      throw PDFParsingError.limitExceeded(.init(offset: 0, message: "Structure-tree depth exceeds its limit."))
+    }
+    guard !active.contains(identifier), visited.insert(identifier).inserted else {
+      throw malformed("The structure tree contains a cycle or duplicate element.")
+    }
+    guard visited.count <= limits.maximumStructureElements else {
+      throw PDFParsingError.limitExceeded(.init(offset: 0, message: "Structure element count exceeds its limit."))
+    }
+    active.insert(identifier)
+    scratch = try structureScratch(scratch, adding: 192)
+    let element = try await structureElement(identifier, in: revision)
+    guard element.parent == expectedParent else {
+      throw malformed("A structure element has an incorrect parent.")
+    }
+    for child in element.children {
+      if case .element(let childIdentifier) = child {
+        try await auditStructureElement(
+          childIdentifier, expectedParent: identifier.reference, revision: revision,
+          visited: &visited, active: &active, scratch: &scratch, depth: depth + 1
+        )
+      }
+    }
+    active.remove(identifier)
+  }
+
+  private func validateStructureParentTree(
+    _ tree: PDFStructureTree,
+    revision: PDFRevisionIdentifier,
+    elements: Set<PDFStructureElementIdentifier>
+  ) async throws {
+    guard let root = tree.rawDictionary["ParentTree"] else { return }
+    let entries = try await PDFCollectionTreeReader(
+      kind: .number, limits: limits,
+      resolve: { [resolver] reference in try await resolver.resolve(reference, in: revision) }
+    ).read(root)
+    for entry in entries {
+      guard case .number(let key) = entry.key, key >= 0 else {
+        throw malformed("ParentTree keys must be nonnegative integers.")
+      }
+      let value = try await resolveDirect(entry.value, in: revision, visited: [])
+      let values = if case .array(let array) = value { array } else { [value] }
+      for item in values where item != .null {
+        guard case .reference(let reference) = item,
+          elements.contains(.init(reference: reference))
+        else { throw malformed("ParentTree values must reference structure elements.") }
+      }
+    }
+  }
+
+  private func validateStructureIDTree(
+    _ tree: PDFStructureTree,
+    revision: PDFRevisionIdentifier,
+    elements: Set<PDFStructureElementIdentifier>
+  ) async throws {
+    guard let root = tree.rawDictionary["IDTree"] else { return }
+    let entries = try await PDFCollectionTreeReader(
+      kind: .name, limits: limits,
+      resolve: { [resolver] reference in try await resolver.resolve(reference, in: revision) }
+    ).read(root)
+    for entry in entries {
+      guard case .name(let key) = entry.key,
+        case .reference(let reference) = entry.value
+      else { throw malformed("IDTree values must reference structure elements.") }
+      let identifier = PDFStructureElementIdentifier(reference: reference)
+      guard elements.contains(identifier),
+        try await structureElement(identifier, in: revision).identifierBytes == key
+      else { throw malformed("IDTree keys must equal their structure element IDs.") }
+    }
+  }
+
+  private func structureScratch(_ value: Int, adding amount: Int) throws -> Int {
+    let (result, overflow) = value.addingReportingOverflow(amount)
+    guard !overflow, result <= limits.maximumStructureScratchBytes else {
+      throw PDFParsingError.limitExceeded(.init(offset: 0, message: "Structure-tree scratch exceeds its limit."))
+    }
+    return result
   }
 
   private func optionalContentIntents(_ object: PDFObject?) throws -> [PDFName] {

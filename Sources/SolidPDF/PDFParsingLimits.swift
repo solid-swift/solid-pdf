@@ -52,6 +52,14 @@ public struct PDFParsingLimits: Sendable, Hashable {
   public var maximumOptionalContentGroups: Int
   /// Maximum nesting depth of an optional-content visibility expression.
   public var maximumOptionalContentExpressionDepth: Int
+  /// Maximum structure elements in one logical structure tree.
+  public var maximumStructureElements: Int
+  /// Maximum logical structure-tree depth.
+  public var maximumStructureDepth: Int
+  /// Maximum children retained by one structure element.
+  public var maximumStructureChildren: Int
+  /// Maximum scratch retained while auditing logical structure.
+  public var maximumStructureScratchBytes: Int
 
   /// Creates parsing limits.
   public init(
@@ -80,7 +88,11 @@ public struct PDFParsingLimits: Sendable, Hashable {
     maximumDecodedPageContentBytes: Int = 512 * 1_024 * 1_024,
     maximumGeneratedPageLabelBytes: Int = 1 * 1_024 * 1_024,
     maximumOptionalContentGroups: Int = 65_536,
-    maximumOptionalContentExpressionDepth: Int = 128
+    maximumOptionalContentExpressionDepth: Int = 128,
+    maximumStructureElements: Int = 1_000_000,
+    maximumStructureDepth: Int = 256,
+    maximumStructureChildren: Int = 1_000_000,
+    maximumStructureScratchBytes: Int = 64 * 1_024 * 1_024
   ) {
     self.maximumInputBytes = maximumInputBytes
     self.maximumObjectCount = maximumObjectCount
@@ -108,5 +120,9 @@ public struct PDFParsingLimits: Sendable, Hashable {
     self.maximumGeneratedPageLabelBytes = maximumGeneratedPageLabelBytes
     self.maximumOptionalContentGroups = maximumOptionalContentGroups
     self.maximumOptionalContentExpressionDepth = maximumOptionalContentExpressionDepth
+    self.maximumStructureElements = maximumStructureElements
+    self.maximumStructureDepth = maximumStructureDepth
+    self.maximumStructureChildren = maximumStructureChildren
+    self.maximumStructureScratchBytes = maximumStructureScratchBytes
   }
 }
