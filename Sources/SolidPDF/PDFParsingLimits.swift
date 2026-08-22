@@ -74,6 +74,32 @@ public struct PDFParsingLimits: Sendable, Hashable {
   public var maximumSignatureByteRanges: Int
   /// Maximum scratch retained while resolving annotations and forms.
   public var maximumInteractiveStructureScratchBytes: Int
+  /// Maximum decoded bytes in one XMP metadata packet.
+  public var maximumMetadataPacketBytes: Int
+  /// Maximum element nesting in one XMP packet.
+  public var maximumXMPNesting: Int
+  /// Maximum retained properties in one XMP packet.
+  public var maximumXMPProperties: Int
+  /// Maximum file specifications retained by one revision inventory.
+  public var maximumFileSpecifications: Int
+  /// Maximum embedded-file name-tree entries in one revision.
+  public var maximumEmbeddedFileEntries: Int
+  /// Maximum fields in one portable-collection schema.
+  public var maximumCollectionFields: Int
+  /// Maximum discovered signatures in one document revision.
+  public var maximumSignatures: Int
+  /// Maximum signer records in one CMS container.
+  public var maximumCMSSigners: Int
+  /// Maximum certificates retained for one signature.
+  public var maximumCertificates: Int
+  /// Maximum nesting in one ASN.1 container.
+  public var maximumASN1Nesting: Int
+  /// Maximum timestamp tokens associated with one signature.
+  public var maximumTimestamps: Int
+  /// Maximum revocation-evidence objects associated with one validation.
+  public var maximumRevocationObjects: Int
+  /// Maximum temporary storage used by asset and authenticity processing.
+  public var maximumAuthenticityScratchBytes: Int
 
   /// Creates parsing limits.
   public init(
@@ -113,7 +139,20 @@ public struct PDFParsingLimits: Sendable, Hashable {
     maximumActionChainLength: Int = 1_024,
     maximumAnnotationAppearanceStates: Int = 4_096,
     maximumSignatureByteRanges: Int = 1_024,
-    maximumInteractiveStructureScratchBytes: Int = 64 * 1_024 * 1_024
+    maximumInteractiveStructureScratchBytes: Int = 64 * 1_024 * 1_024,
+    maximumMetadataPacketBytes: Int = 64 * 1_024 * 1_024,
+    maximumXMPNesting: Int = 128,
+    maximumXMPProperties: Int = 1_000_000,
+    maximumFileSpecifications: Int = 1_000_000,
+    maximumEmbeddedFileEntries: Int = 1_000_000,
+    maximumCollectionFields: Int = 65_536,
+    maximumSignatures: Int = 65_536,
+    maximumCMSSigners: Int = 64,
+    maximumCertificates: Int = 1_024,
+    maximumASN1Nesting: Int = 128,
+    maximumTimestamps: Int = 64,
+    maximumRevocationObjects: Int = 4_096,
+    maximumAuthenticityScratchBytes: Int = 512 * 1_024 * 1_024
   ) {
     self.maximumInputBytes = maximumInputBytes
     self.maximumObjectCount = maximumObjectCount
@@ -152,5 +191,18 @@ public struct PDFParsingLimits: Sendable, Hashable {
     self.maximumAnnotationAppearanceStates = maximumAnnotationAppearanceStates
     self.maximumSignatureByteRanges = maximumSignatureByteRanges
     self.maximumInteractiveStructureScratchBytes = maximumInteractiveStructureScratchBytes
+    self.maximumMetadataPacketBytes = maximumMetadataPacketBytes
+    self.maximumXMPNesting = maximumXMPNesting
+    self.maximumXMPProperties = maximumXMPProperties
+    self.maximumFileSpecifications = maximumFileSpecifications
+    self.maximumEmbeddedFileEntries = maximumEmbeddedFileEntries
+    self.maximumCollectionFields = maximumCollectionFields
+    self.maximumSignatures = maximumSignatures
+    self.maximumCMSSigners = maximumCMSSigners
+    self.maximumCertificates = maximumCertificates
+    self.maximumASN1Nesting = maximumASN1Nesting
+    self.maximumTimestamps = maximumTimestamps
+    self.maximumRevocationObjects = maximumRevocationObjects
+    self.maximumAuthenticityScratchBytes = maximumAuthenticityScratchBytes
   }
 }

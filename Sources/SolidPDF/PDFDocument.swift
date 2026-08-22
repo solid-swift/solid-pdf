@@ -24,6 +24,7 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
   private let resolver: PDFDocumentResolver<Source.Session>
   private let structure: PDFDocumentStructure<Source.Session>
   private let interactiveStructure: PDFDocumentInteractiveStructure<Source.Session>
+  private let assets: PDFDocumentAssets<Source.Session>
 
   /// Opens and validates one PDF revision without eagerly resolving its objects.
   public init(
@@ -69,6 +70,12 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
         revisions: index.revisions,
         limits: options.limits
       )
+      assets = PDFDocumentAssets(
+        resolver: documentResolver,
+        structure: documentStructure,
+        revisions: index.revisions,
+        limits: options.limits
+      )
       catalog = try await documentStructure.catalog(in: index.latestRevision.identifier)
     } catch {
       await session.close()
@@ -95,7 +102,9 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     let resolver = resolver
     let structure = structure
     let interactiveStructure = interactiveStructure
+    let assets = assets
     Task {
+      await assets.close()
       await interactiveStructure.close()
       await structure.close()
       await resolver.close()
@@ -304,6 +313,29 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     try await interactiveStructure.validateAcroForm(in: revision)
   }
 
+  /// Returns reconciled Info and XMP metadata for the latest revision.
+  public func metadata() async throws -> PDFMetadata {
+    try await assets.metadata(in: latestRevision.identifier)
+  }
+
+  /// Returns reconciled Info and XMP metadata for a selected revision.
+  public func metadata(in revision: PDFRevisionIdentifier) async throws -> PDFMetadata {
+    try await assets.metadata(in: revision)
+  }
+
+  /// Parses an inert file specification in the latest revision.
+  public func fileSpecification(_ object: PDFObject) async throws -> PDFFileSpecification {
+    try await assets.fileSpecification(object, in: latestRevision.identifier)
+  }
+
+  /// Parses an inert file specification in a selected revision.
+  public func fileSpecification(
+    _ object: PDFObject,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFFileSpecification {
+    try await assets.fileSpecification(object, in: revision)
+  }
+
   /// Resolves one logical structure element in the latest revision.
   public func structureElement(
     _ identifier: PDFStructureElementIdentifier
@@ -357,6 +389,7 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
 
   /// Releases the source and all document-owned caches.
   public func close() async {
+    await assets.close()
     await interactiveStructure.close()
     await structure.close()
     await resolver.close()
