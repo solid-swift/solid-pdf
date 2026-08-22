@@ -33,6 +33,7 @@ let package = Package(
   ],
   products: [
     .library(name: "SolidPDF", targets: ["SolidPDF"]),
+    .library(name: "SolidPDFGraphics", targets: ["SolidPDFGraphics"]),
     .library(name: "SolidFont", targets: ["SolidFont"]),
     .library(name: "SolidPostScript", targets: ["SolidPostScript"]),
     .library(name: "SolidPostScriptDocument", targets: ["SolidPostScriptDocument"]),
@@ -69,6 +70,21 @@ let package = Package(
         .product(name: "SolidImageIO", package: "solid-image"),
         .product(name: "SolidIO", package: "solid-foundation"),
       ],
+      plugins: lintPlugins
+    ),
+    .target(
+      name: "SolidPDFGraphics",
+      dependencies: [
+        "SolidPDF",
+        "SolidPostScript",
+        .product(name: "SolidColor", package: "solid-image"),
+        .product(name: "SolidImageIO", package: "solid-image"),
+      ],
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidPDFGraphicsTests",
+      dependencies: ["SolidPDF", "SolidPDFGraphics", "SolidPostScript"],
       plugins: lintPlugins
     ),
     .target(

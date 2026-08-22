@@ -6,18 +6,22 @@ public struct GraphicsDeviceRenderingSnapshot: Sendable, Hashable {
   public let blackGeneration: GraphicsComponentFunction
   public let undercolorRemoval: GraphicsComponentFunction
   public let halftone: GraphicsHalftone
+  /// The absolute device-space phase applied to halftone screens.
+  public let halftonePhase: GraphicsPoint
 
   /// Creates a device-rendering snapshot.
   public init(
     transferFunctions: GraphicsTransferFunctions = .identity,
     blackGeneration: GraphicsComponentFunction = .zero,
     undercolorRemoval: GraphicsComponentFunction = .zero,
-    halftone: GraphicsHalftone = .default
+    halftone: GraphicsHalftone = .default,
+    halftonePhase: GraphicsPoint = GraphicsPoint(x: 0, y: 0)
   ) {
     self.transferFunctions = transferFunctions
     self.blackGeneration = blackGeneration
     self.undercolorRemoval = undercolorRemoval
     self.halftone = halftone
+    self.halftonePhase = halftonePhase
   }
 
   /// Identity continuous-tone rendering controls.

@@ -1,4 +1,5 @@
 import Foundation
+import SolidColor
 
 /// An immutable snapshot of the canonical PostScript graphics state.
 public struct GraphicsStateSnapshot: Sendable, Hashable {
@@ -42,6 +43,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
   public let deviceRendering: GraphicsDeviceRenderingSnapshot
   /// The current language-visible font.
   public let font: GraphicsFontDescription
+  /// The current color-rendering intent.
+  public let renderingIntent: ColorRenderingIntent
 
   /// Creates a graphics-state snapshot.
   public init(
@@ -64,7 +67,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     pathBoundingBox: GraphicsRect? = nil,
     device: GraphicsDeviceSnapshot = .letter,
     deviceRendering: GraphicsDeviceRenderingSnapshot = .continuousTone,
-    font: GraphicsFontDescription = .invalid
+    font: GraphicsFontDescription = .invalid,
+    renderingIntent: ColorRenderingIntent = .relativeColorimetric
   ) {
     self.matrix = matrix
     self.path = path
@@ -86,6 +90,7 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     self.device = device
     self.deviceRendering = deviceRendering
     self.font = font
+    self.renderingIntent = renderingIntent
   }
 
   /// Returns a copy using the caller's current device-owned lifecycle state.
@@ -110,7 +115,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
       pathBoundingBox: pathBoundingBox,
       device: device,
       deviceRendering: deviceRendering,
-      font: font
+      font: font,
+      renderingIntent: renderingIntent
     )
   }
 }

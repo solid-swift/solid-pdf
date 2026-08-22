@@ -8,11 +8,19 @@ public struct GraphicsEvent: Sendable, Hashable {
   public let before: GraphicsStateSnapshot
   /// The graphics state immediately after the operation.
   public let after: GraphicsStateSnapshot
+  /// Optional source provenance for the operation.
+  public let origin: GraphicsEventOrigin?
 
   /// Creates a graphics event.
-  public init(operation: GraphicsOperation, before: GraphicsStateSnapshot, after: GraphicsStateSnapshot) {
+  public init(
+    operation: GraphicsOperation,
+    before: GraphicsStateSnapshot,
+    after: GraphicsStateSnapshot,
+    origin: GraphicsEventOrigin? = nil
+  ) {
     self.operation = operation
     self.before = before
     self.after = after
+    self.origin = origin
   }
 }
