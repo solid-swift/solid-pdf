@@ -51,7 +51,7 @@ struct PDFObjectSerializer {
       output.appendASCII(">>")
     case .reference(let reference):
       guard reference.objectNumber > 0 else { throw PDFError.invalidReference }
-      output.appendASCII("\(reference.objectNumber) 0 R")
+      output.appendASCII("\(reference.objectNumber) \(reference.generationNumber) R")
     }
   }
 
