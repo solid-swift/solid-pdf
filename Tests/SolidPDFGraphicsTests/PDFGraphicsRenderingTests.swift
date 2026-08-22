@@ -2,6 +2,12 @@ import Foundation
 import SolidPDF
 import SolidPDFGraphics
 import SolidPostScript
+#if canImport(CoreGraphics)
+import SolidPostScriptCoreGraphics
+#endif
+import SolidPostScriptPDF
+import SolidPostScriptPlutoVG
+import SolidPostScriptRaster
 import Testing
 
 @Suite
@@ -232,6 +238,98 @@ struct PDFGraphicsRenderingTests {
       content: "/Sh sh",
       resources: "<< /Shading << /Sh 5 0 R >> >>",
       extraObjects: [shading]
+    )))
+    await #expect(throws: PDFGraphicsError.self) {
+      try await document.render(page: 0, to: RecordingGraphicsTarget())
+    }
+    await document.close()
+  }
+
+  @Test
+  func reportsPortableICCAlternateAndPostScriptXObjectDiagnostics() async throws {
+    let profile = streamObject(dictionary: "/N 3 /Alternate /DeviceRGB", data: iccProfile(componentSignature: "RGB "))
+    let postScript = streamObject(dictionary: "/Type /XObject /Subtype /PS", data: Data())
+    let resources = """
+      << /ColorSpace << /ICC [/ICCBased 5 0 R] >>
+         /XObject << /PS 6 0 R >> >>
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "/ICC cs 0 0 0 sc 0 0 1 1 re f /ICC cs 1 1 1 sc 1 1 1 1 re f /PS Do",
+      resources: resources,
+      extraObjects: [profile, postScript]
+    )))
+
+    let result = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    #expect(result.diagnostics.count { $0.identifier == "pdf.graphics.icc-alternate" } == 1)
+    #expect(result.diagnostics.map(\.identifier).contains("pdf.graphics.postscript-xobject-ignored"))
+    await document.close()
+  }
+
+  @Test
+  func rendersImageMasksAndPatchMeshesThroughBuiltInTargets() async throws {
+    let image = streamObject(
+      dictionary: "/Type /XObject /Subtype /Image /Width 2 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Mask 6 0 R",
+      data: Data([255, 0, 0, 0, 0, 255])
+    )
+    let mask = streamObject(
+      dictionary: "/Type /XObject /Subtype /Image /Width 2 /Height 1 /ImageMask true",
+      data: Data([0x40])
+    )
+    let shading = patchShading(type: 7, continuationFlag: 1)
+    let resources = "<< /XObject << /Im 5 0 R >> /Shading << /Sh 7 0 R >> >>"
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "/Im Do /Sh sh",
+      resources: resources,
+      extraObjects: [image, mask, shading]
+    )))
+
+    let raster = try await document.render(
+      page: 0,
+      to: RasterImageTarget(pixelWidth: 100, pixelHeight: 100)
+    )
+    #expect(raster.output.count == 1)
+    let pluto = try await document.render(
+      page: 0,
+      to: PlutoVGImageTarget(pixelWidth: 100, pixelHeight: 100)
+    )
+    #expect(pluto.output.count == 1)
+#if canImport(CoreGraphics)
+    let coreGraphics = try await document.render(
+      page: 0,
+      to: CoreGraphicsImageTarget(pixelWidth: 100, pixelHeight: 100)
+    )
+    #expect(coreGraphics.output.count == 1)
+#endif
+    let separations = try await document.render(page: 0, to: RasterSeparationTarget())
+    #expect(separations.output.count == 1)
+    let bounds = GraphicsRect(x: 0, y: 0, width: 100, height: 100)
+    let spool = try await document.render(
+      page: 0,
+      to: PrintSpoolGraphicsTarget(deviceDescriptor: GraphicsDeviceDescriptor(
+        mediaBounds: bounds,
+        imageableBounds: bounds,
+        horizontalResolution: 72,
+        verticalResolution: 72,
+        defaultMatrix: .identity
+      ))
+    )
+    #expect(spool.output.pages.count == 1)
+    let pdf = try await document.render(
+      page: 0,
+      to: PDFGraphicsTarget(sink: PDFDataOutputSink())
+    )
+    #expect(pdf.output.pageCount == 1)
+    await document.close()
+  }
+
+  @Test
+  func rejectsMalformedICCProfileBeforePainting() async throws {
+    let profile = streamObject(dictionary: "/N 3 /Alternate /DeviceRGB", data: Data(repeating: 0, count: 128))
+    let resources = "<< /ColorSpace << /ICC [/ICCBased 5 0 R] >> >>"
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "/ICC cs 0 0 0 sc 0 0 1 1 re f",
+      resources: resources,
+      extraObjects: [profile]
     )))
     await #expect(throws: PDFGraphicsError.self) {
       try await document.render(page: 0, to: RecordingGraphicsTarget())

@@ -103,6 +103,96 @@ struct PDFGraphicsStateTests {
     await document.close()
   }
 
+  @Test
+  func resolvesTypeOneAndPerColorantHalftones() async throws {
+    let typeOne = "<< /HalftoneType 1 /Frequency 20 /Angle 15 /SpotFunction /Round /TransferFunction /Identity >>"
+    let resources = """
+      << /ExtGState
+         << /Screen << /HT \(typeOne) /HTP [3 4] >>
+            /ColorScreens
+              << /HT
+                << /HalftoneType 5
+                   /Default \(typeOne)
+                   /Red << /HalftoneType 1 /Frequency 25 /Angle 45 /SpotFunction /Line >>
+                >>
+              >>
+         >>
+      >>
+      """
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(fixture(content: "/Screen gs /ColorScreens gs", resources: resources))
+    )
+    let page = try await document.page(at: 0)
+    let handler = PDFGraphicsInstructionHandler(
+      device: .letter,
+      resources: PDFGraphicsResourceResolver(
+        document: document,
+        revision: document.latestRevision.identifier,
+        resources: page.resources.value,
+        limits: .init()
+      ),
+      limits: .init(),
+      emit: { _ in }
+    )
+    try await executor(document: document, page: page, handler: handler).execute()
+
+    guard case .colorants(let screens) = handler.currentSnapshot.deviceRendering.halftone else {
+      Issue.record("Expected a per-colorant PDF halftone")
+      await document.close()
+      return
+    }
+    #expect(screens["Default"] != nil)
+    #expect(screens["Red"] != nil)
+    #expect(handler.currentSnapshot.deviceRendering.halftonePhase == GraphicsPoint(x: 3, y: 4))
+    await document.close()
+  }
+
+  @Test(arguments: [6, 10, 16])
+  func resolvesThresholdHalftones(type: Int) async throws {
+    let definition: String
+    let bytes: String
+    switch type {
+    case 6:
+      definition = "/HalftoneType 6 /Width 2 /Height 2"
+      bytes = "\u{01}\u{02}\u{03}\u{04}"
+    case 10:
+      definition = "/HalftoneType 10 /Xsquare 1 /Ysquare 1"
+      bytes = "\u{01}\u{02}"
+    default:
+      definition = "/HalftoneType 16 /Width 2 /Height 1"
+      bytes = "\u{00}\u{01}\u{00}\u{02}"
+    }
+    let stream = "<< \(definition) /Length \(bytes.utf8.count) >>\nstream\n\(bytes)\nendstream"
+    let resources = "<< /ExtGState << /Screen << /HT 5 0 R >> >> >>"
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "/Screen gs",
+      resources: resources,
+      extraObjects: [stream]
+    )))
+    let page = try await document.page(at: 0)
+    let handler = PDFGraphicsInstructionHandler(
+      device: .letter,
+      resources: PDFGraphicsResourceResolver(
+        document: document,
+        revision: document.latestRevision.identifier,
+        resources: page.resources.value,
+        limits: .init()
+      ),
+      limits: .init(),
+      emit: { _ in }
+    )
+    try await executor(document: document, page: page, handler: handler).execute()
+
+    guard case .threshold(let screen) = handler.currentSnapshot.deviceRendering.halftone else {
+      Issue.record("Expected a threshold PDF halftone")
+      await document.close()
+      return
+    }
+    #expect(screen.bitsPerSample == (type == 16 ? 16 : 8))
+    #expect(screen.usesAngledSquares == (type == 10))
+    await document.close()
+  }
+
   private func executor(
     document: PDFDocument<PDFDataInputSource>,
     page: PDFPage,

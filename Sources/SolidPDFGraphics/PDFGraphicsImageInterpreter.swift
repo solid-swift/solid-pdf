@@ -143,7 +143,14 @@ extension PDFGraphicsInstructionHandler {
     switch subtype {
     case "Image": try await paintImage(stream, reference: object.reference, instruction: instruction)
     case "Form": try await paintForm(stream, reference: object.reference, instruction: instruction)
-    case "PS": return
+    case "PS":
+      recordDiagnostic(PDFGraphicsDiagnostic(
+        identifier: "pdf.graphics.postscript-xobject-ignored",
+        message: "A PostScript XObject produces no marks when rendered as non-PostScript PDF output.",
+        severity: .information,
+        location: instruction.location
+      ))
+      return
     case "Ref": throw PDFGraphicsError.unsupported(.referenceXObject, location: instruction.location)
     default: throw malformed("Unknown XObject subtype.", instruction)
     }

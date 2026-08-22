@@ -18,6 +18,8 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
   private var scopes: [[PDFName: PDFObject]]
   private var colorSpaceCache: [PDFName: ResolvedColorSpace] = [:]
   private var activeReusableResources: Set<PDFObjectReference> = []
+  private var diagnosedICCProfiles: Set<PDFObjectReference> = []
+  private(set) var diagnostics: [PDFGraphicsDiagnostic] = []
 
   init(
     document: PDFDocument<Source>,
@@ -135,8 +137,18 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
       guard case .stream(let stream) = object.value else { throw PDFObjectAccess.TypeMismatch.array }
       let count = try PDFObjectAccess.integer(stream.dictionary["N"] ?? .null)
       guard [1, 3, 4].contains(count) else { throw PDFObjectAccess.TypeMismatch.integer }
+      try validateICCProfile(try await document.decodedBytes(of: stream), componentCount: count)
+      if diagnosedICCProfiles.insert(reference).inserted {
+        diagnostics.append(PDFGraphicsDiagnostic(
+          identifier: "pdf.graphics.icc-alternate",
+          message: "ICCBased color uses its validated Alternate because portable ICC realization is unavailable.",
+          severity: .warning
+        ))
+      }
       if let alternate = stream.dictionary["Alternate"] {
-        return try await colorSpace(alternate, depth: depth + 1)
+        let resolved = try await colorSpace(alternate, depth: depth + 1)
+        guard resolved.description.componentCount == count else { throw PDFObjectAccess.TypeMismatch.array }
+        return resolved
       }
       return try standardColorSpace(PDFName(count == 1 ? "DeviceGray" : count == 3 ? "DeviceRGB" : "DeviceCMYK"))!
     case "Indexed", "I":
@@ -384,6 +396,21 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
       )
     default: return nil
     }
+  }
+
+  private func validateICCProfile(_ data: Data, componentCount: Int) throws {
+    guard data.count >= 128 else { throw PDFObjectAccess.TypeMismatch.array }
+    let declaredLength = data.prefix(4).reduce(0) { ($0 << 8) | Int($1) }
+    let expectedSignature = switch componentCount {
+    case 1: Data("GRAY".utf8)
+    case 3: Data("RGB ".utf8)
+    case 4: Data("CMYK".utf8)
+    default: Data()
+    }
+    guard declaredLength >= 128, declaredLength <= data.count,
+      data[36..<40] == Data("acsp".utf8),
+      data[16..<20] == expectedSignature
+    else { throw PDFObjectAccess.TypeMismatch.array }
   }
 
   private func cieSpace(

@@ -14,7 +14,7 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
   private var subpathStart: GraphicsPoint?
   private var diagnosticsStorage: [PDFGraphicsDiagnostic] = []
 
-  var diagnostics: [PDFGraphicsDiagnostic] { diagnosticsStorage }
+  var diagnostics: [PDFGraphicsDiagnostic] { diagnosticsStorage + resources.diagnostics }
   var currentSnapshot: GraphicsStateSnapshot { state.snapshot(stroking: false) }
 
   convenience init(
@@ -45,6 +45,10 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
   }
 
   private func emit(_ event: GraphicsEvent) throws { try output.process(event) }
+
+  func recordDiagnostic(_ diagnostic: PDFGraphicsDiagnostic) {
+    diagnosticsStorage.append(diagnostic)
+  }
 
   func execute(_ instruction: PDFContentInstruction) async throws {
     do {
@@ -547,10 +551,19 @@ final class PDFGraphicsInstructionHandler<Source: PDFInputSource>: PDFContentIns
       }
     }
     if let value = dictionary["HT"] {
-      guard case .name(let name) = value, name.pdfGraphicsString == "Default" else {
-        throw PDFGraphicsError.unsupported(.operatorName("ExtGState.HT"), location: instruction.location)
+      if case .name(let name) = value, name.pdfGraphicsString == "Default" {
+        replaceDeviceRendering(halftone: state.device.descriptor.deviceRendering.defaultState.halftone)
+      } else {
+        do {
+          replaceDeviceRendering(halftone: try await resources.halftone(
+            value,
+            device: state.device.descriptor,
+            maximumBytes: limits.maximumScratchBytes
+          ))
+        } catch PDFGraphicsError.limitExceeded(let message, location: nil) {
+          throw PDFGraphicsError.limitExceeded(message, location: instruction.location)
+        }
       }
-      replaceDeviceRendering(halftone: state.device.descriptor.deviceRendering.defaultState.halftone)
     }
     if let value = dictionary["HTP"] {
       let phase = try PDFObjectAccess.numbers(value)

@@ -84,7 +84,15 @@ let package = Package(
     ),
     .testTarget(
       name: "SolidPDFGraphicsTests",
-      dependencies: ["SolidPDF", "SolidPDFGraphics", "SolidPostScript"],
+      dependencies: [
+        "SolidPDF",
+        "SolidPDFGraphics",
+        "SolidPostScript",
+        "SolidPostScriptCoreGraphics",
+        "SolidPostScriptPDF",
+        "SolidPostScriptPlutoVG",
+        "SolidPostScriptRaster",
+      ],
       plugins: lintPlugins
     ),
     .target(
