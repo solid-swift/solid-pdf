@@ -372,6 +372,90 @@ struct PDFGraphicsRenderingTests {
   }
 
   @Test
+  func extractsAnnotationAppearanceTextAndAuthoritativeFormValues() async throws {
+    let note = Data(
+      "<< /Type /Annot /Subtype /Text /P 3 0 R /Rect [1 2 20 12] /Contents (Note) /Alt (Description) >>".utf8
+    )
+    let widget = Data(
+      "<< /Type /Annot /Subtype /Widget /Parent 7 0 R /P 3 0 R /Rect [10 40 80 60] /AP << /N 10 0 R >> >>".utf8
+    )
+    let field = Data("<< /FT /Tx /T (Name) /V (B) /Kids [6 0 R] >>".utf8)
+    let passwordWidget = Data(
+      "<< /Type /Annot /Subtype /Widget /Parent 9 0 R /P 3 0 R /Rect [10 65 80 85] >>".utf8
+    )
+    let passwordField = Data("<< /FT /Tx /Ff 8192 /T (Password) /V (Secret) /Kids [8 0 R] >>".utf8)
+    let appearanceContent = "BT /F1 10 Tf 2 4 Td (A) Tj ET"
+    let appearance = streamObject(
+      dictionary: "/Type /XObject /Subtype /Form /BBox [0 0 70 20] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic /FirstChar 65 /LastChar 65 /Widths [600] /Encoding /WinAnsiEncoding >> >> >>",
+      data: Data(appearanceContent.utf8)
+    )
+    let acroForm = Data("<< /Fields [7 0 R 9 0 R] >>".utf8)
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "",
+      catalogExtras: "/AcroForm 11 0 R",
+      pageExtras: "/Annots [5 0 R 6 0 R 8 0 R]",
+      extraObjects: [note, widget, field, passwordWidget, passwordField, appearance, acroForm]
+    )))
+
+    let sequence = try await document.extractedText(options: .init(
+      fontEnvironment: .init(providers: [SyntheticPDFFontProvider()])
+    ))
+    let page = try #require(try await sequence.next())
+    await sequence.close()
+
+    #expect(page.spans.compactMap(\.text).contains("A"))
+    #expect(page.spans.compactMap(\.text).contains("B"))
+    #expect(page.spans.compactMap(\.text).contains("Note"))
+    #expect(page.spans.compactMap(\.text).contains("Description"))
+    #expect(!page.spans.compactMap(\.text).contains("Secret"))
+    let appearanceSpan = try #require(page.spans.first { span in
+      if case .appearance(let annotation, let field) = span.source {
+        return annotation.reference.objectNumber == 6 && field?.reference.objectNumber == 7
+      }
+      return false
+    })
+    #expect(appearanceSpan.runs.count == 1)
+    #expect(appearanceSpan.widgetIdentifier?.reference.objectNumber == 6)
+    let valueSpan = try #require(page.spans.first { span in
+      if case .formValue(let field, let widget) = span.source {
+        return field.reference.objectNumber == 7 && widget.reference.objectNumber == 6
+      }
+      return false
+    })
+    #expect(valueSpan.text == "B")
+    #expect(valueSpan.runs.isEmpty)
+    #expect(page.diagnostics.contains { $0.identifier == "pdf.form.stale-appearance" })
+    await document.close()
+  }
+
+  @Test
+  func ordersAnnotationTextThroughStructureObjectReferences() async throws {
+    let first = Data(
+      "<< /Type /Annot /Subtype /Text /P 3 0 R /Rect [1 1 10 10] /Contents (First) >>".utf8
+    )
+    let structureRoot = Data("<< /Type /StructTreeRoot /K [7 0 R] >>".utf8)
+    let structureElement = Data(
+      "<< /Type /StructElem /S /P /P 6 0 R /Pg 3 0 R /K << /Type /OBJR /Obj 8 0 R /Pg 3 0 R >> >>".utf8
+    )
+    let second = Data(
+      "<< /Type /Annot /Subtype /Text /P 3 0 R /Rect [20 1 30 10] /Contents (Second) >>".utf8
+    )
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "",
+      catalogExtras: "/StructTreeRoot 6 0 R",
+      pageExtras: "/Annots [5 0 R 8 0 R]",
+      extraObjects: [first, structureRoot, structureElement, second]
+    )))
+
+    let sequence = try await document.extractedText()
+    let page = try #require(try await sequence.next())
+    await sequence.close()
+    #expect(page.spans.compactMap(\.text) == ["Second", "First"])
+    #expect(page.spans.first?.structurePath.first?.reference.objectNumber == 7)
+    await document.close()
+  }
+
+  @Test
   func interpretsTextRunsUsingPDFWidthsSpacingAndSourceRanges() async throws {
     let resources = """
       << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic

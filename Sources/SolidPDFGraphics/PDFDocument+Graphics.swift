@@ -202,6 +202,7 @@ extension PDFDocument {
     var rendered = [PDFAnnotationIdentifier]()
     var diagnostics = [PDFGraphicsDiagnostic]()
     for annotation in annotations where annotationIsEligible(annotation, options: options) {
+      var extractionVisibility = annotationExtractionVisibility(annotation)
       if let optionalContent = annotation.optionalContent {
         let visibility = try await optionalContentVisibility(
           of: optionalContent,
@@ -209,7 +210,12 @@ extension PDFDocument {
           context: options.optionalContentContext,
           in: revision
         )
-        if !visibility.isVisible { continue }
+        if !visibility.isVisible {
+          guard options.accessPurpose == .extraction || options.accessPurpose == .accessibilityExtraction else {
+            continue
+          }
+          extractionVisibility = pdfGraphicsContentVisibility(visibility, revision: revision)
+        }
       }
       if annotation.details.payload.action != nil {
         diagnostics.append(.init(
@@ -232,7 +238,8 @@ extension PDFDocument {
           let annotationOutput = PDFAnnotationEventOutput(
             base: output,
             annotation: annotation.identifier,
-            revision: revision
+            revision: revision,
+            visibility: extractionVisibility
           )
           let handler = PDFGraphicsInstructionHandler(
             device: device,
@@ -264,6 +271,15 @@ extension PDFDocument {
           }
           continue
         }
+        if options.accessPurpose == .extraction || options.accessPurpose == .accessibilityExtraction {
+          diagnostics.append(.init(
+            identifier: "pdf.annotation.missing-appearance",
+            message: "No selected appearance was available for extraction; semantic annotation data remains available.",
+            severity: .warning,
+            annotation: annotation.identifier
+          ))
+          continue
+        }
         throw PDFGraphicsError.malformedContent(
           message: "An eligible annotation has no selected normal appearance.",
           operatorName: "annotation-appearance",
@@ -273,7 +289,8 @@ extension PDFDocument {
       let annotationOutput = PDFAnnotationEventOutput(
         base: output,
         annotation: annotation.identifier,
-        revision: revision
+        revision: revision,
+        visibility: extractionVisibility
       )
       let handler = PDFGraphicsInstructionHandler(
         device: device,
@@ -351,6 +368,17 @@ extension PDFDocument {
       segments: [],
       resourceStack: [annotation.identifier.reference]
     )
+  }
+
+  private func annotationExtractionVisibility(
+    _ annotation: PDFAnnotation
+  ) -> GraphicsContentVisibility {
+    guard annotation.flags.contains(.hidden) || annotation.flags.contains(.invisible) else {
+      return .visible
+    }
+    return .hidden([GraphicsResourceIdentifier(
+      rawValue: "pdf:annotation-hidden:\(annotation.identifier.reference.objectNumber)"
+    )])
   }
 
   private func selectedPageIndices(
@@ -439,4 +467,17 @@ extension PDFDocument {
   private func targetFinish<Renderer: GraphicsRenderer>(_ renderer: Renderer) throws -> Renderer.Output {
     do { return try renderer.finish() } catch { throw PDFGraphicsError.targetFailure(String(describing: error)) }
   }
+}
+
+func pdfGraphicsContentVisibility(
+  _ visibility: PDFOptionalContentVisibility,
+  revision: PDFRevisionIdentifier
+) -> GraphicsContentVisibility {
+  visibility.isVisible
+    ? .visible
+    : .hidden(visibility.controllingGroups.map { group in
+      GraphicsResourceIdentifier(
+        rawValue: "pdf:r\(revision.ordinal):o\(group.reference.objectNumber):\(group.reference.generationNumber)"
+      )
+    })
 }

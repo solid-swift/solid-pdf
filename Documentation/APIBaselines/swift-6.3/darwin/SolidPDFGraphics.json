@@ -69,6 +69,577 @@
       },
       {
         "kind": "TypeDecl",
+        "name": "PDFAnnotationRenderingPolicy",
+        "printedName": "PDFAnnotationRenderingPolicy",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "none",
+            "printedName": "none",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPDFGraphics.PDFAnnotationRenderingPolicy.Type) -> SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationRenderingPolicy",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                    "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFAnnotationRenderingPolicy",
+                        "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                        "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO4noneyA2CmF",
+            "mangledName": "$s16SolidPDFGraphics28PDFAnnotationRenderingPolicyO4noneyA2CmF",
+            "moduleName": "SolidPDFGraphics"
+          },
+          {
+            "kind": "Var",
+            "name": "purposeAware",
+            "printedName": "purposeAware",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPDFGraphics.PDFAnnotationRenderingPolicy.Type) -> SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationRenderingPolicy",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                    "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFAnnotationRenderingPolicy",
+                        "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                        "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO12purposeAwareyA2CmF",
+            "mangledName": "$s16SolidPDFGraphics28PDFAnnotationRenderingPolicyO12purposeAwareyA2CmF",
+            "moduleName": "SolidPDFGraphics"
+          },
+          {
+            "kind": "Var",
+            "name": "view",
+            "printedName": "view",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPDFGraphics.PDFAnnotationRenderingPolicy.Type) -> SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationRenderingPolicy",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                    "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFAnnotationRenderingPolicy",
+                        "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                        "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO4viewyA2CmF",
+            "mangledName": "$s16SolidPDFGraphics28PDFAnnotationRenderingPolicyO4viewyA2CmF",
+            "moduleName": "SolidPDFGraphics"
+          },
+          {
+            "kind": "Var",
+            "name": "print",
+            "printedName": "print",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPDFGraphics.PDFAnnotationRenderingPolicy.Type) -> SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationRenderingPolicy",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                    "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFAnnotationRenderingPolicy",
+                        "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                        "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO5printyA2CmF",
+            "mangledName": "$s16SolidPDFGraphics28PDFAnnotationRenderingPolicyO5printyA2CmF",
+            "moduleName": "SolidPDFGraphics"
+          },
+          {
+            "kind": "Var",
+            "name": "all",
+            "printedName": "all",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPDFGraphics.PDFAnnotationRenderingPolicy.Type) -> SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationRenderingPolicy",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                    "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFAnnotationRenderingPolicy",
+                        "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                        "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO3allyA2CmF",
+            "mangledName": "$s16SolidPDFGraphics28PDFAnnotationRenderingPolicyO3allyA2CmF",
+            "moduleName": "SolidPDFGraphics"
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_enum_equals",
+            "printedName": "__derived_enum_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PDFAnnotationRenderingPolicy",
+                "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PDFAnnotationRenderingPolicy",
+                "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO21__derived_enum_equalsySbAC_ACtFZ",
+            "mangledName": "$s16SolidPDFGraphics28PDFAnnotationRenderingPolicyO21__derived_enum_equalsySbAC_ACtFZ",
+            "moduleName": "SolidPDFGraphics",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements",
+              "Semantics"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO4hash4intoys6HasherVz_tF",
+            "mangledName": "$s16SolidPDFGraphics28PDFAnnotationRenderingPolicyO4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidPDFGraphics",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO9hashValueSivp",
+            "mangledName": "$s16SolidPDFGraphics28PDFAnnotationRenderingPolicyO9hashValueSivp",
+            "moduleName": "SolidPDFGraphics",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO9hashValueSivg",
+                "mangledName": "$s16SolidPDFGraphics28PDFAnnotationRenderingPolicyO9hashValueSivg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO",
+        "mangledName": "$s16SolidPDFGraphics28PDFAnnotationRenderingPolicyO",
+        "moduleName": "SolidPDFGraphics",
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "PDFAnnotationAppearancePolicy",
+        "printedName": "PDFAnnotationAppearancePolicy",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "existingOnly",
+            "printedName": "existingOnly",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPDFGraphics.PDFAnnotationAppearancePolicy.Type) -> SolidPDFGraphics.PDFAnnotationAppearancePolicy",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationAppearancePolicy",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationAppearancePolicy",
+                    "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationAppearancePolicy.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFAnnotationAppearancePolicy",
+                        "printedName": "SolidPDFGraphics.PDFAnnotationAppearancePolicy",
+                        "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO12existingOnlyyA2CmF",
+            "mangledName": "$s16SolidPDFGraphics29PDFAnnotationAppearancePolicyO12existingOnlyyA2CmF",
+            "moduleName": "SolidPDFGraphics"
+          },
+          {
+            "kind": "Var",
+            "name": "generateMissingStandard",
+            "printedName": "generateMissingStandard",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPDFGraphics.PDFAnnotationAppearancePolicy.Type) -> SolidPDFGraphics.PDFAnnotationAppearancePolicy",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationAppearancePolicy",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationAppearancePolicy",
+                    "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationAppearancePolicy.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFAnnotationAppearancePolicy",
+                        "printedName": "SolidPDFGraphics.PDFAnnotationAppearancePolicy",
+                        "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO23generateMissingStandardyA2CmF",
+            "mangledName": "$s16SolidPDFGraphics29PDFAnnotationAppearancePolicyO23generateMissingStandardyA2CmF",
+            "moduleName": "SolidPDFGraphics"
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_enum_equals",
+            "printedName": "__derived_enum_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PDFAnnotationAppearancePolicy",
+                "printedName": "SolidPDFGraphics.PDFAnnotationAppearancePolicy",
+                "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PDFAnnotationAppearancePolicy",
+                "printedName": "SolidPDFGraphics.PDFAnnotationAppearancePolicy",
+                "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO21__derived_enum_equalsySbAC_ACtFZ",
+            "mangledName": "$s16SolidPDFGraphics29PDFAnnotationAppearancePolicyO21__derived_enum_equalsySbAC_ACtFZ",
+            "moduleName": "SolidPDFGraphics",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements",
+              "Semantics"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO4hash4intoys6HasherVz_tF",
+            "mangledName": "$s16SolidPDFGraphics29PDFAnnotationAppearancePolicyO4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidPDFGraphics",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO9hashValueSivp",
+            "mangledName": "$s16SolidPDFGraphics29PDFAnnotationAppearancePolicyO9hashValueSivp",
+            "moduleName": "SolidPDFGraphics",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO9hashValueSivg",
+                "mangledName": "$s16SolidPDFGraphics29PDFAnnotationAppearancePolicyO9hashValueSivg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO",
+        "mangledName": "$s16SolidPDFGraphics29PDFAnnotationAppearancePolicyO",
+        "moduleName": "SolidPDFGraphics",
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
         "name": "PDFContentLocation",
         "printedName": "PDFContentLocation",
         "children": [
@@ -1781,9 +2352,71 @@
             ]
           },
           {
+            "kind": "Var",
+            "name": "annotation",
+            "printedName": "annotation",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPDF.PDFAnnotationIdentifier?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationIdentifier",
+                    "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                    "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics0B10DiagnosticV10annotation0A3PDF23PDFAnnotationIdentifierVSgvp",
+            "mangledName": "$s16SolidPDFGraphics0B10DiagnosticV10annotation0A3PDF23PDFAnnotationIdentifierVSgvp",
+            "moduleName": "SolidPDFGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "SolidPDF.PDFAnnotationIdentifier?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFAnnotationIdentifier",
+                        "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                        "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics0B10DiagnosticV10annotation0A3PDF23PDFAnnotationIdentifierVSgvg",
+                "mangledName": "$s16SolidPDFGraphics0B10DiagnosticV10annotation0A3PDF23PDFAnnotationIdentifierVSgvg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
             "kind": "Constructor",
             "name": "init",
-            "printedName": "init(identifier:message:severity:location:)",
+            "printedName": "init(identifier:message:severity:location:annotation:)",
             "children": [
               {
                 "kind": "TypeNominal",
@@ -1823,11 +2456,26 @@
                 ],
                 "hasDefaultArg": true,
                 "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPDF.PDFAnnotationIdentifier?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationIdentifier",
+                    "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                    "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
               }
             ],
             "declKind": "Constructor",
-            "usr": "s:16SolidPDFGraphics0B10DiagnosticV10identifier7message8severity8locationACSS_SSAC8SeverityOAA18PDFContentLocationVSgtcfc",
-            "mangledName": "$s16SolidPDFGraphics0B10DiagnosticV10identifier7message8severity8locationACSS_SSAC8SeverityOAA18PDFContentLocationVSgtcfc",
+            "usr": "s:16SolidPDFGraphics0B10DiagnosticV10identifier7message8severity8location10annotationACSS_SSAC8SeverityOAA18PDFContentLocationVSg0A3PDF23PDFAnnotationIdentifierVSgtcfc",
+            "mangledName": "$s16SolidPDFGraphics0B10DiagnosticV10identifier7message8severity8location10annotationACSS_SSAC8SeverityOAA18PDFContentLocationVSg0A3PDF23PDFAnnotationIdentifierVSgtcfc",
             "moduleName": "SolidPDFGraphics",
             "init_kind": "Designated"
           },
@@ -3195,9 +3843,101 @@
             ]
           },
           {
+            "kind": "Var",
+            "name": "annotationRenderingPolicy",
+            "printedName": "annotationRenderingPolicy",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PDFAnnotationRenderingPolicy",
+                "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics0B21InterpretationOptionsV25annotationRenderingPolicyAA013PDFAnnotationfG0Ovp",
+            "mangledName": "$s16SolidPDFGraphics0B21InterpretationOptionsV25annotationRenderingPolicyAA013PDFAnnotationfG0Ovp",
+            "moduleName": "SolidPDFGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationRenderingPolicy",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                    "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics0B21InterpretationOptionsV25annotationRenderingPolicyAA013PDFAnnotationfG0Ovg",
+                "mangledName": "$s16SolidPDFGraphics0B21InterpretationOptionsV25annotationRenderingPolicyAA013PDFAnnotationfG0Ovg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "annotationAppearancePolicy",
+            "printedName": "annotationAppearancePolicy",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PDFAnnotationAppearancePolicy",
+                "printedName": "SolidPDFGraphics.PDFAnnotationAppearancePolicy",
+                "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics0B21InterpretationOptionsV26annotationAppearancePolicyAA013PDFAnnotationfG0Ovp",
+            "mangledName": "$s16SolidPDFGraphics0B21InterpretationOptionsV26annotationAppearancePolicyAA013PDFAnnotationfG0Ovp",
+            "moduleName": "SolidPDFGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationAppearancePolicy",
+                    "printedName": "SolidPDFGraphics.PDFAnnotationAppearancePolicy",
+                    "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics0B21InterpretationOptionsV26annotationAppearancePolicyAA013PDFAnnotationfG0Ovg",
+                "mangledName": "$s16SolidPDFGraphics0B21InterpretationOptionsV26annotationAppearancePolicyAA013PDFAnnotationfG0Ovg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
             "kind": "Constructor",
             "name": "init",
-            "printedName": "init(pageBoundary:accessPurpose:strict:limits:optionalContentSelection:optionalContentContext:)",
+            "printedName": "init(pageBoundary:accessPurpose:strict:limits:optionalContentSelection:optionalContentContext:annotationRenderingPolicy:annotationAppearancePolicy:)",
             "children": [
               {
                 "kind": "TypeNominal",
@@ -3246,11 +3986,25 @@
                 "printedName": "SolidPDF.PDFOptionalContentContext",
                 "hasDefaultArg": true,
                 "usr": "s:8SolidPDF25PDFOptionalContentContextV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PDFAnnotationRenderingPolicy",
+                "printedName": "SolidPDFGraphics.PDFAnnotationRenderingPolicy",
+                "hasDefaultArg": true,
+                "usr": "s:16SolidPDFGraphics28PDFAnnotationRenderingPolicyO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PDFAnnotationAppearancePolicy",
+                "printedName": "SolidPDFGraphics.PDFAnnotationAppearancePolicy",
+                "hasDefaultArg": true,
+                "usr": "s:16SolidPDFGraphics29PDFAnnotationAppearancePolicyO"
               }
             ],
             "declKind": "Constructor",
-            "usr": "s:16SolidPDFGraphics0B21InterpretationOptionsV12pageBoundary13accessPurpose6strict6limits24optionalContentSelection0kL7ContextAC0A3PDF07PDFPageF4KindO_AA0b6AccessH0OSbAA0B6LimitsVAJ011PDFOptionallM0OAJ0tlN0Vtcfc",
-            "mangledName": "$s16SolidPDFGraphics0B21InterpretationOptionsV12pageBoundary13accessPurpose6strict6limits24optionalContentSelection0kL7ContextAC0A3PDF07PDFPageF4KindO_AA0b6AccessH0OSbAA0B6LimitsVAJ011PDFOptionallM0OAJ0tlN0Vtcfc",
+            "usr": "s:16SolidPDFGraphics0B21InterpretationOptionsV12pageBoundary13accessPurpose6strict6limits24optionalContentSelection0kL7Context25annotationRenderingPolicy0o10AppearanceQ0AC0A3PDF07PDFPageF4KindO_AA0b6AccessH0OSbAA0B6LimitsVAL011PDFOptionallM0OAL0xlN0VAA013PDFAnnotationpQ0OAA0yrQ0Otcfc",
+            "mangledName": "$s16SolidPDFGraphics0B21InterpretationOptionsV12pageBoundary13accessPurpose6strict6limits24optionalContentSelection0kL7Context25annotationRenderingPolicy0o10AppearanceQ0AC0A3PDF07PDFPageF4KindO_AA0b6AccessH0OSbAA0B6LimitsVAL011PDFOptionallM0OAL0xlN0VAA013PDFAnnotationpQ0OAA0yrQ0Otcfc",
             "moduleName": "SolidPDFGraphics",
             "init_kind": "Designated"
           },
@@ -5257,6 +6011,43 @@
             "moduleName": "SolidPDFGraphics"
           },
           {
+            "kind": "Var",
+            "name": "annotationAppearanceGeneration",
+            "printedName": "annotationAppearanceGeneration",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPDFGraphics.PDFGraphicsUnsupportedFeature.Type) -> SolidPDFGraphics.PDFGraphicsUnsupportedFeature",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFGraphicsUnsupportedFeature",
+                    "printedName": "SolidPDFGraphics.PDFGraphicsUnsupportedFeature",
+                    "usr": "s:16SolidPDFGraphics0B18UnsupportedFeatureO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPDFGraphics.PDFGraphicsUnsupportedFeature.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFGraphicsUnsupportedFeature",
+                        "printedName": "SolidPDFGraphics.PDFGraphicsUnsupportedFeature",
+                        "usr": "s:16SolidPDFGraphics0B18UnsupportedFeatureO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:16SolidPDFGraphics0B18UnsupportedFeatureO30annotationAppearanceGenerationyA2CmF",
+            "mangledName": "$s16SolidPDFGraphics0B18UnsupportedFeatureO30annotationAppearanceGenerationyA2CmF",
+            "moduleName": "SolidPDFGraphics"
+          },
+          {
             "kind": "Function",
             "name": "__derived_enum_equals",
             "printedName": "__derived_enum_equals(_:_:)",
@@ -5689,9 +6480,71 @@
             ]
           },
           {
+            "kind": "Var",
+            "name": "renderedAnnotations",
+            "printedName": "renderedAnnotations",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[SolidPDF.PDFAnnotationIdentifier]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationIdentifier",
+                    "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                    "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics15PDFRenderedPageV19renderedAnnotationsSay0A3PDF23PDFAnnotationIdentifierVGvp",
+            "mangledName": "$s16SolidPDFGraphics15PDFRenderedPageV19renderedAnnotationsSay0A3PDF23PDFAnnotationIdentifierVGvp",
+            "moduleName": "SolidPDFGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[SolidPDF.PDFAnnotationIdentifier]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFAnnotationIdentifier",
+                        "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                        "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics15PDFRenderedPageV19renderedAnnotationsSay0A3PDF23PDFAnnotationIdentifierVGvg",
+                "mangledName": "$s16SolidPDFGraphics15PDFRenderedPageV19renderedAnnotationsSay0A3PDF23PDFAnnotationIdentifierVGvg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
             "kind": "Constructor",
             "name": "init",
-            "printedName": "init(revision:pageIndex:pageReference:device:coordinateMapping:transmittedOrdinal:)",
+            "printedName": "init(revision:pageIndex:pageReference:device:coordinateMapping:transmittedOrdinal:renderedAnnotations:)",
             "children": [
               {
                 "kind": "TypeNominal",
@@ -5734,11 +6587,26 @@
                 "name": "Int",
                 "printedName": "Swift.Int",
                 "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[SolidPDF.PDFAnnotationIdentifier]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationIdentifier",
+                    "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                    "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sa"
               }
             ],
             "declKind": "Constructor",
-            "usr": "s:16SolidPDFGraphics15PDFRenderedPageV8revision9pageIndex0F9Reference6device17coordinateMapping18transmittedOrdinalAC0A3PDF21PDFRevisionIdentifierV_SiAJ09PDFObjectH0V0A10PostScript22GraphicsDeviceSnapshotVAO0td10CoordinateK0VSitcfc",
-            "mangledName": "$s16SolidPDFGraphics15PDFRenderedPageV8revision9pageIndex0F9Reference6device17coordinateMapping18transmittedOrdinalAC0A3PDF21PDFRevisionIdentifierV_SiAJ09PDFObjectH0V0A10PostScript22GraphicsDeviceSnapshotVAO0td10CoordinateK0VSitcfc",
+            "usr": "s:16SolidPDFGraphics15PDFRenderedPageV8revision9pageIndex0F9Reference6device17coordinateMapping18transmittedOrdinal19renderedAnnotationsAC0A3PDF21PDFRevisionIdentifierV_SiAK09PDFObjectH0V0A10PostScript22GraphicsDeviceSnapshotVAP0vd10CoordinateK0VSiSayAK013PDFAnnotationR0VGtcfc",
+            "mangledName": "$s16SolidPDFGraphics15PDFRenderedPageV8revision9pageIndex0F9Reference6device17coordinateMapping18transmittedOrdinal19renderedAnnotationsAC0A3PDF21PDFRevisionIdentifierV_SiAK09PDFObjectH0V0A10PostScript22GraphicsDeviceSnapshotVAP0vd10CoordinateK0VSiSayAK013PDFAnnotationR0VGtcfc",
             "moduleName": "SolidPDFGraphics",
             "init_kind": "Designated"
           },
@@ -6123,6 +6991,383 @@
       },
       {
         "kind": "TypeDecl",
+        "name": "PDFExtractedTextSource",
+        "printedName": "PDFExtractedTextSource",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "pageContent",
+            "printedName": "pageContent",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPDFGraphics.PDFExtractedTextSource.Type) -> SolidPDFGraphics.PDFExtractedTextSource",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFExtractedTextSource",
+                    "printedName": "SolidPDFGraphics.PDFExtractedTextSource",
+                    "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPDFGraphics.PDFExtractedTextSource.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFExtractedTextSource",
+                        "printedName": "SolidPDFGraphics.PDFExtractedTextSource",
+                        "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO11pageContentyA2CmF",
+            "mangledName": "$s16SolidPDFGraphics22PDFExtractedTextSourceO11pageContentyA2CmF",
+            "moduleName": "SolidPDFGraphics"
+          },
+          {
+            "kind": "Var",
+            "name": "appearance",
+            "printedName": "appearance",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPDFGraphics.PDFExtractedTextSource.Type) -> (SolidPDF.PDFAnnotationIdentifier, SolidPDF.PDFFormFieldIdentifier?) -> SolidPDFGraphics.PDFExtractedTextSource",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(SolidPDF.PDFAnnotationIdentifier, SolidPDF.PDFFormFieldIdentifier?) -> SolidPDFGraphics.PDFExtractedTextSource",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFExtractedTextSource",
+                        "printedName": "SolidPDFGraphics.PDFExtractedTextSource",
+                        "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Tuple",
+                        "printedName": "(annotation: SolidPDF.PDFAnnotationIdentifier, field: SolidPDF.PDFFormFieldIdentifier?)",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "PDFAnnotationIdentifier",
+                            "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                            "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Optional",
+                            "printedName": "SolidPDF.PDFFormFieldIdentifier?",
+                            "children": [
+                              {
+                                "kind": "TypeNominal",
+                                "name": "PDFFormFieldIdentifier",
+                                "printedName": "SolidPDF.PDFFormFieldIdentifier",
+                                "usr": "s:8SolidPDF22PDFFormFieldIdentifierV"
+                              }
+                            ],
+                            "usr": "s:Sq"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPDFGraphics.PDFExtractedTextSource.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFExtractedTextSource",
+                        "printedName": "SolidPDFGraphics.PDFExtractedTextSource",
+                        "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO10appearanceyAC0A3PDF23PDFAnnotationIdentifierV_AE012PDFFormFieldI0VSgtcACmF",
+            "mangledName": "$s16SolidPDFGraphics22PDFExtractedTextSourceO10appearanceyAC0A3PDF23PDFAnnotationIdentifierV_AE012PDFFormFieldI0VSgtcACmF",
+            "moduleName": "SolidPDFGraphics"
+          },
+          {
+            "kind": "Var",
+            "name": "annotationText",
+            "printedName": "annotationText",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPDFGraphics.PDFExtractedTextSource.Type) -> (SolidPDF.PDFAnnotationIdentifier) -> SolidPDFGraphics.PDFExtractedTextSource",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(SolidPDF.PDFAnnotationIdentifier) -> SolidPDFGraphics.PDFExtractedTextSource",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFExtractedTextSource",
+                        "printedName": "SolidPDFGraphics.PDFExtractedTextSource",
+                        "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFAnnotationIdentifier",
+                        "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                        "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPDFGraphics.PDFExtractedTextSource.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFExtractedTextSource",
+                        "printedName": "SolidPDFGraphics.PDFExtractedTextSource",
+                        "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO010annotationD0yAC0A3PDF23PDFAnnotationIdentifierVcACmF",
+            "mangledName": "$s16SolidPDFGraphics22PDFExtractedTextSourceO010annotationD0yAC0A3PDF23PDFAnnotationIdentifierVcACmF",
+            "moduleName": "SolidPDFGraphics"
+          },
+          {
+            "kind": "Var",
+            "name": "formValue",
+            "printedName": "formValue",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(SolidPDFGraphics.PDFExtractedTextSource.Type) -> (SolidPDF.PDFFormFieldIdentifier, SolidPDF.PDFAnnotationIdentifier) -> SolidPDFGraphics.PDFExtractedTextSource",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(SolidPDF.PDFFormFieldIdentifier, SolidPDF.PDFAnnotationIdentifier) -> SolidPDFGraphics.PDFExtractedTextSource",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFExtractedTextSource",
+                        "printedName": "SolidPDFGraphics.PDFExtractedTextSource",
+                        "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Tuple",
+                        "printedName": "(field: SolidPDF.PDFFormFieldIdentifier, widget: SolidPDF.PDFAnnotationIdentifier)",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "PDFFormFieldIdentifier",
+                            "printedName": "SolidPDF.PDFFormFieldIdentifier",
+                            "usr": "s:8SolidPDF22PDFFormFieldIdentifierV"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "PDFAnnotationIdentifier",
+                            "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                            "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "SolidPDFGraphics.PDFExtractedTextSource.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFExtractedTextSource",
+                        "printedName": "SolidPDFGraphics.PDFExtractedTextSource",
+                        "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO9formValueyAC0A3PDF22PDFFormFieldIdentifierV_AE013PDFAnnotationK0VtcACmF",
+            "mangledName": "$s16SolidPDFGraphics22PDFExtractedTextSourceO9formValueyAC0A3PDF22PDFFormFieldIdentifierV_AE013PDFAnnotationK0VtcACmF",
+            "moduleName": "SolidPDFGraphics"
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_enum_equals",
+            "printedName": "__derived_enum_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PDFExtractedTextSource",
+                "printedName": "SolidPDFGraphics.PDFExtractedTextSource",
+                "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PDFExtractedTextSource",
+                "printedName": "SolidPDFGraphics.PDFExtractedTextSource",
+                "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO21__derived_enum_equalsySbAC_ACtFZ",
+            "mangledName": "$s16SolidPDFGraphics22PDFExtractedTextSourceO21__derived_enum_equalsySbAC_ACtFZ",
+            "moduleName": "SolidPDFGraphics",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements",
+              "Semantics"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO4hash4intoys6HasherVz_tF",
+            "mangledName": "$s16SolidPDFGraphics22PDFExtractedTextSourceO4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidPDFGraphics",
+            "implicit": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO9hashValueSivp",
+            "mangledName": "$s16SolidPDFGraphics22PDFExtractedTextSourceO9hashValueSivp",
+            "moduleName": "SolidPDFGraphics",
+            "implicit": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO9hashValueSivg",
+                "mangledName": "$s16SolidPDFGraphics22PDFExtractedTextSourceO9hashValueSivg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO",
+        "mangledName": "$s16SolidPDFGraphics22PDFExtractedTextSourceO",
+        "moduleName": "SolidPDFGraphics",
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
         "name": "PDFTextExtractionOptions",
         "printedName": "PDFTextExtractionOptions",
         "children": [
@@ -6333,6 +7578,150 @@
                 "declKind": "Accessor",
                 "usr": "s:16SolidPDFGraphics24PDFTextExtractionOptionsV16includeArtifactsSbvs",
                 "mangledName": "$s16SolidPDFGraphics24PDFTextExtractionOptionsV16includeArtifactsSbvs",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "includeAnnotations",
+            "printedName": "includeAnnotations",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics24PDFTextExtractionOptionsV18includeAnnotationsSbvp",
+            "mangledName": "$s16SolidPDFGraphics24PDFTextExtractionOptionsV18includeAnnotationsSbvp",
+            "moduleName": "SolidPDFGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics24PDFTextExtractionOptionsV18includeAnnotationsSbvg",
+                "mangledName": "$s16SolidPDFGraphics24PDFTextExtractionOptionsV18includeAnnotationsSbvg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics24PDFTextExtractionOptionsV18includeAnnotationsSbvs",
+                "mangledName": "$s16SolidPDFGraphics24PDFTextExtractionOptionsV18includeAnnotationsSbvs",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "includeAnnotationAppearances",
+            "printedName": "includeAnnotationAppearances",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics24PDFTextExtractionOptionsV28includeAnnotationAppearancesSbvp",
+            "mangledName": "$s16SolidPDFGraphics24PDFTextExtractionOptionsV28includeAnnotationAppearancesSbvp",
+            "moduleName": "SolidPDFGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics24PDFTextExtractionOptionsV28includeAnnotationAppearancesSbvg",
+                "mangledName": "$s16SolidPDFGraphics24PDFTextExtractionOptionsV28includeAnnotationAppearancesSbvg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics24PDFTextExtractionOptionsV28includeAnnotationAppearancesSbvs",
+                "mangledName": "$s16SolidPDFGraphics24PDFTextExtractionOptionsV28includeAnnotationAppearancesSbvs",
                 "moduleName": "SolidPDFGraphics",
                 "implicit": true,
                 "declAttributes": [
@@ -6777,7 +8166,7 @@
           {
             "kind": "Constructor",
             "name": "init",
-            "printedName": "init(order:includeHiddenContent:includeArtifacts:accessPurpose:strict:optionalContentSelection:optionalContentContext:fontEnvironment:limits:)",
+            "printedName": "init(order:includeHiddenContent:includeArtifacts:includeAnnotations:includeAnnotationAppearances:accessPurpose:strict:optionalContentSelection:optionalContentContext:fontEnvironment:limits:)",
             "children": [
               {
                 "kind": "TypeNominal",
@@ -6791,6 +8180,20 @@
                 "printedName": "SolidPDFGraphics.PDFTextExtractionOrder",
                 "hasDefaultArg": true,
                 "usr": "s:16SolidPDFGraphics22PDFTextExtractionOrderO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "hasDefaultArg": true,
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "hasDefaultArg": true,
+                "usr": "s:Sb"
               },
               {
                 "kind": "TypeNominal",
@@ -6850,8 +8253,8 @@
               }
             ],
             "declKind": "Constructor",
-            "usr": "s:16SolidPDFGraphics24PDFTextExtractionOptionsV5order20includeHiddenContent0G9Artifacts13accessPurpose6strict08optionalI9Selection0nI7Context15fontEnvironment6limitsAcA0cD5OrderO_S2bAA0b6AccessL0OSb0A3PDF011PDFOptionaliO0OAQ0wiP0VAA0b4FontR0VAA0B6LimitsVtcfc",
-            "mangledName": "$s16SolidPDFGraphics24PDFTextExtractionOptionsV5order20includeHiddenContent0G9Artifacts13accessPurpose6strict08optionalI9Selection0nI7Context15fontEnvironment6limitsAcA0cD5OrderO_S2bAA0b6AccessL0OSb0A3PDF011PDFOptionaliO0OAQ0wiP0VAA0b4FontR0VAA0B6LimitsVtcfc",
+            "usr": "s:16SolidPDFGraphics24PDFTextExtractionOptionsV5order20includeHiddenContent0G9Artifacts0G11Annotations0G21AnnotationAppearances13accessPurpose6strict08optionalI9Selection0qI7Context15fontEnvironment6limitsAcA0cD5OrderO_S4bAA0b6AccessO0OSb0A3PDF011PDFOptionaliR0OAS0ziS0VAA0b4FontU0VAA0B6LimitsVtcfc",
+            "mangledName": "$s16SolidPDFGraphics24PDFTextExtractionOptionsV5order20includeHiddenContent0G9Artifacts0G11Annotations0G21AnnotationAppearances13accessPurpose6strict08optionalI9Selection0qI7Context15fontEnvironment6limitsAcA0cD5OrderO_S4bAA0b6AccessO0OSb0A3PDF011PDFOptionaliR0OAS0ziS0VAA0b4FontU0VAA0B6LimitsVtcfc",
             "moduleName": "SolidPDFGraphics",
             "init_kind": "Designated"
           }
@@ -6896,6 +8299,52 @@
         "name": "PDFExtractedTextSpan",
         "printedName": "PDFExtractedTextSpan",
         "children": [
+          {
+            "kind": "Var",
+            "name": "source",
+            "printedName": "source",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PDFExtractedTextSource",
+                "printedName": "SolidPDFGraphics.PDFExtractedTextSource",
+                "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics20PDFExtractedTextSpanV6sourceAA0cD6SourceOvp",
+            "mangledName": "$s16SolidPDFGraphics20PDFExtractedTextSpanV6sourceAA0cD6SourceOvp",
+            "moduleName": "SolidPDFGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFExtractedTextSource",
+                    "printedName": "SolidPDFGraphics.PDFExtractedTextSource",
+                    "usr": "s:16SolidPDFGraphics22PDFExtractedTextSourceO"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics20PDFExtractedTextSpanV6sourceAA0cD6SourceOvg",
+                "mangledName": "$s16SolidPDFGraphics20PDFExtractedTextSpanV6sourceAA0cD6SourceOvg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
           {
             "kind": "Var",
             "name": "text",
@@ -7305,6 +8754,192 @@
                 "declKind": "Accessor",
                 "usr": "s:16SolidPDFGraphics20PDFExtractedTextSpanV10pageBounds0A10PostScript12GraphicsRectVSgvg",
                 "mangledName": "$s16SolidPDFGraphics20PDFExtractedTextSpanV10pageBounds0A10PostScript12GraphicsRectVSgvg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "annotationIdentifier",
+            "printedName": "annotationIdentifier",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPDF.PDFAnnotationIdentifier?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationIdentifier",
+                    "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                    "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics20PDFExtractedTextSpanV20annotationIdentifier0A3PDF013PDFAnnotationG0VSgvp",
+            "mangledName": "$s16SolidPDFGraphics20PDFExtractedTextSpanV20annotationIdentifier0A3PDF013PDFAnnotationG0VSgvp",
+            "moduleName": "SolidPDFGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "SolidPDF.PDFAnnotationIdentifier?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFAnnotationIdentifier",
+                        "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                        "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics20PDFExtractedTextSpanV20annotationIdentifier0A3PDF013PDFAnnotationG0VSgvg",
+                "mangledName": "$s16SolidPDFGraphics20PDFExtractedTextSpanV20annotationIdentifier0A3PDF013PDFAnnotationG0VSgvg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "widgetIdentifier",
+            "printedName": "widgetIdentifier",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPDF.PDFAnnotationIdentifier?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFAnnotationIdentifier",
+                    "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                    "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics20PDFExtractedTextSpanV16widgetIdentifier0A3PDF013PDFAnnotationG0VSgvp",
+            "mangledName": "$s16SolidPDFGraphics20PDFExtractedTextSpanV16widgetIdentifier0A3PDF013PDFAnnotationG0VSgvp",
+            "moduleName": "SolidPDFGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "SolidPDF.PDFAnnotationIdentifier?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFAnnotationIdentifier",
+                        "printedName": "SolidPDF.PDFAnnotationIdentifier",
+                        "usr": "s:8SolidPDF23PDFAnnotationIdentifierV"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics20PDFExtractedTextSpanV16widgetIdentifier0A3PDF013PDFAnnotationG0VSgvg",
+                "mangledName": "$s16SolidPDFGraphics20PDFExtractedTextSpanV16widgetIdentifier0A3PDF013PDFAnnotationG0VSgvg",
+                "moduleName": "SolidPDFGraphics",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "formFieldIdentifier",
+            "printedName": "formFieldIdentifier",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "SolidPDF.PDFFormFieldIdentifier?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFFormFieldIdentifier",
+                    "printedName": "SolidPDF.PDFFormFieldIdentifier",
+                    "usr": "s:8SolidPDF22PDFFormFieldIdentifierV"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:16SolidPDFGraphics20PDFExtractedTextSpanV19formFieldIdentifier0A3PDF07PDFFormgH0VSgvp",
+            "mangledName": "$s16SolidPDFGraphics20PDFExtractedTextSpanV19formFieldIdentifier0A3PDF07PDFFormgH0VSgvp",
+            "moduleName": "SolidPDFGraphics",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "SolidPDF.PDFFormFieldIdentifier?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFFormFieldIdentifier",
+                        "printedName": "SolidPDF.PDFFormFieldIdentifier",
+                        "usr": "s:8SolidPDF22PDFFormFieldIdentifierV"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:16SolidPDFGraphics20PDFExtractedTextSpanV19formFieldIdentifier0A3PDF07PDFFormgH0VSgvg",
+                "mangledName": "$s16SolidPDFGraphics20PDFExtractedTextSpanV19formFieldIdentifier0A3PDF07PDFFormgH0VSgvg",
                 "moduleName": "SolidPDFGraphics",
                 "implicit": true,
                 "declAttributes": [

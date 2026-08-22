@@ -1895,6 +1895,46 @@
             "isInternal": true,
             "isFromExtension": true,
             "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "glyphIndex",
+            "printedName": "glyphIndex(faceIndex:glyphName:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Swift.UInt32?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt32",
+                    "printedName": "Swift.UInt32",
+                    "usr": "s:s6UInt32V"
+                  }
+                ],
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:9SolidFont07CompactB10CollectionV10glyphIndex04faceF00E4Names6UInt32VSgSi_SStF",
+            "mangledName": "$s9SolidFont07CompactB10CollectionV10glyphIndex04faceF00E4Names6UInt32VSgSi_SStF",
+            "moduleName": "SolidFont",
+            "isInternal": true,
+            "isFromExtension": true,
+            "funcSelfKind": "NonMutating"
           }
         ],
         "declKind": "Struct",
@@ -1929,6 +1969,116 @@
             "printedName": "Hashable",
             "usr": "s:SH",
             "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "CompactFontStandardStrings",
+        "printedName": "CompactFontStandardStrings",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "values",
+            "printedName": "values",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[Swift.String]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:9SolidFont07CompactB15StandardStringsO6valuesSaySSGvpZ",
+            "mangledName": "$s9SolidFont07CompactB15StandardStringsO6valuesSaySSGvpZ",
+            "moduleName": "SolidFont",
+            "static": true,
+            "isInternal": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[Swift.String]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "String",
+                        "printedName": "Swift.String",
+                        "usr": "s:SS"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:9SolidFont07CompactB15StandardStringsO6valuesSaySSGvgZ",
+                "mangledName": "$s9SolidFont07CompactB15StandardStringsO6valuesSaySSGvgZ",
+                "moduleName": "SolidFont",
+                "static": true,
+                "implicit": true,
+                "isInternal": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:9SolidFont07CompactB15StandardStringsO",
+        "mangledName": "$s9SolidFont07CompactB15StandardStringsO",
+        "moduleName": "SolidFont",
+        "isInternal": true,
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
           },
           {
             "kind": "Conformance",
@@ -15226,6 +15376,230 @@
             "printedName": "Escapable",
             "usr": "s:s9EscapableP",
             "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "Type1FontProgram",
+        "printedName": "Type1FontProgram",
+        "children": [
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(data:limits:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Type1FontProgram",
+                "printedName": "SolidFont.Type1FontProgram",
+                "usr": "s:9SolidFont05Type1B7ProgramV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Data",
+                "printedName": "Foundation.Data",
+                "usr": "s:10Foundation4DataV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FontParsingLimits",
+                "printedName": "SolidFont.FontParsingLimits",
+                "hasDefaultArg": true,
+                "usr": "s:9SolidFont0B13ParsingLimitsV"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:9SolidFont05Type1B7ProgramV4data6limitsAC10Foundation4DataV_AA0B13ParsingLimitsVtKcfc",
+            "mangledName": "$s9SolidFont05Type1B7ProgramV4data6limitsAC10Foundation4DataV_AA0B13ParsingLimitsVtKcfc",
+            "moduleName": "SolidFont",
+            "isInternal": true,
+            "throwing": true,
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "glyph",
+            "printedName": "glyph(named:selector:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "FontGlyph",
+                "printedName": "SolidFont.FontGlyph",
+                "usr": "s:9SolidFont0B5GlyphV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FontGlyphSelector",
+                "printedName": "SolidFont.FontGlyphSelector",
+                "usr": "s:9SolidFont0B13GlyphSelectorO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:9SolidFont05Type1B7ProgramV5glyph5named8selectorAA0B5GlyphVSS_AA0bH8SelectorOtKF",
+            "mangledName": "$s9SolidFont05Type1B7ProgramV5glyph5named8selectorAA0B5GlyphVSS_AA0bH8SelectorOtKF",
+            "moduleName": "SolidFont",
+            "isInternal": true,
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_struct_equals",
+            "printedName": "__derived_struct_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Type1FontProgram",
+                "printedName": "SolidFont.Type1FontProgram",
+                "usr": "s:9SolidFont05Type1B7ProgramV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Type1FontProgram",
+                "printedName": "SolidFont.Type1FontProgram",
+                "usr": "s:9SolidFont05Type1B7ProgramV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:9SolidFont05Type1B7ProgramV23__derived_struct_equalsySbAC_ACtFZ",
+            "mangledName": "$s9SolidFont05Type1B7ProgramV23__derived_struct_equalsySbAC_ACtFZ",
+            "moduleName": "SolidFont",
+            "static": true,
+            "implicit": true,
+            "isInternal": true,
+            "declAttributes": [
+              "Implements"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "hash",
+            "printedName": "hash(into:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Hasher",
+                "printedName": "Swift.Hasher",
+                "paramValueOwnership": "InOut",
+                "usr": "s:s6HasherV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:9SolidFont05Type1B7ProgramV4hash4intoys6HasherVz_tF",
+            "mangledName": "$s9SolidFont05Type1B7ProgramV4hash4intoys6HasherVz_tF",
+            "moduleName": "SolidFont",
+            "implicit": true,
+            "isInternal": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Var",
+            "name": "hashValue",
+            "printedName": "hashValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:9SolidFont05Type1B7ProgramV9hashValueSivp",
+            "mangledName": "$s9SolidFont05Type1B7ProgramV9hashValueSivp",
+            "moduleName": "SolidFont",
+            "implicit": true,
+            "isInternal": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:9SolidFont05Type1B7ProgramV9hashValueSivg",
+                "mangledName": "$s9SolidFont05Type1B7ProgramV9hashValueSivg",
+                "moduleName": "SolidFont",
+                "implicit": true,
+                "isInternal": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:9SolidFont05Type1B7ProgramV",
+        "mangledName": "$s9SolidFont05Type1B7ProgramV",
+        "moduleName": "SolidFont",
+        "isInternal": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
           },
           {
             "kind": "Conformance",

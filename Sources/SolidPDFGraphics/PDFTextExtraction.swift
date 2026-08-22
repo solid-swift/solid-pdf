@@ -9,11 +9,25 @@ public enum PDFTextExtractionOrder: Sendable, Hashable {
   case structure
 }
 
+/// The document semantic source of one extracted text span.
+public enum PDFExtractedTextSource: Sendable, Hashable {
+  /// Text painted by the page's content streams.
+  case pageContent
+  /// Text painted by an annotation or widget appearance.
+  case appearance(annotation: PDFAnnotationIdentifier, field: PDFFormFieldIdentifier?)
+  /// Text stored directly in an annotation dictionary.
+  case annotationText(PDFAnnotationIdentifier)
+  /// An authoritative AcroForm value without invented glyph geometry.
+  case formValue(field: PDFFormFieldIdentifier, widget: PDFAnnotationIdentifier)
+}
+
 /// Options for semantic PDF text extraction.
 public struct PDFTextExtractionOptions: Sendable {
   public var order: PDFTextExtractionOrder
   public var includeHiddenContent: Bool
   public var includeArtifacts: Bool
+  public var includeAnnotations: Bool
+  public var includeAnnotationAppearances: Bool
   public var accessPurpose: PDFGraphicsAccessPurpose
   public var strict: Bool
   public var optionalContentSelection: PDFOptionalContentSelection
@@ -25,6 +39,8 @@ public struct PDFTextExtractionOptions: Sendable {
     order: PDFTextExtractionOrder = .structure,
     includeHiddenContent: Bool = false,
     includeArtifacts: Bool = false,
+    includeAnnotations: Bool = true,
+    includeAnnotationAppearances: Bool = true,
     accessPurpose: PDFGraphicsAccessPurpose = .extraction,
     strict: Bool = true,
     optionalContentSelection: PDFOptionalContentSelection = .documentDefault,
@@ -35,6 +51,8 @@ public struct PDFTextExtractionOptions: Sendable {
     self.order = order
     self.includeHiddenContent = includeHiddenContent
     self.includeArtifacts = includeArtifacts
+    self.includeAnnotations = includeAnnotations
+    self.includeAnnotationAppearances = includeAnnotationAppearances
     self.accessPurpose = accessPurpose
     self.strict = strict
     self.optionalContentSelection = optionalContentSelection
@@ -46,6 +64,8 @@ public struct PDFTextExtractionOptions: Sendable {
 
 /// One semantically coherent extracted text span.
 public struct PDFExtractedTextSpan: Sendable, Hashable {
+  /// The page, appearance, annotation, or field value that supplied this text.
+  public let source: PDFExtractedTextSource
   /// Logical text when an authoritative mapping or replacement is available.
   public let text: String?
   /// The glyph runs contributing physical styling and geometry.
@@ -60,6 +80,12 @@ public struct PDFExtractedTextSpan: Sendable, Hashable {
   public let deviceBounds: GraphicsRect?
   /// Bounds in default-user-space page points when the mapping is invertible.
   public let pageBounds: GraphicsRect?
+  /// The originating annotation, when applicable.
+  public let annotationIdentifier: PDFAnnotationIdentifier?
+  /// The originating widget annotation, when applicable.
+  public let widgetIdentifier: PDFAnnotationIdentifier?
+  /// The originating AcroForm field, when applicable.
+  public let formFieldIdentifier: PDFFormFieldIdentifier?
 }
 
 /// Extracted text and diagnostics for one transmitted PDF page.
