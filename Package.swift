@@ -48,6 +48,8 @@ let package = Package(
   dependencies: [
     foundationDependency,
     imageDependency,
+    .package(url: "https://github.com/apple/swift-asn1.git", .upToNextMajor(from: "1.7.1")),
+    .package(url: "https://github.com/apple/swift-certificates.git", .upToNextMajor(from: "1.19.4")),
     .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "4.2.0")),
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.0"),
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
@@ -60,6 +62,8 @@ let package = Package(
         .product(name: "SolidIO", package: "solid-foundation"),
         .product(name: "Crypto", package: "swift-crypto"),
         .product(name: "CryptoExtras", package: "swift-crypto"),
+        .product(name: "SwiftASN1", package: "swift-asn1"),
+        .product(name: "X509", package: "swift-certificates"),
       ],
       plugins: lintPlugins
     ),

@@ -194,6 +194,16 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
     _ = try await formFields(in: revision)
   }
 
+  func signature(
+    from object: PDFObject,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFSignature {
+    guard let result = try await signature(.other(object), revision: revision) else {
+      throw malformed("A signature dictionary is required.")
+    }
+    return result
+  }
+
   private func auditAcroForm(
     _ form: PDFAcroForm,
     revision: PDFRevisionIdentifier
@@ -402,6 +412,7 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
     case .null: return nil
     default: throw malformed("A signature field value must be a signature dictionary.")
     }
+    let dictionaryReference: PDFObjectReference? = if case .reference(let reference) = raw { reference } else { nil }
     let (dictionary, definingRevision) = try await resolvedDictionary(raw, revision: revision)
     guard let byteRange = dictionary.pdfArray(named: "ByteRange"),
       byteRange.count.isMultiple(of: 2),
@@ -421,7 +432,20 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
       previousEnd = range.endOffset
       ranges.append(range)
     }
+    let signatureRevision = definingRevision ?? revision
+    let transforms = try await signatureTransforms(dictionary["Reference"], revision: revision)
+    let kind: PDFSignatureKind
+    if dictionary.pdfName(named: "Type") == "DocTimeStamp" {
+      kind = .documentTimestamp
+    } else if transforms.contains(where: { if case .docMDP = $0 { true } else { false } }) {
+      kind = .certification
+    } else {
+      kind = .approval
+    }
     return PDFSignature(
+      identifier: dictionaryReference.map { .init(reference: $0, revision: signatureRevision) },
+      kind: kind,
+      dictionaryReference: dictionaryReference,
       byteRanges: ranges,
       contents: contents.bytes,
       filter: dictionary.pdfName(named: "Filter"),
@@ -430,8 +454,49 @@ actor PDFDocumentInteractiveStructure<Session: PDFInputSourceSession> {
       signingTime: try optionalString(dictionary["M"], name: "M"),
       permissions: dictionary["Reference"],
       rawDictionary: dictionary,
-      definingRevision: definingRevision ?? revision
+      definingRevision: signatureRevision,
+      transforms: transforms
     )
+  }
+
+  private func signatureTransforms(
+    _ object: PDFObject?,
+    revision: PDFRevisionIdentifier
+  ) async throws -> [PDFSignatureTransform] {
+    let values = try await optionalArray(object, revision: revision)
+    var result = [PDFSignatureTransform]()
+    result.reserveCapacity(values.count)
+    for value in values {
+      let dictionary = try await optionalDictionary(value, revision: revision) ?? [:]
+      guard let method = dictionary.pdfName(named: "TransformMethod") else {
+        throw malformed("A signature reference requires TransformMethod.")
+      }
+      let parameters = try await optionalDictionary(dictionary["TransformParams"], revision: revision)
+      switch method {
+      case "DocMDP":
+        let permission = parameters?.pdfInteger(named: "P") ?? 2
+        guard (1...3).contains(permission) else { throw malformed("A DocMDP permission must be from 1 through 3.") }
+        result.append(.docMDP(.init(permissionLevel: Int(permission), rawParameters: parameters ?? [:])))
+      case "FieldMDP":
+        guard let parameters,
+          let actionName = parameters.pdfName(named: "Action")
+        else { throw malformed("A FieldMDP transform requires Action.") }
+        let action: PDFFieldMDPAction = switch actionName {
+        case "All": .all
+        case "Include": .include
+        case "Exclude": .exclude
+        default: throw malformed("A FieldMDP Action is invalid.")
+        }
+        let fields = try await optionalArray(parameters["Fields"], revision: revision).map { field -> String in
+          guard case .string(let string) = field else { throw malformed("FieldMDP Fields must contain strings.") }
+          return try PDFTextStringDecoder.decode(string, allowsUTF8: true)
+        }
+        result.append(.fieldMDP(.init(action: action, fieldNames: fields, rawParameters: parameters)))
+      default:
+        result.append(.unsupported(method: method, parameters: dictionary["TransformParams"]))
+      }
+    }
+    return result
   }
 
   private func fieldType(_ name: PDFName) throws -> PDFFormFieldType {

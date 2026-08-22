@@ -25,6 +25,7 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
   private let structure: PDFDocumentStructure<Source.Session>
   private let interactiveStructure: PDFDocumentInteractiveStructure<Source.Session>
   private let assets: PDFDocumentAssets<Source.Session>
+  private let authenticity: PDFDocumentAuthenticity<Source.Session>
 
   /// Opens and validates one PDF revision without eagerly resolving its objects.
   public init(
@@ -71,10 +72,18 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
         limits: options.limits
       )
       assets = documentAssets
-      interactiveStructure = PDFDocumentInteractiveStructure(
+      let documentInteractiveStructure = PDFDocumentInteractiveStructure(
         resolver: documentResolver,
         structure: documentStructure,
         assets: documentAssets,
+        revisions: index.revisions,
+        limits: options.limits
+      )
+      interactiveStructure = documentInteractiveStructure
+      authenticity = PDFDocumentAuthenticity(
+        resolver: documentResolver,
+        structure: documentStructure,
+        interactive: documentInteractiveStructure,
         revisions: index.revisions,
         limits: options.limits
       )
@@ -105,7 +114,9 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     let structure = structure
     let interactiveStructure = interactiveStructure
     let assets = assets
+    let authenticity = authenticity
     Task {
+      await authenticity.close()
       await assets.close()
       await interactiveStructure.close()
       await structure.close()
@@ -386,6 +397,16 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     try await assets.collection(in: revision)
   }
 
+  /// Returns every signature visible in the latest document revision.
+  public func signatures() async throws -> [PDFSignature] {
+    try await authenticity.signatures(in: latestRevision.identifier)
+  }
+
+  /// Returns every signature visible in a selected document revision.
+  public func signatures(in revision: PDFRevisionIdentifier) async throws -> [PDFSignature] {
+    try await authenticity.signatures(in: revision)
+  }
+
   /// Opens a validated, bounded stream over an embedded file's decoded bytes.
   public func decodedStream(of file: PDFEmbeddedFile) async throws -> PDFDecodedStream {
     let stream = try await resolver.decodedStream(file.stream)
@@ -468,6 +489,7 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
 
   /// Releases the source and all document-owned caches.
   public func close() async {
+    await authenticity.close()
     await assets.close()
     await interactiveStructure.close()
     await structure.close()

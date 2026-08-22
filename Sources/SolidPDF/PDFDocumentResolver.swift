@@ -62,6 +62,11 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
     return try await reader.read(stream.encodedRange)
   }
 
+  func sourceBytes(in range: PDFSourceRange) async throws -> Data {
+    guard !closed else { throw PDFParsingError.documentClosed }
+    return try await reader.read(range)
+  }
+
   func decodedStream(_ stream: PDFStreamObject) async throws -> PDFDecodedStream {
     guard !closed else { throw PDFParsingError.documentClosed }
     let key = PDFStreamCacheKey(stream, security: securityContext?.security)
