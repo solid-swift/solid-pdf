@@ -45,7 +45,7 @@ if [[ -z "${MODULE_DIRECTORY}" ]]; then
   exit 69
 fi
 
-FOUNDATION_PATH="$(swift package show-dependencies --format json | awk '
+FOUNDATION_PATH="$(swift package --scratch-path "${BUILD_ROOT}" show-dependencies --format json | awk '
   /"name"[[:space:]]*:[[:space:]]*"SolidFoundation"/ { found = 1 }
   found && /"path"[[:space:]]*:/ {
     value = $0

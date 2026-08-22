@@ -119,6 +119,84 @@ public enum PDFParsingBenchmarkFixtures {
     return try writer.finish(root: catalog, pageCount: 0).data
   }
 
+  /// Creates a classic document with the requested number of chronological revisions.
+  public static func incrementalDocument(revisionCount: Int = 256) -> Data {
+    precondition(revisionCount > 0)
+    var data = Data("%PDF-1.7\n".utf8)
+    let rootOffset = data.count
+    data.append(Data("1 0 obj\n<< /Type /Catalog /Value 2 0 R >>\nendobj\n".utf8))
+    var valueOffset = data.count
+    data.append(Data("2 0 obj\n0\nendobj\n".utf8))
+    var previousXRefOffset = data.count
+    data.append(Data("xref\n0 3\n0000000000 65535 f \n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", rootOffset).utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", valueOffset).utf8))
+    data.append(Data("trailer\n<< /Size 3 /Root 1 0 R >>\n".utf8))
+    data.append(Data("startxref\n\(previousXRefOffset)\n%%EOF\n".utf8))
+
+    for revision in 1..<revisionCount {
+      valueOffset = data.count
+      data.append(Data("2 0 obj\n\(revision)\nendobj\n".utf8))
+      let xrefOffset = data.count
+      data.append(Data("xref\n2 1\n".utf8))
+      data.append(Data(String(format: "%010d 00000 n \n", valueOffset).utf8))
+      data.append(
+        Data(
+          ("trailer\n<< /Size 3 /Root 1 0 R /Prev \(previousXRefOffset) >>\n"
+            + "startxref\n\(xrefOffset)\n%%EOF\n").utf8
+        )
+      )
+      previousXRefOffset = xrefOffset
+    }
+    return data
+  }
+
+  /// A qpdf-authored R4 RC4 interoperability fixture with password `user`.
+  public static let r4RC4Document = decodedFixture(
+    "JVBERi0xLjcKJb/3ov4KMSAwIG9iago8PCAvUGFnZXMgMiAwIFIgL1R5cGUgL0NhdGFsb2cgPj4K"
+      + "ZW5kb2JqCjIgMCBvYmoKPDwgL0NvdW50IDEgL0tpZHMgWyAzIDAgUiBdIC9UeXBlIC9QYWdlcyA+"
+      + "PgplbmRvYmoKMyAwIG9iago8PCAvQ29udGVudHMgNCAwIFIgL01lZGlhQm94IFsgMCAwIDcyIDcy"
+      + "IF0gL1BhcmVudCAyIDAgUiAvUmVzb3VyY2VzIDw8ID4+IC9UeXBlIC9QYWdlID4+CmVuZG9iago0"
+      + "IDAgb2JqCjw8IC9MZW5ndGggMjEgL0ZpbHRlciAvRmxhdGVEZWNvZGUgPj4Kc3RyZWFtCvHI+jNH"
+      + "nAp9HzpCwAOSbNTgIYqERmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvQ0YgPDwgL1N0ZENG"
+      + "IDw8IC9BdXRoRXZlbnQgL0RvY09wZW4gL0NGTSAvVjIgL0xlbmd0aCAxNiA+PiA+PiAvRmlsdGVy"
+      + "IC9TdGFuZGFyZCAvTGVuZ3RoIDEyOCAvTyA8MGJhMzgzNWY4OGY5MDM4OGU3NGU1NDU4NDEyNWNl"
+      + "MTQyYmUwZGUyNGM2YjBkMzc3NDZlMDc1Yjg5MTc1NjY3MT4gL1AgLTQgL1IgNCAvU3RtRiAvU3Rk"
+      + "Q0YgL1N0ckYgL1N0ZENGIC9VIDxmYWY1YzUxYjRlMDY5Mjk0ZTc5NmEzNzAyM2NkYzcwMDAxMjI0"
+      + "NTZhOTFiYWU1MTM0MjczYTZkYjEzNGM4N2M0PiAvViA0ID4+CmVuZG9iagp4cmVmCjAgNgowMDAw"
+      + "MDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgMDAwMDAgbiAKMDAwMDAwMDA2NCAwMDAwMCBuIAow"
+      + "MDAwMDAwMTIzIDAwMDAwIG4gCjAwMDAwMDAyMjcgMDAwMDAgbiAKMDAwMDAwMDMxOCAwMDAwMCBu"
+      + "IAp0cmFpbGVyIDw8IC9Sb290IDEgMCBSIC9TaXplIDYgL0lEIFs8YzY1ZDk4ZmRhN2UzMjZmNjU4"
+      + "M2IwMjQ1OTFhN2ViOTQ+PDljYzk1MzAzODljODYyYzBkNzA3NDkxM2I3MjZhMTkyPl0gL0VuY3J5"
+      + "cHQgNSAwIFIgPj4Kc3RhcnR4cmVmCjYxNAolJUVPRgo="
+  )
+
+  /// A qpdf-authored R6 AES-256 interoperability fixture with password `user`.
+  public static let r6AESDocument = decodedFixture(
+    "JVBERi0xLjcKJb/3ov4KMSAwIG9iago8PCAvRXh0ZW5zaW9ucyA8PCAvQURCRSA8PCAvQmFzZVZl"
+      + "cnNpb24gLzEuNyAvRXh0ZW5zaW9uTGV2ZWwgOCA+PiA+PiAvUGFnZXMgMiAwIFIgL1R5cGUgL0Nh"
+      + "dGFsb2cgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL0NvdW50IDEgL0tpZHMgWyAzIDAgUiBdIC9UeXBl"
+      + "IC9QYWdlcyA+PgplbmRvYmoKMyAwIG9iago8PCAvQ29udGVudHMgNCAwIFIgL01lZGlhQm94IFsg"
+      + "MCAwIDcyIDcyIF0gL1BhcmVudCAyIDAgUiAvUmVzb3VyY2VzIDw8ID4+IC9UeXBlIC9QYWdlID4+"
+      + "CmVuZG9iago0IDAgb2JqCjw8IC9MZW5ndGggNDggL0ZpbHRlciAvRmxhdGVEZWNvZGUgPj4Kc3Ry"
+      + "ZWFtCj8KPfDd3xcAztqZn5+BiW0k+RkDozTea3v1WzJRkL6I39LZ6sQxVqN1LdPCQfRvEGVuZHN0"
+      + "cmVhbQplbmRvYmoKNSAwIG9iago8PCAvQ0YgPDwgL1N0ZENGIDw8IC9BdXRoRXZlbnQgL0RvY09w"
+      + "ZW4gL0NGTSAvQUVTVjMgL0xlbmd0aCAzMiA+PiA+PiAvRmlsdGVyIC9TdGFuZGFyZCAvTGVuZ3Ro"
+      + "IDI1NiAvTyA8MGViYzJiYzA5MTlhOWMxYzRiMDM2NDAwZDNjZTA5ZGVhMDg3ZmYxMDExMjQ3NGJj"
+      + "OGY4MGI1ZWY4N2RjOWFhYWMwMzhhMTVjZTVhMjBkZDdjNTMyMmE3MDMxOTUwOGE0PiAvT0UgPDNm"
+      + "ZTViZmNhYWViOTE0Y2I2NzVjMzcyYjMzMzJiZTY2YjBiZjNmN2QwZTYwZWQ1ZDJjNGNiM2EzOGNj"
+      + "YTNmODc+IC9QIC00IC9QZXJtcyA8Y2YzOTEwMmI3MDEwMmU4YjY5ZThkYTExZThhZDEwOTc+IC9S"
+      + "IDYgL1N0bUYgL1N0ZENGIC9TdHJGIC9TdGRDRiAvVSA8NzlmNWZjNzhjOTU1NDdlNmQ5NDBjZjYy"
+      + "ODM0ZjZmMmUyNzA0NTE3MzJmM2ZmNTUxYTdlZTMyMTFmMWQ2N2ExNTIwZjM5Y2ZkYjViNGZlOGE5"
+      + "N2Q5Nzg1MmJjYjUyMGZhPiAvVUUgPDZlMmExY2Q0NWE2NDg1MzExMTc5YTFhMWUxMmUwN2VlMjhk"
+      + "OTk1YWEwZThlNmFkZTQ0YjI1ZDJkYjhlNWEwYmI+IC9WIDUgPj4KZW5kb2JqCnhyZWYKMCA2CjAw"
+      + "MDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxNSAwMDAwMCBuIAowMDAwMDAwMTMwIDAwMDAwIG4g"
+      + "CjAwMDAwMDAxODkgMDAwMDAgbiAKMDAwMDAwMDI5MyAwMDAwMCBuIAowMDAwMDAwNDExIDAwMDAw"
+      + "IG4gCnRyYWlsZXIgPDwgL1Jvb3QgMSAwIFIgL1NpemUgNiAvSUQgWzxjNjVkOThmZGE3ZTMyNmY2"
+      + "NTgzYjAyNDU5MWE3ZWI5ND48NzYyYzY5NjI5OTc3YmI0MjBjZDhjNGE5MWY5MjQ1NTg+XSAvRW5j"
+      + "cnlwdCA1IDAgUiA+PgpzdGFydHhyZWYKOTU4CiUlRU9GCg=="
+  )
+
   private static func appendXRefEntry(
     type: UInt8,
     field2: Int,
@@ -132,5 +210,12 @@ public enum PDFParsingBenchmarkFixtures {
     data.append(UInt8(field2 & 0xFF))
     data.append(UInt8((field3 >> 8) & 0xFF))
     data.append(UInt8(field3 & 0xFF))
+  }
+
+  private static func decodedFixture(_ value: String) -> Data {
+    guard let data = Data(base64Encoded: value) else {
+      preconditionFailure("A checked-in PDF benchmark fixture is malformed.")
+    }
+    return data
   }
 }

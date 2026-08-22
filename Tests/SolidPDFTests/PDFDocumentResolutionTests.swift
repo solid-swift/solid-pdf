@@ -63,6 +63,19 @@ struct PDFDocumentResolutionTests {
   }
 
   @Test
+  func acceptsAStreamWithoutTheRecommendedLineEndingBeforeEndstream() async throws {
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(streamWithoutTrailingLineEndingFixture())
+    )
+    guard case .stream(let stream) = try await document.resolve(document.root).value else {
+      Issue.record("Expected the root object to be a stream")
+      return
+    }
+    #expect(try await document.encodedBytes(of: stream) == Data([0x00, 0xFF, 0x0D]))
+    await document.close()
+  }
+
+  @Test
   func detectsIndirectLengthCyclesAndGenerationMismatches() async throws {
     let document = try await PDFDocument(source: PDFDataInputSource(cyclicLengthFixture()))
     let first = try PDFObjectReference(objectNumber: 1, generationNumber: 0)
@@ -257,6 +270,20 @@ struct PDFDocumentResolutionTests {
       data.append(Data(String(format: "%010d 00000 n \n", offset).utf8))
     }
     data.append(Data("trailer\n<< /Size 4 /Root 3 0 R >>\n".utf8))
+    data.append(Data("startxref\n\(xrefOffset)\n%%EOF\n".utf8))
+    return data
+  }
+
+  private func streamWithoutTrailingLineEndingFixture() -> Data {
+    var data = Data("%PDF-1.7\n".utf8)
+    let rootOffset = data.count
+    data.append(Data("1 0 obj\n<< /Length 3 >>\nstream\n".utf8))
+    data.append(contentsOf: [0x00, 0xFF, 0x0D])
+    data.append(Data("endstream\nendobj\n".utf8))
+    let xrefOffset = data.count
+    data.append(Data("xref\n0 2\n0000000000 65535 f \n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", rootOffset).utf8))
+    data.append(Data("trailer\n<< /Size 2 /Root 1 0 R >>\n".utf8))
     data.append(Data("startxref\n\(xrefOffset)\n%%EOF\n".utf8))
     return data
   }

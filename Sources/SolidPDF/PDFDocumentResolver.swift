@@ -1,4 +1,5 @@
 import Foundation
+import SolidIO
 
 actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   private struct ResolutionKey: Sendable, Hashable {
@@ -17,7 +18,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   private let index: PDFCrossReferenceIndex
   private let options: PDFParsingOptions
   private let externalStreamProvider: (any PDFExternalStreamProvider)?
-  private let securityContext: PDFSecurityContext?
+  private var securityContext: PDFSecurityContext?
   private let streamRegistry = PDFDecodedStreamRegistry()
   private var objectCache = [ResolutionKey: PDFIndirectObject]()
   private var decodedObjectStreams = [ResolutionKey: DecodedObjectStream]()
@@ -62,10 +63,11 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
 
   func decodedStream(_ stream: PDFStreamObject) async throws -> PDFDecodedStream {
     guard !closed else { throw PDFParsingError.documentClosed }
+    let key = PDFStreamCacheKey(stream, security: securityContext?.security)
     if stream.dictionary[PDFName("F")] == nil,
-      let cached = decodedStreamCache[PDFStreamCacheKey(stream)]
+      let cached = decodedStreamCache[key]
     {
-      touchDecodedStream(PDFStreamCacheKey(stream))
+      touchDecodedStream(key)
       return PDFDecodedStream(
         state: PDFBufferedDecodedStreamState(
           data: cached,
@@ -79,7 +81,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   func decodedBytes(_ stream: PDFStreamObject) async throws -> Data {
     guard !closed else { throw PDFParsingError.documentClosed }
     let cacheable = stream.dictionary[PDFName("F")] == nil
-    let key = PDFStreamCacheKey(stream)
+    let key = PDFStreamCacheKey(stream, security: securityContext?.security)
     if cacheable, let cached = decodedStreamCache[key] {
       touchDecodedStream(key)
       return cached
@@ -130,6 +132,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
     decodedStreamRecency.removeAll()
     decodedStreamCacheBytes = 0
     await streamRegistry.closeAll()
+    securityContext = nil
     await reader.close()
   }
 
@@ -211,9 +214,24 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
           )
         )
       }
+      let rawValue: PDFObject
+      if let securityContext,
+        securityContext.encryptionReference != reference,
+        !Self.isCrossReferenceDictionary(raw.value)
+      {
+        do {
+          rawValue = try PDFObjectDecrypter.decrypt(raw.value, in: reference, using: securityContext)
+        } catch {
+          throw PDFParsingError.malformed(
+            .init(offset: offset, object: reference, message: "An encrypted object is malformed.")
+          )
+        }
+      } else {
+        rawValue = raw.value
+      }
       let value: PDFResolvedObject
       if let streamRange = raw.streamRange {
-        guard case .dictionary(let dictionary) = raw.value else {
+        guard case .dictionary(let dictionary) = rawValue else {
           throw PDFParsingError.malformed(
             .init(offset: offset, object: reference, message: "A stream lacks its dictionary.")
           )
@@ -227,7 +245,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
           )
         )
       } else {
-        value = .value(raw.value)
+        value = .value(rawValue)
       }
       return PDFIndirectObject(
         reference: reference,
@@ -481,6 +499,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
         return value
       }
     )
+    let filters = try decryptionFilters(for: configuration, stream: stream)
     let input: PDFDecodedStreamInput
     if let fileSpecification = configuration.fileSpecification {
       guard let externalStreamProvider else {
@@ -512,7 +531,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
     }
     let state = try PDFIncrementalDecodedStreamState(
       input: input,
-      filters: configuration.filters,
+      filters: filters,
       options: options,
       diagnostic: .init(
         offset: stream.encodedRange.offset,
@@ -523,6 +542,91 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
     )
     await state.register()
     return PDFDecodedStream(state: state)
+  }
+
+  private func decryptionFilters(
+    for configuration: PDFStreamConfiguration,
+    stream: PDFStreamObject
+  ) throws -> [PDFStreamFilterSpecification] {
+    var filters = configuration.filters
+    if let cryptIndex = filters.firstIndex(where: { $0.name == PDFName("Crypt") }) {
+      guard cryptIndex == 0 else {
+        throw PDFParsingError.malformed(
+          .init(
+            offset: stream.encodedRange.offset,
+            object: stream.objectReference,
+            message: "Crypt must be the first stream filter."
+          )
+        )
+      }
+      let name: PDFName
+      if let value = filters[0].parameters?["Name"] {
+        guard case .name(let selectedName) = value else {
+          throw PDFParsingError.malformed(
+            .init(
+              offset: stream.encodedRange.offset,
+              object: stream.objectReference,
+              message: "A Crypt filter Name must be a name."
+            )
+          )
+        }
+        name = selectedName
+      } else {
+        name = PDFName("Identity")
+      }
+      let implementation: any IncrementalFilter
+      if name == PDFName("Identity") {
+        implementation = PDFIdentityDecryptionFilter()
+      } else {
+        guard let securityContext, let reference = stream.objectReference else {
+          throw PDFParsingError.unsupported(
+            .encryptionFilter,
+            .init(
+              offset: stream.encodedRange.offset,
+              object: stream.objectReference,
+              message: "An explicit Crypt filter requires an authenticated document object."
+            )
+          )
+        }
+        implementation = try securityContext.explicitStreamFilter(named: name, object: reference)
+      }
+      filters[0] = PDFStreamFilterSpecification(
+        name: PDFName("Crypt"),
+        parameters: filters[0].parameters,
+        implementation: implementation
+      )
+      return filters
+    }
+
+    guard configuration.fileSpecification == nil, let securityContext else { return filters }
+    guard let reference = stream.objectReference else {
+      throw PDFParsingError.malformed(
+        .init(
+          offset: stream.encodedRange.offset,
+          message: "An encrypted embedded stream lacks indirect object identity."
+        )
+      )
+    }
+    let kind: PDFSecurityContext.StreamKind
+    switch stream.dictionary.pdfName(named: "Type") {
+    case PDFName("XRef"): kind = .crossReference
+    case PDFName("Metadata"): kind = .metadata
+    case PDFName("EmbeddedFile"): kind = .embeddedFile
+    default: kind = .ordinary
+    }
+    guard let implementation = try securityContext.implicitStreamFilter(
+      for: kind,
+      object: reference
+    ) else { return filters }
+    filters.insert(
+      PDFStreamFilterSpecification(
+        name: PDFName("Crypt"),
+        parameters: nil,
+        implementation: implementation
+      ),
+      at: 0
+    )
+    return filters
   }
 
   private func insertDecodedStream(_ data: Data, for key: PDFStreamCacheKey) {
@@ -542,5 +646,10 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   private func touchDecodedStream(_ key: PDFStreamCacheKey) {
     decodedStreamRecency.removeAll { $0 == key }
     decodedStreamRecency.append(key)
+  }
+
+  private static func isCrossReferenceDictionary(_ object: PDFObject) -> Bool {
+    guard case .dictionary(let dictionary) = object else { return false }
+    return dictionary.pdfName(named: "Type") == PDFName("XRef")
   }
 }

@@ -47,14 +47,8 @@ extension PDFObjectParser {
       try await cursor.seek(to: streamStart + length)
       if try await cursor.consume(0x0D) {
         _ = try await cursor.consume(0x0A)
-      } else if !(try await cursor.consume(0x0A)) {
-        throw PDFParsingError.malformed(
-          .init(
-            offset: position,
-            object: header.reference,
-            message: "The stream data must be followed by a line ending."
-          )
-        )
+      } else {
+        _ = try await cursor.consume(0x0A)
       }
       try await requireKeyword("endstream")
       try await skipWhitespaceAndComments()

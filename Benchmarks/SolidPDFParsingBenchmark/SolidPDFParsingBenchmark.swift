@@ -28,6 +28,7 @@ let benchmarks: @Sendable () -> Void = {
     bytes: decodedStreamBytes,
     compressed: true
   )
+  let incremental = PDFParsingBenchmarkFixtures.incrementalDocument(revisionCount: 256)
   let coldFile = FileManager.default.temporaryDirectory
     .appendingPathComponent("SolidPDFParsingBenchmark-(UUID().uuidString).pdf")
   try! classic.write(to: coldFile)
@@ -88,6 +89,61 @@ let benchmarks: @Sendable () -> Void = {
     benchmark.stopMeasurement()
     await document.close()
   }
+
+  Benchmark("256-Revision Chain Open", configuration: configuration) { benchmark in
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      let document = try await PDFDocument(source: PDFDataInputSource(incremental))
+      blackHole(document.latestRevision)
+      await document.close()
+    }
+  }
+
+  Benchmark("Cold Historical Resolution", configuration: configuration) { benchmark in
+    let reference = try PDFObjectReference(objectNumber: 2, generationNumber: 0)
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      let document = try await PDFDocument(source: PDFDataInputSource(incremental))
+      blackHole(try await document.resolve(reference, in: document.revisions[0].identifier))
+      await document.close()
+    }
+  }
+
+  Benchmark("Cached Historical Resolution", configuration: configuration) { benchmark in
+    let document = try await PDFDocument(source: PDFDataInputSource(incremental))
+    let reference = try PDFObjectReference(objectNumber: 2, generationNumber: 0)
+    let revision = document.revisions[0].identifier
+    _ = try await document.resolve(reference, in: revision)
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      blackHole(try await document.resolve(reference, in: revision))
+    }
+    benchmark.stopMeasurement()
+    await document.close()
+  }
+
+  Benchmark("R6 Authentication", configuration: configuration) { benchmark in
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      let document = try await PDFDocument(
+        source: PDFDataInputSource(PDFParsingBenchmarkFixtures.r6AESDocument),
+        password: PDFPassword("user")
+      )
+      blackHole(document.security)
+      await document.close()
+    }
+  }
+
+  registerEncryptedStreamDecode(
+    "RC4 Stream Decode",
+    data: PDFParsingBenchmarkFixtures.r4RC4Document,
+    configuration: configuration
+  )
+  registerEncryptedStreamDecode(
+    "AES-256 Stream Decode",
+    data: PDFParsingBenchmarkFixtures.r6AESDocument,
+    configuration: configuration
+  )
 }
 
 private func registerOpen(
@@ -114,6 +170,47 @@ private func catalogStream<Source: PDFInputSource>(
     case .stream(let stream) = try await document.resolve(reference).value
   else {
     throw PDFParsingError.malformed(.init(offset: 0, message: "The benchmark stream is absent."))
+  }
+  return stream
+}
+
+private func registerEncryptedStreamDecode(
+  _ name: String,
+  data: Data,
+  configuration: Benchmark.Configuration
+) {
+  Benchmark(name, configuration: configuration) { benchmark in
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(data),
+      password: PDFPassword("user")
+    )
+    let stream = try await pageContentStream(in: document)
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      let decoded = try await document.decodedStream(of: stream)
+      var byteCount = 0
+      for try await chunk in decoded { byteCount += chunk.count }
+      blackHole(byteCount)
+      await decoded.close()
+    }
+    benchmark.stopMeasurement()
+    await document.close()
+  }
+}
+
+private func pageContentStream<Source: PDFInputSource>(
+  in document: PDFDocument<Source>
+) async throws -> PDFStreamObject {
+  guard case .value(.dictionary(let catalog)) = try await document.resolve(document.root).value,
+    case .reference(let pagesReference) = catalog["Pages"],
+    case .value(.dictionary(let pages)) = try await document.resolve(pagesReference).value,
+    case .array(let kids) = pages["Kids"],
+    case .reference(let pageReference) = kids.first,
+    case .value(.dictionary(let page)) = try await document.resolve(pageReference).value,
+    case .reference(let contentReference) = page["Contents"],
+    case .stream(let stream) = try await document.resolve(contentReference).value
+  else {
+    throw PDFParsingError.malformed(.init(offset: 0, message: "The benchmark page is malformed."))
   }
   return stream
 }

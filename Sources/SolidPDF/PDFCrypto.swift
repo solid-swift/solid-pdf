@@ -62,12 +62,12 @@ enum PDFCrypto {
   }
 
   static func constantTimeEqual(_ lhs: Data, _ rhs: Data) -> Bool {
-    var difference = UInt8(truncatingIfNeeded: lhs.count ^ rhs.count)
+    var difference = lhs.count ^ rhs.count
     let count = max(lhs.count, rhs.count)
     for index in 0..<count {
       let left = index < lhs.count ? lhs[index] : 0
       let right = index < rhs.count ? rhs[index] : 0
-      difference |= left ^ right
+      difference |= Int(left ^ right)
     }
     return difference == 0
   }

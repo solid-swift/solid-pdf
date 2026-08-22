@@ -341,9 +341,8 @@ struct PDFStreamDecodingTests {
   }
 
   @Test
-  func rejectsUnavailableImageAndEncryptionFiltersPrecisely() async throws {
+  func rejectsUnavailableImageFiltersPrecisely() async throws {
     let filters: [(PDFName, PDFUnsupportedFeature)] = [
-      ("Crypt", .encryptionFilter),
       ("JPXDecode", .jpxDecode),
       ("JBIG2Decode", .jbig2Decode),
       ("Unknown", .streamFilter("Unknown")),
@@ -365,6 +364,20 @@ struct PDFStreamDecodingTests {
       }
       await document.close()
     }
+  }
+
+  @Test
+  func treatsAnUnnamedCryptFilterAsIdentity() async throws {
+    let expected = Data("unencrypted explicit Crypt data".utf8)
+    let encoded = try makeDocument(
+      data: expected,
+      compressed: false,
+      dictionary: ["Filter": .name("Crypt")]
+    )
+    let document = try await PDFDocument(source: PDFDataInputSource(encoded.data))
+    let stream = try await contentStream(in: document)
+    #expect(try await document.decodedBytes(of: stream) == expected)
+    await document.close()
   }
 
   private func makeDocument(

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ "$#" -ne 2 ]]; then
+  echo "usage: generate-pdf-security-oracles SOURCE_PDF OUTPUT_DIRECTORY" >&2
+  exit 64
+fi
+
+if ! command -v qpdf >/dev/null 2>&1; then
+  echo "error: qpdf is required to generate PDF security oracle files" >&2
+  exit 69
+fi
+
+SOURCE_PDF="$1"
+OUTPUT_DIRECTORY="$2"
+mkdir -p "${OUTPUT_DIRECTORY}"
+
+generate() {
+  local name="$1"
+  shift
+  local output="${OUTPUT_DIRECTORY}/${name}.pdf"
+  qpdf --allow-weak-crypto "${SOURCE_PDF}" \
+    --encrypt --user-password=user --owner-password=owner "$@" -- "${output}"
+  qpdf --password=user --check "${output}"
+  qpdf --password=user --show-encryption "${output}" \
+    >"${OUTPUT_DIRECTORY}/${name}.encryption.txt"
+}
+
+generate r2-rc4 --bits=40
+generate r3-rc4 --bits=128 --use-aes=n
+generate r4-rc4 --bits=128 --use-aes=n --force-V4
+generate r4-aes128 --bits=128 --use-aes=y --force-V4
+generate r5-aes256 --bits=256 --force-R5
+generate r6-aes256 --bits=256
+
+qpdf --version >"${OUTPUT_DIRECTORY}/qpdf-version.txt"

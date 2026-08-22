@@ -5,6 +5,17 @@ import SolidImageIO
 struct PDFStreamFilterSpecification: Sendable {
   let name: PDFName
   let parameters: [PDFName: PDFObject]?
+  let implementation: (any IncrementalFilter)?
+
+  init(
+    name: PDFName,
+    parameters: [PDFName: PDFObject]?,
+    implementation: (any IncrementalFilter)? = nil
+  ) {
+    self.name = name
+    self.parameters = parameters
+    self.implementation = implementation
+  }
 }
 
 struct PDFStreamConfiguration: Sendable {
@@ -169,6 +180,7 @@ struct PDFStreamFilterFactory {
     diagnostic: PDFParsingDiagnostic,
     maximumDecodedBytes: Int
   ) throws -> [any IncrementalFilter] {
+    if let implementation = specification.implementation { return [implementation] }
     switch specification.name {
     case PDFName("ASCIIHexDecode"):
       return [ASCIIHexDecoder()]

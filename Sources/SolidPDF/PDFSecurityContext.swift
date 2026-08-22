@@ -1,6 +1,13 @@
 import Foundation
+import SolidIO
 
 struct PDFSecurityContext: Sendable {
+  enum StreamKind: Equatable {
+    case ordinary
+    case embeddedFile
+    case metadata
+    case crossReference
+  }
   struct AuthenticationResult: Sendable {
     let key: Data
     let kind: PDFAuthenticationKind
@@ -10,6 +17,91 @@ struct PDFSecurityContext: Sendable {
   let fileKey: Data
   let encryptionReference: PDFObjectReference?
   let cryptFilters: [PDFName: PDFCryptFilterDescription]
+
+  func decryptString(_ data: Data, in object: PDFObjectReference) throws -> Data {
+    try decrypt(data, using: security.stringFilter, object: object)
+  }
+
+  func implicitStreamFilter(
+    for kind: StreamKind,
+    object: PDFObjectReference
+  ) throws -> (any IncrementalFilter)? {
+    if kind == .crossReference || kind == .metadata && !security.encryption.encryptsMetadata {
+      return nil
+    }
+    let name = kind == .embeddedFile ? security.embeddedFileFilter : security.streamFilter
+    guard name != PDFName("Identity") else { return nil }
+    return try decryptionFilter(named: name, object: object)
+  }
+
+  func explicitStreamFilter(
+    named name: PDFName,
+    object: PDFObjectReference
+  ) throws -> any IncrementalFilter {
+    try decryptionFilter(named: name, object: object)
+  }
+
+  private func decrypt(
+    _ data: Data,
+    using filterName: PDFName,
+    object: PDFObjectReference
+  ) throws -> Data {
+    let filter = try decryptionFilter(named: filterName, object: object)
+    var output = Data()
+    let result = try filter.process(input: data)
+    output.append(result.output)
+    output.append(try filter.finish() ?? Data())
+    return output
+  }
+
+  private func decryptionFilter(
+    named name: PDFName,
+    object: PDFObjectReference?
+  ) throws -> any IncrementalFilter {
+    if name == PDFName("Identity") { return PDFIdentityDecryptionFilter() }
+    guard let description = cryptFilters[name] else {
+      throw PDFParsingError.malformed(
+        .init(offset: 0, object: object, message: "A crypt filter is undefined.")
+      )
+    }
+    switch description.method {
+    case .identity:
+      return PDFIdentityDecryptionFilter()
+    case .rc4:
+      guard let object else {
+        throw Self.malformed("RC4 string decryption lacks object identity.")
+      }
+      return try PDFRC4DecryptionFilter(
+        key: objectKey(for: object, description: description, usesAESSalt: false)
+      )
+    case .aes128:
+      guard let object else {
+        throw Self.malformed("AES string decryption lacks object identity.")
+      }
+      return PDFAESDecryptionFilter(
+        key: objectKey(for: object, description: description, usesAESSalt: true)
+      )
+    case .aes256:
+      return PDFAESDecryptionFilter(key: fileKey)
+    }
+  }
+
+  private func objectKey(
+    for object: PDFObjectReference,
+    description: PDFCryptFilterDescription,
+    usesAESSalt: Bool
+  ) -> Data {
+    var input = Data(fileKey.prefix(description.keyByteCount))
+    input.append(contentsOf: [
+      UInt8(object.objectNumber & 0xFF),
+      UInt8((object.objectNumber >> 8) & 0xFF),
+      UInt8((object.objectNumber >> 16) & 0xFF),
+      UInt8(object.generationNumber & 0xFF),
+      UInt8((object.generationNumber >> 8) & 0xFF),
+    ])
+    if usesAESSalt { input.append(Data("sAlT".utf8)) }
+    return PDFCrypto.md5(input).prefix(min(description.keyByteCount + 5, 16))
+  }
 
   private static let passwordPadding = Data([
     0x28, 0xBF, 0x4E, 0x5E, 0x4E, 0x75, 0x8A, 0x41,
@@ -172,7 +264,7 @@ struct PDFSecurityContext: Sendable {
       }
       round += 1
       if round >= 64, Int(encrypted.last ?? 0) <= round - 32 { return key.prefix(32) }
-      guard round < 256 else {
+      guard round < 288 else {
         throw malformed("R6 password hashing exceeded its bounded rounds.")
       }
     }
@@ -302,9 +394,12 @@ struct PDFSecurityContext: Sendable {
       result: AuthenticationResult,
       encryptionReference: PDFObjectReference?
     ) -> PDFSecurityContext {
+      let revisionPermissions: PDFPermissionSet = revision == 2
+        ? [.print, .modify, .extract, .annotate]
+        : .all
       let effectivePermissions: PDFPermissionSet = result.kind == .owner
         ? .all
-        : PDFPermissionSet(rawValue: rawPermissions & PDFPermissionSet.all.rawValue)
+        : PDFPermissionSet(rawValue: rawPermissions & revisionPermissions.rawValue)
       return PDFSecurityContext(
         security: PDFDocumentSecurity(
           encryption: description,

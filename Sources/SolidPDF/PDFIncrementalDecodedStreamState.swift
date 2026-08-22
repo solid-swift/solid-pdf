@@ -4,10 +4,14 @@ import SolidIO
 struct PDFStreamCacheKey: Hashable, Sendable {
   let range: PDFSourceRange
   let reference: PDFObjectReference?
+  let revision: PDFRevisionIdentifier?
+  let security: PDFDocumentSecurity?
 
-  init(_ stream: PDFStreamObject) {
+  init(_ stream: PDFStreamObject, security: PDFDocumentSecurity?) {
     range = stream.encodedRange
     reference = stream.objectReference
+    revision = stream.revision
+    self.security = security
   }
 }
 

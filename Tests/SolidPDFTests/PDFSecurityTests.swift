@@ -35,6 +35,7 @@ struct PDFSecurityTests {
         removesPadding: false
       ) == plaintext
     )
+    #expect(!PDFCrypto.constantTimeEqual(Data(), Data(repeating: 0, count: 256)))
   }
 
   @Test(arguments: [2, 3, 4, 5, 6])
@@ -51,6 +52,14 @@ struct PDFSecurityTests {
     #expect(userDocument.security?.encryption.revision == revision)
     #expect(userDocument.security?.authentication == .user)
     #expect(userDocument.security?.rawPermissionFlags == UInt32(bitPattern: Int32(-4)))
+    if revision == 2 {
+      #expect(
+        userDocument.security?.effectivePermissions
+          == [.print, .modify, .extract, .annotate]
+      )
+    } else {
+      #expect(userDocument.security?.effectivePermissions == .all)
+    }
     await userDocument.close()
 
     let ownerDocument = try await PDFDocument(
@@ -84,6 +93,32 @@ struct PDFSecurityTests {
     )
     #expect(document.security?.authentication == .user)
     #expect(await provider.attempts == [1, 2])
+    await document.close()
+
+    await #expect(throws: PDFParsingError.self) {
+      _ = try await PDFDocument(
+        source: PDFDataInputSource(fixture),
+        passwordProvider: FailingPasswordProvider()
+      )
+    }
+    await #expect(throws: CancellationError.self) {
+      _ = try await PDFDocument(
+        source: PDFDataInputSource(fixture),
+        passwordProvider: CancellingPasswordProvider()
+      )
+    }
+  }
+
+  @Test
+  func authenticatesAnExactByteLegacyPassword() async throws {
+    let password = Data([0x80, 0xFF, 0x00, 0x41])
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        try encryptedFixture(revision: 2, exactUserPassword: password)
+      ),
+      password: PDFPassword(exactBytes: password)
+    )
+    #expect(document.security?.authentication == .user)
     await document.close()
   }
 
@@ -125,10 +160,190 @@ struct PDFSecurityTests {
     #expect(password.debugDescription == "<redacted PDF password>")
   }
 
+  @Test(arguments: [2, 3, 4, 5, 6])
+  func decryptsRecursiveStringsAndStreams(_ revision: Int) async throws {
+    let fixture = try encryptedFixture(revision: revision)
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(fixture),
+      password: PDFPassword(revision == 6 ? "IX" : "user")
+    )
+    let stringReference = try PDFObjectReference(objectNumber: 3, generationNumber: 0)
+    let stringObject = try await document.resolve(stringReference)
+    guard case .value(.dictionary(let dictionary)) = stringObject.value,
+      case .string(let literal) = dictionary["Literal"],
+      case .array(let nested) = dictionary["Nested"],
+      case .string(let nestedString) = nested.first,
+      case .string(let escaped) = dictionary["Escaped"]
+    else {
+      Issue.record("Expected recursively decrypted strings")
+      return
+    }
+    #expect(literal.bytes == Data("Secret text".utf8))
+    #expect(nestedString.bytes == Data("Secret text".utf8))
+    #expect(literal.representation == .hexadecimal)
+    #expect(escaped.bytes == Data("Secret text".utf8))
+    #expect(escaped.representation == .literal)
+
+    let streamReference = try PDFObjectReference(objectNumber: 4, generationNumber: 0)
+    guard case .stream(let stream) = try await document.resolve(streamReference).value else {
+      Issue.record("Expected an encrypted stream")
+      return
+    }
+    #expect(try await document.encodedBytes(of: stream) != Data("Stream secret".utf8))
+    #expect(try await document.decodedBytes(of: stream) == Data("Stream secret".utf8))
+    await document.close()
+  }
+
+  @Test(arguments: [StreamFixtureMode.explicit, .identity, .metadata, .embeddedIdentity])
+  func appliesExplicitIdentityAndMetadataCryptRules(_ mode: StreamFixtureMode) async throws {
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(try encryptedFixture(revision: 4, streamMode: mode)),
+      password: PDFPassword("user")
+    )
+    let reference = try PDFObjectReference(objectNumber: 4, generationNumber: 0)
+    guard case .stream(let stream) = try await document.resolve(reference).value else {
+      Issue.record("Expected a test stream")
+      return
+    }
+    #expect(try await document.decodedBytes(of: stream) == Data("Stream secret".utf8))
+    await document.close()
+  }
+
+  @Test
+  func requiresCryptToBeTheFirstFilter() async throws {
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        try encryptedFixture(revision: 4, streamMode: .misorderedCrypt)
+      ),
+      password: PDFPassword("user")
+    )
+    let reference = try PDFObjectReference(objectNumber: 4, generationNumber: 0)
+    guard case .stream(let stream) = try await document.resolve(reference).value else {
+      Issue.record("Expected a test stream")
+      return
+    }
+    await #expect(throws: PDFParsingError.self) {
+      _ = try await document.decodedBytes(of: stream)
+    }
+    await document.close()
+  }
+
+  @Test
+  func appliesCryptFiltersToExternalStreamsWithoutImplicitDecryption() async throws {
+    let identifier = Data("0123456789abcdef".utf8)
+    let values = try legacyValues(
+      revision: 4,
+      userPassword: Data("user".utf8),
+      ownerPassword: Data("owner".utf8),
+      identifier: identifier,
+      permissions: UInt32(bitPattern: -4)
+    )
+    let plaintext = Data("External stream secret".utf8)
+    let ciphertext = try encryptObjectData(
+      plaintext,
+      revision: 4,
+      fileKey: values.fileKey,
+      objectNumber: 4
+    )
+
+    for (mode, externalBytes) in [
+      (StreamFixtureMode.externalExplicit, ciphertext),
+      (.externalPlain, plaintext),
+    ] {
+      let document = try await PDFDocument(
+        source: PDFDataInputSource(try encryptedFixture(revision: 4, streamMode: mode)),
+        externalStreamProvider: SecurityExternalStreamProvider(data: externalBytes),
+        password: PDFPassword("user")
+      )
+      let reference = try PDFObjectReference(objectNumber: 4, generationNumber: 0)
+      guard case .stream(let stream) = try await document.resolve(reference).value else {
+        Issue.record("Expected an external test stream")
+        return
+      }
+      #expect(try await document.decodedBytes(of: stream) == plaintext)
+      await document.close()
+    }
+  }
+
+  @Test(arguments: [4, 6])
+  func rejectsInvalidAESCiphertextPadding(_ revision: Int) async throws {
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(
+        try encryptedFixture(revision: revision, streamMode: .corruptCiphertext)
+      ),
+      password: PDFPassword(revision == 6 ? "IX" : "user")
+    )
+    let reference = try PDFObjectReference(objectNumber: 4, generationNumber: 0)
+    guard case .stream(let stream) = try await document.resolve(reference).value else {
+      Issue.record("Expected a corrupt encrypted stream")
+      return
+    }
+    await #expect(throws: PDFParsingError.self) {
+      _ = try await document.decodedBytes(of: stream)
+    }
+    await document.close()
+  }
+
+  @Test
+  func rejectsTamperedModernPermissions() async throws {
+    let fixture = try tamperingFirstHexDigit(
+      after: "/Perms <",
+      in: encryptedFixture(revision: 6)
+    )
+    await #expect(throws: PDFParsingError.self) {
+      _ = try await PDFDocument(
+        source: PDFDataInputSource(fixture),
+        password: PDFPassword("IX")
+      )
+    }
+  }
+
+  @Test
+  func decryptsObjectStreamsExactlyOnce() async throws {
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(try encryptedObjectStreamFixture()),
+      password: PDFPassword("user")
+    )
+    let reference = try PDFObjectReference(objectNumber: 6, generationNumber: 0)
+    let object = try await document.resolve(reference)
+    guard case .value(.dictionary(let dictionary)) = object.value,
+      case .string(let string) = dictionary["Secret"]
+    else {
+      Issue.record("Expected an object-stream string")
+      return
+    }
+    #expect(string.bytes == Data("Inside object stream".utf8))
+    #expect(
+      object.provenance
+        == .objectStream(
+          container: try PDFObjectReference(objectNumber: 5, generationNumber: 0),
+          index: 0
+        )
+    )
+    await document.close()
+  }
+
+  @Test
+  func decryptsHistoricalAndUpdatedObjectsInTheirSelectedRevision() async throws {
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(try encryptedIncrementalFixture()),
+      password: PDFPassword("user")
+    )
+    #expect(document.revisions.count == 2)
+    let reference = try PDFObjectReference(objectNumber: 3, generationNumber: 0)
+    let historical = try await document.resolve(reference, in: document.revisions[0].identifier)
+    let latest = try await document.resolve(reference)
+    #expect(decryptedLiteral(in: historical) == Data("Secret text".utf8))
+    #expect(decryptedLiteral(in: latest) == Data("Updated secret".utf8))
+    await document.close()
+  }
+
   private func encryptedFixture(
     revision: Int,
     userPassword: String = "user",
-    ownerPassword: String = "owner"
+    ownerPassword: String = "owner",
+    exactUserPassword: Data? = nil,
+    streamMode: StreamFixtureMode = .implicit
   ) throws -> Data {
     let identifier = Data("0123456789abcdef".utf8)
     let permissions = UInt32(bitPattern: -4)
@@ -141,8 +356,8 @@ struct PDFSecurityTests {
       )
       : legacyValues(
         revision: revision,
-        userPassword: userPassword,
-        ownerPassword: ownerPassword,
+        userPassword: exactUserPassword ?? Data(userPassword.utf8),
+        ownerPassword: Data(ownerPassword.utf8),
         identifier: identifier,
         permissions: permissions
       )
@@ -153,37 +368,263 @@ struct PDFSecurityTests {
     default: 5
     }
     let length = revision == 2 ? "" : " /Length \(revision >= 5 ? 256 : 128)"
+    let embeddedFileFilter = streamMode == .embeddedIdentity ? " /EFF /Identity" : ""
     let filters = revision >= 4
-      ? " /CF << /StdCF << /CFM /\(revision >= 5 ? "AESV3" : "AESV2") /Length \(revision >= 5 ? 32 : 16) >> >> /StmF /StdCF /StrF /StdCF /EncryptMetadata false"
+      ? " /CF << /StdCF << /CFM /\(revision >= 5 ? "AESV3" : "AESV2") /Length \(revision >= 5 ? 32 : 16) >> >> /StmF /StdCF /StrF /StdCF\(embeddedFileFilter) /EncryptMetadata false"
       : ""
     let modern = revision >= 5
       ? " /OE <\(values.ownerEncryptedKey!.hex)> /UE <\(values.userEncryptedKey!.hex)> /Perms <\(values.permissions!.hex)>"
       : ""
     let encryptionDictionary = "<< /Filter /Standard    /V \(version) /R \(revision)\(length) /O <\(values.owner.hex)> /U <\(values.user.hex)>\(modern) /P -4\(filters) >>"
+    let encryptedString = try encryptObjectData(
+      Data("Secret text".utf8),
+      revision: revision,
+      fileKey: values.fileKey,
+      objectNumber: 3
+    )
+    let streamPlaintext = Data("Stream secret".utf8)
+    let encryptedStream = try encryptObjectData(
+      streamPlaintext,
+      revision: revision,
+      fileKey: values.fileKey,
+      objectNumber: 4
+    )
+    let streamPayload: Data
+    let streamEntries: String
+    switch streamMode {
+    case .implicit:
+      streamPayload = encryptedStream
+      streamEntries = ""
+    case .explicit:
+      streamPayload = encryptedStream
+      streamEntries = "/Filter /Crypt /DecodeParms << /Name /StdCF >> "
+    case .identity:
+      streamPayload = streamPlaintext
+      streamEntries = "/Filter /Crypt /DecodeParms << /Name /Identity >> "
+    case .metadata:
+      streamPayload = streamPlaintext
+      streamEntries = "/Type /Metadata "
+    case .embeddedIdentity:
+      streamPayload = streamPlaintext
+      streamEntries = "/Type /EmbeddedFile "
+    case .misorderedCrypt:
+      streamPayload = encryptedStream
+      streamEntries = "/Filter [/ASCIIHexDecode /Crypt] /DecodeParms [null << /Name /StdCF >>] "
+    case .externalExplicit:
+      streamPayload = Data("ignored embedded data".utf8)
+      streamEntries = "/F /External /FFilter /Crypt /FDecodeParms << /Name /StdCF >> "
+    case .externalPlain:
+      streamPayload = Data("ignored embedded data".utf8)
+      streamEntries = "/F /External "
+    case .corruptCiphertext:
+      var corrupted = encryptedStream
+      corrupted[corrupted.index(before: corrupted.endIndex)] ^= 0x01
+      streamPayload = corrupted
+      streamEntries = ""
+    }
 
     var data = Data("%PDF-1.7\n".utf8)
     let rootOffset = data.count
-    data.append(Data("1 0 obj\n<< /Type /Catalog >>\nendobj\n".utf8))
+    data.append(Data("1 0 obj\n<< /Type /Catalog /Secret 3 0 R /Contents 4 0 R >>\nendobj\n".utf8))
     let encryptionOffset = data.count
     data.append(Data("2 0 obj\n\(encryptionDictionary)\nendobj\n".utf8))
-    let xrefOffset = data.count
-    data.append(Data("xref\n0 3\n0000000000 65535 f \n".utf8))
-    data.append(Data(String(format: "%010d 00000 n \n", rootOffset).utf8))
-    data.append(Data(String(format: "%010d 00000 n \n", encryptionOffset).utf8))
+    let stringOffset = data.count
     data.append(
       Data(
-        ("trailer\n<< /Size 3 /Root 1 0 R /Encrypt 2 0 R /ID [<\(identifier.hex)> <\(identifier.hex)>] >>\n"
+        ("3 0 obj\n<< /Literal <\(encryptedString.hex)> "
+          + "/Nested [<\(encryptedString.hex)>] "
+          + "/Escaped (\(octalLiteral(encryptedString))) >>\nendobj\n").utf8
+      )
+    )
+    let streamOffset = data.count
+    data.append(Data("4 0 obj\n<< \(streamEntries)/Length \(streamPayload.count) >>\nstream\n".utf8))
+    data.append(streamPayload)
+    data.append(Data("\nendstream\nendobj\n".utf8))
+    let xrefOffset = data.count
+    data.append(Data("xref\n0 5\n0000000000 65535 f \n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", rootOffset).utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", encryptionOffset).utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", stringOffset).utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", streamOffset).utf8))
+    data.append(
+      Data(
+        ("trailer\n<< /Size 5 /Root 1 0 R /Encrypt 2 0 R /ID [<\(identifier.hex)> <\(identifier.hex)>] >>\n"
           + "startxref\n\(xrefOffset)\n%%EOF\n").utf8
       )
     )
     return data
   }
 
-  private func replacing(_ data: Data, _ original: String, with replacement: String) -> Data {
-    Data(
-      String(decoding: data, as: UTF8.self)
-        .replacingOccurrences(of: original, with: replacement).utf8
+  private func encryptObjectData(
+    _ plaintext: Data,
+    revision: Int,
+    fileKey: Data,
+    objectNumber: Int
+  ) throws -> Data {
+    if revision >= 5 {
+      let iv = Data(repeating: UInt8(objectNumber), count: 16)
+      var result = iv
+      result.append(
+        try PDFCrypto.aesCBCEncrypt(
+          plaintext,
+          key: fileKey,
+          initializationVector: iv,
+          addsPadding: true
+        )
+      )
+      return result
+    }
+    var keyInput = fileKey
+    keyInput.append(contentsOf: [
+      UInt8(objectNumber & 0xFF), UInt8((objectNumber >> 8) & 0xFF),
+      UInt8((objectNumber >> 16) & 0xFF), 0, 0,
+    ])
+    if revision == 4 { keyInput.append(Data("sAlT".utf8)) }
+    let objectKey = PDFCrypto.md5(keyInput).prefix(min(fileKey.count + 5, 16))
+    if revision < 4 { return try PDFRC4.process(plaintext, key: objectKey) }
+    let iv = Data(repeating: UInt8(objectNumber), count: 16)
+    var result = iv
+    result.append(
+      try PDFCrypto.aesCBCEncrypt(
+        plaintext,
+        key: objectKey,
+        initializationVector: iv,
+        addsPadding: true
+      )
     )
+    return result
+  }
+
+  private func encryptedObjectStreamFixture() throws -> Data {
+    let identifier = Data("0123456789abcdef".utf8)
+    let permissions = UInt32(bitPattern: Int32(-4))
+    let values = try legacyValues(
+      revision: 4,
+      userPassword: Data("user".utf8),
+      ownerPassword: Data("owner".utf8),
+      identifier: identifier,
+      permissions: permissions
+    )
+    let encryptionDictionary = "<< /Filter /Standard /V 4 /R 4 /Length 128 /O <\(values.owner.hex)> /U <\(values.user.hex)> /P -4 /CF << /StdCF << /CFM /AESV2 /Length 16 >> >> /StmF /StdCF /StrF /StdCF /EncryptMetadata false >>"
+    var data = Data("%PDF-1.7\n".utf8)
+    let rootOffset = data.count
+    data.append(Data("1 0 obj\n<< /Type /Catalog /Member 6 0 R >>\nendobj\n".utf8))
+    let encryptionOffset = data.count
+    data.append(Data("2 0 obj\n\(encryptionDictionary)\nendobj\n".utf8))
+    let objectStreamOffset = data.count
+    let decodedObjectStream = Data("6 0 << /Secret (Inside object stream) >>".utf8)
+    let encodedObjectStream = try encryptObjectData(
+      decodedObjectStream,
+      revision: 4,
+      fileKey: values.fileKey,
+      objectNumber: 5
+    )
+    data.append(
+      Data(
+        ("5 0 obj\n<< /Type /ObjStm /N 1 /First 4 /Length \(encodedObjectStream.count) >>\n"
+          + "stream\n").utf8
+      )
+    )
+    data.append(encodedObjectStream)
+    data.append(Data("\nendstream\nendobj\n".utf8))
+    let xrefOffset = data.count
+    var entries = Data()
+    appendEntry(type: 0, field2: 0, field3: 65_535, to: &entries)
+    appendEntry(type: 1, field2: rootOffset, field3: 0, to: &entries)
+    appendEntry(type: 1, field2: encryptionOffset, field3: 0, to: &entries)
+    appendEntry(type: 0, field2: 0, field3: 0, to: &entries)
+    appendEntry(type: 0, field2: 0, field3: 0, to: &entries)
+    appendEntry(type: 1, field2: objectStreamOffset, field3: 0, to: &entries)
+    appendEntry(type: 2, field2: 5, field3: 0, to: &entries)
+    appendEntry(type: 1, field2: xrefOffset, field3: 0, to: &entries)
+    data.append(
+      Data(
+        ("7 0 obj\n<< /Type /XRef /Size 8 /Root 1 0 R /Encrypt 2 0 R "
+          + "/ID [<\(identifier.hex)> <\(identifier.hex)>] /W [1 4 2] "
+          + "/Length \(entries.count) >>\nstream\n").utf8
+      )
+    )
+    data.append(entries)
+    data.append(Data("\nendstream\nendobj\nstartxref\n\(xrefOffset)\n%%EOF\n".utf8))
+    return data
+  }
+
+  private func encryptedIncrementalFixture() throws -> Data {
+    let identifier = Data("0123456789abcdef".utf8)
+    let permissions = UInt32(bitPattern: Int32(-4))
+    let values = try legacyValues(
+      revision: 4,
+      userPassword: Data("user".utf8),
+      ownerPassword: Data("owner".utf8),
+      identifier: identifier,
+      permissions: permissions
+    )
+    var data = try encryptedFixture(revision: 4)
+    let previousOffset = terminalCrossReferenceOffset(in: data)
+    let encrypted = try encryptObjectData(
+      Data("Updated secret".utf8),
+      revision: 4,
+      fileKey: values.fileKey,
+      objectNumber: 3
+    )
+    let objectOffset = data.count
+    data.append(Data("3 0 obj\n<< /Literal <\(encrypted.hex)> >>\nendobj\n".utf8))
+    let xrefOffset = data.count
+    data.append(Data("xref\n3 1\n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", objectOffset).utf8))
+    data.append(
+      Data(
+        ("trailer\n<< /Size 5 /Root 1 0 R /Encrypt 2 0 R /Prev \(previousOffset) "
+          + "/ID [<\(identifier.hex)> <\(identifier.hex)>] >>\n"
+          + "startxref\n\(xrefOffset)\n%%EOF\n").utf8
+      )
+    )
+    return data
+  }
+
+  private func decryptedLiteral(in object: PDFIndirectObject) -> Data? {
+    guard case .value(.dictionary(let dictionary)) = object.value,
+      case .string(let string) = dictionary["Literal"]
+    else { return nil }
+    return string.bytes
+  }
+
+  private func terminalCrossReferenceOffset(in data: Data) -> Int {
+    let text = String(decoding: data, as: UTF8.self)
+    let markerRange = text.range(of: "startxref\n", options: .backwards)!
+    let start = markerRange.upperBound
+    let end = text[start...].firstIndex(of: "\n")!
+    return Int(text[start..<end])!
+  }
+
+  private func appendEntry(type: UInt8, field2: Int, field3: Int, to data: inout Data) {
+    data.append(type)
+    data.append(UInt8((field2 >> 24) & 0xFF))
+    data.append(UInt8((field2 >> 16) & 0xFF))
+    data.append(UInt8((field2 >> 8) & 0xFF))
+    data.append(UInt8(field2 & 0xFF))
+    data.append(UInt8((field3 >> 8) & 0xFF))
+    data.append(UInt8(field3 & 0xFF))
+  }
+
+  private func replacing(_ data: Data, _ original: String, with replacement: String) -> Data {
+    var result = data
+    guard let range = result.range(of: Data(original.utf8)) else { return result }
+    result.replaceSubrange(range, with: Data(replacement.utf8))
+    return result
+  }
+
+  private func tamperingFirstHexDigit(after marker: String, in data: Data) throws -> Data {
+    var result = data
+    guard let markerRange = result.range(of: Data(marker.utf8)), markerRange.upperBound < result.endIndex
+    else { throw PDFParsingError.malformed(.init(offset: 0, message: "Fixture marker is absent.")) }
+    let index = markerRange.upperBound
+    result[index] = result[index] == 0x30 ? 0x31 : 0x30
+    return result
+  }
+
+  private func octalLiteral(_ data: Data) -> String {
+    data.map { String(format: "\\%03o", $0) }.joined()
   }
 
   private func incrementallyChangedEncryption(_ original: Data) -> Data {
@@ -201,7 +642,7 @@ struct PDFSecurityTests {
     data.append(Data(String(format: "%010d 00000 n \n", encryptionOffset).utf8))
     data.append(
       Data(
-        ("trailer\n<< /Size 3 /Root 1 0 R /Encrypt 2 0 R /Prev \(previousOffset) "
+        ("trailer\n<< /Size 5 /Root 1 0 R /Encrypt 2 0 R /Prev \(previousOffset) "
           + "/ID [<30313233343536373839616263646566> <30313233343536373839616263646566>] >>\n"
           + "startxref\n\(xrefOffset)\n%%EOF\n").utf8
       )
@@ -211,18 +652,18 @@ struct PDFSecurityTests {
 
   private func legacyValues(
     revision: Int,
-    userPassword: String,
-    ownerPassword: String,
+    userPassword: Data,
+    ownerPassword: Data,
     identifier: Data,
     permissions: UInt32
   ) throws -> SecurityValues {
     let keyByteCount = revision == 2 ? 5 : 16
-    var ownerDigest = PDFCrypto.md5(padded(Data(ownerPassword.utf8)))
+    var ownerDigest = PDFCrypto.md5(padded(ownerPassword))
     if revision >= 3 {
       for _ in 0..<50 { ownerDigest = PDFCrypto.md5(ownerDigest) }
     }
     let ownerKey = ownerDigest.prefix(keyByteCount)
-    var ownerValue = padded(Data(userPassword.utf8))
+    var ownerValue = padded(userPassword)
     if revision == 2 {
       ownerValue = try PDFRC4.process(ownerValue, key: ownerKey)
     } else {
@@ -233,7 +674,7 @@ struct PDFSecurityTests {
         )
       }
     }
-    var keyInput = padded(Data(userPassword.utf8))
+    var keyInput = padded(userPassword)
     keyInput.append(ownerValue)
     keyInput.append(contentsOf: permissions.littleEndianBytes)
     keyInput.append(identifier)
@@ -256,7 +697,7 @@ struct PDFSecurityTests {
       value.append(Data(repeating: 0, count: 16))
       userValue = value
     }
-    return SecurityValues(owner: ownerValue, user: userValue)
+    return SecurityValues(owner: ownerValue, user: userValue, fileKey: fileKey)
   }
 
   private func modernValues(
@@ -329,6 +770,7 @@ struct PDFSecurityTests {
     return SecurityValues(
       owner: owner,
       user: user,
+      fileKey: fileKey,
       ownerEncryptedKey: ownerEncryptedKey,
       userEncryptedKey: userEncryptedKey,
       permissions: encryptedPermissions
@@ -358,9 +800,22 @@ struct PDFSecurityTests {
   private struct SecurityValues {
     let owner: Data
     let user: Data
+    let fileKey: Data
     var ownerEncryptedKey: Data?
     var userEncryptedKey: Data?
     var permissions: Data?
+  }
+
+  enum StreamFixtureMode: Sendable {
+    case implicit
+    case explicit
+    case identity
+    case metadata
+    case embeddedIdentity
+    case misorderedCrypt
+    case externalExplicit
+    case externalPlain
+    case corruptCiphertext
   }
 
   private static let padding = Data([
@@ -369,6 +824,34 @@ struct PDFSecurityTests {
     0x2E, 0x2E, 0x00, 0xB6, 0xD0, 0x68, 0x3E, 0x80,
     0x2F, 0x0C, 0xA9, 0xFE, 0x64, 0x53, 0x69, 0x7A,
   ])
+}
+
+private struct SecurityExternalStreamProvider: PDFExternalStreamProvider {
+  let data: Data
+
+  func open(
+    _ fileSpecification: PDFObject,
+    for stream: PDFStreamObject
+  ) async throws -> any PDFInputSourceSession {
+    SecurityExternalStreamSession(data: data)
+  }
+}
+
+private actor SecurityExternalStreamSession: PDFInputSourceSession {
+  let data: Data
+
+  init(data: Data) {
+    self.data = data
+  }
+
+  func length() async throws -> Int64 { Int64(data.count) }
+
+  func read(_ range: PDFSourceRange) async throws -> Data {
+    let lowerBound = Int(range.offset)
+    return data.subdata(in: lowerBound..<(lowerBound + range.length))
+  }
+
+  func close() async {}
 }
 
 private actor SequencePasswordProvider: PDFPasswordProvider {
@@ -382,6 +865,20 @@ private actor SequencePasswordProvider: PDFPasswordProvider {
   func password(for request: PDFPasswordRequest) async throws -> PDFPassword? {
     attempts.append(request.attempt)
     return passwords.isEmpty ? nil : passwords.removeFirst()
+  }
+}
+
+private struct FailingPasswordProvider: PDFPasswordProvider {
+  struct Failure: Error {}
+
+  func password(for request: PDFPasswordRequest) async throws -> PDFPassword? {
+    throw Failure()
+  }
+}
+
+private struct CancellingPasswordProvider: PDFPasswordProvider {
+  func password(for request: PDFPasswordRequest) async throws -> PDFPassword? {
+    throw CancellationError()
   }
 }
 
