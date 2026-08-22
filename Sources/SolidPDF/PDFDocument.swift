@@ -166,6 +166,33 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     try await structure.pageLabelRanges(in: revision)
   }
 
+  /// Returns the optional-content properties in the latest catalog.
+  public func optionalContentProperties() async throws -> PDFOptionalContentProperties? {
+    try await structure.optionalContentProperties(in: latestRevision.identifier)
+  }
+
+  /// Returns the optional-content properties in a selected revision.
+  public func optionalContentProperties(
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFOptionalContentProperties? {
+    try await structure.optionalContentProperties(in: revision)
+  }
+
+  /// Evaluates an optional-content group or membership dictionary.
+  public func optionalContentVisibility(
+    of object: PDFObject,
+    selection: PDFOptionalContentSelection = .documentDefault,
+    context: PDFOptionalContentContext = .init(),
+    in revision: PDFRevisionIdentifier? = nil
+  ) async throws -> PDFOptionalContentVisibility {
+    try await structure.optionalContentVisibility(
+      of: object,
+      selection: selection,
+      context: context,
+      in: revision ?? latestRevision.identifier
+    )
+  }
+
   /// Opens the exact ordered concatenation of a page's decoded content streams.
   public func decodedContent(of page: PDFPage) -> PDFDecodedPageContent {
     PDFDecodedPageContent(

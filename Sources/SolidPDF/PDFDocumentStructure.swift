@@ -7,6 +7,7 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
   private var validatedPageCounts = [PDFRevisionIdentifier: Int]()
   private var pendingPageValidations = [PDFRevisionIdentifier: Task<Int, Error>]()
   private var pageLabelRangeCache = [PDFRevisionIdentifier: [PDFPageLabelRange]?]()
+  private var optionalContentCache = [PDFRevisionIdentifier: PDFOptionalContentProperties?]()
   private var closed = false
 
   init(
@@ -65,6 +66,7 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
     catalogs.removeAll()
     validatedPageCounts.removeAll()
     pageLabelRangeCache.removeAll()
+    optionalContentCache.removeAll()
   }
 
   func pageCount(in revision: PDFRevisionIdentifier) async throws -> Int {
@@ -180,6 +182,109 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
     }
     pageLabelRangeCache[revision] = ranges
     return ranges
+  }
+
+  func optionalContentProperties(
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFOptionalContentProperties? {
+    if let cached = optionalContentCache[revision] { return cached }
+    let catalog = try await catalog(in: revision)
+    guard let rawProperties = catalog.rawDictionary["OCProperties"] else {
+      optionalContentCache[revision] = .some(nil)
+      return nil
+    }
+    let propertiesObject = try await resolveDirect(rawProperties, in: revision, visited: [])
+    guard case .dictionary(let dictionary) = propertiesObject,
+      let groupObjects = dictionary.pdfArray(named: "OCGs"),
+      groupObjects.count <= limits.maximumOptionalContentGroups,
+      let defaultObject = dictionary["D"]
+    else { throw malformed("OCProperties must contain bounded OCGs and a default configuration.") }
+
+    var groups = [PDFOptionalContentGroup]()
+    var groupIDs = Set<PDFOptionalContentGroupIdentifier>()
+    for object in groupObjects {
+      guard case .reference(let reference) = object else {
+        throw malformed("Each OCG must be an indirect object.")
+      }
+      let identifier = PDFOptionalContentGroupIdentifier(reference: reference)
+      guard groupIDs.insert(identifier).inserted else {
+        throw malformed("The OCG array contains a duplicate group.")
+      }
+      let resolved = try await resolver.resolve(reference, in: revision)
+      guard case .value(.dictionary(let group)) = resolved.value,
+        group.pdfName(named: "Type") == PDFName("OCG"),
+        case .string(let rawName)? = group["Name"]
+      else { throw malformed("An OCG is not a valid indirect OCG dictionary.") }
+      let name = try PDFTextStringDecoder.decode(
+        rawName,
+        allowsUTF8: catalog.effectiveVersion == .v2_0
+      )
+      let intents = try optionalContentIntents(group["Intent"])
+      groups.append(.init(identifier: identifier, name: name, intents: intents, rawDictionary: group))
+    }
+
+    let defaultDictionary = try await optionalContentDictionary(defaultObject, in: revision)
+    let defaultConfiguration = try optionalContentConfiguration(
+      defaultDictionary,
+      identifier: .defaultConfiguration,
+      knownGroups: groupIDs,
+      allowsUTF8: catalog.effectiveVersion == .v2_0
+    )
+    var alternates = [PDFOptionalContentConfiguration]()
+    if let rawAlternates = dictionary["Configs"] {
+      let resolved = try await resolveDirect(rawAlternates, in: revision, visited: [])
+      guard case .array(let values) = resolved,
+        values.count <= limits.maximumOptionalContentGroups
+      else { throw malformed("Configs must be a bounded array.") }
+      for (index, value) in values.enumerated() {
+        let config = try await optionalContentDictionary(value, in: revision)
+        alternates.append(try optionalContentConfiguration(
+          config,
+          identifier: .alternate(index),
+          knownGroups: groupIDs,
+          allowsUTF8: catalog.effectiveVersion == .v2_0
+        ))
+      }
+    }
+    let result = PDFOptionalContentProperties(
+      groups: groups,
+      defaultConfiguration: defaultConfiguration,
+      alternateConfigurations: alternates
+    )
+    optionalContentCache[revision] = result
+    return result
+  }
+
+  func optionalContentVisibility(
+    of object: PDFObject,
+    selection: PDFOptionalContentSelection,
+    context: PDFOptionalContentContext,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> PDFOptionalContentVisibility {
+    guard let properties = try await optionalContentProperties(in: revision) else {
+      throw malformed("Optional content cannot be evaluated without OCProperties.")
+    }
+    let configuration = try selectedConfiguration(selection, properties: properties)
+    var states = optionalContentStates(configuration, groups: properties.groups)
+    if case .custom(_, let overrides) = selection {
+      for (group, state) in overrides where states[group] != nil { states[group] = state }
+    }
+    try applyUsageApplications(
+      configuration.rawDictionary["AS"],
+      context: context,
+      groups: properties.groups,
+      states: &states
+    )
+    var controlling = Set<PDFOptionalContentGroupIdentifier>()
+    let visible = try await evaluateOptionalContent(
+      object,
+      revision: revision,
+      states: states,
+      groups: Set(properties.groups.map(\.identifier)),
+      controlling: &controlling,
+      depth: 0
+    )
+    return .init(isVisible: visible, controllingGroups: controlling.sorted())
   }
 
   private final class PageWalkState {
@@ -660,6 +765,296 @@ actor PDFDocumentStructure<Session: PDFInputSourceSession> {
       throw malformed("The document version is unsupported.")
     }
     return versions[max(headerIndex, catalogIndex)]
+  }
+
+  private func optionalContentDictionary(
+    _ object: PDFObject,
+    in revision: PDFRevisionIdentifier
+  ) async throws -> [PDFName: PDFObject] {
+    let resolved = try await resolveDirect(object, in: revision, visited: [])
+    guard case .dictionary(let dictionary) = resolved else {
+      throw malformed("An optional-content configuration must be a dictionary.")
+    }
+    return dictionary
+  }
+
+  private func optionalContentIntents(_ object: PDFObject?) throws -> [PDFName] {
+    guard let object else { return [PDFName("View")] }
+    switch object {
+    case .name(let name): return [name]
+    case .array(let values):
+      return try values.map {
+        guard case .name(let name) = $0 else {
+          throw malformed("Optional-content intents must be names.")
+        }
+        return name
+      }
+    default:
+      throw malformed("Optional-content Intent must be a name or array of names.")
+    }
+  }
+
+  private func optionalContentConfiguration(
+    _ dictionary: [PDFName: PDFObject],
+    identifier: PDFOptionalContentConfigurationIdentifier,
+    knownGroups: Set<PDFOptionalContentGroupIdentifier>,
+    allowsUTF8: Bool
+  ) throws -> PDFOptionalContentConfiguration {
+    let base: PDFOptionalContentBaseState
+    switch dictionary.pdfName(named: "BaseState") ?? PDFName("ON") {
+    case PDFName("ON"): base = .on
+    case PDFName("OFF"): base = .off
+    case PDFName("Unchanged"): base = .unchanged
+    default: throw malformed("An optional-content BaseState is invalid.")
+    }
+    let on = try optionalContentGroupSet(dictionary["ON"], knownGroups: knownGroups)
+    let off = try optionalContentGroupSet(dictionary["OFF"], knownGroups: knownGroups)
+    guard on.isDisjoint(with: off) else {
+      throw malformed("An optional-content group cannot be both ON and OFF.")
+    }
+    let locked = try optionalContentGroupSet(dictionary["Locked"], knownGroups: knownGroups)
+    return .init(
+      identifier: identifier,
+      name: try optionalContentText(dictionary["Name"], allowsUTF8: allowsUTF8),
+      creator: try optionalContentText(dictionary["Creator"], allowsUTF8: allowsUTF8),
+      baseState: base,
+      initiallyOn: on,
+      initiallyOff: off,
+      locked: locked,
+      rawDictionary: dictionary
+    )
+  }
+
+  private func optionalContentText(_ object: PDFObject?, allowsUTF8: Bool) throws -> String? {
+    guard let object else { return nil }
+    guard case .string(let value) = object else {
+      throw malformed("Optional-content text values must be strings.")
+    }
+    return try PDFTextStringDecoder.decode(value, allowsUTF8: allowsUTF8)
+  }
+
+  private func optionalContentGroupSet(
+    _ object: PDFObject?,
+    knownGroups: Set<PDFOptionalContentGroupIdentifier>
+  ) throws -> Set<PDFOptionalContentGroupIdentifier> {
+    guard let object else { return [] }
+    guard case .array(let values) = object else {
+      throw malformed("An optional-content group list must be an array.")
+    }
+    var result = Set<PDFOptionalContentGroupIdentifier>()
+    for value in values {
+      guard case .reference(let reference) = value else {
+        throw malformed("An optional-content group list must contain indirect references.")
+      }
+      let identifier = PDFOptionalContentGroupIdentifier(reference: reference)
+      guard knownGroups.contains(identifier) else {
+        throw malformed("An optional-content configuration references an unknown group.")
+      }
+      result.insert(identifier)
+    }
+    return result
+  }
+
+  private func selectedConfiguration(
+    _ selection: PDFOptionalContentSelection,
+    properties: PDFOptionalContentProperties
+  ) throws -> PDFOptionalContentConfiguration {
+    let identifier: PDFOptionalContentConfigurationIdentifier
+    switch selection {
+    case .documentDefault: identifier = .defaultConfiguration
+    case .configuration(let value), .custom(let value, _): identifier = value
+    }
+    switch identifier {
+    case .defaultConfiguration: return properties.defaultConfiguration
+    case .alternate(let index):
+      guard properties.alternateConfigurations.indices.contains(index) else {
+        throw malformed("The selected optional-content configuration does not exist.")
+      }
+      return properties.alternateConfigurations[index]
+    }
+  }
+
+  private func optionalContentStates(
+    _ configuration: PDFOptionalContentConfiguration,
+    groups: [PDFOptionalContentGroup]
+  ) -> [PDFOptionalContentGroupIdentifier: PDFOptionalContentState] {
+    var result: [PDFOptionalContentGroupIdentifier: PDFOptionalContentState] =
+      Dictionary(uniqueKeysWithValues: groups.map {
+        (
+          $0.identifier,
+          configuration.baseState == .off
+            ? PDFOptionalContentState.off
+            : PDFOptionalContentState.on
+        )
+      })
+    for group in configuration.initiallyOn { result[group] = .on }
+    for group in configuration.initiallyOff { result[group] = .off }
+    return result
+  }
+
+  private func applyUsageApplications(
+    _ object: PDFObject?,
+    context: PDFOptionalContentContext,
+    groups: [PDFOptionalContentGroup],
+    states: inout [PDFOptionalContentGroupIdentifier: PDFOptionalContentState]
+  ) throws {
+    guard let object else { return }
+    guard case .array(let applications) = object else {
+      throw malformed("An optional-content AS entry must be an array.")
+    }
+    let event = switch context.purpose {
+    case .view: PDFName("View")
+    case .print: PDFName("Print")
+    case .export: PDFName("Export")
+    }
+    let groupByID = Dictionary(uniqueKeysWithValues: groups.map { ($0.identifier, $0) })
+    for application in applications {
+      guard case .dictionary(let dictionary) = application,
+        dictionary.pdfName(named: "Event") == event,
+        case .array(let categories)? = dictionary["Category"],
+        categories.contains(.name(event))
+      else { continue }
+      let targets = try optionalContentGroupSet(
+        dictionary["OCGs"],
+        knownGroups: Set(groupByID.keys)
+      )
+      for identifier in targets {
+        guard let group = groupByID[identifier],
+          case .dictionary(let usage)? = group.rawDictionary["Usage"],
+          case .dictionary(let category)? = usage[event],
+          let stateName = category.pdfName(named: PDFName(String(data: event.bytes, encoding: .ascii)! + "State"))
+        else { continue }
+        if stateName == PDFName("ON") { states[identifier] = .on }
+        if stateName == PDFName("OFF") { states[identifier] = .off }
+      }
+    }
+  }
+
+  private func evaluateOptionalContent(
+    _ object: PDFObject,
+    revision: PDFRevisionIdentifier,
+    states: [PDFOptionalContentGroupIdentifier: PDFOptionalContentState],
+    groups: Set<PDFOptionalContentGroupIdentifier>,
+    controlling: inout Set<PDFOptionalContentGroupIdentifier>,
+    depth: Int
+  ) async throws -> Bool {
+    guard depth <= limits.maximumOptionalContentExpressionDepth else {
+      throw PDFParsingError.limitExceeded(.init(offset: 0, message: "Optional-content expression nesting exceeds its limit."))
+    }
+    if case .reference(let reference) = object {
+      let identifier = PDFOptionalContentGroupIdentifier(reference: reference)
+      if groups.contains(identifier) {
+        controlling.insert(identifier)
+        return states[identifier] != .off
+      }
+      let resolved = try await resolver.resolve(reference, in: revision)
+      guard case .value(let value) = resolved.value else {
+        throw malformed("An optional-content reference resolves to a stream.")
+      }
+      return try await evaluateOptionalContent(
+        value,
+        revision: revision,
+        states: states,
+        groups: groups,
+        controlling: &controlling,
+        depth: depth + 1
+      )
+    }
+    guard case .dictionary(let dictionary) = object else {
+      throw malformed("Optional content must name an OCG or OCMD dictionary.")
+    }
+    if dictionary.pdfName(named: "Type") == PDFName("OCG") {
+      throw malformed("A direct OCG has no stable document identity.")
+    }
+    guard dictionary.pdfName(named: "Type") == PDFName("OCMD") || dictionary["OCGs"] != nil || dictionary["VE"] != nil else {
+      throw malformed("An optional-content dictionary is not an OCMD.")
+    }
+    if let expression = dictionary["VE"] {
+      return try await evaluateVisibilityExpression(
+        expression,
+        revision: revision,
+        states: states,
+        groups: groups,
+        controlling: &controlling,
+        depth: depth + 1
+      )
+    }
+    let values: [PDFObject]
+    switch dictionary["OCGs"] {
+    case .array(let array)?: values = array
+    case .reference(let reference)?: values = [.reference(reference)]
+    case nil: values = []
+    default: throw malformed("An OCMD OCGs entry is invalid.")
+    }
+    var visibility = [Bool]()
+    for value in values {
+      visibility.append(try await evaluateOptionalContent(
+        value,
+        revision: revision,
+        states: states,
+        groups: groups,
+        controlling: &controlling,
+        depth: depth + 1
+      ))
+    }
+    switch dictionary.pdfName(named: "P") ?? PDFName("AnyOn") {
+    case PDFName("AllOn"): return visibility.allSatisfy { $0 }
+    case PDFName("AnyOn"): return visibility.contains(true)
+    case PDFName("AnyOff"): return visibility.contains(false)
+    case PDFName("AllOff"): return visibility.allSatisfy { !$0 }
+    default: throw malformed("An OCMD policy is invalid.")
+    }
+  }
+
+  private func evaluateVisibilityExpression(
+    _ object: PDFObject,
+    revision: PDFRevisionIdentifier,
+    states: [PDFOptionalContentGroupIdentifier: PDFOptionalContentState],
+    groups: Set<PDFOptionalContentGroupIdentifier>,
+    controlling: inout Set<PDFOptionalContentGroupIdentifier>,
+    depth: Int
+  ) async throws -> Bool {
+    guard case .array(let values) = object, case .name(let operatorName)? = values.first else {
+      return try await evaluateOptionalContent(
+        object,
+        revision: revision,
+        states: states,
+        groups: groups,
+        controlling: &controlling,
+        depth: depth
+      )
+    }
+    let operands = values.dropFirst()
+    switch operatorName {
+    case PDFName("Not"):
+      guard operands.count == 1, let operand = operands.first else {
+        throw malformed("A Not visibility expression requires one operand.")
+      }
+      return try await !evaluateVisibilityExpression(
+        operand,
+        revision: revision,
+        states: states,
+        groups: groups,
+        controlling: &controlling,
+        depth: depth + 1
+      )
+    case PDFName("And"), PDFName("Or"):
+      guard !operands.isEmpty else { throw malformed("A visibility expression has no operands.") }
+      var results = [Bool]()
+      for operand in operands {
+        results.append(try await evaluateVisibilityExpression(
+          operand,
+          revision: revision,
+          states: states,
+          groups: groups,
+          controlling: &controlling,
+          depth: depth + 1
+        ))
+      }
+      return operatorName == PDFName("And") ? results.allSatisfy { $0 } : results.contains(true)
+    default:
+      throw malformed("A visibility expression operator is invalid.")
+    }
   }
 
   private func malformed(_ message: String) -> PDFParsingError {

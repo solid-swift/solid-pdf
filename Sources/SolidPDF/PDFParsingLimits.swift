@@ -48,6 +48,10 @@ public struct PDFParsingLimits: Sendable, Hashable {
   public var maximumDecodedPageContentBytes: Int
   /// Maximum generated page-label text.
   public var maximumGeneratedPageLabelBytes: Int
+  /// Maximum optional-content groups in one document configuration.
+  public var maximumOptionalContentGroups: Int
+  /// Maximum nesting depth of an optional-content visibility expression.
+  public var maximumOptionalContentExpressionDepth: Int
 
   /// Creates parsing limits.
   public init(
@@ -74,7 +78,9 @@ public struct PDFParsingLimits: Sendable, Hashable {
     maximumPageTreeScratchBytes: Int = 64 * 1_024 * 1_024,
     maximumPageContentStreams: Int = 65_536,
     maximumDecodedPageContentBytes: Int = 512 * 1_024 * 1_024,
-    maximumGeneratedPageLabelBytes: Int = 1 * 1_024 * 1_024
+    maximumGeneratedPageLabelBytes: Int = 1 * 1_024 * 1_024,
+    maximumOptionalContentGroups: Int = 65_536,
+    maximumOptionalContentExpressionDepth: Int = 128
   ) {
     self.maximumInputBytes = maximumInputBytes
     self.maximumObjectCount = maximumObjectCount
@@ -100,5 +106,7 @@ public struct PDFParsingLimits: Sendable, Hashable {
     self.maximumPageContentStreams = maximumPageContentStreams
     self.maximumDecodedPageContentBytes = maximumDecodedPageContentBytes
     self.maximumGeneratedPageLabelBytes = maximumGeneratedPageLabelBytes
+    self.maximumOptionalContentGroups = maximumOptionalContentGroups
+    self.maximumOptionalContentExpressionDepth = maximumOptionalContentExpressionDepth
   }
 }
