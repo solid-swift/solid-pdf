@@ -16,4 +16,6 @@ public struct PDFIncrementalUpdateResult<Output: Sendable>: Sendable {
   public let effectiveVersion: PDFFileVersion
   /// Nonfatal update diagnostics.
   public let diagnostics: [PDFIncrementalUpdateDiagnostic]
+  /// Predicted modification status for each pre-existing identifiable signature.
+  public let signatureModifications: [PDFSignatureIdentifier: PDFSignatureModificationStatus]
 }

@@ -87,6 +87,11 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
     return try await reader.read(try PDFSourceRange(offset: 0, length: Int(currentLength)))
   }
 
+  func securityContextForWriting() throws -> PDFSecurityContext? {
+    guard !closed else { throw PDFIncrementalUpdateError.documentClosed }
+    return securityContext
+  }
+
   func digest(
     of ranges: [PDFSourceRange],
     using algorithm: PDFDigestAlgorithm

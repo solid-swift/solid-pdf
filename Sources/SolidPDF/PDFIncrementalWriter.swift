@@ -17,6 +17,7 @@ struct PDFIncrementalWriter {
   let revision: PDFDocumentRevision
   let objects: [PDFObjectReference: PDFIncrementalObjectBody]
   let limits: PDFIncrementalWritingLimits
+  var securityContext: PDFSecurityContext? = nil
 
   func encode() throws -> EncodedRevision {
     try validateLimits()
@@ -34,15 +35,26 @@ struct PDFIncrementalWriter {
       guard let body = objects[reference] else { throw PDFIncrementalUpdateError.validationFailed }
       switch body {
       case .value(let value):
-        output.append(try serializer.serialize(value))
+        output.append(try serializer.serialize(
+          securityContext.map { try $0.encryptObject(value, in: reference) } ?? value
+        ))
       case .stream(var dictionary, let bytes):
         guard bytes.count <= limits.maximumAppearanceStreamBytes else {
           throw PDFIncrementalUpdateError.limitExceeded
         }
         dictionary["Length"] = .integer(bytes.count)
+        if let securityContext {
+          guard case .dictionary(let encrypted) = try securityContext.encryptObject(
+            .dictionary(dictionary),
+            in: reference
+          ) else { throw PDFIncrementalUpdateError.validationFailed }
+          dictionary = encrypted
+        }
+        let streamBytes = try securityContext?.encryptStream(bytes, in: reference) ?? bytes
+        dictionary["Length"] = .integer(streamBytes.count)
         output.append(try serializer.serialize(.dictionary(dictionary)))
         output.appendASCII("\nstream\n")
-        output.append(bytes)
+        output.append(streamBytes)
         output.appendASCII("\nendstream")
       }
       output.appendASCII("\nendobj\n")

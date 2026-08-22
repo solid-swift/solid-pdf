@@ -12,6 +12,13 @@ extension PDFDocument {
     guard let form else { throw PDFIncrementalUpdateError.missingAcroForm }
     let fieldValues = try await formFields()
     let fields = Dictionary(uniqueKeysWithValues: fieldValues.map { ($0.identifier, $0) })
+    let signatures = try await signatures()
+    let authorization = PDFFormUpdateAuthorization(
+      security: security,
+      signatures: signatures,
+      fields: fields
+    )
+    try authorization.validate(transaction)
     let valuePlan = try PDFFormUpdatePlanner(
       form: form,
       fields: fields,
@@ -38,21 +45,21 @@ extension PDFDocument {
     let original = try await resolver.originalSourceData(
       maximumBytes: options.limits.maximumStagedDocumentBytes
     )
+    let securityContext = try await resolver.securityContextForWriting()
     let encoded = try PDFIncrementalWriter(
       original: original,
       revision: latestRevision,
       objects: plan.objects,
-      limits: options.limits
+      limits: options.limits,
+      securityContext: securityContext
     ).encode()
-    let validated = try await PDFDocument<PDFDataInputSource>(
-      source: PDFDataInputSource(encoded.data)
+    let pageCount = try await PDFIncrementalUpdateValidator.validate(
+      encoded.data,
+      expectedRevisionCount: revisions.count + 1,
+      securityContext: securityContext,
+      limits: options.limits
     )
     do {
-      guard validated.revisions.count == revisions.count + 1 else {
-        throw PDFIncrementalUpdateError.validationFailed
-      }
-      try await validated.validateAcroForm()
-      let pageCount = try await validated.pageCount()
       let session = try sink.makeSession()
       do {
         try session.write(encoded.data)
@@ -63,7 +70,8 @@ extension PDFDocument {
             PDFDiagnostic(kind: .rendering, message: $0.message)
           }
         )
-        await validated.close()
+        let changed = plan.changedReferences + plan.newReferences
+        let signatureStatuses = authorization.modificationStatuses(changed: changed)
         return PDFIncrementalUpdateResult(
           output: output,
           sourceRevision: latestRevision.identifier,
@@ -76,16 +84,21 @@ extension PDFDocument {
           changedReferences: plan.changedReferences,
           newReferences: plan.newReferences,
           effectiveVersion: effectiveVersion,
-          diagnostics: plan.diagnostics
+          diagnostics: plan.diagnostics + signatures.compactMap { signature in
+            signature.identifier.map { _ in
+              PDFIncrementalUpdateDiagnostic(
+                kind: .signatureModification,
+                message: "The update appends a revision after an existing signature."
+              )
+            }
+          },
+          signatureModifications: signatureStatuses
         )
       } catch {
         session.abort()
         throw error
       }
-    } catch {
-      await validated.close()
-      throw error
-    }
+    } catch { throw error }
   }
 
   /// Returns an in-memory document containing one appended form revision.

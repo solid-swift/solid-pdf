@@ -22,6 +22,26 @@ struct PDFSecurityContext: Sendable {
     try decrypt(data, using: security.stringFilter, object: object)
   }
 
+  func encryptObject(_ object: PDFObject, in reference: PDFObjectReference) throws -> PDFObject {
+    switch object {
+    case .string(let string):
+      return .string(PDFString(
+        bytes: try encrypt(string.bytes, using: security.stringFilter, object: reference),
+        representation: .hexadecimal
+      ))
+    case .array(let values):
+      return .array(try values.map { try encryptObject($0, in: reference) })
+    case .dictionary(let dictionary):
+      return .dictionary(try dictionary.mapValues { try encryptObject($0, in: reference) })
+    default:
+      return object
+    }
+  }
+
+  func encryptStream(_ data: Data, in reference: PDFObjectReference) throws -> Data {
+    try encrypt(data, using: security.streamFilter, object: reference)
+  }
+
   func implicitStreamFilter(
     for kind: StreamKind,
     object: PDFObjectReference
@@ -52,6 +72,48 @@ struct PDFSecurityContext: Sendable {
     output.append(result.output)
     output.append(try filter.finish() ?? Data())
     return output
+  }
+
+  private func encrypt(
+    _ data: Data,
+    using filterName: PDFName,
+    object: PDFObjectReference
+  ) throws -> Data {
+    guard filterName != PDFName("Identity") else { return data }
+    guard let description = cryptFilters[filterName] else {
+      throw Self.malformed("An encryption crypt filter is undefined.")
+    }
+    switch description.method {
+    case .identity:
+      return data
+    case .rc4:
+      return try PDFRC4.process(
+        data,
+        key: objectKey(for: object, description: description, usesAESSalt: false)
+      )
+    case .aes128:
+      return try aesEncrypt(
+        data,
+        key: objectKey(for: object, description: description, usesAESSalt: true)
+      )
+    case .aes256:
+      return try aesEncrypt(data, key: fileKey)
+    }
+  }
+
+  private func aesEncrypt(_ data: Data, key: Data) throws -> Data {
+    var generator = SystemRandomNumberGenerator()
+    let initializationVector = Data((0..<16).map { _ in
+      UInt8.random(in: UInt8.min...UInt8.max, using: &generator)
+    })
+    var result = initializationVector
+    result.append(try PDFCrypto.aesCBCEncrypt(
+      data,
+      key: key,
+      initializationVector: initializationVector,
+      addsPadding: true
+    ))
+    return result
   }
 
   private func decryptionFilter(
