@@ -31,6 +31,8 @@ package final class GraphicsEffectCollector {
     case .paint(.shading(let shading)): effects.append(.shading(shading, state: event.before))
     case .paint(.form(let form)): effects.append(.form(form, state: event.before))
     case .paint(.text(let run)): effects.append(.text(run, state: event.before))
+    case .content(.markedContent(let operation)):
+      effects.append(.markedContent(operation, state: event.before))
     default: break
     }
   }

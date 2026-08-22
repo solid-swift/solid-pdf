@@ -10,7 +10,7 @@ import Testing
 
     #expect(manifest.schemaVersion == 1)
     #expect(manifest.contractVersion == GraphicsSemanticContractVersion.current.rawValue)
-    #expect(Set(manifest.operationCases.root) == ["state", "transform", "path", "clip", "paint", "page"])
+    #expect(Set(manifest.operationCases.root) == ["state", "transform", "path", "clip", "paint", "content", "page"])
     #expect(Set(manifest.operationCases.paint) == Set(Self.paintCases))
     #expect(Set(manifest.effectCases) == Set(Self.effectCases))
     #expect(manifest.compatibility.enumExpansion == "major-version")
@@ -44,7 +44,7 @@ import Testing
       style: .init(fill: fill, stroke: stroke)
     )
 
-    #expect(GraphicsSemanticContractVersion.current == .v2)
+    #expect(GraphicsSemanticContractVersion.current == .v3)
     #expect(run.renderingMode.fills)
     #expect(run.renderingMode.strokes)
     #expect(run.renderingMode.clips)
@@ -59,7 +59,7 @@ import Testing
 
   private static let effectCases = [
     "fill", "stroke", "userPathFill", "userPathStroke", "erase", "fillRectangles",
-    "strokeRectangles", "image", "shading", "form", "text",
+    "strokeRectangles", "image", "shading", "form", "text", "markedContent",
   ]
 
   private var manifestURL: URL {

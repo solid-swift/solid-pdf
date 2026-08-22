@@ -99,10 +99,16 @@ public enum GraphicsOperation: Sendable, Hashable {
     case copy
   }
 
+  /// A document-semantic operation that does not directly paint.
+  public enum Content: Sendable, Hashable {
+    case markedContent(GraphicsMarkedContentOperation)
+  }
+
   case state(State)
   case transform(Transform)
   case path(Path)
   case clip(Clip)
   case paint(Paint)
+  case content(Content)
   case page(Page)
 }

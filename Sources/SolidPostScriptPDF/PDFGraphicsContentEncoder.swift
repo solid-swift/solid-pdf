@@ -205,7 +205,46 @@ enum PDFGraphicsContentEncoder {
           break
         }
       }
+    case .markedContent(let operation, _):
+      switch operation {
+      case .begin(let scope):
+        let properties = markedContentProperties(scope.properties)
+        builder.command("/\(pdfName(scope.tag)) \(properties.map { "\($0) BDC" } ?? "BMC")")
+      case .end:
+        builder.command("EMC")
+      case .point(let scope):
+        let properties = markedContentProperties(scope.properties)
+        builder.command("/\(pdfName(scope.tag)) \(properties.map { "\($0) DP" } ?? "MP")")
+      }
     }
+  }
+
+  private static func pdfName(_ bytes: Data) -> String {
+    bytes.map { byte in
+      if (33...126).contains(byte), !"#%()/<>[]{}".utf8.contains(byte) {
+        return String(UnicodeScalar(byte))
+      }
+      return String(format: "#%02X", byte)
+    }.joined()
+  }
+
+  private static func markedContentProperties(_ value: GraphicsMarkedContentProperties) -> String? {
+    var entries: [String] = []
+    if let identifier = value.identifier { entries.append("/MCID \(identifier.value)") }
+    if let language = value.language { entries.append("/Lang <\(textString(language))>") }
+    if let replacement = value.replacement { entries.append("/ActualText <\(textString(replacement.text))>") }
+    if let alternate = value.alternateDescription { entries.append("/Alt <\(textString(alternate))>") }
+    if let expansion = value.expansion { entries.append("/E <\(textString(expansion))>") }
+    return entries.isEmpty ? nil : "<< \(entries.joined(separator: " ")) >>"
+  }
+
+  private static func textString(_ value: String) -> String {
+    var bytes = Data([0xFE, 0xFF])
+    for unit in value.utf16 {
+      bytes.append(UInt8(truncatingIfNeeded: unit >> 8))
+      bytes.append(UInt8(truncatingIfNeeded: unit))
+    }
+    return bytes.map { String(format: "%02X", $0) }.joined()
   }
 
   private static func stroke<Sink: PDFOutputSink>(

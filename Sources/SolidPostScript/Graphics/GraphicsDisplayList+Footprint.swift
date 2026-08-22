@@ -102,6 +102,8 @@ private extension GraphicsEffect {
         result = combined
       }
       return result
+    case .markedContent:
+      return GraphicsStorageFootprint(displayBytes: 128, sourceBytes: 0)
     case .erase:
       return GraphicsStorageFootprint(displayBytes: 128, sourceBytes: 0)
     }
@@ -163,6 +165,8 @@ private extension GraphicsEffect {
         let total = partial.addingReportingOverflow(bytes)
         return total.overflow ? .max : total.partialValue
       }
+    case .markedContent:
+      return 128
     case .erase:
       return 128
     }

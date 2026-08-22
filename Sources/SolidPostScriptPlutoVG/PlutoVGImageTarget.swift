@@ -508,6 +508,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
 
     private func replayFormEffect(_ effect: GraphicsEffect, in canvas: OpaquePointer, depth: Int) throws {
       switch effect {
+      case .markedContent:
+        break
       case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
         try fill(path, rule: rule, state: state, in: canvas)
       case .stroke(let path, let state):
@@ -688,6 +690,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       let rule: GraphicsFillRule
       let state: GraphicsStateSnapshot
       switch effect {
+      case .markedContent:
+        return
       case .form(let form, _):
         guard depth < 16 else { throw SolidPostScript.Error.ioError }
         for nested in form.displayList.effects {

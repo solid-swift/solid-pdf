@@ -14,8 +14,11 @@ public struct GraphicsSemanticContractVersion: RawRepresentable, Sendable, Hasha
   /// The PDF text styling and extraction contract.
   public static let v2 = Self(rawValue: 2)
 
+  /// The marked-content, optional-content, and logical-structure contract.
+  public static let v3 = Self(rawValue: 3)
+
   /// The contract emitted by this version of SolidPostScript.
-  public static let current = v2
+  public static let current = v3
 
   public static func < (lhs: Self, rhs: Self) -> Bool {
     lhs.rawValue < rhs.rawValue

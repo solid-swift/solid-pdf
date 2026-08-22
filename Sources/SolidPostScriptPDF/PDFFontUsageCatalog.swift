@@ -82,7 +82,7 @@ struct PDFFontUsageCatalog {
     case .fill(_, _, let state), .stroke(_, let state), .userPathFill(_, _, let state),
       .userPathStroke(_, let state), .erase(let state), .fillRectangles(_, let state),
       .strokeRectangles(_, _, let state), .image(_, let state), .shading(_, let state),
-      .form(_, let state), .text(_, let state): state
+      .form(_, let state), .text(_, let state), .markedContent(_, let state): state
     }
     if case .pattern(.tiling(let pattern, _)) = state.paint {
       try collect(pattern.displayList.effects, depth: depth + 1)

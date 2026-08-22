@@ -24,4 +24,6 @@ public enum GraphicsEffect: Sendable, Hashable {
   case form(GraphicsForm, state: GraphicsStateSnapshot)
   /// A semantic text effect with portable glyph fallbacks.
   case text(GraphicsGlyphRun, state: GraphicsStateSnapshot)
+  /// An ordered marked-content boundary or point retained by recordings.
+  case markedContent(GraphicsMarkedContentOperation, state: GraphicsStateSnapshot)
 }

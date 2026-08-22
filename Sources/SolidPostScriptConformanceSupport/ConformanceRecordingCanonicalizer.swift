@@ -35,6 +35,10 @@ private struct Writer {
   mutating func double(_ value: Double) { token(String(value.bitPattern, radix: 16)) }
   mutating func float(_ value: Float) { token(String(value.bitPattern, radix: 16)) }
 
+  mutating func optionalString(_ value: String?) {
+    if let value { token(value) } else { token("nil") }
+  }
+
   mutating func binary(_ value: Data?) {
     guard let value else {
       token("nil")
@@ -526,6 +530,34 @@ private struct Writer {
       token("text")
       glyphRun(run, depth: depth)
       state(stateValue, depth: depth)
+    case .markedContent(let operation, let stateValue):
+      token("markedContent")
+      switch operation {
+      case .begin(let scope): token("begin"); markedContentScope(scope, depth: depth)
+      case .end(let scope): token("end"); markedContentScope(scope, depth: depth)
+      case .point(let scope): token("point"); markedContentScope(scope, depth: depth)
+      }
+      state(stateValue, depth: depth)
+    }
+  }
+
+  mutating func markedContentScope(_ value: GraphicsMarkedContentScope, depth: Int) {
+    resource(value.resourceIdentifier)
+    binary(value.tag)
+    if let identifier = value.properties.identifier {
+      resource(identifier.owner)
+      integer(identifier.value)
+    } else {
+      token("nil")
+    }
+    optionalString(value.properties.language)
+    optionalString(value.properties.replacement?.text)
+    optionalString(value.properties.alternateDescription)
+    optionalString(value.properties.expansion)
+    integer(value.properties.values.count)
+    for key in value.properties.values.keys.sorted(by: { $0.lexicographicallyPrecedes($1) }) {
+      binary(key)
+      token(String(describing: value.properties.values[key]!))
     }
   }
 

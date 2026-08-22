@@ -539,7 +539,7 @@ extension Operators {
             break
           }
         }
-      case .erase, .image, .shading:
+      case .erase, .image, .shading, .markedContent:
         break
       }
     }

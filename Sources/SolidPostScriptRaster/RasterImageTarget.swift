@@ -522,6 +522,8 @@ where
         try paintForm(nested, depth: depth)
       case .text(let run, let state):
         try paintText(run, state: state, depth: depth)
+      case .markedContent:
+        break
       }
     }
 
@@ -649,6 +651,8 @@ where
       let effectRule: GraphicsFillRule
       let effectState: GraphicsStateSnapshot
       switch effect {
+      case .markedContent:
+        return
       case .form(let form, _):
         guard depth < 16 else { throw SolidPostScript.Error.ioError }
         for nested in form.displayList.effects {

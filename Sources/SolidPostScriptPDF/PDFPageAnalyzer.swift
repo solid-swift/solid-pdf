@@ -16,7 +16,7 @@ enum PDFPageAnalyzer {
     case .fill(_, _, let value), .stroke(_, let value), .userPathFill(_, _, let value),
       .userPathStroke(_, let value), .erase(let value), .fillRectangles(_, let value),
       .strokeRectangles(_, _, let value), .image(_, let value), .shading(_, let value),
-      .form(_, let value), .text(_, let value):
+      .form(_, let value), .text(_, let value), .markedContent(_, let value):
       state = value
     }
     let unsupportedState = state.deviceRendering != .continuousTone || state.strokeAdjustment

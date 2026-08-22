@@ -606,6 +606,8 @@ private extension RasterSeparationTarget.Renderer {
       try paintForm(form, depth: depth)
     case .text(let run, let state):
       try paintText(run, state: state, depth: depth)
+    case .markedContent:
+      break
     }
   }
 
@@ -780,6 +782,8 @@ private extension RasterSeparationTarget.Renderer {
     let effectRule: GraphicsFillRule
     let effectState: GraphicsStateSnapshot
     switch effect {
+    case .markedContent:
+      return
     case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
       effectPath = path.transformed(by: translation)
       effectRule = rule
