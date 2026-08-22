@@ -428,6 +428,25 @@ if benchmarkEnabled {
         .plugin(name: "BenchmarkPlugin", package: "benchmark")
       ]
     ),
+    .target(
+      name: "SolidPDFTextBenchmarkSupport",
+      dependencies: ["SolidPDF", "SolidPDFGraphics", "SolidPostScript"],
+      path: "Benchmarks/SolidPDFTextBenchmarkSupport"
+    ),
+    .executableTarget(
+      name: "SolidPDFTextBenchmark",
+      dependencies: [
+        "SolidPDF",
+        "SolidPDFGraphics",
+        "SolidPDFTextBenchmarkSupport",
+        "SolidPostScript",
+        .product(name: "Benchmark", package: "benchmark"),
+      ],
+      path: "Benchmarks/SolidPDFTextBenchmark",
+      plugins: [
+        .plugin(name: "BenchmarkPlugin", package: "benchmark")
+      ]
+    ),
     .executableTarget(
       name: "SolidPDFInteropFixtures",
       dependencies: [

@@ -97,6 +97,38 @@ struct PDFGraphicsRenderingTests {
   }
 
   @Test
+  func rendersEmbeddedEncryptedType1WithoutAProvider() async throws {
+    let descriptor = Data(
+      "<< /Type /FontDescriptor /FontName /Fixture /FontBBox [0 0 500 700] /FontFile 6 0 R >>".utf8
+    )
+    let fontFile = streamObject(dictionary: "", data: pdfType1Fixture())
+    let resources = """
+      << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Fixture
+        /FirstChar 65 /LastChar 65 /Widths [600]
+        /Encoding << /Differences [65 /A] >> /FontDescriptor 5 0 R >> >> >>
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BT /F1 20 Tf (A) Tj ET",
+      resources: resources,
+      extraObjects: [descriptor, fontFile]
+    )))
+
+    let result = try await document.render(page: 0, to: RecordingGraphicsTarget())
+    let run = try #require(result.output.pages[0].effects.compactMap { effect -> GraphicsGlyphRun? in
+      if case .text(let run, _) = effect { return run }
+      return nil
+    }.first)
+    #expect(run.rootFont.technology == .type1)
+    #expect(run.glyphs[0].glyph.metrics.horizontalAdvance == GraphicsPoint(x: 600, y: 0))
+    guard case .outline = run.glyphs[0].glyph.program else {
+      Issue.record("Expected an owned Type 1 outline")
+      await document.close()
+      return
+    }
+    await document.close()
+  }
+
+  @Test
   func emitsInvisibleTextWithoutLosingExtractionMetadata() async throws {
     let resources = """
       << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic
@@ -118,6 +150,31 @@ struct PDFGraphicsRenderingTests {
     }.first)
     #expect(run.renderingMode == .invisible)
     #expect(run.glyphs[0].unicodeScalars == ["A".unicodeScalars.first!])
+    await document.close()
+  }
+
+  @Test(arguments: Array(0...7))
+  func preservesEveryPDFTextRenderingMode(_ rawMode: Int) async throws {
+    let resources = """
+      << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic
+        /FirstChar 65 /LastChar 65 /Widths [600] /Encoding /WinAnsiEncoding >> >> >>
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BT /F1 12 Tf \(rawMode) Tr (A) Tj ET",
+      resources: resources
+    )))
+    let result = try await document.render(
+      page: 0,
+      to: RecordingGraphicsTarget(),
+      fontEnvironment: PDFGraphicsFontEnvironment(providers: [SyntheticPDFFontProvider()])
+    )
+    let run = try #require(result.output.pages[0].effects.compactMap { effect -> GraphicsGlyphRun? in
+      if case .text(let run, _) = effect { return run }
+      return nil
+    }.first)
+    #expect(run.renderingMode.rawValue == rawMode)
+    #expect(run.style?.fill.colorSpace == .deviceGray)
+    #expect(run.style?.stroke.colorSpace == .deviceGray)
     await document.close()
   }
 
@@ -243,6 +300,142 @@ struct PDFGraphicsRenderingTests {
     await #expect(throws: PDFGraphicsError.self) {
       try await document.render(page: 0, to: RecordingGraphicsTarget())
     }
+    await document.close()
+  }
+
+  @Test
+  func implementsTextPositioningConvenienceOperatorsAndClipping() async throws {
+    let resources = """
+      << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic
+        /FirstChar 32 /LastChar 65 /Widths [250 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500
+          500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 600]
+        /Encoding /WinAnsiEncoding >> >> >>
+      """
+    let content = """
+      BT /F1 10 Tf 12 TL 1 0 0 1 5 6 Tm (A) Tj
+      10 20 Td (A) Tj 10 20 TD (A) Tj T* (A) Tj (A) ' 4 5 ( A) " ET
+      BT /F1 10 Tf 4 Tr (A) Tj ET 0 0 10 10 re f
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(content: content, resources: resources)))
+    let result = try await document.render(
+      page: 0,
+      to: RecordingGraphicsTarget(),
+      fontEnvironment: PDFGraphicsFontEnvironment(providers: [SyntheticPDFFontProvider()])
+    )
+    let runs = result.output.pages[0].effects.compactMap { effect -> GraphicsGlyphRun? in
+      if case .text(let run, _) = effect { return run }
+      return nil
+    }
+    #expect(runs.count == 7)
+    #expect(runs[5].sourceBytes == Data(" A".utf8))
+    #expect(runs[5].glyphs[0].advance.x == 11.5)
+    #expect(runs[6].renderingMode == .fillClip)
+    guard case .fill(_, _, let state) = result.output.pages[0].effects.last else {
+      Issue.record("Expected fill after the text clipping operation")
+      await document.close()
+      return
+    }
+    #expect(!state.clip.constraints.isEmpty)
+    await document.close()
+  }
+
+  @Test
+  func appliesVerticalCIDMetricsWithoutBackendPositioning() async throws {
+    let resources = """
+      << /Font << /F0 << /Type /Font /Subtype /Type0 /BaseFont /SyntheticCID
+        /Encoding /Identity-V
+        /DescendantFonts [<< /Type /Font /Subtype /CIDFontType2 /BaseFont /SyntheticCID
+          /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>
+          /DW 1000 /DW2 [880 -1000] /W2 [42 [-1200 400 900]] /CIDToGIDMap /Identity >>] >> >> >>
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BT /F0 10 Tf <002a> Tj ET",
+      resources: resources
+    )))
+    let result = try await document.render(
+      page: 0,
+      to: RecordingGraphicsTarget(),
+      fontEnvironment: PDFGraphicsFontEnvironment(providers: [SyntheticPDFFontProvider()])
+    )
+    let run = try #require(result.output.pages[0].effects.compactMap { effect -> GraphicsGlyphRun? in
+      if case .text(let run, _) = effect { return run }
+      return nil
+    }.first)
+    #expect(run.rootFont.writingMode == 1)
+    #expect(run.glyphs[0].glyph.selector == .cid(42))
+    #expect(run.glyphs[0].glyph.metrics.verticalAdvance == GraphicsPoint(x: 0, y: -1_200))
+    #expect(run.glyphs[0].glyph.metrics.verticalOrigin == GraphicsPoint(x: 400, y: 900))
+    #expect(run.glyphs[0].advance == GraphicsPoint(x: 0, y: -12))
+    await document.close()
+  }
+
+  @Test
+  func reportsSimpleFontSubstitutionAndRejectsUnprovenCIDSubstitution() async throws {
+    let simpleResources = """
+      << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Unavailable
+        /FirstChar 65 /LastChar 65 /Widths [600] /Encoding /WinAnsiEncoding >> >> >>
+      """
+    let simple = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BT /F1 10 Tf (A) Tj ET",
+      resources: simpleResources
+    )))
+    let simpleResult = try await simple.render(
+      page: 0,
+      to: RecordingGraphicsTarget(),
+      fontEnvironment: PDFGraphicsFontEnvironment(providers: [SubstitutingPDFFontProvider(cidCompatible: false)])
+    )
+    #expect(simpleResult.diagnostics.map(\.identifier).contains("pdf.graphics.font-substitution"))
+    await simple.close()
+
+    let cidResources = """
+      << /Font << /F0 << /Type /Font /Subtype /Type0 /BaseFont /UnavailableCID /Encoding /Identity-H
+        /DescendantFonts [<< /Type /Font /Subtype /CIDFontType2 /BaseFont /UnavailableCID
+          /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>
+          /CIDToGIDMap /Identity >>] >> >> >>
+      """
+    let cid = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BT /F0 10 Tf <002a> Tj ET",
+      resources: cidResources
+    )))
+    await #expect(throws: PDFGraphicsError.self) {
+      try await cid.render(
+        page: 0,
+        to: RecordingGraphicsTarget(),
+        fontEnvironment: PDFGraphicsFontEnvironment(providers: [SubstitutingPDFFontProvider(cidCompatible: false)])
+      )
+    }
+    await cid.close()
+  }
+
+  @Test
+  func rendersType3TextThroughBuiltInTargets() async throws {
+    let charProc = streamObject(dictionary: "", data: Data("500 0 0 0 500 700 d1 0 0 500 700 re f".utf8))
+    let resources = """
+      << /Font << /F3 << /Type /Font /Subtype /Type3
+        /FontBBox [0 0 500 700] /FontMatrix [0.001 0 0 0.001 0 0]
+        /CharProcs << /A 5 0 R >> /Encoding << /Differences [65 /A] >>
+        /FirstChar 65 /LastChar 65 /Widths [500] /Resources << >> >> >> >>
+      """
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "BT /F3 40 Tf 1 0 0 1 20 20 Tm (A) Tj ET",
+      resources: resources,
+      extraObjects: [charProc]
+    )))
+    #expect(try await document.render(
+      page: 0, to: RasterImageTarget(pixelWidth: 100, pixelHeight: 100)
+    ).output.count == 1)
+    #expect(try await document.render(
+      page: 0, to: PlutoVGImageTarget(pixelWidth: 100, pixelHeight: 100)
+    ).output.count == 1)
+#if canImport(CoreGraphics)
+    #expect(try await document.render(
+      page: 0, to: CoreGraphicsImageTarget(pixelWidth: 100, pixelHeight: 100)
+    ).output.count == 1)
+#endif
+    #expect(try await document.render(page: 0, to: RasterSeparationTarget()).output.count == 1)
+    #expect(try await document.render(
+      page: 0, to: PDFGraphicsTarget(sink: PDFDataOutputSink())
+    ).output.pageCount == 1)
     await document.close()
   }
 
@@ -610,6 +803,52 @@ struct PDFGraphicsRenderingTests {
       #expect(white.position.y == red.position.y)
     }
   }
+
+  private func pdfType1Fixture() -> Data {
+    let notdef = pdfType1EncryptedCharString([139, 248, 136, 13, 14])
+    let a = pdfType1EncryptedCharString([
+      139, 248, 236, 13, 139, 139, 21,
+      248, 136, 139, 5, 139, 249, 80, 5,
+      252, 136, 139, 5, 139, 253, 80, 5, 9, 14,
+    ])
+    var privateProgram = Data([0, 0, 0, 0])
+    privateProgram.append(Data("/lenIV 4 def /Subrs 0 array /CharStrings 2 dict dup begin ".utf8))
+    privateProgram.append(Data("/.notdef \(notdef.count) RD ".utf8)); privateProgram.append(notdef)
+    privateProgram.append(Data(" ND /A \(a.count) RD ".utf8)); privateProgram.append(a)
+    privateProgram.append(Data(" ND end end".utf8))
+    let encrypted = pdfType1Encrypt(privateProgram, seed: 55_665)
+    let header = Data("%!PS-AdobeFont-1.0: Fixture 1.0\ncurrentfile eexec\n".utf8)
+    var result = Data()
+    appendPDFPFB(kind: 1, bytes: header, to: &result)
+    appendPDFPFB(kind: 2, bytes: encrypted, to: &result)
+    result.append(contentsOf: [0x80, 0x03])
+    return result
+  }
+
+  private func pdfType1EncryptedCharString(_ bytes: [UInt8]) -> Data {
+    pdfType1Encrypt(Data([0, 0, 0, 0] + bytes), seed: 4_330)
+  }
+
+  private func pdfType1Encrypt(_ plaintext: Data, seed: UInt16) -> Data {
+    var state = seed
+    var result = Data(capacity: plaintext.count)
+    for byte in plaintext {
+      let cipher = byte ^ UInt8(truncatingIfNeeded: state >> 8)
+      result.append(cipher)
+      state = UInt16(truncatingIfNeeded: (UInt32(cipher) + UInt32(state)) * 52_845 + 22_719)
+    }
+    return result
+  }
+
+  private func appendPDFPFB(kind: UInt8, bytes: Data, to result: inout Data) {
+    result.append(contentsOf: [0x80, kind])
+    let length = UInt32(bytes.count)
+    result.append(UInt8(truncatingIfNeeded: length))
+    result.append(UInt8(truncatingIfNeeded: length >> 8))
+    result.append(UInt8(truncatingIfNeeded: length >> 16))
+    result.append(UInt8(truncatingIfNeeded: length >> 24))
+    result.append(bytes)
+  }
 }
 
 private struct SyntheticPDFFontProvider: FontResourceProvider {
@@ -652,5 +891,32 @@ private struct SyntheticPDFFontProvider: FontResourceProvider {
       ])),
       resolvedGlyphIndex: selector == .name("A") ? 1 : 2
     )
+  }
+}
+
+private struct SubstitutingPDFFontProvider: FontResourceProvider {
+  let identifier = "tests.substituting-pdf-font"
+  let cidCompatible: Bool
+
+  func availableFontNames() async throws -> [String] { ["Substitute"] }
+
+  func resolve(_ query: FontResourceQuery) async throws -> FontProviderFace? {
+    guard query.permitsSubstitution else { return nil }
+    let descriptor = try FontDescriptor(postScriptName: "Substitute", unitsPerEm: 1_000)
+    let asset = try FontAsset(descriptor: descriptor, format: .type1, data: Data("substitute".utf8))
+    return FontProviderFace(
+      providerIdentifier: identifier,
+      faceKey: "substitute",
+      asset: asset,
+      isSubstitute: true
+    )
+  }
+
+  func isCompatible(with systemInfo: FontCIDSystemInfo, face: FontProviderFace) async throws -> Bool {
+    cidCompatible
+  }
+
+  func glyph(_ selector: FontGlyphSelector, in face: FontProviderFace) async throws -> FontGlyph? {
+    try await SyntheticPDFFontProvider().glyph(selector, in: face)
   }
 }

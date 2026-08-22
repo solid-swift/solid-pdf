@@ -19,6 +19,24 @@ import Testing
     #expect(!face.isCIDKeyed)
   }
 
+  @Test func resolvesCompactFontGlyphsThroughStandardStrings() throws {
+    var data = Data([1, 0, 4, 4])
+    data.append(contentsOf: [0, 1, 1, 1, 5])
+    data.append(contentsOf: "Test".utf8)
+    data.append(contentsOf: [0, 1, 1, 1, 7, 29, 0, 0, 0, 28, 17])
+    data.append(contentsOf: [0, 0, 0, 0])
+    data.append(contentsOf: [0, 3, 1, 1, 2, 3, 4, 14, 14, 14])
+
+    let collection = try CompactFontCollection(data: data)
+
+    #expect(CompactFontStandardStrings.values.count == 391)
+    #expect(CompactFontStandardStrings.values[34] == "A")
+    #expect(CompactFontStandardStrings.values[390] == "Semibold")
+    #expect(collection.glyphIndex(faceIndex: 0, glyphName: "space") == 1)
+    #expect(collection.glyphIndex(faceIndex: 0, glyphName: "exclam") == 2)
+    #expect(collection.glyphIndex(faceIndex: 0, glyphName: "A") == nil)
+  }
+
   @Test func parsesSFNTAndCollectionDirectories() throws {
     var sfnt = Data([0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0])
     sfnt.append(contentsOf: [0x68, 0x65, 0x61, 0x64, 0, 0, 0, 0, 0, 0, 0, 28, 0, 0, 0, 4])
@@ -138,8 +156,90 @@ import Testing
     )
     #expect(glyph.resolvedGlyphIndex == 1)
     #expect(glyph.metrics.horizontalAdvance == FontPoint(x: 600, y: 0))
-    #expect(glyph.program == .empty)
+    guard case .outline(let outline) = glyph.program else {
+      Issue.record("Expected a portable TrueType outline")
+      return
+    }
+    #expect(outline.elements.count == 5)
+
+    let composite = try collection.glyph(
+      data: data,
+      faceIndex: 0,
+      glyphIndex: 2,
+      selector: .name("B")
+    )
+    guard case .outline(let compositeOutline) = composite.program else {
+      Issue.record("Expected a portable composite TrueType outline")
+      return
+    }
+    #expect(compositeOutline.elements.count == 10)
+    #expect(compositeOutline.elements[5] == .move(FontPoint(x: 100, y: 0)))
   }
+
+  @Test func decodesEncryptedPFBType1GlyphsPortably() throws {
+    let program = try Type1FontProgram(data: makeType1Fixture())
+    let glyph = try program.glyph(named: "A", selector: .name("A"))
+
+    #expect(glyph.metrics.horizontalAdvance == FontPoint(x: 600, y: 0))
+    #expect(glyph.metrics.bounds == FontBounds(minimumX: 0, minimumY: 0, maximumX: 500, maximumY: 700))
+    guard case .outline(let outline) = glyph.program else {
+      Issue.record("Expected a portable Type 1 outline")
+      return
+    }
+    #expect(outline.elements.count == 6)
+  }
+}
+
+private func makeType1Fixture() -> Data {
+  let notdef = type1EncryptedCharString([139, 248, 136, 13, 14])
+  let a = type1EncryptedCharString([
+    139, 248, 236, 13,
+    139, 139, 21,
+    248, 136, 139, 5,
+    139, 249, 80, 5,
+    252, 136, 139, 5,
+    139, 253, 80, 5,
+    9, 14,
+  ])
+  var privateProgram = Data([0, 0, 0, 0])
+  privateProgram.append(Data("/lenIV 4 def /Subrs 0 array /CharStrings 2 dict dup begin ".utf8))
+  privateProgram.append(Data("/.notdef \(notdef.count) RD ".utf8))
+  privateProgram.append(notdef)
+  privateProgram.append(Data(" ND /A \(a.count) RD ".utf8))
+  privateProgram.append(a)
+  privateProgram.append(Data(" ND end end".utf8))
+  let encrypted = type1Encrypt(privateProgram, seed: 55_665)
+  let header = Data("%!PS-AdobeFont-1.0: Fixture 1.0\ncurrentfile eexec\n".utf8)
+  var result = Data()
+  appendPFB(kind: 1, bytes: header, to: &result)
+  appendPFB(kind: 2, bytes: encrypted, to: &result)
+  result.append(contentsOf: [0x80, 0x03])
+  return result
+}
+
+private func type1EncryptedCharString(_ bytes: [UInt8]) -> Data {
+  type1Encrypt(Data([0, 0, 0, 0] + bytes), seed: 4_330)
+}
+
+private func type1Encrypt(_ plaintext: Data, seed: UInt16) -> Data {
+  var state = seed
+  var result = Data(capacity: plaintext.count)
+  for byte in plaintext {
+    let cipher = byte ^ UInt8(truncatingIfNeeded: state >> 8)
+    result.append(cipher)
+    state = UInt16(truncatingIfNeeded: (UInt32(cipher) + UInt32(state)) * 52_845 + 22_719)
+  }
+  return result
+}
+
+private func appendPFB(kind: UInt8, bytes: Data, to result: inout Data) {
+  result.append(contentsOf: [0x80, kind])
+  let length = UInt32(bytes.count)
+  result.append(UInt8(truncatingIfNeeded: length))
+  result.append(UInt8(truncatingIfNeeded: length >> 8))
+  result.append(UInt8(truncatingIfNeeded: length >> 16))
+  result.append(UInt8(truncatingIfNeeded: length >> 24))
+  result.append(bytes)
 }
 
 private func makeTrueTypeFixture() -> Data {
@@ -161,18 +261,26 @@ private func makeTrueTypeFixture() -> Data {
     hmtx.testAppendU16(advance)
     hmtx.testAppendU16(0)
   }
-  var simple = Data(repeating: 0, count: 12)
-  simple.testReplaceU16(0, at: 0)
-  simple.testReplaceU16(0, at: 10)
-  var composite = Data(repeating: 0, count: 18)
+  var simple = Data(repeating: 0, count: 14)
+  simple.testReplaceU16(1, at: 0)
+  simple.testReplaceU16(100, at: 6)
+  simple.testReplaceU16(100, at: 8)
+  simple.testReplaceU16(2, at: 10)
+  simple.testReplaceU16(0, at: 12)
+  simple.append(contentsOf: [0x31, 0x33, 0x27, 100, 100, 100])
+  var composite = Data(repeating: 0, count: 26)
   composite.testReplaceU16(0xFFFF, at: 0)
-  composite.testReplaceU16(1, at: 10)
+  composite.testReplaceU16(0x0023, at: 10)
   composite.testReplaceU16(1, at: 12)
+  composite.testReplaceU16(0x0001, at: 18)
+  composite.testReplaceU16(1, at: 20)
+  composite.testReplaceU16(1, at: 22)
+  composite.testReplaceU16(0, at: 24)
   var glyf = Data()
   glyf.append(simple)
   glyf.append(composite)
   var loca = Data()
-  for offset: UInt32 in [0, 0, 12, 30, 30] { loca.testAppendU32(offset) }
+  for offset: UInt32 in [0, 0, 20, 46, 46] { loca.testAppendU32(offset) }
   let cmap = makeCMapFixture()
   var post = Data(repeating: 0, count: 32)
   post.testReplaceU32(0x0003_0000, at: 0)

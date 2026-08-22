@@ -54,6 +54,22 @@ package extension CompactFontCollection {
     guard faces.indices.contains(faceIndex) else { return nil }
     return faces[faceIndex].encoding[encodedCode]
   }
+
+  func glyphIndex(faceIndex: Int, glyphName: String) -> UInt32? {
+    guard faces.indices.contains(faceIndex) else { return nil }
+    if glyphName == ".notdef" { return 0 }
+    return faces[faceIndex].charset.enumerated().first { _, identifier in
+      guard case .stringIdentifier(let identifier) = identifier else { return false }
+      let name: String?
+      if Int(identifier) < CompactFontStandardStrings.values.count {
+        name = CompactFontStandardStrings.values[Int(identifier)]
+      } else {
+        let index = Int(identifier) - CompactFontStandardStrings.values.count
+        name = strings.indices.contains(index) ? strings[index] : nil
+      }
+      return name == glyphName
+    }.map { UInt32($0.offset + 1) }
+  }
 }
 
 private extension FontOutline {

@@ -44,6 +44,7 @@ final class PDFResolvedFont {
   }
 
   enum GlyphSource {
+    case type1(Type1FontProgram)
     case compact(CompactFontCollection, faceIndex: Int)
     case sfnt(SFNTCollection, data: Data, faceIndex: Int)
     case provider(any FontResourceProvider, FontProviderFace)
@@ -329,6 +330,15 @@ extension PDFGraphicsResourceResolver {
     location: PDFContentLocation
   ) async throws -> (source: PDFResolvedFont.GlyphSource, asset: FontAsset?, substitution: GraphicsFontSubstitution?) {
     if let asset {
+      if asset.format == .type1, let data = asset.data {
+        do {
+          return (.type1(try Type1FontProgram(data: data)), asset, nil)
+        } catch {
+          throw PDFGraphicsError.malformedContent(
+            message: "Malformed embedded Type 1 font program.", operatorName: "Tf", location: location
+          )
+        }
+      }
       if asset.format == .compactFontFormat {
         do {
           let collection = try CompactFontCollection(data: asset.data!, limits: .default)

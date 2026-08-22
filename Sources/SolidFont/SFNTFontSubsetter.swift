@@ -186,7 +186,7 @@ package struct TrueTypeSource {
     maximumDepth: Int = 64
   ) throws -> FontGlyph {
     guard let glyphIndex = Int(exactly: glyph), glyphIndex < glyphCount else { throw FontError.range }
-    let outline = try outline(for: Int(glyph), depth: 0, maximumDepth: maximumDepth)
+    let outline = try decodedOutline(for: Int(glyph), depth: 0, maximumDepth: maximumDepth).outline
     let verticalAdvance = verticalAdvances.map { FontPoint(x: 0, y: -Double($0[glyphIndex])) }
     let verticalOrigin = topSideBearings.map { bearings in
       FontPoint(x: Double(horizontalAdvances[glyphIndex]) / 2, y: Double(bearings[glyphIndex]))
@@ -280,14 +280,15 @@ package struct TrueTypeSource {
     return table.subdata(in: lower..<upper)
   }
 
-  private func outline(for glyph: Int, depth: Int, maximumDepth: Int) throws -> FontOutline {
+  private func decodedOutline(for glyph: Int, depth: Int, maximumDepth: Int) throws -> TrueTypeDecodedOutline {
     guard depth < maximumDepth else { throw FontError.limitExceeded }
     let bytes = try glyphData(glyph)
-    guard !bytes.isEmpty else { return FontOutline(elements: []) }
+    guard !bytes.isEmpty else { return TrueTypeDecodedOutline() }
     guard bytes.count >= 10 else { throw FontError.invalidData }
     let contourCount = try bytes.i16(0)
     if contourCount >= 0 { return try simpleOutline(bytes, contourCount: Int(contourCount)) }
     var elements: [FontOutline.Element] = []
+    var points: [FontPoint] = []
     var offset = 10
     var hasMore = true
     while hasMore {
@@ -297,17 +298,16 @@ package struct TrueTypeSource {
       offset += 4
       let words = flags & 0x0001 != 0
       let usesXY = flags & 0x0002 != 0
-      guard usesXY else { throw FontError.unsupportedFormat }
       let argumentByteCount = words ? 4 : 2
       guard offset <= bytes.count - argumentByteCount else { throw FontError.invalidData }
-      let dx: Double
-      let dy: Double
+      let firstArgument: Int
+      let secondArgument: Int
       if words {
-        dx = Double(try bytes.i16(offset))
-        dy = Double(try bytes.i16(offset + 2))
+        firstArgument = usesXY ? Int(try bytes.i16(offset)) : Int(try bytes.u16(offset))
+        secondArgument = usesXY ? Int(try bytes.i16(offset + 2)) : Int(try bytes.u16(offset + 2))
       } else {
-        dx = Double(Int8(bitPattern: bytes[offset]))
-        dy = Double(Int8(bitPattern: bytes[offset + 1]))
+        firstArgument = usesXY ? Int(Int8(bitPattern: bytes[offset])) : Int(bytes[offset])
+        secondArgument = usesXY ? Int(Int8(bitPattern: bytes[offset + 1])) : Int(bytes[offset + 1])
       }
       offset += argumentByteCount
       var a = 1.0
@@ -330,17 +330,45 @@ package struct TrueTypeSource {
         d = try fixed2Dot14(bytes, at: offset + 6)
         offset += 8
       }
-      let component = try outline(for: componentGlyph, depth: depth + 1, maximumDepth: maximumDepth)
-      elements.append(contentsOf: component.elements.map { element in
-        element.transformed(a: a, b: b, c: c, d: d, dx: dx, dy: dy)
+      guard flags & 0x0800 == 0 || flags & 0x1000 == 0 else { throw FontError.invalidData }
+      let component = try decodedOutline(for: componentGlyph, depth: depth + 1, maximumDepth: maximumDepth)
+      let linearlyTransformedPoints = component.points.map { point in
+        FontPoint(x: a * point.x + c * point.y, y: b * point.x + d * point.y)
+      }
+      var translation: FontPoint
+      if usesXY {
+        translation = FontPoint(x: Double(firstArgument), y: Double(secondArgument))
+        if flags & 0x0800 != 0 {
+          translation = FontPoint(
+            x: a * translation.x + c * translation.y,
+            y: b * translation.x + d * translation.y
+          )
+        }
+        if flags & 0x0004 != 0 {
+          translation = FontPoint(x: translation.x.rounded(), y: translation.y.rounded())
+        }
+      } else {
+        guard points.indices.contains(firstArgument), linearlyTransformedPoints.indices.contains(secondArgument) else {
+          throw FontError.invalidData
+        }
+        translation = FontPoint(
+          x: points[firstArgument].x - linearlyTransformedPoints[secondArgument].x,
+          y: points[firstArgument].y - linearlyTransformedPoints[secondArgument].y
+        )
+      }
+      elements.append(contentsOf: component.outline.elements.map { element in
+        element.transformed(a: a, b: b, c: c, d: d, dx: translation.x, dy: translation.y)
+      })
+      points.append(contentsOf: linearlyTransformedPoints.map { point in
+        FontPoint(x: point.x + translation.x, y: point.y + translation.y)
       })
       hasMore = flags & 0x0020 != 0
     }
-    return FontOutline(elements: elements)
+    return TrueTypeDecodedOutline(outline: FontOutline(elements: elements), points: points)
   }
 
-  private func simpleOutline(_ bytes: Data, contourCount: Int) throws -> FontOutline {
-    guard contourCount > 0 else { return FontOutline(elements: []) }
+  private func simpleOutline(_ bytes: Data, contourCount: Int) throws -> TrueTypeDecodedOutline {
+    guard contourCount > 0 else { return TrueTypeDecodedOutline() }
     let endPointsOffset = 10
     guard endPointsOffset <= bytes.count - contourCount * 2 else { throw FontError.invalidData }
     let endPoints = try (0..<contourCount).map { Int(try bytes.u16(endPointsOffset + $0 * 2)) }
@@ -408,7 +436,10 @@ package struct TrueTypeSource {
       appendContour(Array(points[start...end]), to: &elements)
       start = end + 1
     }
-    return FontOutline(elements: elements)
+    return TrueTypeDecodedOutline(
+      outline: FontOutline(elements: elements),
+      points: points.map(\.point)
+    )
   }
 
   private func appendContour(
@@ -673,6 +704,16 @@ package struct TrueTypeSource {
       offset += 4
     }
     return sum
+  }
+}
+
+private struct TrueTypeDecodedOutline {
+  let outline: FontOutline
+  let points: [FontPoint]
+
+  init(outline: FontOutline = FontOutline(elements: []), points: [FontPoint] = []) {
+    self.outline = outline
+    self.points = points
   }
 }
 

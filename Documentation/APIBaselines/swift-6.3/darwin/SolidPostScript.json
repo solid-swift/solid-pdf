@@ -9296,6 +9296,40 @@
             ]
           },
           {
+            "kind": "Function",
+            "name": "isCompatible",
+            "printedName": "isCompatible(with:face:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FontCIDSystemInfo",
+                "printedName": "SolidFont.FontCIDSystemInfo",
+                "usr": "s:9SolidFont0B13CIDSystemInfoV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FontProviderFace",
+                "printedName": "SolidPostScript.FontProviderFace",
+                "usr": "s:15SolidPostScript16FontProviderFaceV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript20FontResourceProviderP12isCompatible4with4faceSb0aD00D13CIDSystemInfoV_AA0dF4FaceVtYaKF",
+            "mangledName": "$s15SolidPostScript20FontResourceProviderP12isCompatible4with4faceSb0aD00D13CIDSystemInfoV_AA0dF4FaceVtYaKF",
+            "moduleName": "SolidPostScript",
+            "genericSig": "<Self where Self : SolidPostScript.FontResourceProvider>",
+            "protocolReq": true,
+            "throwing": true,
+            "reqNewWitnessTableEntry": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
             "kind": "Var",
             "name": "supportedAssetFormats",
             "printedName": "supportedAssetFormats",
@@ -9425,6 +9459,39 @@
                 "accessorKind": "get"
               }
             ]
+          },
+          {
+            "kind": "Function",
+            "name": "isCompatible",
+            "printedName": "isCompatible(with:face:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FontCIDSystemInfo",
+                "printedName": "SolidFont.FontCIDSystemInfo",
+                "usr": "s:9SolidFont0B13CIDSystemInfoV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FontProviderFace",
+                "printedName": "SolidPostScript.FontProviderFace",
+                "usr": "s:15SolidPostScript16FontProviderFaceV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript20FontResourceProviderPAAE12isCompatible4with4faceSb0aD00D13CIDSystemInfoV_AA0dF4FaceVtYaKF",
+            "mangledName": "$s15SolidPostScript20FontResourceProviderPAAE12isCompatible4with4faceSb0aD00D13CIDSystemInfoV_AA0dF4FaceVtYaKF",
+            "moduleName": "SolidPostScript",
+            "genericSig": "<Self where Self : SolidPostScript.FontResourceProvider>",
+            "isFromExtension": true,
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
           }
         ],
         "declKind": "Protocol",
@@ -9446,6 +9513,75 @@
             "printedName": "Copyable",
             "usr": "s:s8CopyableP",
             "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "StandardEncodings",
+        "printedName": "StandardEncodings",
+        "children": [
+          {
+            "kind": "Function",
+            "name": "standardName",
+            "printedName": "standardName(for:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UInt8",
+                "printedName": "Swift.UInt8",
+                "usr": "s:s5UInt8V"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:15SolidPostScript17StandardEncodingsO12standardName3forSSs5UInt8V_tFZ",
+            "mangledName": "$s15SolidPostScript17StandardEncodingsO12standardName3forSSs5UInt8V_tFZ",
+            "moduleName": "SolidPostScript",
+            "static": true,
+            "isInternal": true,
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:15SolidPostScript17StandardEncodingsO",
+        "mangledName": "$s15SolidPostScript17StandardEncodingsO",
+        "moduleName": "SolidPostScript",
+        "isInternal": true,
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
           },
           {
             "kind": "Conformance",
@@ -30795,6 +30931,38 @@
                 "accessorKind": "get"
               }
             ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(_:selector:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsGlyphDescription",
+                "printedName": "SolidPostScript.GraphicsGlyphDescription",
+                "usr": "s:15SolidPostScript24GraphicsGlyphDescriptionV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FontGlyph",
+                "printedName": "SolidFont.FontGlyph",
+                "usr": "s:9SolidFont0B5GlyphV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsGlyphSelector",
+                "printedName": "SolidPostScript.GraphicsGlyphSelector",
+                "usr": "s:15SolidPostScript21GraphicsGlyphSelectorO"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:15SolidPostScript24GraphicsGlyphDescriptionV_8selectorAC0A4Font0hE0V_AA0dE8SelectorOtcfc",
+            "mangledName": "$s15SolidPostScript24GraphicsGlyphDescriptionV_8selectorAC0A4Font0hE0V_AA0dE8SelectorOtcfc",
+            "moduleName": "SolidPostScript",
+            "isInternal": true,
+            "isFromExtension": true,
+            "init_kind": "Designated"
           }
         ],
         "declKind": "Struct",
@@ -55009,6 +55177,32 @@
                 "accessorKind": "get"
               }
             ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GraphicsPath",
+                "printedName": "SolidPostScript.GraphicsPath",
+                "usr": "s:15SolidPostScript12GraphicsPathV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FontOutline",
+                "printedName": "SolidFont.FontOutline",
+                "usr": "s:9SolidFont0B7OutlineV"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:15SolidPostScript12GraphicsPathVyAC0A4Font0F7OutlineVcfc",
+            "mangledName": "$s15SolidPostScript12GraphicsPathVyAC0A4Font0F7OutlineVcfc",
+            "moduleName": "SolidPostScript",
+            "isInternal": true,
+            "isFromExtension": true,
+            "init_kind": "Designated"
           }
         ],
         "declKind": "Struct",

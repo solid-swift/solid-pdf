@@ -238,10 +238,17 @@ extension PDFGraphicsInstructionHandler {
     let resolved: FontGlyph?
     do {
       switch font.source {
+      case .type1(let program):
+        resolved = try program.glyph(
+          named: selection.glyphName ?? ".notdef",
+          selector: fontSelector(selection, glyphIndex: 0)
+        )
       case .compact(let collection, let faceIndex):
         let glyphIndex: UInt32?
         if let cid = selection.cid {
           glyphIndex = collection.glyphIndex(faceIndex: faceIndex, cid: cid)
+        } else if let glyphName = selection.glyphName {
+          glyphIndex = collection.glyphIndex(faceIndex: faceIndex, glyphName: glyphName)
         } else {
           glyphIndex = collection.glyphIndex(faceIndex: faceIndex, encodedCode: UInt8(selection.code!))
         }

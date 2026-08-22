@@ -1,1 +1,2 @@
 Vendor/PlutoVG/** -whitespace
+Tests/Fixtures/**/*.pdf -whitespace

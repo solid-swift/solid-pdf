@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+for tool in qpdf mutool pdfinfo pdffonts pdftotext pdftoppm; do
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    echo "error: ${tool} is required for PDF text interoperability validation" >&2
+    exit 69
+  fi
+done
+
+WORK_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/solidpdf-text-interop.XXXXXX")"
+trap 'rm -rf "${WORK_DIRECTORY}"' EXIT
+
+INPUT="${ROOT_DIRECTORY}/Tests/Fixtures/PDFText/native-text.pdf"
+qpdf --check "${INPUT}"
+mutool clean -d "${INPUT}" "${WORK_DIRECTORY}/clean.pdf"
+qpdf --check "${WORK_DIRECTORY}/clean.pdf"
+pdfinfo "${INPUT}" >"${WORK_DIRECTORY}/pdfinfo.txt"
+pdffonts "${INPUT}" >"${WORK_DIRECTORY}/pdffonts.txt"
+pdftotext "${INPUT}" "${WORK_DIRECTORY}/text.txt"
+pdftoppm -f 1 -singlefile -png -r 144 "${INPUT}" "${WORK_DIRECTORY}/page" >/dev/null
+
+grep -Fq "Pages:           1" "${WORK_DIRECTORY}/pdfinfo.txt"
+grep -Fq "Helvetica" "${WORK_DIRECTORY}/pdffonts.txt"
+grep -Fq "Native PDF Text" "${WORK_DIRECTORY}/text.txt"
+grep -Fq "searchable" "${WORK_DIRECTORY}/text.txt"
+test -s "${WORK_DIRECTORY}/page.png"

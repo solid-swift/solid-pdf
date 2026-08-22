@@ -80,3 +80,9 @@ system-module availability matches supported Linux builds.
 `Scripts/pdf-parser-interop` generates deterministic PDF 1.7, PDF 2.0, and object-stream fixtures,
 then validates them with qpdf, MuPDF, and Poppler. Run `Scripts/linux-pdf-parser-interop` when those
 tools are not installed on the host; the reusable Linux container includes all required commands.
+
+# PDF text interoperability
+
+`Scripts/pdf-text-interop` validates the project-authored searchable-text fixture with qpdf, MuPDF,
+Poppler font inventory and extraction, and a 144-dpi raster render. Run
+`Scripts/linux-pdf-text-interop` to use the same reusable Linux container and its pinned tool set.
