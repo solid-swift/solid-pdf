@@ -124,6 +124,22 @@ import Testing
     #expect(cmap.mappings[0x41] == 1)
     #expect(cmap.mappings[0x42] == 2)
   }
+
+  @Test func decodesPortableTrueTypeGlyphMetricsAndCMapSelection() throws {
+    let data = makeTrueTypeFixture()
+    let collection = try SFNTCollection(data: data)
+
+    #expect(try collection.glyphIndex(data: data, faceIndex: 0, unicodeScalar: "A") == 1)
+    let glyph = try collection.glyph(
+      data: data,
+      faceIndex: 0,
+      glyphIndex: 1,
+      selector: .name("A")
+    )
+    #expect(glyph.resolvedGlyphIndex == 1)
+    #expect(glyph.metrics.horizontalAdvance == FontPoint(x: 600, y: 0))
+    #expect(glyph.program == .empty)
+  }
 }
 
 private func makeTrueTypeFixture() -> Data {

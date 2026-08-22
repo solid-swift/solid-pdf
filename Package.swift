@@ -80,11 +80,13 @@ let package = Package(
         .product(name: "SolidColor", package: "solid-image"),
         .product(name: "SolidImageIO", package: "solid-image"),
       ],
+      resources: [.process("Resources")],
       plugins: lintPlugins
     ),
     .testTarget(
       name: "SolidPDFGraphicsTests",
       dependencies: [
+        "SolidFont",
         "SolidPDF",
         "SolidPDFGraphics",
         "SolidPostScript",

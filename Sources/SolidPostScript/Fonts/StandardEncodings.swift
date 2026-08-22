@@ -1,7 +1,7 @@
 import Foundation
 
-enum StandardEncodings {
-  static func standardName(for code: UInt8) -> String {
+package enum StandardEncodings {
+  package static func standardName(for code: UInt8) -> String {
     standardNames[Int(code)] ?? ".notdef"
   }
 

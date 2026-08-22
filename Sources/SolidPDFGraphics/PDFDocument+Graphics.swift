@@ -6,18 +6,26 @@ extension PDFDocument {
   public func render<Target: GraphicsTarget>(
     page index: Int,
     to target: Target,
-    options: PDFGraphicsInterpretationOptions = .init()
+    options: PDFGraphicsInterpretationOptions = .init(),
+    fontEnvironment: PDFGraphicsFontEnvironment = .portable
   ) async throws -> PDFGraphicsRenderResult<Target.Output> {
-    try await render(selection: .indices([index]), in: latestRevision.identifier, to: target, options: options)
+    try await render(
+      selection: .indices([index]), in: latestRevision.identifier, to: target,
+      options: options, fontEnvironment: fontEnvironment
+    )
   }
 
   /// Interprets selected pages from the latest revision through `target`.
   public func render<Target: GraphicsTarget>(
     selection: PDFGraphicsPageSelection = .all,
     to target: Target,
-    options: PDFGraphicsInterpretationOptions = .init()
+    options: PDFGraphicsInterpretationOptions = .init(),
+    fontEnvironment: PDFGraphicsFontEnvironment = .portable
   ) async throws -> PDFGraphicsRenderResult<Target.Output> {
-    try await render(selection: selection, in: latestRevision.identifier, to: target, options: options)
+    try await render(
+      selection: selection, in: latestRevision.identifier, to: target,
+      options: options, fontEnvironment: fontEnvironment
+    )
   }
 
   /// Interprets selected pages from one document revision through `target`.
@@ -25,7 +33,8 @@ extension PDFDocument {
     selection: PDFGraphicsPageSelection,
     in revision: PDFRevisionIdentifier,
     to target: Target,
-    options: PDFGraphicsInterpretationOptions = .init()
+    options: PDFGraphicsInterpretationOptions = .init(),
+    fontEnvironment: PDFGraphicsFontEnvironment = .portable
   ) async throws -> PDFGraphicsRenderResult<Target.Output> {
     try checkPermission(options.accessPurpose)
     let selected = try await selectedPageIndices(selection, revision: revision)
@@ -96,7 +105,8 @@ extension PDFDocument {
           document: self,
           revision: revision,
           resources: page.resources.value,
-          limits: options.limits
+          limits: options.limits,
+          fontEnvironment: fontEnvironment
         )
         let handler = PDFGraphicsInstructionHandler(
           device: device,

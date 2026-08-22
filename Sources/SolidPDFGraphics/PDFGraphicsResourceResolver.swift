@@ -14,22 +14,26 @@ final class PDFGraphicsResourceResolver<Source: PDFInputSource> {
 
   let document: PDFDocument<Source>
   let revision: PDFRevisionIdentifier
-  private let limits: PDFGraphicsLimits
+  let limits: PDFGraphicsLimits
+  let fontEnvironment: PDFGraphicsFontEnvironment
   private var scopes: [[PDFName: PDFObject]]
   private var colorSpaceCache: [PDFName: ResolvedColorSpace] = [:]
+  var fontCache: [FontCacheKey: PDFResolvedFont] = [:]
   private var activeReusableResources: Set<PDFObjectReference> = []
   private var diagnosedICCProfiles: Set<PDFObjectReference> = []
-  private(set) var diagnostics: [PDFGraphicsDiagnostic] = []
+  var diagnostics: [PDFGraphicsDiagnostic] = []
 
   init(
     document: PDFDocument<Source>,
     revision: PDFRevisionIdentifier,
     resources: [PDFName: PDFObject],
-    limits: PDFGraphicsLimits
+    limits: PDFGraphicsLimits,
+    fontEnvironment: PDFGraphicsFontEnvironment = .portable
   ) {
     self.document = document
     self.revision = revision
     self.limits = limits
+    self.fontEnvironment = fontEnvironment
     scopes = [resources]
   }
 

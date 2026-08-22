@@ -83,7 +83,7 @@ private enum Tag {
   static let cff: UInt32 = 0x4346_4620
 }
 
-private struct TrueTypeSource {
+package struct TrueTypeSource {
   let data: Data
   let face: SFNTFace
   let glyphCount: Int
@@ -180,6 +180,34 @@ private struct TrueTypeSource {
     )
   }
 
+  func glyph(
+    _ glyph: UInt32,
+    selector: FontGlyphSelector,
+    maximumDepth: Int = 64
+  ) throws -> FontGlyph {
+    guard let glyphIndex = Int(exactly: glyph), glyphIndex < glyphCount else { throw FontError.range }
+    let outline = try outline(for: Int(glyph), depth: 0, maximumDepth: maximumDepth)
+    let verticalAdvance = verticalAdvances.map { FontPoint(x: 0, y: -Double($0[glyphIndex])) }
+    let verticalOrigin = topSideBearings.map { bearings in
+      FontPoint(x: Double(horizontalAdvances[glyphIndex]) / 2, y: Double(bearings[glyphIndex]))
+    }
+    return FontGlyph(
+      selector: selector,
+      metrics: FontGlyphMetrics(
+        horizontalAdvance: FontPoint(x: Double(horizontalAdvances[glyphIndex]), y: 0),
+        verticalAdvance: verticalAdvance,
+        verticalOrigin: verticalOrigin,
+        bounds: bounds(for: glyphIndex)
+      ),
+      program: outline.elements.isEmpty ? .empty : .outline(outline),
+      resolvedGlyphIndex: glyph
+    )
+  }
+
+  func glyphIndex(for unicodeScalar: Unicode.Scalar) -> UInt32? {
+    characterMap[unicodeScalar.value]
+  }
+
   func rebuild(
     glyphs: [UInt32],
     subsetName: String,
@@ -244,12 +272,193 @@ private struct TrueTypeSource {
     return (try makeSFNT(tables: tables, maximumBytes: maximumBytes), mapping)
   }
 
-  private func glyphData(_ glyph: Int) throws -> Data {
+  package func glyphData(_ glyph: Int) throws -> Data {
     let table = try requiredTable(Tag.glyf)
     let lower = glyphOffsets[glyph]
     let upper = glyphOffsets[glyph + 1]
     guard lower <= upper, upper <= table.count else { throw FontError.invalidData }
     return table.subdata(in: lower..<upper)
+  }
+
+  private func outline(for glyph: Int, depth: Int, maximumDepth: Int) throws -> FontOutline {
+    guard depth < maximumDepth else { throw FontError.limitExceeded }
+    let bytes = try glyphData(glyph)
+    guard !bytes.isEmpty else { return FontOutline(elements: []) }
+    guard bytes.count >= 10 else { throw FontError.invalidData }
+    let contourCount = try bytes.i16(0)
+    if contourCount >= 0 { return try simpleOutline(bytes, contourCount: Int(contourCount)) }
+    var elements: [FontOutline.Element] = []
+    var offset = 10
+    var hasMore = true
+    while hasMore {
+      guard offset <= bytes.count - 4 else { throw FontError.invalidData }
+      let flags = try bytes.u16(offset)
+      let componentGlyph = Int(try bytes.u16(offset + 2))
+      offset += 4
+      let words = flags & 0x0001 != 0
+      let usesXY = flags & 0x0002 != 0
+      guard usesXY else { throw FontError.unsupportedFormat }
+      let argumentByteCount = words ? 4 : 2
+      guard offset <= bytes.count - argumentByteCount else { throw FontError.invalidData }
+      let dx: Double
+      let dy: Double
+      if words {
+        dx = Double(try bytes.i16(offset))
+        dy = Double(try bytes.i16(offset + 2))
+      } else {
+        dx = Double(Int8(bitPattern: bytes[offset]))
+        dy = Double(Int8(bitPattern: bytes[offset + 1]))
+      }
+      offset += argumentByteCount
+      var a = 1.0
+      var b = 0.0
+      var c = 0.0
+      var d = 1.0
+      if flags & 0x0008 != 0 {
+        let scale = try fixed2Dot14(bytes, at: offset)
+        a = scale
+        d = scale
+        offset += 2
+      } else if flags & 0x0040 != 0 {
+        a = try fixed2Dot14(bytes, at: offset)
+        d = try fixed2Dot14(bytes, at: offset + 2)
+        offset += 4
+      } else if flags & 0x0080 != 0 {
+        a = try fixed2Dot14(bytes, at: offset)
+        b = try fixed2Dot14(bytes, at: offset + 2)
+        c = try fixed2Dot14(bytes, at: offset + 4)
+        d = try fixed2Dot14(bytes, at: offset + 6)
+        offset += 8
+      }
+      let component = try outline(for: componentGlyph, depth: depth + 1, maximumDepth: maximumDepth)
+      elements.append(contentsOf: component.elements.map { element in
+        element.transformed(a: a, b: b, c: c, d: d, dx: dx, dy: dy)
+      })
+      hasMore = flags & 0x0020 != 0
+    }
+    return FontOutline(elements: elements)
+  }
+
+  private func simpleOutline(_ bytes: Data, contourCount: Int) throws -> FontOutline {
+    guard contourCount > 0 else { return FontOutline(elements: []) }
+    let endPointsOffset = 10
+    guard endPointsOffset <= bytes.count - contourCount * 2 else { throw FontError.invalidData }
+    let endPoints = try (0..<contourCount).map { Int(try bytes.u16(endPointsOffset + $0 * 2)) }
+    guard endPoints.elementsEqual(endPoints.sorted()), let lastPoint = endPoints.last else {
+      throw FontError.invalidData
+    }
+    let pointCount = lastPoint + 1
+    var offset = endPointsOffset + contourCount * 2
+    guard offset <= bytes.count - 2 else { throw FontError.invalidData }
+    let instructionCount = Int(try bytes.u16(offset))
+    offset += 2
+    guard offset <= bytes.count - instructionCount else { throw FontError.invalidData }
+    offset += instructionCount
+    var flags: [UInt8] = []
+    flags.reserveCapacity(pointCount)
+    while flags.count < pointCount {
+      guard offset < bytes.count else { throw FontError.invalidData }
+      let flag = bytes[offset]
+      offset += 1
+      flags.append(flag)
+      if flag & 0x08 != 0 {
+        guard offset < bytes.count else { throw FontError.invalidData }
+        let repetitions = Int(bytes[offset])
+        offset += 1
+        guard repetitions <= pointCount - flags.count else { throw FontError.invalidData }
+        flags.append(contentsOf: repeatElement(flag, count: repetitions))
+      }
+    }
+    var xValues: [Int] = []
+    xValues.reserveCapacity(pointCount)
+    var x = 0
+    for flag in flags {
+      if flag & 0x02 != 0 {
+        guard offset < bytes.count else { throw FontError.invalidData }
+        let delta = Int(bytes[offset])
+        offset += 1
+        x += flag & 0x10 != 0 ? delta : -delta
+      } else if flag & 0x10 == 0 {
+        guard offset <= bytes.count - 2 else { throw FontError.invalidData }
+        x += Int(try bytes.i16(offset))
+        offset += 2
+      }
+      xValues.append(x)
+    }
+    var points: [(point: FontPoint, onCurve: Bool)] = []
+    points.reserveCapacity(pointCount)
+    var y = 0
+    for (index, flag) in flags.enumerated() {
+      if flag & 0x04 != 0 {
+        guard offset < bytes.count else { throw FontError.invalidData }
+        let delta = Int(bytes[offset])
+        offset += 1
+        y += flag & 0x20 != 0 ? delta : -delta
+      } else if flag & 0x20 == 0 {
+        guard offset <= bytes.count - 2 else { throw FontError.invalidData }
+        y += Int(try bytes.i16(offset))
+        offset += 2
+      }
+      points.append((FontPoint(x: Double(xValues[index]), y: Double(y)), flag & 0x01 != 0))
+    }
+    var elements: [FontOutline.Element] = []
+    var start = 0
+    for end in endPoints {
+      guard start <= end, end < points.count else { throw FontError.invalidData }
+      appendContour(Array(points[start...end]), to: &elements)
+      start = end + 1
+    }
+    return FontOutline(elements: elements)
+  }
+
+  private func appendContour(
+    _ points: [(point: FontPoint, onCurve: Bool)],
+    to elements: inout [FontOutline.Element]
+  ) {
+    guard let first = points.first, let last = points.last else { return }
+    let startPoint: FontPoint
+    var index: Int
+    if first.onCurve {
+      startPoint = first.point
+      index = 1
+    } else if last.onCurve {
+      startPoint = last.point
+      index = 0
+    } else {
+      startPoint = midpoint(last.point, first.point)
+      index = 0
+    }
+    elements.append(.move(startPoint))
+    var currentIndex = index
+    var consumed = 0
+    while consumed < points.count {
+      let current = points[currentIndex % points.count]
+      if current.onCurve {
+        if current.point != startPoint || consumed + 1 < points.count { elements.append(.line(current.point)) }
+        currentIndex += 1
+        consumed += 1
+      } else {
+        let next = points[(currentIndex + 1) % points.count]
+        if next.onCurve {
+          elements.append(.quadratic(control: current.point, end: next.point))
+          currentIndex += 2
+          consumed += 2
+        } else {
+          elements.append(.quadratic(control: current.point, end: midpoint(current.point, next.point)))
+          currentIndex += 1
+          consumed += 1
+        }
+      }
+    }
+    elements.append(.close)
+  }
+
+  private func midpoint(_ first: FontPoint, _ second: FontPoint) -> FontPoint {
+    FontPoint(x: (first.x + second.x) / 2, y: (first.y + second.y) / 2)
+  }
+
+  private func fixed2Dot14(_ bytes: Data, at offset: Int) throws -> Double {
+    Double(try bytes.i16(offset)) / 16_384
   }
 
   private func components(of glyph: Int) throws -> [UInt32] {

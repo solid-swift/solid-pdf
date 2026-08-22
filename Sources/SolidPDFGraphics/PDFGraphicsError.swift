@@ -12,4 +12,12 @@ public enum PDFGraphicsError: Error, Sendable, Hashable {
   case targetFailure(String)
   /// A configured interpretation limit was exceeded.
   case limitExceeded(String, location: PDFContentLocation?)
+  /// No embedded program or compatible configured provider can realize a used font.
+  case fontProgramUnavailable(name: String, location: PDFContentLocation)
+  /// A well-formed font subtype is outside portable support.
+  case unsupportedFont(subtype: String, location: PDFContentLocation)
+  /// A referenced encoding or CMap is malformed.
+  case malformedCMap(message: String, location: PDFContentLocation?)
+  /// A configured font provider failed while resolving or realizing a glyph.
+  case fontProviderFailure(provider: String, message: String, location: PDFContentLocation?)
 }
