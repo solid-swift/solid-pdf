@@ -1,3 +1,4 @@
+import Crypto
 import Foundation
 import SolidIO
 
@@ -65,6 +66,63 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   func sourceBytes(in range: PDFSourceRange) async throws -> Data {
     guard !closed else { throw PDFParsingError.documentClosed }
     return try await reader.read(range)
+  }
+
+  func sourceLength() async throws -> Int64 {
+    guard !closed else { throw PDFParsingError.documentClosed }
+    return try await reader.length()
+  }
+
+  func digest(
+    of ranges: [PDFSourceRange],
+    using algorithm: PDFDigestAlgorithm
+  ) async throws -> Data {
+    switch algorithm {
+    case .sha1: return try await digest(of: ranges, using: Insecure.SHA1.self)
+    case .sha256: return try await digest(of: ranges, using: SHA256.self)
+    case .sha384: return try await digest(of: ranges, using: SHA384.self)
+    case .sha512: return try await digest(of: ranges, using: SHA512.self)
+    case .sha224, .unsupported:
+      throw PDFParsingError.unsupported(
+        .signatureAlgorithm(String(describing: algorithm)),
+        .init(offset: 0, message: "The signature digest algorithm is unsupported.")
+      )
+    }
+  }
+
+  func materialize(
+    ranges: [PDFSourceRange],
+    maximumBytes: Int
+  ) async throws -> Data {
+    guard !closed else { throw PDFParsingError.documentClosed }
+    var result = Data()
+    for range in ranges {
+      let (size, overflow) = result.count.addingReportingOverflow(range.length)
+      guard !overflow, size <= maximumBytes else {
+        throw PDFParsingError.limitExceeded(.init(offset: range.offset, message: "Signed source material exceeds its scratch limit."))
+      }
+      result.append(try await reader.read(range))
+    }
+    return result
+  }
+
+  func changedObjectReferences(
+    after revision: PDFRevisionIdentifier,
+    through target: PDFRevisionIdentifier
+  ) throws -> [PDFObjectReference] {
+    guard let before = index.snapshots[revision], let after = index.snapshots[target] else {
+      throw PDFParsingError.unknownRevision(revision)
+    }
+    let numbers = Set(before.keys).union(after.keys)
+    return numbers.sorted().compactMap { number in
+      guard before[number] != after[number], let entry = after[number] else { return nil }
+      let generation: Int = switch entry.entry {
+      case .free(_, let generation): generation
+      case .uncompressed(_, let generation): generation
+      case .compressed: 0
+      }
+      return PDFObjectReference(uncheckedObjectNumber: number, generationNumber: generation)
+    }
   }
 
   func decodedStream(_ stream: PDFStreamObject) async throws -> PDFDecodedStream {
@@ -174,6 +232,25 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
       pending[key] = nil
       throw error
     }
+  }
+
+  private func digest<Hash: HashFunction>(
+    of ranges: [PDFSourceRange],
+    using _: Hash.Type
+  ) async throws -> Data {
+    guard !closed else { throw PDFParsingError.documentClosed }
+    var hash = Hash()
+    for range in ranges {
+      var offset = range.offset
+      while offset < range.endOffset {
+        try Task.checkCancellation()
+        let count = Int(min(Int64(64 * 1_024), range.endOffset - offset))
+        let chunk = try await reader.read(PDFSourceRange(uncheckedOffset: offset, length: count))
+        hash.update(data: chunk)
+        offset += Int64(count)
+      }
+    }
+    return Data(hash.finalize())
   }
 
   private func resolveUncached(

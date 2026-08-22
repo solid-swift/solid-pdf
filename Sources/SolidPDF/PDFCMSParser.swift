@@ -1,4 +1,3 @@
-import Crypto
 import Foundation
 import SwiftASN1
 import X509
@@ -92,19 +91,9 @@ struct PDFCMSParser {
       guard node.tagClass == .universal, node.tagNumber == 16 else { return nil }
       let bytes = node.bytes(in: data)
       let certificate = try Certificate(derEncoded: [UInt8](bytes))
-      var serializer = DER.Serializer()
-      try certificate.issuer.serialize(into: &serializer)
       return ParsedCertificate(
-        value: PDFCertificate(
-          derRepresentation: bytes,
-          serialNumber: Data(certificate.serialNumber.bytes),
-          subject: certificate.subject.description,
-          issuer: certificate.issuer.description,
-          notValidBefore: certificate.notValidBefore,
-          notValidAfter: certificate.notValidAfter,
-          sha256Fingerprint: Data(SHA256.hash(data: bytes))
-        ),
-        issuerDER: Data(serializer.serializedBytes)
+        value: try PDFCertificateBridge.portable(certificate),
+        issuerDER: try PDFCertificateBridge.issuerDER(certificate)
       )
     }
   }
@@ -171,7 +160,11 @@ struct PDFCMSParser {
       signingTime: signed.signingTime,
       certificate: matchedCertificate,
       unknownSignedAttributeIdentifiers: signed.unknown,
-      unknownUnsignedAttributeIdentifiers: unsigned.unknown
+      unknownUnsignedAttributeIdentifiers: unsigned.unknown,
+      signedAttributesDER: signedAttributesDER(node.children.first(where: {
+        $0.tagClass == .contextSpecific && $0.tagNumber == 0
+      }), data: data),
+      signedContentTypeIdentifier: signed.contentType
     )
   }
 
@@ -188,9 +181,10 @@ struct PDFCMSParser {
   private func attributes(
     _ nodes: [PDFDERNode],
     data: Data
-  ) throws -> (messageDigest: Data?, signingTime: Date?, unknown: [String]) {
+  ) throws -> (messageDigest: Data?, signingTime: Date?, contentType: String?, unknown: [String]) {
     var messageDigest: Data?
     var signingTime: Date?
+    var contentType: String?
     var unknown = [String]()
     for node in nodes {
       try node.requireUniversal(16)
@@ -199,7 +193,9 @@ struct PDFCMSParser {
       let values = node.children[1]
       try values.requireUniversal(17)
       switch oid {
-      case "1.2.840.113549.1.9.3": break
+      case "1.2.840.113549.1.9.3":
+        guard values.children.count == 1 else { throw PDFDERError.malformed(values.fullRange.lowerBound) }
+        contentType = try values.children[0].objectIdentifier(in: data)
       case "1.2.840.113549.1.9.4":
         guard values.children.count == 1 else { throw PDFDERError.malformed(values.fullRange.lowerBound) }
         try values.children[0].requireUniversal(4)
@@ -210,7 +206,15 @@ struct PDFCMSParser {
       default: unknown.append(oid)
       }
     }
-    return (messageDigest, signingTime, unknown)
+    return (messageDigest, signingTime, contentType, unknown)
+  }
+
+  private func signedAttributesDER(_ node: PDFDERNode?, data: Data) -> Data? {
+    guard let node else { return nil }
+    var bytes = node.bytes(in: data)
+    guard !bytes.isEmpty else { return nil }
+    bytes[bytes.startIndex] = 0x31
+    return bytes
   }
 
   private func parseTime(_ node: PDFDERNode, data: Data) throws -> Date {

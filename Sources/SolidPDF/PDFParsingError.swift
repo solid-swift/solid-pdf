@@ -24,6 +24,8 @@ public enum PDFUnsupportedFeature: Sendable, Hashable {
   case securityHandler(PDFName)
   /// The document selects an unsupported crypt method.
   case cryptMethod(PDFName)
+  /// A signature selects an unsupported digest or public-key algorithm.
+  case signatureAlgorithm(String)
 }
 
 /// An error raised while opening or resolving a PDF document.

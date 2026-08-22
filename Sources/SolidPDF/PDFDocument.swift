@@ -407,6 +407,23 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     try await authenticity.signatures(in: revision)
   }
 
+  /// Validates a signature against the latest document revision.
+  public func validate(
+    signature: PDFSignature,
+    options: PDFSignatureValidationOptions = .init()
+  ) async throws -> PDFSignatureValidationResult {
+    try await authenticity.validate(signature, in: latestRevision.identifier, options: options)
+  }
+
+  /// Validates a signature and its later modifications as of a selected revision.
+  public func validate(
+    signature: PDFSignature,
+    in revision: PDFRevisionIdentifier,
+    options: PDFSignatureValidationOptions = .init()
+  ) async throws -> PDFSignatureValidationResult {
+    try await authenticity.validate(signature, in: revision, options: options)
+  }
+
   /// Opens a validated, bounded stream over an embedded file's decoded bytes.
   public func decodedStream(of file: PDFEmbeddedFile) async throws -> PDFDecodedStream {
     let stream = try await resolver.decodedStream(file.stream)

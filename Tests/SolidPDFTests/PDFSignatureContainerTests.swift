@@ -58,7 +58,46 @@ struct PDFSignatureContainerTests {
     #expect(signatures[0].container?.signers.count == 1)
     #expect(signatures[0].signedRevision == document.latestRevision.identifier)
     #expect(signatures[0].transforms == [.docMDP(.init(permissionLevel: 1, rawParameters: ["P": .integer(1)]))])
+    let validation = try await document.validate(signature: signatures[0])
+    #expect(!validation.coverage.coversSignedRevision)
+    #expect(validation.integrity == .invalid(reason: "The signed byte ranges do not exactly cover the signed revision."))
+    #expect(validation.trust == .notEvaluated)
+    #expect(validation.modifications == .unchanged)
     await document.close()
+  }
+
+  @Test
+  func offlineTrustUsesOnlyExplicitAnchors() async throws {
+    let der = try #require(Data(base64Encoded: testRootCertificate))
+    let certificate = PDFCertificate(
+      derRepresentation: der,
+      serialNumber: Data(),
+      subject: "",
+      issuer: "",
+      notValidBefore: .distantPast,
+      notValidAfter: .distantFuture,
+      sha256Fingerprint: Data()
+    )
+    let date = try #require(ISO8601DateFormatter().date(from: "2027-01-01T00:00:00Z"))
+    let trusted = try PDFOfflineSignatureTrustProvider(trustAnchorsDER: [der])
+    let result = try await trusted.evaluate(.init(
+      leaf: certificate,
+      intermediates: [],
+      validationTime: date,
+      role: .signer
+    ))
+    #expect(result.trust == .trusted)
+    #expect(result.chain.count == 1)
+    #expect(result.revocation == .notChecked)
+
+    let untrusted = try PDFOfflineSignatureTrustProvider(trustAnchorsDER: [])
+    let rejected = try await untrusted.evaluate(.init(
+      leaf: certificate,
+      intermediates: [],
+      validationTime: date,
+      role: .signer
+    ))
+    #expect(rejected.trust == .untrusted)
   }
 
   private func cmsFixture() -> Data {
@@ -143,5 +182,9 @@ struct PDFSignatureContainerTests {
     for offset in offsets { data.append(Data(String(format: "%010d 00000 n \n", offset).utf8)) }
     data.append(Data("trailer\n<< /Size \(objects.count + 1) /Root 1 0 R >>\nstartxref\n\(xref)\n%%EOF\n".utf8))
     return data
+  }
+
+  private var testRootCertificate: String {
+    "MIIBjzCCATWgAwIBAgIUSmS8vTVXM33IY9E1jkKBDpl5JYUwCgYIKoZIzj0EAwIwHTEbMBkGA1UEAwwSU29saWRQREYtVGVzdC1Sb290MB4XDTI2MDgyMjE4MjIxM1oXDTM2MDgxOTE4MjIxM1owHTEbMBkGA1UEAwwSU29saWRQREYtVGVzdC1Sb290MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEM/qXWQxuuXaXb1u0Nkm3nFLAjbfBUyi6SGZGoTA8jqVFYtYfp30K/GSjojUJeutc4UwSn3eSFDvJSYAU6oVw1aNTMFEwHQYDVR0OBBYEFEZk20l9GAT73fkB+9fG7k7NuwaPMB8GA1UdIwQYMBaAFEZk20l9GAT73fkB+9fG7k7NuwaPMA8GA1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDSAAwRQIgI0KcKfKatEyjstnhNpDt4SqAzn4EkRB4+eL3BbG62V8CIQCm+FefBJ5RP+7yhDL4qoa18+yy5Iz5kfWYYrJMr1q8gQ=="
   }
 }

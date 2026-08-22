@@ -23,6 +23,9 @@ public struct PDFSignatureSigner: Sendable, Hashable {
   /// Unknown unsigned attribute object identifiers retained for inspection.
   public let unknownUnsignedAttributeIdentifiers: [String]
 
+  package let signedAttributesDER: Data?
+  package let signedContentTypeIdentifier: String?
+
   /// Creates portable signer metadata.
   public init(
     issuerAndSerialNumber: PDFSignatureIssuerAndSerialNumber? = nil,
@@ -34,7 +37,9 @@ public struct PDFSignatureSigner: Sendable, Hashable {
     signingTime: Date? = nil,
     certificate: PDFCertificate? = nil,
     unknownSignedAttributeIdentifiers: [String] = [],
-    unknownUnsignedAttributeIdentifiers: [String] = []
+    unknownUnsignedAttributeIdentifiers: [String] = [],
+    signedAttributesDER: Data? = nil,
+    signedContentTypeIdentifier: String? = nil
   ) {
     self.issuerAndSerialNumber = issuerAndSerialNumber
     self.subjectKeyIdentifier = subjectKeyIdentifier
@@ -46,6 +51,8 @@ public struct PDFSignatureSigner: Sendable, Hashable {
     self.certificate = certificate
     self.unknownSignedAttributeIdentifiers = unknownSignedAttributeIdentifiers
     self.unknownUnsignedAttributeIdentifiers = unknownUnsignedAttributeIdentifiers
+    self.signedAttributesDER = signedAttributesDER
+    self.signedContentTypeIdentifier = signedContentTypeIdentifier
   }
 }
 
