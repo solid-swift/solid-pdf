@@ -16,8 +16,13 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
   public var latestRevision: PDFDocumentRevision { revisions[revisions.count - 1] }
   /// Authenticated security metadata, or `nil` for an unencrypted document.
   public let security: PDFDocumentSecurity?
+  /// The validated latest document catalog.
+  public let catalog: PDFDocumentCatalog
+  /// The effective version after applying the catalog's optional `/Version`.
+  public var effectiveVersion: PDFFileVersion { catalog.effectiveVersion }
 
   private let resolver: PDFDocumentResolver<Source.Session>
+  private let structure: PDFDocumentStructure<Source.Session>
 
   /// Opens and validates one PDF revision without eagerly resolving its objects.
   public init(
@@ -42,13 +47,22 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
       identifier = index.identifier
       revisions = index.revisions
       security = securityContext?.security
-      resolver = PDFDocumentResolver(
+      let documentResolver = PDFDocumentResolver(
         reader: reader,
         index: index,
         options: options,
         externalStreamProvider: externalStreamProvider,
         securityContext: securityContext
       )
+      let documentStructure = PDFDocumentStructure(
+        resolver: documentResolver,
+        revisions: index.revisions,
+        headerVersion: index.version,
+        limits: options.limits
+      )
+      resolver = documentResolver
+      structure = documentStructure
+      catalog = try await documentStructure.catalog(in: index.latestRevision.identifier)
     } catch {
       await session.close()
       throw error
@@ -72,7 +86,11 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
 
   deinit {
     let resolver = resolver
-    Task { await resolver.close() }
+    let structure = structure
+    Task {
+      await structure.close()
+      await resolver.close()
+    }
   }
 
   /// Resolves an indirect object on demand.
@@ -86,6 +104,11 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     in revision: PDFRevisionIdentifier
   ) async throws -> PDFIndirectObject {
     try await resolver.resolve(reference, in: revision)
+  }
+
+  /// Returns the validated catalog as it existed in a selected revision.
+  public func catalog(in revision: PDFRevisionIdentifier) async throws -> PDFDocumentCatalog {
+    try await structure.catalog(in: revision)
   }
 
   /// Reads the exact encoded bytes of a resolved stream.
@@ -105,6 +128,7 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
 
   /// Releases the source and all document-owned caches.
   public func close() async {
+    await structure.close()
     await resolver.close()
   }
 }

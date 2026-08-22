@@ -44,6 +44,8 @@ public enum PDFParsingError: Error, Sendable, Hashable {
   case unresolvedReference(PDFObjectReference)
   /// A revision identifier does not belong to the document.
   case unknownRevision(PDFRevisionIdentifier)
+  /// A requested zero-based page index is outside the selected revision's page tree.
+  case pageIndexOutOfRange(Int)
   /// The encrypted document requires a password provider.
   case authenticationRequired(PDFEncryptionDescription)
   /// None of the supplied passwords authenticated the document.

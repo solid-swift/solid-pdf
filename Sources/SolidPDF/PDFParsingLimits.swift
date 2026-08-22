@@ -38,6 +38,16 @@ public struct PDFParsingLimits: Sendable, Hashable {
   public var maximumStreamExpansionRatio: Int
   /// Maximum terminal bytes searched for `startxref` and `%%EOF`.
   public var maximumTailSearchBytes: Int
+  /// Maximum number of leaf pages in one page tree.
+  public var maximumPages: Int
+  /// Maximum temporary storage used while validating one page tree.
+  public var maximumPageTreeScratchBytes: Int
+  /// Maximum content streams associated with one page.
+  public var maximumPageContentStreams: Int
+  /// Maximum aggregate decoded content for one page.
+  public var maximumDecodedPageContentBytes: Int
+  /// Maximum generated page-label text.
+  public var maximumGeneratedPageLabelBytes: Int
 
   /// Creates parsing limits.
   public init(
@@ -59,7 +69,12 @@ public struct PDFParsingLimits: Sendable, Hashable {
     maximumStreamScratchBytes: Int = 64 * 1_024 * 1_024,
     maximumCachedDecodedStreamBytes: Int = 64 * 1_024 * 1_024,
     maximumStreamExpansionRatio: Int = 1_000,
-    maximumTailSearchBytes: Int = 1 * 1_024 * 1_024
+    maximumTailSearchBytes: Int = 1 * 1_024 * 1_024,
+    maximumPages: Int = 1_000_000,
+    maximumPageTreeScratchBytes: Int = 64 * 1_024 * 1_024,
+    maximumPageContentStreams: Int = 65_536,
+    maximumDecodedPageContentBytes: Int = 512 * 1_024 * 1_024,
+    maximumGeneratedPageLabelBytes: Int = 1 * 1_024 * 1_024
   ) {
     self.maximumInputBytes = maximumInputBytes
     self.maximumObjectCount = maximumObjectCount
@@ -80,5 +95,10 @@ public struct PDFParsingLimits: Sendable, Hashable {
     self.maximumCachedDecodedStreamBytes = maximumCachedDecodedStreamBytes
     self.maximumStreamExpansionRatio = maximumStreamExpansionRatio
     self.maximumTailSearchBytes = maximumTailSearchBytes
+    self.maximumPages = maximumPages
+    self.maximumPageTreeScratchBytes = maximumPageTreeScratchBytes
+    self.maximumPageContentStreams = maximumPageContentStreams
+    self.maximumDecodedPageContentBytes = maximumDecodedPageContentBytes
+    self.maximumGeneratedPageLabelBytes = maximumGeneratedPageLabelBytes
   }
 }
