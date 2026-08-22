@@ -10,4 +10,10 @@ public enum GraphicsUnicodeProvenance: Sendable, Hashable {
   case glyphName
   /// A configured font provider supplied the mapping.
   case provider
+  /// A PDF simple-font Encoding and glyph name established the mapping.
+  case pdfEncoding
+  /// A PDF composite-font CMap or standard collection mapping established the mapping.
+  case pdfCMap
+  /// A PDF `/ToUnicode` CMap explicitly established the mapping.
+  case pdfToUnicode
 }

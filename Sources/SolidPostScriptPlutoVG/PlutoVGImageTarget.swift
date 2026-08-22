@@ -564,11 +564,20 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       depth: Int
     ) throws {
       guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      let fillState = run.style.map { state.replacingColor(with: $0.fill) } ?? state
+      let strokeState = run.style.map { state.replacingColor(with: $0.stroke) } ?? state
       for placement in run.glyphs {
         switch placement.glyph.program {
         case .outline(let path):
-          try fill(path.transformed(by: placement.transform), rule: .winding, state: state, in: canvas)
+          let outline = path.transformed(by: placement.transform)
+          if run.renderingMode.fills {
+            try fill(outline, rule: .winding, state: fillState, in: canvas)
+          }
+          if run.renderingMode.strokes {
+            try stroke(outline, matrix: state.matrix, state: strokeState, in: canvas)
+          }
         case .displayList(let list):
+          guard run.renderingMode != .invisible else { continue }
           for effect in list.effects { try replayFormEffect(effect, in: canvas, depth: depth + 1) }
         case .bitmap, .empty, .missing:
           break

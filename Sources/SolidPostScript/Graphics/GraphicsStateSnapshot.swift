@@ -119,4 +119,31 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
       renderingIntent: renderingIntent
     )
   }
+
+  /// Returns a copy using one independently captured PDF text paint.
+  public func replacingColor(with textPaint: GraphicsTextPaint) -> Self {
+    Self(
+      matrix: matrix,
+      path: path,
+      clip: clip,
+      paint: textPaint.paint,
+      colorSpace: textPaint.colorSpace,
+      colorRealization: textPaint.colorRealization,
+      colorComponents: textPaint.components,
+      overprint: textPaint.overprint,
+      lineWidth: lineWidth,
+      lineCap: lineCap,
+      lineJoin: lineJoin,
+      miterLimit: miterLimit,
+      dash: dash,
+      flatness: flatness,
+      strokeAdjustment: strokeAdjustment,
+      smoothness: smoothness,
+      pathBoundingBox: pathBoundingBox,
+      device: device,
+      deviceRendering: deviceRendering,
+      font: font,
+      renderingIntent: renderingIntent
+    )
+  }
 }

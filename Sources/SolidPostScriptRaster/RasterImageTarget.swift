@@ -768,14 +768,25 @@ where
 
     private func paintText(_ run: GraphicsGlyphRun, state: GraphicsStateSnapshot, depth: Int) throws {
       guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      let fillState = run.style.map { state.replacingColor(with: $0.fill) } ?? state
+      let strokeState = run.style.map { state.replacingColor(with: $0.stroke) } ?? state
       for placement in run.glyphs {
         switch placement.glyph.program {
         case .outline(let path):
-          try fill(path.transformed(by: placement.transform), rule: .winding, state: state)
+          let outline = path.transformed(by: placement.transform)
+          if run.renderingMode.fills {
+            try fill(outline, rule: .winding, state: fillState)
+          }
+          if run.renderingMode.strokes {
+            try stroke(outline, matrix: state.matrix, state: strokeState)
+          }
         case .displayList(let list):
+          guard run.renderingMode != .invisible else { continue }
           for effect in list.effects { try replayFormEffect(effect, depth: depth + 1) }
         case .bitmap(let bitmap):
-          try paintGlyphBitmap(bitmap, placement: placement, state: state)
+          if run.renderingMode.fills {
+            try paintGlyphBitmap(bitmap, placement: placement, state: fillState)
+          }
         case .empty, .missing:
           break
         }

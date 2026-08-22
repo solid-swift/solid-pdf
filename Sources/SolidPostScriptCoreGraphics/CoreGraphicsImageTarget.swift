@@ -475,14 +475,25 @@ where
       depth: Int
     ) throws {
       guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      let fillState = run.style.map { state.replacingColor(with: $0.fill) } ?? state
+      let strokeState = run.style.map { state.replacingColor(with: $0.stroke) } ?? state
       for placement in run.glyphs {
-        if try paintPreparedGlyph(placement, rootFont: run.rootFont, state: state, in: context) {
+        if run.renderingMode == .fill,
+          try paintPreparedGlyph(placement, rootFont: run.rootFont, state: fillState, in: context)
+        {
           continue
         }
         switch placement.glyph.program {
         case .outline(let path):
-          try fill(path.transformed(by: placement.transform), rule: .winding, state: state, in: context)
+          let outline = path.transformed(by: placement.transform)
+          if run.renderingMode.fills {
+            try fill(outline, rule: .winding, state: fillState, in: context)
+          }
+          if run.renderingMode.strokes {
+            try stroke(outline, matrix: state.matrix, state: strokeState, in: context)
+          }
         case .displayList(let list):
+          guard run.renderingMode != .invisible else { continue }
           for effect in list.effects { try replayFormEffect(effect, in: context, depth: depth + 1) }
         case .bitmap, .empty, .missing:
           break

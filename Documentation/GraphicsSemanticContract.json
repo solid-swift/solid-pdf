@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "contractVersion": 1,
+  "contractVersion": 2,
   "coordinateSpaces": {
     "authoritative": "device",
     "page": "default-user-space-points",
@@ -39,7 +39,8 @@
     "text-source-bytes", "glyph-source-range", "glyph-selector", "font-and-descendant-identity",
     "glyph-metrics-and-transform", "unicode-provenance", "page-transmission", "device-snapshot",
     "optional-format-neutral-origin", "rendering-intent", "halftone-phase",
-    "shading-source-patches"
+    "shading-source-patches", "text-rendering-mode", "independent-text-fill-and-stroke",
+    "pdf-unicode-provenance", "font-substitution-evidence"
   ],
   "imageTransaction": ["event", "begin", "ordered-color-rows", "ordered-mask-rows", "end-or-abandon"],
   "compatibility": {

@@ -1,13 +1,13 @@
 # PostScript Semantic Graphics Contract
 
-`GraphicsSemanticContractVersion.v1` is the stable document-processing boundary emitted by
+`GraphicsSemanticContractVersion.v2` is the stable document-processing boundary emitted by
 SolidPostScript. `SemanticGraphicsTarget` is the bounded streaming interface;
 `RecordingGraphicsTarget` is its materialized counterpart. Neither interface exposes PostScript VM
 objects, executable callbacks, renderer sessions, or platform-native handles.
 
 The contract is frozen at the PostScript graphics closeout milestone. Native PDF parsing is the next
 product stage. A parser may consume this contract and the shared SolidImage products, but it may not
-change version 1 coordinate, identity, ordering, text, or lifetime semantics without the major-version
+change version 2 coordinate, identity, ordering, text, or lifetime semantics without the major-version
 process described below.
 
 ## Coordinates
@@ -39,6 +39,12 @@ optional extraction metadata paired with an explicit provenance; they never affe
 positioning, callbacks, or rendering. Styling is the placement plus the captured graphics state,
 including paint, original color space and components, color realization, overprint, device-rendering
 controls, clipping, CTM, and device snapshot.
+
+Version 2 adds the exact PDF text rendering mode and independent nonstroking and stroking paints to
+each run. It also records PDF Encoding, CMap, and `/ToUnicode` provenance and any provider
+substitution evidence. These values reproduce PDF fill, stroke, fill-stroke, invisible, and clipping
+text without using Unicode or a platform layout engine to select or position glyphs. Version 1
+symbols and default initializers remain available for legacy producers.
 
 Every event may additionally identify a format-neutral source origin. An origin correlates a source
 resource and one or more exact byte segments without changing operation semantics. PDF content uses

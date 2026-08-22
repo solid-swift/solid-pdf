@@ -612,17 +612,21 @@ private extension RasterSeparationTarget.Renderer {
   func paintText(_ run: GraphicsGlyphRun, state: GraphicsStateSnapshot, depth: Int) throws {
     let state = state.replacingDevice(activeDevice)
     guard depth < 16 else { throw SolidPostScript.Error.ioError }
+    let fillState = run.style.map { state.replacingColor(with: $0.fill) } ?? state
+    let strokeState = run.style.map { state.replacingColor(with: $0.stroke) } ?? state
     for placement in run.glyphs {
       switch placement.glyph.program {
       case .outline(let path):
-        try fill(
-          path.transformed(by: placement.transform),
-          rule: .winding,
-          state: state,
-          depth: depth,
-          markKind: .text
-        )
+        let outline = path.transformed(by: placement.transform)
+        if run.renderingMode.fills {
+          try fill(outline, rule: .winding, state: fillState, depth: depth, markKind: .text)
+        }
+        if run.renderingMode.strokes {
+          let stroked = try GraphicsPathGeometry.strokeOutline(path: outline, state: strokeState, matrix: state.matrix)
+          try fill(stroked, rule: .winding, state: strokeState, depth: depth, markKind: .text)
+        }
       case .displayList(let list):
+        guard run.renderingMode != .invisible else { continue }
         for effect in list.effects { try replayFormEffect(effect, depth: depth + 1) }
       case .bitmap, .empty, .missing:
         break

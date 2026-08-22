@@ -446,6 +446,14 @@ private struct Writer {
     integer(value.paintType)
     double(value.strokeWidth)
     resource(value.resourceIdentifier)
+    if let substitution = value.substitution {
+      token(substitution.requestedName)
+      token(substitution.resolvedName ?? "nil")
+      token(substitution.providerIdentifier)
+      boolean(substitution.isCIDCompatible)
+    } else {
+      token("nil")
+    }
     if let asset = value.asset {
       token(String(describing: asset.format))
       integer(asset.faceIndex)
@@ -678,6 +686,13 @@ private struct Writer {
   }
 
   mutating func glyphRun(_ value: GraphicsGlyphRun, depth: Int) {
+    integer(value.renderingMode.rawValue)
+    if let style = value.style {
+      textPaint(style.fill, depth: depth)
+      textPaint(style.stroke, depth: depth)
+    } else {
+      token("nil")
+    }
     font(value.rootFont)
     binary(value.sourceBytes)
     integer(value.glyphs.count)
@@ -727,6 +742,14 @@ private struct Writer {
       case .missing: token("missing")
       }
     }
+  }
+
+  mutating func textPaint(_ value: GraphicsTextPaint, depth: Int) {
+    paint(value.paint, depth: depth)
+    colorSpace(value.colorSpace)
+    colorRealization(value.colorRealization)
+    doubles(value.components)
+    boolean(value.overprint)
   }
 
   mutating func glyphSelector(_ value: GraphicsGlyphSelector) {

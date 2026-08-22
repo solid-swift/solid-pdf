@@ -11,8 +11,11 @@ public struct GraphicsSemanticContractVersion: RawRepresentable, Sendable, Hasha
   /// The first frozen document-processing contract.
   public static let v1 = Self(rawValue: 1)
 
+  /// The PDF text styling and extraction contract.
+  public static let v2 = Self(rawValue: 2)
+
   /// The contract emitted by this version of SolidPostScript.
-  public static let current = v1
+  public static let current = v2
 
   public static func < (lhs: Self, rhs: Self) -> Bool {
     lhs.rawValue < rhs.rawValue

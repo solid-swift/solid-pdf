@@ -10234,6 +10234,262 @@
       },
       {
         "kind": "TypeDecl",
+        "name": "PDFInlineStreamDecoder",
+        "printedName": "PDFInlineStreamDecoder",
+        "children": [
+          {
+            "kind": "TypeDecl",
+            "name": "Result",
+            "printedName": "Result",
+            "children": [
+              {
+                "kind": "Var",
+                "name": "output",
+                "printedName": "output",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Data",
+                    "printedName": "Foundation.Data",
+                    "usr": "s:10Foundation4DataV"
+                  }
+                ],
+                "declKind": "Var",
+                "usr": "s:8SolidPDF22PDFInlineStreamDecoderC6ResultV6output10Foundation4DataVvp",
+                "mangledName": "$s8SolidPDF22PDFInlineStreamDecoderC6ResultV6output10Foundation4DataVvp",
+                "moduleName": "SolidPDF",
+                "isInternal": true,
+                "declAttributes": [
+                  "HasStorage"
+                ],
+                "isLet": true,
+                "hasStorage": true,
+                "accessors": [
+                  {
+                    "kind": "Accessor",
+                    "name": "Get",
+                    "printedName": "Get()",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Data",
+                        "printedName": "Foundation.Data",
+                        "usr": "s:10Foundation4DataV"
+                      }
+                    ],
+                    "declKind": "Accessor",
+                    "usr": "s:8SolidPDF22PDFInlineStreamDecoderC6ResultV6output10Foundation4DataVvg",
+                    "mangledName": "$s8SolidPDF22PDFInlineStreamDecoderC6ResultV6output10Foundation4DataVvg",
+                    "moduleName": "SolidPDF",
+                    "implicit": true,
+                    "isInternal": true,
+                    "declAttributes": [
+                      "Transparent"
+                    ],
+                    "accessorKind": "get"
+                  }
+                ]
+              },
+              {
+                "kind": "Var",
+                "name": "finished",
+                "printedName": "finished",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Var",
+                "usr": "s:8SolidPDF22PDFInlineStreamDecoderC6ResultV8finishedSbvp",
+                "mangledName": "$s8SolidPDF22PDFInlineStreamDecoderC6ResultV8finishedSbvp",
+                "moduleName": "SolidPDF",
+                "isInternal": true,
+                "declAttributes": [
+                  "HasStorage"
+                ],
+                "isLet": true,
+                "hasStorage": true,
+                "accessors": [
+                  {
+                    "kind": "Accessor",
+                    "name": "Get",
+                    "printedName": "Get()",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Bool",
+                        "printedName": "Swift.Bool",
+                        "usr": "s:Sb"
+                      }
+                    ],
+                    "declKind": "Accessor",
+                    "usr": "s:8SolidPDF22PDFInlineStreamDecoderC6ResultV8finishedSbvg",
+                    "mangledName": "$s8SolidPDF22PDFInlineStreamDecoderC6ResultV8finishedSbvg",
+                    "moduleName": "SolidPDF",
+                    "implicit": true,
+                    "isInternal": true,
+                    "declAttributes": [
+                      "Transparent"
+                    ],
+                    "accessorKind": "get"
+                  }
+                ]
+              }
+            ],
+            "declKind": "Struct",
+            "usr": "s:8SolidPDF22PDFInlineStreamDecoderC6ResultV",
+            "mangledName": "$s8SolidPDF22PDFInlineStreamDecoderC6ResultV",
+            "moduleName": "SolidPDF",
+            "isInternal": true,
+            "conformances": [
+              {
+                "kind": "Conformance",
+                "name": "Copyable",
+                "printedName": "Copyable",
+                "usr": "s:s8CopyableP",
+                "mangledName": "$ss8CopyableP"
+              },
+              {
+                "kind": "Conformance",
+                "name": "Escapable",
+                "printedName": "Escapable",
+                "usr": "s:s9EscapableP",
+                "mangledName": "$ss9EscapableP"
+              },
+              {
+                "kind": "Conformance",
+                "name": "Sendable",
+                "printedName": "Sendable",
+                "usr": "s:s8SendableP",
+                "mangledName": "$ss8SendableP"
+              },
+              {
+                "kind": "Conformance",
+                "name": "SendableMetatype",
+                "printedName": "SendableMetatype",
+                "usr": "s:s16SendableMetatypeP",
+                "mangledName": "$ss16SendableMetatypeP"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(dictionary:maximumFilters:maximumDecodedBytes:diagnostic:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PDFInlineStreamDecoder",
+                "printedName": "SolidPDF.PDFInlineStreamDecoder",
+                "usr": "s:8SolidPDF22PDFInlineStreamDecoderC"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Dictionary",
+                "printedName": "[SolidPDF.PDFName : SolidPDF.PDFObject]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFName",
+                    "printedName": "SolidPDF.PDFName",
+                    "usr": "s:8SolidPDF7PDFNameV"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "PDFObject",
+                    "printedName": "SolidPDF.PDFObject",
+                    "usr": "s:8SolidPDF9PDFObjectO"
+                  }
+                ],
+                "usr": "s:SD"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PDFParsingDiagnostic",
+                "printedName": "SolidPDF.PDFParsingDiagnostic",
+                "usr": "s:8SolidPDF20PDFParsingDiagnosticV"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:8SolidPDF22PDFInlineStreamDecoderC10dictionary14maximumFilters0G12DecodedBytes10diagnosticACSDyAA7PDFNameVAA9PDFObjectOG_S2iAA20PDFParsingDiagnosticVtKcfc",
+            "mangledName": "$s8SolidPDF22PDFInlineStreamDecoderC10dictionary14maximumFilters0G12DecodedBytes10diagnosticACSDyAA7PDFNameVAA9PDFObjectOG_S2iAA20PDFParsingDiagnosticVtKcfc",
+            "moduleName": "SolidPDF",
+            "isInternal": true,
+            "throwing": true,
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Function",
+            "name": "process",
+            "printedName": "process(_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Result",
+                "printedName": "SolidPDF.PDFInlineStreamDecoder.Result",
+                "usr": "s:8SolidPDF22PDFInlineStreamDecoderC6ResultV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Data",
+                "printedName": "Foundation.Data",
+                "usr": "s:10Foundation4DataV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:8SolidPDF22PDFInlineStreamDecoderC7processyAC6ResultV10Foundation4DataVKF",
+            "mangledName": "$s8SolidPDF22PDFInlineStreamDecoderC7processyAC6ResultV10Foundation4DataVKF",
+            "moduleName": "SolidPDF",
+            "isInternal": true,
+            "declAttributes": [
+              "Final"
+            ],
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Class",
+        "usr": "s:8SolidPDF22PDFInlineStreamDecoderC",
+        "mangledName": "$s8SolidPDF22PDFInlineStreamDecoderC",
+        "moduleName": "SolidPDF",
+        "isInternal": true,
+        "declAttributes": [
+          "Final"
+        ],
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
         "name": "PDFInputSource",
         "printedName": "PDFInputSource",
         "children": [
@@ -25179,6 +25435,205 @@
             "printedName": "Hashable",
             "usr": "s:SH",
             "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "PDFStreamFilterSpecification",
+        "printedName": "PDFStreamFilterSpecification",
+        "children": [
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(name:parameters:implementation:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PDFStreamFilterSpecification",
+                "printedName": "SolidPDF.PDFStreamFilterSpecification",
+                "usr": "s:8SolidPDF28PDFStreamFilterSpecificationV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PDFName",
+                "printedName": "SolidPDF.PDFName",
+                "usr": "s:8SolidPDF7PDFNameV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "[SolidPDF.PDFName : SolidPDF.PDFObject]?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Dictionary",
+                    "printedName": "[SolidPDF.PDFName : SolidPDF.PDFObject]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFName",
+                        "printedName": "SolidPDF.PDFName",
+                        "usr": "s:8SolidPDF7PDFNameV"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PDFObject",
+                        "printedName": "SolidPDF.PDFObject",
+                        "usr": "s:8SolidPDF9PDFObjectO"
+                      }
+                    ],
+                    "usr": "s:SD"
+                  }
+                ],
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "(any SolidIO.IncrementalFilter)?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "IncrementalFilter",
+                    "printedName": "any SolidIO.IncrementalFilter",
+                    "usr": "s:7SolidIO17IncrementalFilterP"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:8SolidPDF28PDFStreamFilterSpecificationV4name10parameters14implementationAcA7PDFNameV_SDyAhA9PDFObjectOGSg0A2IO011IncrementalD0_pSgtcfc",
+            "mangledName": "$s8SolidPDF28PDFStreamFilterSpecificationV4name10parameters14implementationAcA7PDFNameV_SDyAhA9PDFObjectOGSg0A2IO011IncrementalD0_pSgtcfc",
+            "moduleName": "SolidPDF",
+            "isInternal": true,
+            "init_kind": "Designated"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:8SolidPDF28PDFStreamFilterSpecificationV",
+        "mangledName": "$s8SolidPDF28PDFStreamFilterSpecificationV",
+        "moduleName": "SolidPDF",
+        "isInternal": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "PDFStreamFilterFactory",
+        "printedName": "PDFStreamFilterFactory",
+        "children": [
+          {
+            "kind": "Function",
+            "name": "make",
+            "printedName": "make(_:diagnostic:maximumDecodedBytes:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[any SolidIO.IncrementalFilter]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "IncrementalFilter",
+                    "printedName": "any SolidIO.IncrementalFilter",
+                    "usr": "s:7SolidIO17IncrementalFilterP"
+                  }
+                ],
+                "usr": "s:Sa"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PDFStreamFilterSpecification",
+                "printedName": "SolidPDF.PDFStreamFilterSpecification",
+                "usr": "s:8SolidPDF28PDFStreamFilterSpecificationV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "PDFParsingDiagnostic",
+                "printedName": "SolidPDF.PDFParsingDiagnostic",
+                "usr": "s:8SolidPDF20PDFParsingDiagnosticV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:8SolidPDF22PDFStreamFilterFactoryV4make_10diagnostic19maximumDecodedBytesSay0A2IO011IncrementalD0_pGAA0cD13SpecificationV_AA20PDFParsingDiagnosticVSitKFZ",
+            "mangledName": "$s8SolidPDF22PDFStreamFilterFactoryV4make_10diagnostic19maximumDecodedBytesSay0A2IO011IncrementalD0_pGAA0cD13SpecificationV_AA20PDFParsingDiagnosticVSitKFZ",
+            "moduleName": "SolidPDF",
+            "static": true,
+            "isInternal": true,
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:8SolidPDF22PDFStreamFilterFactoryV",
+        "mangledName": "$s8SolidPDF22PDFStreamFilterFactoryV",
+        "moduleName": "SolidPDF",
+        "isInternal": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
           },
           {
             "kind": "Conformance",

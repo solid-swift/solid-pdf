@@ -127,43 +127,56 @@ enum PDFGraphicsContentEncoder {
       builder.command("/\(String(decoding: name.bytes, as: UTF8.self)) Do")
       builder.command("Q")
     case .text(let run, let state):
+      let fillState = run.style.map { state.replacingColor(with: $0.fill) } ?? state
+      let strokeState = run.style.map { state.replacingColor(with: $0.stroke) } ?? state
       for placement in run.glyphs {
         switch placement.glyph.program {
         case .outline(let path):
-          guard !isEmptyPattern(state.paint, override: paintOverride) else { continue }
           let font = placement.font ?? run.rootFont
           if let selection = resources.fontSelection(font: font, glyph: placement.glyph) {
-            try begin(
-              state,
-              in: &builder,
-              resources: resources,
-              writer: &writer,
-              stroking: false,
-              paintOverride: paintOverride
-            )
+            try beginClip(state, in: &builder)
+            if run.renderingMode.fills {
+              try appendPaint(
+                fillState, stroking: false, to: &builder, resources: resources,
+                writer: &writer, paintOverride: paintOverride
+              )
+            }
+            if run.renderingMode.strokes {
+              try appendPaint(
+                strokeState, stroking: true, to: &builder, resources: resources,
+                writer: &writer, paintOverride: paintOverride
+              )
+            }
             builder.command("BT")
             builder.command(
               "/\(String(decoding: selection.name.bytes, as: UTF8.self)) "
                 + "\(builder.number(selection.size)) Tf"
             )
+            builder.command("\(run.renderingMode.rawValue) Tr")
             builder.command("\(builder.matrix(placement.transform)) Tm")
             builder.command("<\(selection.code.map { String(format: "%02X", $0) }.joined())> Tj")
             builder.command("ET")
             builder.command("Q")
             continue
           }
-          try begin(
-            state,
-            in: &builder,
-            resources: resources,
-            writer: &writer,
-            stroking: false,
-            paintOverride: paintOverride
-          )
-          builder.path(path, transformedBy: placement.transform)
-          builder.command("f")
-          builder.command("Q")
+          let outline = path.transformed(by: placement.transform)
+          if run.renderingMode.fills {
+            try begin(
+              fillState, in: &builder, resources: resources, writer: &writer,
+              stroking: false, paintOverride: paintOverride
+            )
+            builder.path(outline)
+            builder.command("f")
+            builder.command("Q")
+          }
+          if run.renderingMode.strokes {
+            try stroke(
+              outline, state: strokeState, matrix: state.matrix, builder: &builder,
+              resources: resources, writer: &writer, paintOverride: paintOverride
+            )
+          }
         case .displayList(let list):
+          guard run.renderingMode != .invisible else { continue }
           for nested in list.effects {
             try append(
               nested,
@@ -174,6 +187,7 @@ enum PDFGraphicsContentEncoder {
             )
           }
         case .empty, .missing:
+          guard run.renderingMode != .invisible else { continue }
           let font = placement.font ?? run.rootFont
           guard let selection = resources.fontSelection(font: font, glyph: placement.glyph) else { continue }
           try beginClip(state, in: &builder)
@@ -182,6 +196,7 @@ enum PDFGraphicsContentEncoder {
             "/\(String(decoding: selection.name.bytes, as: UTF8.self)) "
               + "\(builder.number(selection.size)) Tf"
           )
+          builder.command("\(run.renderingMode.rawValue) Tr")
           builder.command("\(builder.matrix(placement.transform)) Tm")
           builder.command("<\(selection.code.map { String(format: "%02X", $0) }.joined())> Tj")
           builder.command("ET")

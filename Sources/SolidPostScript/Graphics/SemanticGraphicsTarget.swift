@@ -151,6 +151,6 @@ public struct SemanticGraphicsTarget<Sink: GraphicsSemanticSink>: GraphicsTarget
 
   /// Creates a renderer dedicated to one semantic stream.
   public func makeRenderer() throws -> sending Renderer {
-    try Renderer(session: sink.makeSession(contractVersion: .v1))
+    try Renderer(session: sink.makeSession(contractVersion: .current))
   }
 }
