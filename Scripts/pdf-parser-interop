@@ -31,3 +31,7 @@ for input in "${WORK_DIRECTORY}"/writer-*.pdf; do
   pdftoppm -f 1 -singlefile -png "${input}" "${WORK_DIRECTORY}/${name}" >/dev/null
   test -s "${WORK_DIRECTORY}/${name}.png"
 done
+
+qpdf --show-object=3 --filtered-stream-data "${WORK_DIRECTORY}/mixed-filter.pdf" \
+  >"${WORK_DIRECTORY}/mixed-filter.actual"
+cmp "${WORK_DIRECTORY}/mixed-filter.expected" "${WORK_DIRECTORY}/mixed-filter.actual"

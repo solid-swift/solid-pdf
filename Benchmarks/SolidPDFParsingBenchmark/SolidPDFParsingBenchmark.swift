@@ -23,6 +23,11 @@ let benchmarks: @Sendable () -> Void = {
     additionalObjectCount: 10_000
   )
   let objectStream = PDFParsingBenchmarkFixtures.objectStreamDocument(containedObjectCount: 1_000)
+  let decodedStreamBytes = Data((0..<(8 * 1_024 * 1_024)).map { UInt8(truncatingIfNeeded: $0) })
+  let flateStream = try! PDFParsingBenchmarkFixtures.streamDocument(
+    bytes: decodedStreamBytes,
+    compressed: true
+  )
   let coldFile = FileManager.default.temporaryDirectory
     .appendingPathComponent("SolidPDFParsingBenchmark-(UUID().uuidString).pdf")
   try! classic.write(to: coldFile)
@@ -61,6 +66,28 @@ let benchmarks: @Sendable () -> Void = {
       await document.close()
     }
   }
+
+  Benchmark("Flate Stream Decode", configuration: configuration) { benchmark in
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      let document = try await PDFDocument(source: PDFDataInputSource(flateStream))
+      let stream = try await catalogStream(in: document)
+      blackHole(try await document.decodedBytes(of: stream))
+      await document.close()
+    }
+  }
+
+  Benchmark("Decoded Stream Cache Hit", configuration: configuration) { benchmark in
+    let document = try await PDFDocument(source: PDFDataInputSource(flateStream))
+    let stream = try await catalogStream(in: document)
+    _ = try await document.decodedBytes(of: stream)
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      blackHole(try await document.decodedBytes(of: stream))
+    }
+    benchmark.stopMeasurement()
+    await document.close()
+  }
 }
 
 private func registerOpen(
@@ -76,4 +103,17 @@ private func registerOpen(
       await document.close()
     }
   }
+}
+
+private func catalogStream<Source: PDFInputSource>(
+  in document: PDFDocument<Source>
+) async throws -> PDFStreamObject {
+  let root = try await document.resolve(document.root)
+  guard case .value(.dictionary(let dictionary)) = root.value,
+    case .reference(let reference) = dictionary["Stream"],
+    case .stream(let stream) = try await document.resolve(reference).value
+  else {
+    throw PDFParsingError.malformed(.init(offset: 0, message: "The benchmark stream is absent."))
+  }
+  return stream
 }

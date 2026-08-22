@@ -1,3 +1,4 @@
+import Foundation
 import SolidPDF
 import SolidPDFParsingBenchmarkSupport
 import Testing
@@ -27,6 +28,24 @@ struct PDFParsingBenchmarkFixturesTests {
       container: try PDFObjectReference(objectNumber: 3, generationNumber: 0),
       index: 31
     ))
+    await document.close()
+  }
+
+
+  @Test
+  func compressedStreamFixtureDecodesItsPayload() async throws {
+    let expected = Data(repeating: 0xA5, count: 65_537)
+    let data = try PDFParsingBenchmarkFixtures.streamDocument(bytes: expected, compressed: true)
+    let document = try await PDFDocument(source: PDFDataInputSource(data))
+    let root = try await document.resolve(document.root)
+    guard case .value(.dictionary(let dictionary)) = root.value,
+      case .reference(let reference) = dictionary["Stream"],
+      case .stream(let stream) = try await document.resolve(reference).value
+    else {
+      Issue.record("Expected the benchmark stream")
+      return
+    }
+    #expect(try await document.decodedBytes(of: stream) == expected)
     await document.close()
   }
 }

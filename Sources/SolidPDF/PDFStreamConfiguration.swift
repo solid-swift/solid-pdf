@@ -166,7 +166,8 @@ struct PDFStreamConfiguration: Sendable {
 struct PDFStreamFilterFactory {
   static func make(
     _ specification: PDFStreamFilterSpecification,
-    diagnostic: PDFParsingDiagnostic
+    diagnostic: PDFParsingDiagnostic,
+    maximumDecodedBytes: Int
   ) throws -> [any IncrementalFilter] {
     switch specification.name {
     case PDFName("ASCIIHexDecode"):
@@ -194,6 +195,84 @@ struct PDFStreamFilterFactory {
       ].compactMap { $0 }
     case PDFName("RunLengthDecode"):
       return [RunLengthDecoder()]
+    case PDFName("CCITTFaxDecode"):
+      do {
+        return [
+          CCITTFaxDecoder(
+            options: try CCITTFaxOptions(
+              k: try integer("K", in: specification.parameters, default: 0, diagnostic: diagnostic),
+              endOfLine: try boolean(
+                "EndOfLine",
+                in: specification.parameters,
+                default: false,
+                diagnostic: diagnostic
+              ),
+              encodedByteAlign: try boolean(
+                "EncodedByteAlign",
+                in: specification.parameters,
+                default: false,
+                diagnostic: diagnostic
+              ),
+              columns: try integer(
+                "Columns",
+                in: specification.parameters,
+                default: 1_728,
+                diagnostic: diagnostic
+              ),
+              rows: try integer("Rows", in: specification.parameters, default: 0, diagnostic: diagnostic),
+              endOfBlock: try boolean(
+                "EndOfBlock",
+                in: specification.parameters,
+                default: true,
+                diagnostic: diagnostic
+              ),
+              blackIs1: try boolean(
+                "BlackIs1",
+                in: specification.parameters,
+                default: false,
+                diagnostic: diagnostic
+              ),
+              damagedRowsBeforeError: try integer(
+                "DamagedRowsBeforeError",
+                in: specification.parameters,
+                default: 0,
+                diagnostic: diagnostic
+              )
+            )
+          )
+        ]
+      } catch let error as PDFParsingError {
+        throw error
+      } catch {
+        throw malformedParameter("CCITTFaxDecode", diagnostic: diagnostic)
+      }
+    case PDFName("DCTDecode"):
+      let colorTransform: Int?
+      if specification.parameters?[PDFName("ColorTransform")] == nil {
+        colorTransform = nil
+      } else {
+        colorTransform = try integer(
+          "ColorTransform",
+          in: specification.parameters,
+          default: 1,
+          diagnostic: diagnostic
+        )
+      }
+      guard colorTransform == nil || colorTransform == 0 || colorTransform == 1 else {
+        throw malformedParameter("ColorTransform", diagnostic: diagnostic)
+      }
+      do {
+        return [
+          DCTDecoder(
+            options: try DCTDecodeOptions(
+              colorTransform: colorTransform,
+              maximumDecodedBytes: maximumDecodedBytes
+            )
+          )
+        ]
+      } catch {
+        throw malformedParameter("DCTDecode", diagnostic: diagnostic)
+      }
     case PDFName("Crypt"):
       throw PDFParsingError.unsupported(.encryptionFilter, diagnostic)
     case PDFName("JPXDecode"):
@@ -249,6 +328,19 @@ struct PDFStreamFilterFactory {
       throw malformedParameter(String(decoding: name.bytes, as: UTF8.self), diagnostic: diagnostic)
     }
     return Int(integer)
+  }
+
+  private static func boolean(
+    _ name: PDFName,
+    in parameters: [PDFName: PDFObject]?,
+    default defaultValue: Bool,
+    diagnostic: PDFParsingDiagnostic
+  ) throws -> Bool {
+    guard let value = parameters?[name] else { return defaultValue }
+    guard case .boolean(let boolean) = value else {
+      throw malformedParameter(String(decoding: name.bytes, as: UTF8.self), diagnostic: diagnostic)
+    }
+    return boolean
   }
 
   private static func malformedParameter(

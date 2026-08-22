@@ -103,6 +103,22 @@ public enum PDFParsingBenchmarkFixtures {
     return data
   }
 
+  /// Creates a document whose catalog references one large stream directly.
+  public static func streamDocument(bytes: Data, compressed: Bool) throws -> Data {
+    var writer = try PDFDocumentWriter(
+      sink: PDFDataOutputSink(),
+      options: .init(version: .v1_7)
+    )
+    let catalog = try writer.reserveObject()
+    let stream = try writer.reserveObject()
+    try writer.write(
+      .dictionary(["Type": .name("Catalog"), "Stream": .reference(stream)]),
+      to: catalog
+    )
+    try writer.writeStream(chunks: [bytes], compressed: compressed, to: stream)
+    return try writer.finish(root: catalog, pageCount: 0).data
+  }
+
   private static func appendXRefEntry(
     type: UInt8,
     field2: Int,

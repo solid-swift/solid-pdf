@@ -50,7 +50,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/solid-swift/solid-image.git",
       "state" : {
-        "revision" : "bd810d1d8e1c409d008a91f4791db0526242ab92"
+        "revision" : "5e5933be1df5869a661ae9e47b5f016e0271bef0"
       }
     },
     {

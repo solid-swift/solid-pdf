@@ -19,7 +19,7 @@ let imageDependency: Package.Dependency =
   } else {
     .package(
       url: "https://github.com/solid-swift/solid-image.git",
-      revision: "bd810d1d8e1c409d008a91f4791db0526242ab92"
+      revision: "5e5933be1df5869a661ae9e47b5f016e0271bef0"
     )
   }
 
@@ -401,7 +401,11 @@ if benchmarkEnabled {
     ),
     .executableTarget(
       name: "SolidPDFInteropFixtures",
-      dependencies: ["SolidPDFParsingBenchmarkSupport"],
+      dependencies: [
+        "SolidPDF",
+        "SolidPDFParsingBenchmarkSupport",
+        .product(name: "SolidIO", package: "solid-foundation"),
+      ],
       path: "Utilities/SolidPDFInteropFixtures"
     ),
     .testTarget(

@@ -46,7 +46,19 @@ struct PDFDecodedStreamInput: Sendable {
       )
     }
     self.length = length
-    read = { range in try await session.read(range) }
+    read = { range in
+      do {
+        return try await session.read(range)
+      } catch let error as PDFParsingError {
+        throw error
+      } catch is CancellationError {
+        throw CancellationError()
+      } catch {
+        throw PDFParsingError.sourceFailure(
+          .init(offset: range.offset, message: "The external stream read failed: \(error)")
+        )
+      }
+    }
     close = { await session.close() }
   }
 }
@@ -135,7 +147,11 @@ actor PDFIncrementalDecodedStreamState: PDFDecodedStreamState {
     self.diagnostic = diagnostic
     self.registry = registry
     stages = try filters.flatMap {
-      try PDFStreamFilterFactory.make($0, diagnostic: diagnostic).map { Stage(filter: $0) }
+      try PDFStreamFilterFactory.make(
+        $0,
+        diagnostic: diagnostic,
+        maximumDecodedBytes: options.limits.maximumDecodedStreamBytes
+      ).map { Stage(filter: $0) }
     }
   }
 
@@ -266,11 +282,12 @@ actor PDFIncrementalDecodedStreamState: PDFDecodedStreamState {
         diagnostic.replacingMessage("The decoded stream exceeds its configured byte limit.")
       )
     }
-    let expansionBase = max(1_024 * 1_024, Int(min(input.length, Int64(Int.max))))
-    let (expandedLimit, overflow) = expansionBase.multipliedReportingOverflow(
+    let encodedBytes = Int(min(input.length, Int64(Int.max)))
+    let (scaledBytes, multiplicationOverflow) = encodedBytes.multipliedReportingOverflow(
       by: options.limits.maximumStreamExpansionRatio
     )
-    guard !overflow, decoded <= expandedLimit else {
+    let (expandedLimit, additionOverflow) = scaledBytes.addingReportingOverflow(1_024 * 1_024)
+    guard !multiplicationOverflow, !additionOverflow, decoded <= expandedLimit else {
       throw PDFParsingError.limitExceeded(
         diagnostic.replacingMessage("The decoded stream exceeds its expansion limit.")
       )

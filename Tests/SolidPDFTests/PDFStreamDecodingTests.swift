@@ -54,6 +54,83 @@ struct PDFStreamDecodingTests {
   }
 
   @Test
+  func resolvesIndirectFilterConfigurationAndRejectsCyclesAndMismatchedArrays() async throws {
+    let filterReference = PDFObjectReference(objectNumber: 20)
+    let parametersReference = PDFObjectReference(objectNumber: 21)
+    let stream = PDFStreamObject(
+      dictionary: [
+        "Filter": .reference(filterReference),
+        "DecodeParms": .reference(parametersReference),
+      ],
+      encodedRange: try PDFSourceRange(offset: 100, length: 20),
+      objectReference: PDFObjectReference(objectNumber: 19)
+    )
+    let configuration = try await PDFStreamConfiguration.resolve(
+      stream: stream,
+      options: .init(),
+      resolve: { reference in
+        switch reference {
+        case filterReference: .name("LZWDecode")
+        case parametersReference: .dictionary(["EarlyChange": .integer(0)])
+        default: .null
+        }
+      }
+    )
+    #expect(configuration.filters.count == 1)
+    #expect(configuration.filters[0].name == PDFName("LZWDecode"))
+    #expect(configuration.filters[0].parameters?["EarlyChange"] == .integer(0))
+
+    let mismatched = PDFStreamObject(
+      dictionary: [
+        "Filter": .array([.name("FlateDecode"), .name("ASCII85Decode")]),
+        "DecodeParms": .array([.null]),
+      ],
+      encodedRange: try PDFSourceRange(offset: 0, length: 0)
+    )
+    await #expect(throws: PDFParsingError.self) {
+      _ = try await PDFStreamConfiguration.resolve(
+        stream: mismatched,
+        options: .init(),
+        resolve: { _ in .null }
+      )
+    }
+
+    let cycle = PDFStreamObject(
+      dictionary: ["Filter": .reference(filterReference)],
+      encodedRange: try PDFSourceRange(offset: 0, length: 0)
+    )
+    await #expect(throws: PDFParsingError.self) {
+      _ = try await PDFStreamConfiguration.resolve(
+        stream: cycle,
+        options: .init(),
+        resolve: { _ in .reference(filterReference) }
+      )
+    }
+  }
+
+  @Test
+  func decodesOneByteSourceWindowsAndNullParameterEntries() async throws {
+    let expected = Data((0..<257).map(UInt8.init(truncatingIfNeeded:)))
+    let data = try encoded(expected, with: [FlateEncoder(), ASCII85Encoder()])
+    let dictionary: [PDFName: PDFObject] = [
+      "Filter": .array([.name("ASCII85Decode"), .name("FlateDecode")]),
+      "DecodeParms": .array([.null, .null]),
+    ]
+    let documentBytes = try makeDocument(
+      data: data,
+      compressed: false,
+      dictionary: dictionary
+    ).data
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(documentBytes),
+      options: .init(sourceWindowByteCount: 1, decodedStreamChunkByteCount: 1)
+    )
+    let stream = try await contentStream(in: document)
+    #expect(try await document.decodedBytes(of: stream) == expected)
+    await document.close()
+  }
+
+  @Test
   func externalStreamsRequireAuthorityAndCloseExactlyOnce() async throws {
     let expected = Data("external stream".utf8)
     let encoded = try makeDocument(
@@ -184,6 +261,110 @@ struct PDFStreamDecodingTests {
     let document = try await PDFDocument(source: PDFDataInputSource(documentBytes))
     #expect(try await document.decodedBytes(of: contentStream(in: document)) == expected)
     await document.close()
+  }
+
+  @Test(arguments: [-1, 0, 2])
+  func decodesCCITTFaxParameterModes(_ k: Int) async throws {
+    let columns = 32
+    let rows = 12
+    let expected = Data((0..<(rows * columns / 8)).map { index in
+      index.isMultiple(of: 3) ? 0xAA : UInt8(truncatingIfNeeded: index * 31)
+    })
+    let options = try CCITTFaxOptions(
+      k: k,
+      endOfLine: k >= 0,
+      encodedByteAlign: k == 0,
+      columns: columns,
+      rows: rows,
+      endOfBlock: true,
+      blackIs1: true,
+      damagedRowsBeforeError: 0
+    )
+    let data = try encoded(expected, with: [CCITTFaxEncoder(options: options)])
+    let dictionary: [PDFName: PDFObject] = [
+      "Filter": .name("CCITTFaxDecode"),
+      "DecodeParms": .dictionary([
+        "K": .integer(k),
+        "EndOfLine": .boolean(k >= 0),
+        "EncodedByteAlign": .boolean(k == 0),
+        "Columns": .integer(columns),
+        "Rows": .integer(rows),
+        "EndOfBlock": .boolean(true),
+        "BlackIs1": .boolean(true),
+        "DamagedRowsBeforeError": .integer(0),
+      ]),
+    ]
+    let documentBytes = try makeDocument(
+      data: data,
+      compressed: false,
+      dictionary: dictionary
+    ).data
+    let document = try await PDFDocument(source: PDFDataInputSource(documentBytes))
+    #expect(try await document.decodedBytes(of: contentStream(in: document)) == expected)
+    await document.close()
+  }
+
+  @Test(arguments: [0, 1])
+  func decodesBaselineDCTWithColorTransform(_ colorTransform: Int) async throws {
+    let width = 16
+    let height = 16
+    let colors = colorTransform == 0 ? 1 : 3
+    let samples = Data((0..<(width * height * colors)).map {
+      UInt8(truncatingIfNeeded: ($0 * 7) + ($0 / max(colors, 1)) * 3)
+    })
+    let data = try encoded(
+      samples,
+      with: [
+        DCTEncoder(
+          options: try DCTEncodeOptions(
+            columns: width,
+            rows: height,
+            colors: colors,
+            colorTransform: colorTransform
+          )
+        )
+      ]
+    )
+    let dictionary: [PDFName: PDFObject] = [
+      "Filter": .name("DCTDecode"),
+      "DecodeParms": .dictionary(["ColorTransform": .integer(colorTransform)]),
+    ]
+    let documentBytes = try makeDocument(
+      data: data,
+      compressed: false,
+      dictionary: dictionary
+    ).data
+    let document = try await PDFDocument(source: PDFDataInputSource(documentBytes))
+    let decoded = try await document.decodedBytes(of: contentStream(in: document))
+    #expect(decoded.count == samples.count)
+    await document.close()
+  }
+
+  @Test
+  func rejectsUnavailableImageAndEncryptionFiltersPrecisely() async throws {
+    let filters: [(PDFName, PDFUnsupportedFeature)] = [
+      ("Crypt", .encryptionFilter),
+      ("JPXDecode", .jpxDecode),
+      ("JBIG2Decode", .jbig2Decode),
+      ("Unknown", .streamFilter("Unknown")),
+    ]
+    for (name, feature) in filters {
+      let encoded = try makeDocument(
+        data: Data(),
+        compressed: false,
+        dictionary: ["Filter": .name(name)]
+      )
+      let document = try await PDFDocument(source: PDFDataInputSource(encoded.data))
+      let stream = try await contentStream(in: document)
+      do {
+        _ = try await document.decodedBytes(of: stream)
+        Issue.record("Expected \(name) to be rejected")
+      } catch let PDFParsingError.unsupported(actual, diagnostic) {
+        #expect(actual == feature)
+        #expect(diagnostic.object == stream.objectReference)
+      }
+      await document.close()
+    }
   }
 
   private func makeDocument(
