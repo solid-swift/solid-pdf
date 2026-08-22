@@ -1,5 +1,5 @@
 {
-  "originHash" : "5cc6d83477e64f477f413a78b09d348b1bcf2e0adb3bb4e2f3358ff295504220",
+  "originHash" : "1df6e48b6754c0b97cb9f1b1b13c39a6ec28622f9dcf91e642170d9c4862dc24",
   "pins" : [
     {
       "identity" : "benchmark",
@@ -50,7 +50,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/solid-swift/solid-image.git",
       "state" : {
-        "revision" : "5e5933be1df5869a661ae9e47b5f016e0271bef0"
+        "revision" : "6bfafb8ca206bf8e454b088aed72c281daf65e56"
       }
     },
     {

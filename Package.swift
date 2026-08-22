@@ -19,7 +19,7 @@ let imageDependency: Package.Dependency =
   } else {
     .package(
       url: "https://github.com/solid-swift/solid-image.git",
-      revision: "5e5933be1df5869a661ae9e47b5f016e0271bef0"
+      revision: "6bfafb8ca206bf8e454b088aed72c281daf65e56"
     )
   }
 
