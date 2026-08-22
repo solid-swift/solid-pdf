@@ -220,8 +220,49 @@ extension PDFDocument {
         ))
       }
       guard let appearance = try await selectedAppearance(annotation, revision: revision) else {
-        if options.annotationAppearancePolicy == .generateMissingStandard {
-          throw PDFGraphicsError.unsupported(.annotationAppearanceGeneration, location: annotationLocation(annotation, page: page))
+        if options.annotationAppearancePolicy == .generateMissingStandard,
+          annotation.appearances.normal == nil,
+          annotation.appearances.rollover == nil,
+          annotation.appearances.down == nil
+        {
+          let fields = try await formFields(in: revision)
+          let matchingFields = fields.filter { field in
+            field.widgets.contains { $0.annotationIdentifier == annotation.identifier }
+          }
+          let annotationOutput = PDFAnnotationEventOutput(
+            base: output,
+            annotation: annotation.identifier,
+            revision: revision
+          )
+          let handler = PDFGraphicsInstructionHandler(
+            device: device,
+            resources: resources,
+            limits: options.limits,
+            output: annotationOutput
+          )
+          let generated = try await handler.generateAnnotationAppearance(
+            annotation,
+            field: matchingFields.count == 1 ? matchingFields[0] : nil,
+            page: page
+          )
+          if generated {
+            diagnostics.append(.init(
+              identifier: "pdf.annotation.generated-appearance",
+              message: "Generated a deterministic in-memory annotation appearance.",
+              severity: .information,
+              annotation: annotation.identifier
+            ))
+            diagnostics.append(contentsOf: handler.diagnostics)
+            rendered.append(annotation.identifier)
+          } else {
+            diagnostics.append(.init(
+              identifier: "pdf.annotation.semantic-only",
+              message: "The annotation remains semantic-only because no portable standard appearance is defined.",
+              severity: .warning,
+              annotation: annotation.identifier
+            ))
+          }
+          continue
         }
         throw PDFGraphicsError.malformedContent(
           message: "An eligible annotation has no selected normal appearance.",

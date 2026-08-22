@@ -312,6 +312,66 @@ struct PDFGraphicsRenderingTests {
   }
 
   @Test
+  func generatesMissingGeometricAndVariableTextAppearancesOnlyWhenEnabled() async throws {
+    let square = Data(
+      "<< /Type /Annot /Subtype /Square /P 3 0 R /Rect [10 10 30 30] /C [1 0 0] >>".utf8
+    )
+    let widget = Data(
+      "<< /Type /Annot /Subtype /Widget /Parent 7 0 R /P 3 0 R /Rect [10 40 80 60] /MK << /BG [1] >> >>".utf8
+    )
+    let field = Data(
+      "<< /FT /Tx /T (Name) /V (A) /Kids [6 0 R] /DA (/F1 10 Tf 0 g) /DR << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic /FirstChar 65 /LastChar 65 /Widths [600] /Encoding /WinAnsiEncoding >> >> >> >>".utf8
+    )
+    let acroForm = Data("<< /Fields [7 0 R] >>".utf8)
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "",
+      catalogExtras: "/AcroForm 8 0 R",
+      pageExtras: "/Annots [5 0 R 6 0 R]",
+      extraObjects: [square, widget, field, acroForm]
+    )))
+    let result = try await document.render(
+      page: 0,
+      to: RecordingGraphicsTarget(),
+      options: .init(annotationAppearancePolicy: .generateMissingStandard),
+      fontEnvironment: .init(providers: [SyntheticPDFFontProvider()])
+    )
+    #expect(result.pages[0].renderedAnnotations.map(\.reference.objectNumber) == [5, 6])
+    #expect(result.diagnostics.filter { $0.identifier == "pdf.annotation.generated-appearance" }.count == 2)
+    #expect(result.output.pages[0].effects.contains { effect in
+      if case .stroke = effect { true } else { false }
+    })
+    let text = result.output.pages[0].effects.compactMap { effect -> String? in
+      guard case .text(let run, _) = effect, let bytes = run.sourceBytes else { return nil }
+      return String(data: bytes, encoding: .utf8)
+    }
+    #expect(text.contains("A"))
+    await document.close()
+  }
+
+  @Test
+  func neverGeneratesOverAnExistingOrSignatureAppearanceRequirement() async throws {
+    let widget = Data(
+      "<< /Type /Annot /Subtype /Widget /Parent 6 0 R /P 3 0 R /Rect [10 40 80 60] >>".utf8
+    )
+    let field = Data("<< /FT /Sig /T (Approval) /Kids [5 0 R] >>".utf8)
+    let acroForm = Data("<< /Fields [6 0 R] >>".utf8)
+    let document = try await PDFDocument(source: PDFDataInputSource(fixture(
+      content: "",
+      catalogExtras: "/AcroForm 7 0 R",
+      pageExtras: "/Annots [5 0 R]",
+      extraObjects: [widget, field, acroForm]
+    )))
+    await #expect(throws: PDFGraphicsError.self) {
+      try await document.render(
+        page: 0,
+        to: RecordingGraphicsTarget(),
+        options: .init(annotationAppearancePolicy: .generateMissingStandard)
+      )
+    }
+    await document.close()
+  }
+
+  @Test
   func interpretsTextRunsUsingPDFWidthsSpacingAndSourceRanges() async throws {
     let resources = """
       << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Synthetic
