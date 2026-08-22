@@ -14,7 +14,11 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
   private let resolver: PDFDocumentResolver<Source.Session>
 
   /// Opens and validates one PDF revision without eagerly resolving its objects.
-  public init(source: Source, options: PDFParsingOptions = .init()) async throws {
+  public init(
+    source: Source,
+    options: PDFParsingOptions = .init(),
+    externalStreamProvider: (any PDFExternalStreamProvider)? = nil
+  ) async throws {
     let session = try await source.makeSession()
     do {
       let reader = try await PDFSourceReader(session: session, options: options)
@@ -23,7 +27,12 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
       root = index.root
       info = index.info
       identifier = index.identifier
-      resolver = PDFDocumentResolver(reader: reader, index: index, options: options)
+      resolver = PDFDocumentResolver(
+        reader: reader,
+        index: index,
+        options: options,
+        externalStreamProvider: externalStreamProvider
+      )
     } catch {
       await session.close()
       throw error
@@ -43,6 +52,16 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
   /// Reads the exact encoded bytes of a resolved stream.
   public func encodedBytes(of stream: PDFStreamObject) async throws -> Data {
     try await resolver.readStream(stream)
+  }
+
+  /// Opens a bounded, single-pass decoder for a resolved stream.
+  public func decodedStream(of stream: PDFStreamObject) async throws -> PDFDecodedStream {
+    try await resolver.decodedStream(stream)
+  }
+
+  /// Materializes the decoded bytes of a resolved stream within configured limits.
+  public func decodedBytes(of stream: PDFStreamObject) async throws -> Data {
+    try await resolver.decodedBytes(stream)
   }
 
   /// Releases the source and all document-owned caches.

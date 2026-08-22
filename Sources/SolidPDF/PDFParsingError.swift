@@ -6,6 +6,16 @@ public enum PDFUnsupportedFeature: Sendable, Hashable {
   case encryption
   /// A structural stream uses an unsupported filter or filter configuration.
   case structuralStreamFilter
+  /// Stream data is stored outside the PDF and no provider authorized access.
+  case externalStream
+  /// A stream requests decryption before the security-handler tranche is available.
+  case encryptionFilter
+  /// A stream uses JPEG 2000 data.
+  case jpxDecode
+  /// A stream uses JBIG2 data.
+  case jbig2Decode
+  /// A stream names an unknown or unavailable filter.
+  case streamFilter(PDFName)
 }
 
 /// An error raised while opening or resolving a PDF document.

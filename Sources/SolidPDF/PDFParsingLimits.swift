@@ -20,6 +20,14 @@ public struct PDFParsingLimits: Sendable, Hashable {
   public var maximumCachedSourceBytes: Int
   /// Maximum bytes retained by object and object-stream caches.
   public var maximumCachedObjectBytes: Int
+  /// Maximum filters applied to one stream.
+  public var maximumStreamFilters: Int
+  /// Maximum temporary bytes retained while decoding one stream.
+  public var maximumStreamScratchBytes: Int
+  /// Maximum bytes retained by the decoded-stream cache.
+  public var maximumCachedDecodedStreamBytes: Int
+  /// Maximum decoded-to-encoded expansion after the first decoded MiB.
+  public var maximumStreamExpansionRatio: Int
   /// Maximum terminal bytes searched for `startxref` and `%%EOF`.
   public var maximumTailSearchBytes: Int
 
@@ -35,6 +43,10 @@ public struct PDFParsingLimits: Sendable, Hashable {
     maximumDecodedStreamBytes: Int = 512 * 1_024 * 1_024,
     maximumCachedSourceBytes: Int = 64 * 1_024 * 1_024,
     maximumCachedObjectBytes: Int = 64 * 1_024 * 1_024,
+    maximumStreamFilters: Int = 16,
+    maximumStreamScratchBytes: Int = 64 * 1_024 * 1_024,
+    maximumCachedDecodedStreamBytes: Int = 64 * 1_024 * 1_024,
+    maximumStreamExpansionRatio: Int = 1_000,
     maximumTailSearchBytes: Int = 1 * 1_024 * 1_024
   ) {
     self.maximumInputBytes = maximumInputBytes
@@ -47,6 +59,10 @@ public struct PDFParsingLimits: Sendable, Hashable {
     self.maximumDecodedStreamBytes = maximumDecodedStreamBytes
     self.maximumCachedSourceBytes = maximumCachedSourceBytes
     self.maximumCachedObjectBytes = maximumCachedObjectBytes
+    self.maximumStreamFilters = maximumStreamFilters
+    self.maximumStreamScratchBytes = maximumStreamScratchBytes
+    self.maximumCachedDecodedStreamBytes = maximumCachedDecodedStreamBytes
+    self.maximumStreamExpansionRatio = maximumStreamExpansionRatio
     self.maximumTailSearchBytes = maximumTailSearchBytes
   }
 }

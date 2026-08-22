@@ -11,21 +11,29 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   private let reader: PDFSourceReader<Session>
   private let index: PDFCrossReferenceIndex
   private let options: PDFParsingOptions
+  private let externalStreamProvider: (any PDFExternalStreamProvider)?
+  private let streamRegistry = PDFDecodedStreamRegistry()
   private var objectCache = [PDFObjectReference: PDFIndirectObject]()
   private var decodedObjectStreams = [PDFObjectReference: DecodedObjectStream]()
   private var recency = [PDFObjectReference]()
   private var cacheBytes = 0
   private var pending = [PDFObjectReference: Task<PDFIndirectObject, Error>]()
+  private var decodedStreamCache = [PDFStreamCacheKey: Data]()
+  private var decodedStreamRecency = [PDFStreamCacheKey]()
+  private var decodedStreamCacheBytes = 0
+  private var pendingDecodedStreams = [PDFStreamCacheKey: Task<Data, Error>]()
   private var closed = false
 
   init(
     reader: PDFSourceReader<Session>,
     index: PDFCrossReferenceIndex,
-    options: PDFParsingOptions
+    options: PDFParsingOptions,
+    externalStreamProvider: (any PDFExternalStreamProvider)?
   ) {
     self.reader = reader
     self.index = index
     self.options = options
+    self.externalStreamProvider = externalStreamProvider
   }
 
   func resolve(_ reference: PDFObjectReference) async throws -> PDFIndirectObject {
@@ -37,15 +45,76 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
     return try await reader.read(stream.encodedRange)
   }
 
+  func decodedStream(_ stream: PDFStreamObject) async throws -> PDFDecodedStream {
+    guard !closed else { throw PDFParsingError.documentClosed }
+    if stream.dictionary[PDFName("F")] == nil,
+      let cached = decodedStreamCache[PDFStreamCacheKey(stream)]
+    {
+      touchDecodedStream(PDFStreamCacheKey(stream))
+      return PDFDecodedStream(
+        state: PDFBufferedDecodedStreamState(
+          data: cached,
+          chunkByteCount: options.decodedStreamChunkByteCount
+        )
+      )
+    }
+    return try await makeDecodedStream(stream)
+  }
+
+  func decodedBytes(_ stream: PDFStreamObject) async throws -> Data {
+    guard !closed else { throw PDFParsingError.documentClosed }
+    let cacheable = stream.dictionary[PDFName("F")] == nil
+    let key = PDFStreamCacheKey(stream)
+    if cacheable, let cached = decodedStreamCache[key] {
+      touchDecodedStream(key)
+      return cached
+    }
+    if cacheable, let task = pendingDecodedStreams[key] {
+      return try await task.value
+    }
+    let task = Task<Data, Error> {
+      let stream = try await self.makeDecodedStream(stream)
+      var data = Data()
+      do {
+        for try await chunk in stream {
+          data.append(chunk)
+        }
+        await stream.close()
+        return data
+      } catch {
+        await stream.close()
+        throw error
+      }
+    }
+    if cacheable { pendingDecodedStreams[key] = task }
+    do {
+      let data = try await task.value
+      if cacheable {
+        pendingDecodedStreams[key] = nil
+        insertDecodedStream(data, for: key)
+      }
+      return data
+    } catch {
+      if cacheable { pendingDecodedStreams[key] = nil }
+      throw error
+    }
+  }
+
   func close() async {
     guard !closed else { return }
     closed = true
     for task in pending.values { task.cancel() }
+    for task in pendingDecodedStreams.values { task.cancel() }
     pending.removeAll()
+    pendingDecodedStreams.removeAll()
     objectCache.removeAll()
     decodedObjectStreams.removeAll()
     recency.removeAll()
     cacheBytes = 0
+    decodedStreamCache.removeAll()
+    decodedStreamRecency.removeAll()
+    decodedStreamCacheBytes = 0
+    await streamRegistry.closeAll()
     await reader.close()
   }
 
@@ -131,7 +200,13 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
             .init(offset: offset, object: reference, message: "A stream lacks its dictionary.")
           )
         }
-        value = .stream(PDFStreamObject(dictionary: dictionary, encodedRange: streamRange))
+        value = .stream(
+          PDFStreamObject(
+            dictionary: dictionary,
+            encodedRange: streamRange,
+            objectReference: reference
+          )
+        )
       } else {
         value = .value(raw.value)
       }
@@ -361,5 +436,86 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
   private func estimatedFootprint(of object: PDFIndirectObject) -> Int {
     if let sourceRange = object.sourceRange { return max(64, sourceRange.length) }
     return 256
+  }
+
+  private func makeDecodedStream(_ stream: PDFStreamObject) async throws -> PDFDecodedStream {
+    let configuration = try await PDFStreamConfiguration.resolve(
+      stream: stream,
+      options: options,
+      resolve: { reference in
+        let resolved = try await self.resolve(reference)
+        guard case .value(let value) = resolved.value else {
+          throw PDFParsingError.malformed(
+            .init(
+              offset: stream.encodedRange.offset,
+              object: stream.objectReference,
+              message: "A stream configuration reference resolves to a stream."
+            )
+          )
+        }
+        return value
+      }
+    )
+    let input: PDFDecodedStreamInput
+    if let fileSpecification = configuration.fileSpecification {
+      guard let externalStreamProvider else {
+        throw PDFParsingError.unsupported(
+          .externalStream,
+          .init(
+            offset: stream.encodedRange.offset,
+            object: stream.objectReference,
+            message: "External stream access was not authorized."
+          )
+        )
+      }
+      do {
+        let session = try await externalStreamProvider.open(fileSpecification, for: stream)
+        input = try await PDFDecodedStreamInput(externalSession: session)
+      } catch let error as PDFParsingError {
+        throw error
+      } catch {
+        throw PDFParsingError.sourceFailure(
+          .init(
+            offset: stream.encodedRange.offset,
+            object: stream.objectReference,
+            message: "The external stream provider failed: \(error)"
+          )
+        )
+      }
+    } else {
+      input = PDFDecodedStreamInput(reader: reader, range: stream.encodedRange)
+    }
+    let state = try PDFIncrementalDecodedStreamState(
+      input: input,
+      filters: configuration.filters,
+      options: options,
+      diagnostic: .init(
+        offset: stream.encodedRange.offset,
+        object: stream.objectReference,
+        message: "The PDF stream could not be decoded."
+      ),
+      registry: streamRegistry
+    )
+    await state.register()
+    return PDFDecodedStream(state: state)
+  }
+
+  private func insertDecodedStream(_ data: Data, for key: PDFStreamCacheKey) {
+    let maximum = options.limits.maximumCachedDecodedStreamBytes
+    guard data.count <= maximum else { return }
+    while decodedStreamCacheBytes > maximum - data.count,
+      let oldest = decodedStreamRecency.first
+    {
+      decodedStreamRecency.removeFirst()
+      decodedStreamCacheBytes -= decodedStreamCache.removeValue(forKey: oldest)?.count ?? 0
+    }
+    decodedStreamCache[key] = data
+    decodedStreamCacheBytes += data.count
+    touchDecodedStream(key)
+  }
+
+  private func touchDecodedStream(_ key: PDFStreamCacheKey) {
+    decodedStreamRecency.removeAll { $0 == key }
+    decodedStreamRecency.append(key)
   }
 }
