@@ -18,6 +18,7 @@ ENABLE_LINT=1 Scripts/linux-build
 Scripts/linux-benchmark-raster.sh --filter "Flat Fill"
 Scripts/linux-benchmark-raster-comparison.sh
 Scripts/linux-conformance
+Scripts/linux-pdf-parser-interop
 ```
 
 Use `linux-container` to inspect or control the reusable environment:
@@ -73,3 +74,9 @@ A deliberate public API change requires
 `Scripts/check-graphics-api update`, review of the resulting diff, and an explicit semantic-contract
 version decision. Linux baselines are generated and checked through the reusable container so C
 system-module availability matches supported Linux builds.
+
+# PDF parser interoperability
+
+`Scripts/pdf-parser-interop` generates deterministic PDF 1.7, PDF 2.0, and object-stream fixtures,
+then validates them with qpdf, MuPDF, and Poppler. Run `Scripts/linux-pdf-parser-interop` when those
+tools are not installed on the host; the reusable Linux container includes all required commands.

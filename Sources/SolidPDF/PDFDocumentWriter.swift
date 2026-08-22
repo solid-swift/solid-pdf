@@ -47,6 +47,7 @@ public struct PDFDocumentWriter<Sink: PDFOutputSink>: ~Copyable {
     try requireOpen()
     guard entries.indices.contains(reference.objectNumber),
       reference.objectNumber != 0,
+      reference.generationNumber == 0,
       entries[reference.objectNumber].body == nil
     else { throw PDFError.invalidReference }
     let serializer = PDFObjectSerializer(limits: options.limits)
@@ -66,6 +67,7 @@ public struct PDFDocumentWriter<Sink: PDFOutputSink>: ~Copyable {
     try requireOpen()
     guard entries.indices.contains(reference.objectNumber),
       reference.objectNumber != 0,
+      reference.generationNumber == 0,
       entries[reference.objectNumber].body == nil
     else { throw PDFError.invalidReference }
 
@@ -161,8 +163,11 @@ public struct PDFDocumentWriter<Sink: PDFOutputSink>: ~Copyable {
     guard entries.indices.contains(root.objectNumber), root.objectNumber != 0 else {
       throw PDFError.invalidReference
     }
+    guard root.generationNumber == 0 else { throw PDFError.invalidReference }
     if let info {
-      guard entries.indices.contains(info.objectNumber), info.objectNumber != 0 else {
+      guard entries.indices.contains(info.objectNumber), info.objectNumber != 0,
+        info.generationNumber == 0
+      else {
         throw PDFError.invalidReference
       }
     }
@@ -172,6 +177,7 @@ public struct PDFDocumentWriter<Sink: PDFOutputSink>: ~Copyable {
       }
       for reference in entry.references {
         guard entries.indices.contains(reference.objectNumber),
+          reference.generationNumber == 0,
           entries[reference.objectNumber].body != nil
         else { throw PDFError.unresolvedReference(reference) }
       }

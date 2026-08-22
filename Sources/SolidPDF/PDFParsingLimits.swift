@@ -1,15 +1,26 @@
 /// Bounded resource limits for parsing and resolving a PDF document.
 public struct PDFParsingLimits: Sendable, Hashable {
+  /// Maximum complete input size.
   public var maximumInputBytes: Int64
+  /// Maximum declared object count.
   public var maximumObjectCount: Int
+  /// Maximum nested array, dictionary, or string depth.
   public var maximumNesting: Int
+  /// Maximum lexical token size.
   public var maximumTokenBytes: Int
+  /// Maximum decoded string size.
   public var maximumStringBytes: Int
+  /// Maximum elements in one array.
   public var maximumArrayElements: Int
+  /// Maximum entries in one dictionary.
   public var maximumDictionaryEntries: Int
+  /// Maximum bytes in one decoded structural stream.
   public var maximumDecodedStreamBytes: Int
+  /// Maximum bytes retained by the source-window cache.
   public var maximumCachedSourceBytes: Int
+  /// Maximum bytes retained by object and object-stream caches.
   public var maximumCachedObjectBytes: Int
+  /// Maximum terminal bytes searched for `startxref` and `%%EOF`.
   public var maximumTailSearchBytes: Int
 
   /// Creates parsing limits.

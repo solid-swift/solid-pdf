@@ -380,6 +380,28 @@ if benchmarkEnabled {
         .plugin(name: "BenchmarkPlugin", package: "benchmark")
       ]
     ),
+    .target(
+      name: "SolidPDFParsingBenchmarkSupport",
+      dependencies: ["SolidPDF"],
+      path: "Benchmarks/SolidPDFParsingBenchmarkSupport"
+    ),
+    .executableTarget(
+      name: "SolidPDFParsingBenchmark",
+      dependencies: [
+        "SolidPDF",
+        "SolidPDFParsingBenchmarkSupport",
+        .product(name: "Benchmark", package: "benchmark"),
+      ],
+      path: "Benchmarks/SolidPDFParsingBenchmark",
+      plugins: [
+        .plugin(name: "BenchmarkPlugin", package: "benchmark")
+      ]
+    ),
+    .executableTarget(
+      name: "SolidPDFInteropFixtures",
+      dependencies: ["SolidPDFParsingBenchmarkSupport"],
+      path: "Utilities/SolidPDFInteropFixtures"
+    ),
     .testTarget(
       name: "SolidRasterBenchmarkSupportTests",
       dependencies: [
@@ -396,6 +418,12 @@ if benchmarkEnabled {
       name: "SolidFontBenchmarkSupportTests",
       dependencies: ["SolidFont", "SolidFontBenchmarkSupport"],
       path: "Tests/SolidFontBenchmarkSupportTests",
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidPDFParsingBenchmarkSupportTests",
+      dependencies: ["SolidPDF", "SolidPDFParsingBenchmarkSupport"],
+      path: "Tests/SolidPDFParsingBenchmarkSupportTests",
       plugins: lintPlugins
     ),
   ]

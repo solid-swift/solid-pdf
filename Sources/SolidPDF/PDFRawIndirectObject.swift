@@ -8,7 +8,9 @@ struct PDFRawIndirectObject: Sendable {
 }
 
 extension PDFObjectParser {
-  mutating func parseRawIndirectObject() async throws -> PDFRawIndirectObject {
+  mutating func parseRawIndirectObject(
+    resolveStreamLength: (@Sendable (PDFObjectReference) async throws -> Int64)? = nil
+  ) async throws -> PDFRawIndirectObject {
     let header = try await parseIndirectHeader()
     let value = try await parseObject()
     try await skipWhitespaceAndComments()
@@ -16,8 +18,14 @@ extension PDFObjectParser {
     if case .dictionary(let dictionary) = value, try await consumeKeyword("stream") {
       try await consumeRequiredLineEnding(after: "stream")
       let streamStart = position
-      guard let length = dictionary.pdfInteger(named: "Length"), length >= 0, length <= Int64(Int.max)
-      else {
+      let length: Int64
+      if let direct = dictionary.pdfInteger(named: "Length") {
+        length = direct
+      } else if let reference = dictionary.pdfReference(named: "Length"),
+        let resolveStreamLength
+      {
+        length = try await resolveStreamLength(reference)
+      } else {
         throw PDFParsingError.malformed(
           .init(
             offset: streamStart,
@@ -26,10 +34,27 @@ extension PDFObjectParser {
           )
         )
       }
+      guard length >= 0, length <= Int64(Int.max) else {
+        throw PDFParsingError.malformed(
+          .init(
+            offset: streamStart,
+            object: header.reference,
+            message: "The stream Length is outside its valid range."
+          )
+        )
+      }
       streamRange = PDFSourceRange(uncheckedOffset: streamStart, length: Int(length))
       try await cursor.seek(to: streamStart + length)
-      if try await cursor.consume(0x0D) { _ = try await cursor.consume(0x0A) } else {
+      if try await cursor.consume(0x0D) {
         _ = try await cursor.consume(0x0A)
+      } else if !(try await cursor.consume(0x0A)) {
+        throw PDFParsingError.malformed(
+          .init(
+            offset: position,
+            object: header.reference,
+            message: "The stream data must be followed by a line ending."
+          )
+        )
       }
       try await requireKeyword("endstream")
       try await skipWhitespaceAndComments()

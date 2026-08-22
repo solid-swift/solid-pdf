@@ -1,5 +1,4 @@
 import Foundation
-import SolidIO
 
 struct PDFCrossReferenceParser<Session: PDFInputSourceSession> {
   let reader: PDFSourceReader<Session>
@@ -205,7 +204,12 @@ struct PDFCrossReferenceParser<Session: PDFInputSourceSession> {
       size <= Int64(options.limits.maximumObjectCount)
     else { throw malformed(offset, "The object at startxref is not a valid cross-reference stream.") }
     let encoded = try await reader.read(range)
-    let decoded = try decodeStructuralStream(encoded, dictionary: dictionary, offset: range.offset)
+    let decoded = try PDFStructuralStreamDecoder.decode(
+      encoded,
+      dictionary: dictionary,
+      limits: options.limits,
+      offset: range.offset
+    )
     let widths = try integerArray(dictionary, name: "W", expectedCount: 3, offset: offset)
     guard widths.allSatisfy({ (0...8).contains($0) }) else {
       throw malformed(offset, "Cross-reference field widths must be between zero and eight.")
@@ -279,43 +283,6 @@ struct PDFCrossReferenceParser<Session: PDFInputSourceSession> {
       }
     }
     return Section(entries: entries, trailer: dictionary)
-  }
-
-  private func decodeStructuralStream(
-    _ data: Data,
-    dictionary: [PDFName: PDFObject],
-    offset: Int64
-  ) throws -> Data {
-    if dictionary["Filter"] == nil { return data }
-    let filter: PDFName?
-    switch dictionary["Filter"] {
-    case .name(let name):
-      filter = name
-    case .array(let values) where values.count == 1:
-      if case .name(let name) = values[0] { filter = name } else { filter = nil }
-    default:
-      filter = nil
-    }
-    guard filter == PDFName("FlateDecode"),
-      dictionary["DecodeParms"] == nil || dictionary["DecodeParms"] == .null
-    else {
-      throw PDFParsingError.unsupported(
-        .structuralStreamFilter,
-        .init(offset: offset, message: "Only raw or plain Flate structural streams are supported.")
-      )
-    }
-    do {
-      let decoder = FlateDecoder()
-      let result = try decoder.process(input: data)
-      guard result.progress == .finished, result.consumedInput == data.count,
-        result.output.count <= options.limits.maximumDecodedStreamBytes
-      else { throw malformed(offset, "The Flate structural stream is truncated or oversized.") }
-      return result.output
-    } catch let error as PDFParsingError {
-      throw error
-    } catch {
-      throw malformed(offset, "The Flate structural stream is malformed: \(error)")
-    }
   }
 
   private func integerArray(

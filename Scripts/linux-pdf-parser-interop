@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "${SCRIPT_DIRECTORY}/linux-container" exec \
+  env SOLIDPDF_SCRATCH_PATH=/build Scripts/pdf-parser-interop "$@"
