@@ -1,0 +1,36 @@
+%!PS-Adobe-3.0
+%%Title: SolidPDF dense Bezier silhouette raster reduction
+%%Creator: SolidPDF project authors
+%%Pages: 1
+%%EndComments
+<< /PageSize [72 72] >> setpagedevice
+
+/silhouette {
+  /blue exch def /green exch def /red exch def /dx exch def
+  newpath
+  dx 6 add 10 moveto
+  dx 1 add 18 dx 5 add 30 dx 13 add 35 curveto
+  dx 6 add 42 dx 9 add 55 dx 20 add 59 curveto
+  dx 27 add 67 dx 40 add 64 dx 43 add 54 curveto
+  dx 55 add 55 dx 64 add 46 dx 59 add 36 curveto
+  dx 67 add 28 dx 59 add 14 dx 48 add 16 curveto
+  dx 42 add 6 dx 27 add 3 dx 21 add 13 curveto
+  dx 15 add 7 dx 9 add 5 dx 6 add 10 curveto
+  closepath
+  gsave red green blue setrgbcolor fill grestore
+  0.12 setgray 0.9 setlinewidth stroke
+} bind def
+
+1 0.86 0.25 0.18 silhouette
+7 0.20 0.48 0.78 silhouette
+
+newpath
+4 33 moveto
+10 38 15 38 21 33 curveto
+27 28 33 28 39 33 curveto
+45 38 52 38 67 31 curveto
+0.95 0.95 0.95 setrgbcolor
+1.1 setlinewidth stroke
+
+showpage
+%%EOF

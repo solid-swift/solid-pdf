@@ -63,7 +63,7 @@ The postponed filter tranche is complete at the portable runtime boundary provid
 
 ## Independent compatibility validation
 
-The owned `PostScriptConformance` suite currently contains 12 PLRM-cited cases. Together they cover every semantic
+The owned `PostScriptConformance` suite currently contains 18 PLRM-cited cases. Together they cover every semantic
 requirement in the machine-readable ledger and exercise language transcripts, canonical recording, and raster output.
 Ordinary tests run the Solid expectations without external software.
 
@@ -71,6 +71,16 @@ Dedicated Linux validation compares the owned suite with the checksummed Ghostsc
 is a discrepancy oracle, not specification authority: every accepted difference names a PLRM authority and pins both
 results and the exact reference version. External PS/EPS and Ghostscript-example directories can be attached for
 discovery, but their files are neither copied into the repository nor promoted to expectations without adjudication.
+The scheduled Ghostscript-example run compares normalized outcomes against an observational baseline keyed by the
+reference archive and source digests. A matched baseline entry means only that an outcome is already known; it does
+not decide whether Solid or Ghostscript is conforming. New sources, changed bytes, recovered timeouts, and changed
+renderings fail the scheduled discovery gate and stage a candidate baseline for review.
+
+Three independent reductions cover the raster observations associated with `doretree.ps`, `golfer.eps`, and
+`tiger.eps`. Paired recording cases pin shared-edge paths, fractionally transformed curves, dense cubic geometry,
+colors, and painting order. Their exact low-resolution Solid and Ghostscript raster digests are retained as
+fixture-local device scan-conversion differences under PLRM section 6.1. No external example source was copied, and
+no global raster tolerance was widened.
 
 Passing this suite closes the planned PostScript implementation gate. The portable graphics event contract is frozen
 as `GraphicsSemanticContractVersion.v1`; native PDF parsing and text-processing work is the next product stage. New

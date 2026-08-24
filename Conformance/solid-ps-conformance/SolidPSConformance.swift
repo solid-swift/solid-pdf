@@ -19,6 +19,10 @@ private struct Discover: AsyncParsableCommand {
   @Option(name: .long, help: "Pinned Ghostscript executable.") var reference: String
   @Option(name: .long, help: "Maximum cases to discover in deterministic path order.") var limit = 1_000
   @Option(name: .long, help: "Maximum concurrent workers.") var jobs: Int?
+  @Option(name: .long, help: "Reviewed observational baseline used to detect discovery drift.") var baseline: String?
+  @Option(name: .long, help: "Identity of the selected external corpus.") var corpusVersion = "external-ps-eps-v1"
+  @Option(name: .long, help: "SHA-256 of the archive supplying the external corpus.")
+  var referenceArchiveSHA256: String?
 
   mutating func run() async throws {
     do {
@@ -50,12 +54,53 @@ private struct Discover: AsyncParsableCommand {
       concurrency: concurrency,
       artifactRoot: artifactRoot
     )
-    let report = ConformanceRunReport(
-      suite: suite.manifest.name,
+    let selectedSources = selected.map(\.source)
+    let archiveSHA256 = referenceArchiveSHA256 ?? "unknown"
+    let candidate = try ConformanceDiscoveryBaseline.candidate(
+      corpusVersion: corpusVersion,
       referenceVersion: referenceVersion,
+      referenceArchiveSHA256: archiveSHA256,
+      selectionLimit: limit,
+      selectedSources: selectedSources,
       results: results
     )
-    try write(report: report, to: outputURL)
+    try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
+    try candidate.encodedJSON().write(
+      to: outputURL.appending(path: "candidate-baseline.json"),
+      options: .atomic
+    )
+
+    let evaluatedResults: [ConformanceDiscoveryCaseResult]
+    let baselineDifferences: [String]
+    if let baseline {
+      guard let referenceArchiveSHA256 else {
+        throw ValidationError("reference-archive-sha256 is required with baseline")
+      }
+      let loaded = try ConformanceDiscoveryBaseline.load(
+        from: URL(fileURLWithPath: baseline).standardizedFileURL
+      )
+      let evaluation = try loaded.evaluate(
+        results: results,
+        selectedSources: selectedSources,
+        referenceVersion: referenceVersion,
+        referenceArchiveSHA256: referenceArchiveSHA256,
+        selectionLimit: limit
+      )
+      evaluatedResults = evaluation.results
+      baselineDifferences = evaluation.differences
+    } else {
+      evaluatedResults = results
+      baselineDifferences = []
+    }
+    let report = ConformanceDiscoveryRunReport(
+      suite: suite.manifest.name,
+      referenceVersion: referenceVersion,
+      selectedSources: selectedSources,
+      baselineApplied: baseline != nil,
+      baselineDifferences: baselineDifferences,
+      results: evaluatedResults
+    )
+    try write(discoveryReport: report, to: outputURL)
     try ConformanceReferenceMetadata(executable: referenceURL.path, version: referenceVersion)
       .encodedJSON()
       .write(to: outputURL.appending(path: "reference-metadata.json"), options: .atomic)
@@ -363,8 +408,11 @@ private func runDiscoveryWorkers(
   reference: URL,
   concurrency: Int,
   artifactRoot: URL
-) async -> [ConformanceCaseResult] {
-  await withTaskGroup(of: ConformanceCaseResult.self, returning: [ConformanceCaseResult].self) { group in
+) async -> [ConformanceDiscoveryCaseResult] {
+  await withTaskGroup(
+    of: ConformanceDiscoveryCaseResult.self,
+    returning: [ConformanceDiscoveryCaseResult].self
+  ) { group in
     var iterator = cases.makeIterator()
     for _ in 0..<min(concurrency, cases.count) {
       if let testCase = iterator.next() {
@@ -378,7 +426,7 @@ private func runDiscoveryWorkers(
         )
       }
     }
-    var results: [ConformanceCaseResult] = []
+    var results: [ConformanceDiscoveryCaseResult] = []
     while let result = await group.next() {
       results.append(result)
       if let testCase = iterator.next() {
@@ -402,11 +450,25 @@ private func addDiscoveryWorker(
   executable: URL,
   reference: URL,
   artifactRoot: URL,
-  to group: inout TaskGroup<ConformanceCaseResult>
+  to group: inout TaskGroup<ConformanceDiscoveryCaseResult>
 ) {
   group.addTask {
     let start = ContinuousClock.now
     let artifactDirectory = artifactRoot.appending(path: testCase.id, directoryHint: .isDirectory)
+    let sourceDigest: String
+    do {
+      let source = try Data(contentsOf: sourceRoot.appending(path: testCase.source), options: [.mappedIfSafe])
+      sourceDigest = ConformanceDigest.sha256(source)
+    } catch {
+      return ConformanceDiscoveryCaseResult(
+        id: testCase.id,
+        source: testCase.source,
+        sourceDigest: "",
+        outcome: .harnessFailure,
+        durationMilliseconds: 0,
+        diagnostic: "source digest failed"
+      )
+    }
     do {
       try FileManager.default.createDirectory(at: artifactDirectory, withIntermediateDirectories: true)
       let process = try ConformanceProcessRunner.run(
@@ -419,19 +481,28 @@ private func addDiscoveryWorker(
       let milliseconds = Int(elapsed.components.seconds * 1_000)
         + Int(elapsed.components.attoseconds / 1_000_000_000_000_000)
       if process.timedOut || process.outputLimitExceeded {
-        return ConformanceCaseResult(
+        return ConformanceDiscoveryCaseResult(
           id: testCase.id,
-          status: .harnessFailure,
+          source: testCase.source,
+          sourceDigest: sourceDigest,
+          outcome: .executionLimit,
           durationMilliseconds: milliseconds,
-          diagnostic: process.timedOut ? "discovery worker timed out" : "discovery worker exceeded output limits"
+          diagnostic: process.timedOut ? "Solid execution timed out" : "Solid execution exceeded output limits",
+          artifactPaths: artifactPaths(in: artifactDirectory, relativeTo: artifactRoot)
         )
       }
       guard process.terminationStatus == 0 else {
-        return ConformanceCaseResult(
+        return ConformanceDiscoveryCaseResult(
           id: testCase.id,
-          status: .difference,
+          source: testCase.source,
+          sourceDigest: sourceDigest,
+          outcome: .compatibilityDifference,
           durationMilliseconds: milliseconds,
-          diagnostic: "Solid discovery execution failed: \(String(decoding: process.standardError, as: UTF8.self))"
+          diagnostic: ConformanceDiscoveryDiagnostic.normalize(
+            process.standardError,
+            prefix: "Solid execution failed"
+          ),
+          artifactPaths: artifactPaths(in: artifactDirectory, relativeTo: artifactRoot)
         )
       }
       let solid = try JSONDecoder().decode(ConformanceObservationResult.self, from: process.standardOutput)
@@ -440,12 +511,18 @@ private func addDiscoveryWorker(
       do {
         ghostscript = try GhostscriptConformanceRunner.run(testCase, in: suite, executable: reference)
       } catch {
-        return ConformanceCaseResult(
+        return ConformanceDiscoveryCaseResult(
           id: testCase.id,
-          status: .difference,
+          source: testCase.source,
+          sourceDigest: sourceDigest,
+          outcome: .compatibilityDifference,
           durationMilliseconds: milliseconds,
           solid: solid,
-          diagnostic: "reference discovery execution failed: \(error)"
+          diagnostic: ConformanceDiscoveryDiagnostic.normalize(
+            String(describing: error),
+            prefix: "reference execution failed"
+          ),
+          artifactPaths: artifactPaths(in: artifactDirectory, relativeTo: artifactRoot)
         )
       }
       let rasterDifferences = try compareRasters(
@@ -463,16 +540,44 @@ private func addDiscoveryWorker(
         additionalDifferences: rasterDifferences
       )
       if result.status == .passed { try? FileManager.default.removeItem(at: artifactDirectory) }
-      return result
-    } catch {
-      return ConformanceCaseResult(
+      return ConformanceDiscoveryCaseResult(
         id: testCase.id,
-        status: .harnessFailure,
+        source: testCase.source,
+        sourceDigest: sourceDigest,
+        outcome: result.status == .passed ? .equivalent : .compatibilityDifference,
+        durationMilliseconds: milliseconds,
+        solid: solid,
+        reference: ghostscript.observation,
+        differences: result.differences,
+        diagnostic: result.diagnostic,
+        artifactPaths: artifactPaths(in: artifactDirectory, relativeTo: artifactRoot)
+      )
+    } catch {
+      return ConformanceDiscoveryCaseResult(
+        id: testCase.id,
+        source: testCase.source,
+        sourceDigest: sourceDigest,
+        outcome: .harnessFailure,
         durationMilliseconds: 0,
-        diagnostic: String(describing: error)
+        diagnostic: ConformanceDiscoveryDiagnostic.normalize(
+          String(describing: error),
+          prefix: "discovery harness failed"
+        ),
+        artifactPaths: artifactPaths(in: artifactDirectory, relativeTo: artifactRoot)
       )
     }
   }
+}
+
+private func artifactPaths(in directory: URL, relativeTo root: URL) -> [String] {
+  guard let values = try? FileManager.default.contentsOfDirectory(
+    at: directory,
+    includingPropertiesForKeys: [.isRegularFileKey]
+  ) else { return [] }
+  return values.compactMap { value in
+    guard (try? value.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { return nil }
+    return "\(root.lastPathComponent)/\(directory.lastPathComponent)/\(value.lastPathComponent)"
+  }.sorted()
 }
 
 private func compareRasters(
@@ -565,6 +670,29 @@ private func write(report: ConformanceRunReport, to directory: URL) throws {
       )
       try (encoder.encode(candidate) + Data([0x0A])).write(
         to: directory.appending(path: "\(result.id).candidate.json"),
+        options: .atomic
+      )
+    }
+  }
+}
+
+private func write(discoveryReport report: ConformanceDiscoveryRunReport, to directory: URL) throws {
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  try report.encodedJSON().write(to: directory.appending(path: "report.json"), options: .atomic)
+  try report.encodedJUnit().write(to: directory.appending(path: "report.junit.xml"), options: .atomic)
+  let encoder = JSONEncoder()
+  encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+  for result in report.results where result.outcome != .equivalent {
+    try (encoder.encode(result) + Data([0x0A])).write(
+      to: directory.appending(path: "\(result.id).failure.json"),
+      options: .atomic
+    )
+    if let transcript = result.solid?.transcript {
+      try transcript.write(to: directory.appending(path: "\(result.id).solid.transcript"), options: .atomic)
+    }
+    if let transcript = result.reference?.transcript {
+      try transcript.write(
+        to: directory.appending(path: "\(result.id).reference.transcript"),
         options: .atomic
       )
     }

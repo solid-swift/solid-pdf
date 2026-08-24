@@ -217,7 +217,14 @@
       "operators": ["arcn", "eoclip", "grestoreall", "rcurveto", "rectstroke"],
       "registration": ["Sources/SolidPostScript/Graphics/GraphicsPath.swift", "Sources/SolidPostScript/Operators/Graphics/GraphicsStateOps.swift", "Sources/SolidPostScript/Operators/Graphics/PathOps.swift"],
       "tests": ["Tests/SolidPostScriptTests/Graphics/GraphicsSemanticsTests.swift", "Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
-      "conformanceCases": ["graphics.recording", "graphics.permissive-raster-box"]
+      "conformanceCases": [
+        "graphics.recording",
+        "graphics.permissive-raster-box",
+        "graphics.adjacent-triangles-recording",
+        "graphics.adjacent-triangles-raster",
+        "graphics.dense-bezier-recording",
+        "graphics.dense-bezier-raster"
+      ]
     },
     {
       "name": "user-path-even-odd-semantics",
@@ -233,7 +240,11 @@
       "operators": ["concatmatrix", "defaultmatrix", "identmatrix", "invertmatrix", "rotate", "setmatrix"],
       "registration": ["Sources/SolidPostScript/Operators/Graphics/MatrixOps.swift"],
       "tests": ["Tests/SolidPostScriptTests/PLRMSemanticOperatorTests.swift"],
-      "conformanceCases": ["graphics.recording"]
+      "conformanceCases": [
+        "graphics.recording",
+        "graphics.transformed-curves-recording",
+        "graphics.transformed-curves-raster"
+      ]
     },
     {
       "name": "font-encoding-resource-lookup",

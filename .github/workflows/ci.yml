@@ -126,4 +126,5 @@ jobs:
           path: |
             .conformance-results
             .conformance-discovery
+          include-hidden-files: true
           retention-days: 30

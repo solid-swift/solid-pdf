@@ -18,4 +18,10 @@ if [[ -n "${reference}" ]]; then
   arguments+=(--reference "${reference}")
 fi
 arguments+=("$@")
-exec env CONFORMANCE_ENABLE=1 swift run --package-path "${REPOSITORY_ROOT}" solid-ps-conformance "${arguments[@]}"
+swift_package=(swift run --package-path "${REPOSITORY_ROOT}")
+if [[ -n "${SOLIDPDF_CONFORMANCE_SCRATCH_PATH:-}" ]]; then
+  swift_package+=(--scratch-path "${SOLIDPDF_CONFORMANCE_SCRATCH_PATH}")
+elif [[ -d /build && ! -w "${REPOSITORY_ROOT}/.build" ]]; then
+  swift_package+=(--scratch-path /build)
+fi
+exec env CONFORMANCE_ENABLE=1 "${swift_package[@]}" solid-ps-conformance "${arguments[@]}"
