@@ -11,6 +11,9 @@ package struct ConformanceDiscoveryCaseResult: Codable, Sendable, Hashable {
   package let differences: [String]
   package let diagnostic: String?
   package let artifactPaths: [String]
+  package let baselineClassification: ConformanceDiscoveryOutcome?
+  package let baselineComparison: ConformanceDiscoveryBaselineComparison?
+  package let ownedRegression: String?
 
   package init(
     id: String,
@@ -22,7 +25,10 @@ package struct ConformanceDiscoveryCaseResult: Codable, Sendable, Hashable {
     reference: ConformanceObservationResult? = nil,
     differences: [String] = [],
     diagnostic: String? = nil,
-    artifactPaths: [String] = []
+    artifactPaths: [String] = [],
+    baselineClassification: ConformanceDiscoveryOutcome? = nil,
+    baselineComparison: ConformanceDiscoveryBaselineComparison? = nil,
+    ownedRegression: String? = nil
   ) {
     self.id = id
     self.source = source
@@ -34,5 +40,8 @@ package struct ConformanceDiscoveryCaseResult: Codable, Sendable, Hashable {
     self.differences = differences
     self.diagnostic = diagnostic
     self.artifactPaths = artifactPaths
+    self.baselineClassification = baselineClassification
+    self.baselineComparison = baselineComparison
+    self.ownedRegression = ownedRegression
   }
 }

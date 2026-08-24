@@ -56,7 +56,14 @@ Scripts/linux-conformance
 
 The first form performs adjudicated differential validation. Setting `SOLIDPDF_CONFORMANCE_REFERENCE=0` runs only checked-in Solid expectations. Reference programs execute as a separate AGPL tool and are never linked into or distributed with SolidPDF.
 
-`Scripts/conformance-discovery` executes an external PS/EPS directory as discovery-only cases. By default it uses examples extracted into the reference cache from the checksummed Ghostscript source archive; set `SOLIDPDF_EXTERNAL_CONFORMANCE_CORPUS` to inspect another directory. External files and generated reports remain outside the repository unless a caller explicitly selects a repository-local output path.
+`Scripts/conformance-discovery` executes an external PS/EPS directory as discovery-only cases. By default it uses
+examples extracted from the checksummed Ghostscript source archive and compares them with the reviewed observational
+baseline. Exact known outcomes pass while remaining visible in reports; source, reference, or outcome drift exits 2.
+Every run stages `candidate-baseline.json`, but never replaces the reviewed baseline. Set
+`SOLIDPDF_EXTERNAL_CONFORMANCE_CORPUS` to inspect another directory without a baseline, or also set
+`SOLIDPDF_CONFORMANCE_DISCOVERY_BASELINE`, `SOLIDPDF_CONFORMANCE_DISCOVERY_CORPUS_VERSION`, and
+`SOLIDPDF_CONFORMANCE_DISCOVERY_ARCHIVE_SHA256` to compare a separately reviewed corpus. External programs remain
+outside the repository, and a known observational outcome is not a PLRM-adjudicated accepted difference.
 
 # Graphics API compatibility
 

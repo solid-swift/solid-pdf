@@ -7,13 +7,38 @@ readonly SCRIPT_DIRECTORY
 REPOSITORY_ROOT="$(cd "${SCRIPT_DIRECTORY}/.." && pwd -P)"
 readonly REPOSITORY_ROOT
 readonly CACHE_ROOT="${SOLIDPDF_CONFORMANCE_CACHE:-${XDG_CACHE_HOME:-${HOME}/.cache}/solidpdf/conformance}"
-readonly CORPUS="${SOLIDPDF_EXTERNAL_CONFORMANCE_CORPUS:-${CACHE_ROOT}/references/ghostscript-10.07.1-examples}"
+readonly DEFAULT_CORPUS="${CACHE_ROOT}/references/ghostscript-10.07.1-examples"
+readonly REFERENCE_ARCHIVE_SHA256=1cdb766de8db8f1e589c817f09c5855ea5f65dfc8540e465a69ac14c18416025
+readonly DEFAULT_BASELINE="${REPOSITORY_ROOT}/Tests/Fixtures/PostScriptConformance/External/Ghostscript-10.07.1.discovery.json"
+readonly CORPUS="${SOLIDPDF_EXTERNAL_CONFORMANCE_CORPUS:-${DEFAULT_CORPUS}}"
+
+baseline="${SOLIDPDF_CONFORMANCE_DISCOVERY_BASELINE:-}"
+corpus_version="${SOLIDPDF_CONFORMANCE_DISCOVERY_CORPUS_VERSION:-external-ps-eps-v1}"
+archive_sha256="${SOLIDPDF_CONFORMANCE_DISCOVERY_ARCHIVE_SHA256:-}"
+if [[ -z "${SOLIDPDF_EXTERNAL_CONFORMANCE_CORPUS:-}" ]]; then
+  baseline="${baseline:-${DEFAULT_BASELINE}}"
+  corpus_version="ghostscript-10.07.1-examples-v1"
+  archive_sha256="${REFERENCE_ARCHIVE_SHA256}"
+fi
 
 reference="$(${SCRIPT_DIRECTORY}/prepare-ghostscript-reference)"
 arguments=(
   discover "${CORPUS}"
   --reference "${reference}"
   --output "${SOLIDPDF_CONFORMANCE_DISCOVERY_OUTPUT:-${REPOSITORY_ROOT}/.conformance-discovery}"
+  --corpus-version "${corpus_version}"
 )
+if [[ -n "${baseline}" ]]; then
+  arguments+=(--baseline "${baseline}")
+fi
+if [[ -n "${archive_sha256}" ]]; then
+  arguments+=(--reference-archive-sha256 "${archive_sha256}")
+fi
 arguments+=("$@")
-exec env CONFORMANCE_ENABLE=1 swift run --package-path "${REPOSITORY_ROOT}" solid-ps-conformance "${arguments[@]}"
+swift_package=(swift run --package-path "${REPOSITORY_ROOT}")
+if [[ -n "${SOLIDPDF_CONFORMANCE_SCRATCH_PATH:-}" ]]; then
+  swift_package+=(--scratch-path "${SOLIDPDF_CONFORMANCE_SCRATCH_PATH}")
+elif [[ -d /build && ! -w "${REPOSITORY_ROOT}/.build" ]]; then
+  swift_package+=(--scratch-path /build)
+fi
+exec env CONFORMANCE_ENABLE=1 "${swift_package[@]}" solid-ps-conformance "${arguments[@]}"

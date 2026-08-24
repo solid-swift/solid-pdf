@@ -1,0 +1,207 @@
+{
+  "corpusVersion" : "ghostscript-10.07.1-examples-v1",
+  "entries" : [
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.55ae75ec8f7e48ac.alphabet-ps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example selects Palatino-Italic, an installation font that is not supplied to the portable discovery environment.",
+      "source" : "alphabet.ps",
+      "sourceDigest" : "0c726c53d1050db449bb0af85d1ad1472ed5473e672000a0dcd2907216cae8d3"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.7d21c35005b663ef.cjk-all-ac1-ps",
+      "outcomeFingerprint" : "1c4a0560771ec0eb24d229a1e56e3ede15272d4d0d241343c59168a8af0e177e",
+      "rationale" : "The example requires external Adobe-CNS1 CIDFont and CMap resources that are not supplied to the portable discovery environment.",
+      "source" : "cjk/all_ac1.ps",
+      "sourceDigest" : "3427b6c5916dd549414f18d76486b7b39c1146ec4bf7b2e88b9141ff1c629113"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.c722d00edd38461a.cjk-all-ag1-ps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example requires external Adobe-GB1 CIDFont and CMap resources that are not supplied to the portable discovery environment.",
+      "source" : "cjk/all_ag1.ps",
+      "sourceDigest" : "407fb91a39797ef744c8d774c8751e9a988119d5565fc40ad29e96825564a2c7"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.24a849f7c286d6f2.cjk-all-aj1-ps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example requires external Adobe-Japan1 CIDFont and CMap resources that are not supplied to the portable discovery environment.",
+      "source" : "cjk/all_aj1.ps",
+      "sourceDigest" : "d88adba9737263a55e904af97a0efd5018fcabe41ac665b11773d214d539fa73"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.75df032148b39d1b.cjk-all-aj2-ps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example requires external Adobe-Japan2 CIDFont and CMap resources that are not supplied to the portable discovery environment.",
+      "source" : "cjk/all_aj2.ps",
+      "sourceDigest" : "084337ec43773a6cdb6d5102a225fdf2ab63fe9abc93e8fe94128951ecb84e9f"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.638f4a911feaa996.cjk-all-ak1-ps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example requires external Adobe-Korea1 CIDFont and CMap resources that are not supplied to the portable discovery environment.",
+      "source" : "cjk/all_ak1.ps",
+      "sourceDigest" : "00c34098c8e8eb8c8c5f8624008d1c29b4a46af4187fd8cca00e32b268ebe371"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.e42393685a43f5ea.cjk-article9-ps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example explicitly requires Ryumin-Light and GothicBBB-Medium resources or locally configured substitute fonts.",
+      "source" : "cjk/article9.ps",
+      "sourceDigest" : "55039e70f0689453a7bb3b97e03bd79728bd4127c594cadde21cfac87665ea80"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.5d74d242c736188a.cjk-gscjk-ac-ps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example requires external Chinese CID fonts and B5 CMaps that are not supplied to the portable discovery environment.",
+      "source" : "cjk/gscjk_ac.ps",
+      "sourceDigest" : "ec494c7c9f1752d1bf43e0422d7cd57bb71cc00128b97dbfc9dfd92053f664e2"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.52ff3220e53adb71.cjk-gscjk-ag-ps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example requires external Chinese CID fonts and GB CMaps that are not supplied to the portable discovery environment.",
+      "source" : "cjk/gscjk_ag.ps",
+      "sourceDigest" : "6befb7c8ccf795bd3cfe8e4124ce61657558648097e2e329fcb7225505e3c56f"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.027ff89efe907f60.cjk-gscjk-aj-ps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example requires external Japanese CID fonts and RKSJ CMaps that are not supplied to the portable discovery environment.",
+      "source" : "cjk/gscjk_aj.ps",
+      "sourceDigest" : "37691df252c423e86ff131afa54680994028810ee67d7d1f4aa4242f241fed66"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.9c38011c3d4908c3.cjk-gscjk-ak-ps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example requires external Korean CID fonts and KSC CMaps that are not supplied to the portable discovery environment.",
+      "source" : "cjk/gscjk_ak.ps",
+      "sourceDigest" : "4d429874cdd5543766bca7ba4268f5e10f16ecf42509e030d6a2821e88a61dea"
+    },
+    {
+      "classification" : "executionLimit",
+      "id" : "external.6ff924cee20be28e.cjk-iso2022-ps",
+      "outcomeFingerprint" : "dbf00e1fc8f464631c23af5f874e5c01c54f567041226e553657131595bd320c",
+      "rationale" : "Solid did not complete this example within the configured ten-second per-case discovery limit.",
+      "source" : "cjk/iso2022.ps",
+      "sourceDigest" : "fdb0dfd25064b56b933710b8aedebc86a66543f7a0e3ca6309c7b53571368e30"
+    },
+    {
+      "classification" : "executionLimit",
+      "id" : "external.c465c260d71ae7bb.cjk-iso2022v-ps",
+      "outcomeFingerprint" : "dbf00e1fc8f464631c23af5f874e5c01c54f567041226e553657131595bd320c",
+      "rationale" : "Solid did not complete this example within the configured ten-second per-case discovery limit.",
+      "source" : "cjk/iso2022v.ps",
+      "sourceDigest" : "9bff646ec21a8b185f27f1e5d6a7c12b8051ad85ce1825b23ec282529339f5e0"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.d8d0a31f4251ac11.colorcir-ps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example selects Times-Roman, an installation font that is not supplied to the portable discovery environment.",
+      "source" : "colorcir.ps",
+      "sourceDigest" : "3867d5e63b6e48e67682970254161368e718a6fb486c49a8029689d2b5d7d9ce"
+    },
+    {
+      "classification" : "compatibilityDifference",
+      "id" : "external.ecea40a1f544a6dd.doretree-ps",
+      "outcomeFingerprint" : "a626e7540784fc9685f8cbac5fd538e7046f51a1774118c990f3c19f754e7aca",
+      "rationale" : "The complete external artwork produces a stable raster difference; an independently authored shared-edge regression is used for PLRM adjudication.",
+      "source" : "doretree.ps",
+      "sourceDigest" : "2bfc8677738a4c641d84a6d95bc8100c008b11ea9205876da447c07ccff32398"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.ff6cc78086b1cb33.escher-ps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example selects Helvetica, an installation font that is not supplied to the portable discovery environment.",
+      "source" : "escher.ps",
+      "sourceDigest" : "3b2e58b24e167ff0d63cfc79918e2be728174df1851488974501b01aa4a26f11"
+    },
+    {
+      "classification" : "compatibilityDifference",
+      "id" : "external.0e7ba3f33d3b8ae2.golfer-eps",
+      "outcomeFingerprint" : "4d7bd38718fa8a35865e12933b4d68de83aba994772b9af81fa1d06591b64ebe",
+      "rationale" : "The complete external artwork produces a stable raster difference; an independently authored transformed-curve regression is used for PLRM adjudication.",
+      "source" : "golfer.eps",
+      "sourceDigest" : "3417f1a4b33cd874596551d63f409f5b6a33eadd0b2e887fa27f58ff223a5a3a"
+    },
+    {
+      "classification" : "equivalent",
+      "id" : "external.f49549ba123ac40c.grayalph-ps",
+      "outcomeFingerprint" : "1260ea860ba791e2b7f86443d1bb502ce3b8216e581bae6a1a0ead8b78b476bf",
+      "source" : "grayalph.ps",
+      "sourceDigest" : "ce40c09335add93972c87451a72f44f64321451a1d5b5dd324217a461206d968"
+    },
+    {
+      "classification" : "unavailablePrerequisite",
+      "id" : "external.0c6f046aeceb188a.ridt91-eps",
+      "outcomeFingerprint" : "7c4ac610ef96c07d31c6f0c892c074c4590a0c6933224500f346f58465207e12",
+      "rationale" : "The example selects Palatino-Roman, an installation font that is not supplied to the portable discovery environment.",
+      "source" : "ridt91.eps",
+      "sourceDigest" : "8dda741bdc98e4313fae31ae39c1efc9c816d3ef22e18c4789f3fda487688b7e"
+    },
+    {
+      "classification" : "compatibilityDifference",
+      "id" : "external.84d572261c0c55f5.snowflak-ps",
+      "outcomeFingerprint" : "3b29ca3bab6631100f91db545023cf94820442f7693ce457b71a4a0ebcddcf13",
+      "rationale" : "Solid reports undefined while Ghostscript executes the example; this stable observation has not been PLRM-adjudicated.",
+      "source" : "snowflak.ps",
+      "sourceDigest" : "8eabb819f44ee02808765f949130f39d9137a6e98815cec296a89558d329ed7b"
+    },
+    {
+      "classification" : "compatibilityDifference",
+      "id" : "external.99a1e53567988dc9.spots-ps",
+      "outcomeFingerprint" : "cac2be89ba2114d4ffea3538a6d444d27165a9c6ab7e5130c3599f5283d7ab16",
+      "rationale" : "Solid reports typecheck while Ghostscript executes the example; this stable observation has not been PLRM-adjudicated.",
+      "source" : "spots.ps",
+      "sourceDigest" : "18671022eb0c823fa8c612ef4d31575cad1ea5dd6574718d49c36a1473171ded"
+    },
+    {
+      "classification" : "compatibilityDifference",
+      "id" : "external.b0f6ff336c47bee2.tiger-eps",
+      "outcomeFingerprint" : "bcbfca4568e8e894dd17ca5bc3ef26d68ce4c710a0daa97091ccddb53d52a8b3",
+      "rationale" : "The complete external artwork produces a stable raster difference; an independently authored dense-curve regression is used for PLRM adjudication.",
+      "source" : "tiger.eps",
+      "sourceDigest" : "ed255555fdab768cce7f025dcde744a6807292cac40f80f73733fbffe61edb4f"
+    },
+    {
+      "classification" : "equivalent",
+      "id" : "external.052cf168d3448d7c.transparency-example-ps",
+      "outcomeFingerprint" : "784b2b7de0a810bab49a8194e670d7d3415e682046d0b4ec1ee9466645bac409",
+      "source" : "transparency_example.ps",
+      "sourceDigest" : "7d9ae1d3d2484a29ea82d2ba244535b44575f18a279fc72acd6ee5393b351438"
+    },
+    {
+      "classification" : "compatibilityDifference",
+      "id" : "external.2485dcbd9addde40.vasarely-ps",
+      "outcomeFingerprint" : "3b29ca3bab6631100f91db545023cf94820442f7693ce457b71a4a0ebcddcf13",
+      "rationale" : "Solid reports undefined while Ghostscript executes the example; this stable observation has not been PLRM-adjudicated.",
+      "source" : "vasarely.ps",
+      "sourceDigest" : "ac15f3637f77ee7a9c0bd4add0e23d763a8f6266d2a8c539764d22f458e71a71"
+    },
+    {
+      "classification" : "compatibilityDifference",
+      "id" : "external.e943297fb80dcc6c.waterfal-ps",
+      "outcomeFingerprint" : "3b29ca3bab6631100f91db545023cf94820442f7693ce457b71a4a0ebcddcf13",
+      "rationale" : "Solid reports undefined while Ghostscript executes the example; this stable observation has not been PLRM-adjudicated.",
+      "source" : "waterfal.ps",
+      "sourceDigest" : "db1767eff8e4dca8a22e0fe2bedeb9a1ebd416e884c7f28fd4ea1e7ea1870c87"
+    }
+  ],
+  "referenceArchiveSHA256" : "1cdb766de8db8f1e589c817f09c5855ea5f65dfc8540e465a69ac14c18416025",
+  "referenceVersion" : "10.07.1",
+  "schemaVersion" : 1,
+  "selectionLimit" : 25
+}

@@ -19,6 +19,10 @@ private struct Discover: AsyncParsableCommand {
   @Option(name: .long, help: "Pinned Ghostscript executable.") var reference: String
   @Option(name: .long, help: "Maximum cases to discover in deterministic path order.") var limit = 1_000
   @Option(name: .long, help: "Maximum concurrent workers.") var jobs: Int?
+  @Option(name: .long, help: "Reviewed observational baseline used to detect discovery drift.") var baseline: String?
+  @Option(name: .long, help: "Identity of the selected external corpus.") var corpusVersion = "external-ps-eps-v1"
+  @Option(name: .long, help: "SHA-256 of the archive supplying the external corpus.")
+  var referenceArchiveSHA256: String?
 
   mutating func run() async throws {
     do {
@@ -50,10 +54,51 @@ private struct Discover: AsyncParsableCommand {
       concurrency: concurrency,
       artifactRoot: artifactRoot
     )
+    let selectedSources = selected.map(\.source)
+    let archiveSHA256 = referenceArchiveSHA256 ?? "unknown"
+    let candidate = try ConformanceDiscoveryBaseline.candidate(
+      corpusVersion: corpusVersion,
+      referenceVersion: referenceVersion,
+      referenceArchiveSHA256: archiveSHA256,
+      selectionLimit: limit,
+      selectedSources: selectedSources,
+      results: results
+    )
+    try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
+    try candidate.encodedJSON().write(
+      to: outputURL.appending(path: "candidate-baseline.json"),
+      options: .atomic
+    )
+
+    let evaluatedResults: [ConformanceDiscoveryCaseResult]
+    let baselineDifferences: [String]
+    if let baseline {
+      guard let referenceArchiveSHA256 else {
+        throw ValidationError("reference-archive-sha256 is required with baseline")
+      }
+      let loaded = try ConformanceDiscoveryBaseline.load(
+        from: URL(fileURLWithPath: baseline).standardizedFileURL
+      )
+      let evaluation = try loaded.evaluate(
+        results: results,
+        selectedSources: selectedSources,
+        referenceVersion: referenceVersion,
+        referenceArchiveSHA256: referenceArchiveSHA256,
+        selectionLimit: limit
+      )
+      evaluatedResults = evaluation.results
+      baselineDifferences = evaluation.differences
+    } else {
+      evaluatedResults = results
+      baselineDifferences = []
+    }
     let report = ConformanceDiscoveryRunReport(
       suite: suite.manifest.name,
       referenceVersion: referenceVersion,
-      results: results
+      selectedSources: selectedSources,
+      baselineApplied: baseline != nil,
+      baselineDifferences: baselineDifferences,
+      results: evaluatedResults
     )
     try write(discoveryReport: report, to: outputURL)
     try ConformanceReferenceMetadata(executable: referenceURL.path, version: referenceVersion)

@@ -33,6 +33,44 @@ import Testing
     #expect(junit.contains("failures=\"1\""))
   }
 
+  @Test func matchedKnownOutcomesRemainVisibleWithoutFailingTheGate() {
+    let known = result(
+      id: "known",
+      outcome: .compatibilityDifference,
+      baselineClassification: .unavailablePrerequisite,
+      baselineComparison: .matched
+    )
+    let run = ConformanceDiscoveryRunReport(
+      suite: "external",
+      referenceVersion: "10.07.1",
+      baselineApplied: true,
+      results: [known]
+    )
+    let junit = String(decoding: run.encodedJUnit(), as: UTF8.self)
+
+    #expect(run.exitStatus == 0)
+    #expect(junit.contains("<skipped message=\"known observational outcome: unavailablePrerequisite\"/>"))
+    #expect(junit.contains("failures=\"0\""))
+  }
+
+  @Test func baselineDriftFailsWithStatusTwo() {
+    let changed = result(
+      id: "changed",
+      outcome: .compatibilityDifference,
+      baselineComparison: .changed
+    )
+    let run = ConformanceDiscoveryRunReport(
+      suite: "external",
+      referenceVersion: "10.07.1",
+      baselineApplied: true,
+      baselineDifferences: ["discovery outcome changed: changed.ps"],
+      results: [changed]
+    )
+
+    #expect(run.exitStatus == 2)
+    #expect(String(decoding: run.encodedJUnit(), as: UTF8.self).contains("name=\"baseline\""))
+  }
+
   private func report(_ results: [ConformanceDiscoveryCaseResult]) -> ConformanceDiscoveryRunReport {
     ConformanceDiscoveryRunReport(
       suite: "external",
@@ -44,7 +82,9 @@ import Testing
   private func result(
     id: String,
     outcome: ConformanceDiscoveryOutcome,
-    diagnostic: String? = nil
+    diagnostic: String? = nil,
+    baselineClassification: ConformanceDiscoveryOutcome? = nil,
+    baselineComparison: ConformanceDiscoveryBaselineComparison? = nil
   ) -> ConformanceDiscoveryCaseResult {
     ConformanceDiscoveryCaseResult(
       id: id,
@@ -52,7 +92,9 @@ import Testing
       sourceDigest: String(repeating: "0", count: 64),
       outcome: outcome,
       durationMilliseconds: 1,
-      diagnostic: diagnostic
+      diagnostic: diagnostic,
+      baselineClassification: baselineClassification,
+      baselineComparison: baselineComparison
     )
   }
 }
