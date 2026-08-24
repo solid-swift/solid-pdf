@@ -10,14 +10,15 @@ package enum ConformanceCorpusDiscovery {
   {
     let root = directory.standardizedFileURL.resolvingSymlinksInPath()
     let programs = try files(in: root, extensions: Set(["ps", "eps", "epsi"]))
-    let cases = programs.enumerated().map { index, url in
+    let cases = programs.map { url in
       let resolved = url.standardizedFileURL.resolvingSymlinksInPath()
       let relative = String(resolved.path.dropFirst(root.path.count + 1))
       let stem = relative.lowercased().map { character in
         character.isLetter || character.isNumber ? character : "-"
       }
+      let digest = ConformanceDigest.sha256(Data(relative.utf8)).prefix(16)
       return ConformanceCaseManifest(
-        id: "external.\(index).\(String(stem))",
+        id: "external.\(digest).\(String(stem.prefix(48)))",
         title: relative,
         authority: [ConformanceAuthority(document: "external", section: "discovery")],
         tags: ["external", "discovery"],
