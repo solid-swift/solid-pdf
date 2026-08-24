@@ -1,0 +1,35 @@
+%!PS-Adobe-3.0
+%%Title: SolidPDF transformed curve raster reduction
+%%Creator: SolidPDF project authors
+%%Pages: 1
+%%EndComments
+<< /PageSize [72 72] >> setpagedevice
+
+0.25 0.25 translate
+1.25 setlinewidth
+1 setlinejoin
+1 setlinecap
+
+/paintCurve {
+  /offset exch def
+  newpath
+  8 offset add 10 moveto
+  14 offset add 60 28 offset add 60 34 offset add 38 curveto
+  40 offset add 14 54 offset add 14 62 offset add 40 curveto
+  52 offset add 8 36 offset add 5 8 offset add 10 curveto
+  closepath
+  gsave 0.18 0.62 0.31 setrgbcolor fill grestore
+  0.08 0.16 0.42 setrgbcolor stroke
+} bind def
+
+0 paintCurve
+-3.5 paintCurve
+
+newpath
+7.25 56.25 moveto
+19.25 66.25 51.25 63.25 64.25 53.25 curveto
+0.75 0.20 0.24 setrgbcolor
+2 setlinewidth stroke
+
+showpage
+%%EOF

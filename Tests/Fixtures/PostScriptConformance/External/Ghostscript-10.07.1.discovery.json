@@ -116,6 +116,7 @@
     {
       "classification" : "compatibilityDifference",
       "id" : "external.ecea40a1f544a6dd.doretree-ps",
+      "ownedRegression" : "graphics.adjacent-triangles-recording",
       "outcomeFingerprint" : "a626e7540784fc9685f8cbac5fd538e7046f51a1774118c990f3c19f754e7aca",
       "rationale" : "The complete external artwork produces a stable raster difference; an independently authored shared-edge regression is used for PLRM adjudication.",
       "source" : "doretree.ps",
@@ -132,6 +133,7 @@
     {
       "classification" : "compatibilityDifference",
       "id" : "external.0e7ba3f33d3b8ae2.golfer-eps",
+      "ownedRegression" : "graphics.transformed-curves-recording",
       "outcomeFingerprint" : "4d7bd38718fa8a35865e12933b4d68de83aba994772b9af81fa1d06591b64ebe",
       "rationale" : "The complete external artwork produces a stable raster difference; an independently authored transformed-curve regression is used for PLRM adjudication.",
       "source" : "golfer.eps",
@@ -171,6 +173,7 @@
     {
       "classification" : "compatibilityDifference",
       "id" : "external.b0f6ff336c47bee2.tiger-eps",
+      "ownedRegression" : "graphics.dense-bezier-recording",
       "outcomeFingerprint" : "bcbfca4568e8e894dd17ca5bc3ef26d68ce4c710a0daa97091ccddb53d52a8b3",
       "rationale" : "The complete external artwork produces a stable raster difference; an independently authored dense-curve regression is used for PLRM adjudication.",
       "source" : "tiger.eps",

@@ -111,6 +111,87 @@
       "disposition": "equivalent"
     },
     {
+      "id": "graphics.adjacent-triangles-recording",
+      "title": "Shared-edge triangle semantic geometry",
+      "authority": [{"document":"PLRM3","section":"4.4.1, 4.5.2","note":"Adjacent closed paths share exact user-space edges and preserve painting order."}],
+      "tags": ["raster", "paths", "shared-edges", "owned-reduction"],
+      "mode": "document",
+      "source": "Programs/raster-adjacent-triangles.ps",
+      "observations": ["recording"],
+      "disposition": "solidExpected",
+      "expectation": {"solid":{"recordingDigest":"56af46ea5a71638695bd59663987b62d5b01148f16a067553fc0f1c33cc69a5f"}}
+    },
+    {
+      "id": "graphics.adjacent-triangles-raster",
+      "title": "Shared-edge triangle rasterization",
+      "authority": [{"document":"PLRM3","section":"4.5.2, 6.1","note":"Painting and device realization preserve the adjacent flat-color regions without changing their semantic geometry."}],
+      "tags": ["raster", "paths", "shared-edges", "owned-reduction"],
+      "mode": "document",
+      "source": "Programs/raster-adjacent-triangles.ps",
+      "observations": ["raster"],
+      "disposition": "acceptedDifference",
+      "expectation": {
+        "solid": {"rasterDigests":["1eee441e7cfe8212045a8cc94ba17e450c0c9ca2c15885db68af6638ce5c8fe1"]},
+        "reference": {"rasterDigests":["922fba9dd89fa1a11c02b63cac04c5bfccc094ea50b99446f1bf5195c5042bcf"]},
+        "referenceVersion": "10.07.1",
+        "rationale": "The paired recording case pins identical shared-edge path construction and painting order. PLRM 6.1 leaves pixel scan conversion device-dependent, so the exact low-resolution antialias coverage is retained as a fixture-local difference rather than widening raster tolerances."
+      }
+    },
+    {
+      "id": "graphics.transformed-curves-recording",
+      "title": "Fractionally transformed curve semantic geometry",
+      "authority": [{"document":"PLRM3","section":"4.3.3, 4.4.1, 4.5.1","note":"The CTM, cubic control points, fill, and stroke operations determine the semantic geometry before device realization."}],
+      "tags": ["raster", "paths", "curves", "transforms", "owned-reduction"],
+      "mode": "document",
+      "source": "Programs/raster-transformed-curves.ps",
+      "observations": ["recording"],
+      "disposition": "solidExpected",
+      "expectation": {"solid":{"recordingDigest":"097d4cbebdfc63bd57ca0dea089193cdb17b92d51693762edc0e78d3a6f6c32d"}}
+    },
+    {
+      "id": "graphics.transformed-curves-raster",
+      "title": "Fractionally transformed curve rasterization",
+      "authority": [{"document":"PLRM3","section":"4.5.1, 4.5.2, 6.1","note":"Fractional device placement may change antialias coverage but not path geometry or painting order."}],
+      "tags": ["raster", "paths", "curves", "transforms", "owned-reduction"],
+      "mode": "document",
+      "source": "Programs/raster-transformed-curves.ps",
+      "observations": ["raster"],
+      "disposition": "acceptedDifference",
+      "expectation": {
+        "solid": {"rasterDigests":["6a7957c0908ff865fb7ee25b98dbd18cd123b340041b973bb1e561493f871b1f"]},
+        "reference": {"rasterDigests":["bc7b1ddb8323c79fe9c55d49d937baceeb1a52d38d2a3408759ee9480bc684fe"]},
+        "referenceVersion": "10.07.1",
+        "rationale": "The paired recording case pins the quarter-device-pixel CTM, cubic controls, and fill-before-stroke order. PLRM 6.1 permits device-dependent scan conversion, so the low-resolution edge coverage is pinned only for this reduction."
+      }
+    },
+    {
+      "id": "graphics.dense-bezier-recording",
+      "title": "Dense Bezier silhouette semantic geometry",
+      "authority": [{"document":"PLRM3","section":"4.4.1, 4.5.1, 4.5.2","note":"Closed cubic paths, adjacent fills, and strokes retain their specified construction and order."}],
+      "tags": ["raster", "paths", "curves", "owned-reduction"],
+      "mode": "document",
+      "source": "Programs/raster-dense-bezier-silhouette.ps",
+      "observations": ["recording"],
+      "disposition": "solidExpected",
+      "expectation": {"solid":{"recordingDigest":"d05ba628ef59ef05b11785b64481b115048079f00ea326effac2703bd2643c0a"}}
+    },
+    {
+      "id": "graphics.dense-bezier-raster",
+      "title": "Dense Bezier silhouette rasterization",
+      "authority": [{"document":"PLRM3","section":"4.5.1, 4.5.2, 6.1","note":"Device antialias coverage is compared separately from the authoritative path and painting semantics."}],
+      "tags": ["raster", "paths", "curves", "owned-reduction"],
+      "mode": "document",
+      "source": "Programs/raster-dense-bezier-silhouette.ps",
+      "observations": ["raster"],
+      "disposition": "acceptedDifference",
+      "expectation": {
+        "solid": {"rasterDigests":["b099020c3b7c2b6fa73bca76274c534001c87be48a125c01d2b4eb2f7fcb8f58"]},
+        "reference": {"rasterDigests":["e7afb0bb5b970fefc1a375082c3666fad3058687db33958dc9cff003e1cbb637"]},
+        "referenceVersion": "10.07.1",
+        "rationale": "The paired recording case pins the dense cubic paths, adjacent fills, strokes, and operation order. The remaining device-pixel edge coverage is an exact fixture-local observation under PLRM 6.1, not a global tolerance change."
+      }
+    },
+    {
       "id": "language.vm-access",
       "title": "Save restore and access semantics",
       "authority": [{"document":"PLRM3","section":"3.7.3, 3.3"}],

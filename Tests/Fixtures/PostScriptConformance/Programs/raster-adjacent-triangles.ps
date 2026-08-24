@@ -1,0 +1,29 @@
+%!PS-Adobe-3.0
+%%Title: SolidPDF adjacent triangle raster reduction
+%%Creator: SolidPDF project authors
+%%Pages: 1
+%%EndComments
+<< /PageSize [72 72] >> setpagedevice
+
+/triangle {
+  /blue exch def /green exch def /red exch def
+  /y3 exch def /x3 exch def /y2 exch def /x2 exch def /y1 exch def /x1 exch def
+  red green blue setrgbcolor
+  newpath x1 y1 moveto x2 y2 lineto x3 y3 lineto closepath fill
+} bind def
+
+0 1 7 {
+  /row exch def
+  0 1 7 {
+    /column exch def
+    /left column 8 mul 4 add def
+    /bottom row 8 mul 4 add def
+    /right left 8 add def
+    /top bottom 8 add def
+    left bottom right bottom right top 0.10 0.35 0.75 triangle
+    left bottom right top left top 0.92 0.45 0.12 triangle
+  } for
+} for
+
+showpage
+%%EOF

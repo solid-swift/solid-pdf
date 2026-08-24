@@ -93,6 +93,16 @@ import Testing
     #expect(candidate.entries.allSatisfy { $0.rationale == nil })
   }
 
+  @Test func reviewedRasterDiscoveriesReferenceOwnedCases() throws {
+    let baseline = try ConformanceDiscoveryBaseline.load(from: Self.reviewedBaselineURL)
+    let suite = try ConformanceSuite.load(from: Self.suiteURL)
+    let ownedIdentifiers = Set(suite.manifest.cases.map(\.id))
+    let regressions = baseline.entries.compactMap(\.ownedRegression)
+
+    #expect(regressions.count == 3)
+    #expect(regressions.allSatisfy(ownedIdentifiers.contains))
+  }
+
   private func baseline(entries: [ConformanceDiscoveryBaseline.Entry]) -> ConformanceDiscoveryBaseline {
     ConformanceDiscoveryBaseline(
       corpusVersion: "test-v1",
@@ -137,4 +147,12 @@ import Testing
   private func sha(_ value: String) -> String {
     ConformanceDigest.sha256(Data(value.utf8))
   }
+
+  private static let fixtureRoot = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+    .appending(path: "Fixtures/PostScriptConformance")
+  private static let suiteURL = fixtureRoot.appending(path: "suite.json")
+  private static let reviewedBaselineURL = fixtureRoot
+    .appending(path: "External/Ghostscript-10.07.1.discovery.json")
 }
