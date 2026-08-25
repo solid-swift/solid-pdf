@@ -119,7 +119,7 @@
       "source": "Programs/raster-adjacent-triangles.ps",
       "observations": ["recording"],
       "disposition": "solidExpected",
-      "expectation": {"solid":{"recordingDigest":"56af46ea5a71638695bd59663987b62d5b01148f16a067553fc0f1c33cc69a5f"}}
+      "expectation": {"solid":{"recordingDigest":"0b10d31d3b55abad92fa33ac583293a150feec7ddbcaa65e9dbc7589bdf0a7ab"}}
     },
     {
       "id": "graphics.adjacent-triangles-raster",
@@ -146,7 +146,7 @@
       "source": "Programs/raster-transformed-curves.ps",
       "observations": ["recording"],
       "disposition": "solidExpected",
-      "expectation": {"solid":{"recordingDigest":"097d4cbebdfc63bd57ca0dea089193cdb17b92d51693762edc0e78d3a6f6c32d"}}
+      "expectation": {"solid":{"recordingDigest":"cee400e438e265e738926e369b83ddf2d7209e5c1e543dbd1bdb071ac3dd6df9"}}
     },
     {
       "id": "graphics.transformed-curves-raster",
@@ -173,7 +173,7 @@
       "source": "Programs/raster-dense-bezier-silhouette.ps",
       "observations": ["recording"],
       "disposition": "solidExpected",
-      "expectation": {"solid":{"recordingDigest":"d05ba628ef59ef05b11785b64481b115048079f00ea326effac2703bd2643c0a"}}
+      "expectation": {"solid":{"recordingDigest":"2242ca16da0520f1a986c26066ec20230cd4c16fb9a1dc8385334a3424380705"}}
     },
     {
       "id": "graphics.dense-bezier-raster",
