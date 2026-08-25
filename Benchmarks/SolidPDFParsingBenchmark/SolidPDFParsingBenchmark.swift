@@ -22,6 +22,7 @@ let benchmarks: @Sendable () -> Void = {
     version: .v2_0,
     additionalObjectCount: 10_000
   )
+  let recovery = try! PDFParsingBenchmarkFixtures.recoveryDocument()
   let objectStream = PDFParsingBenchmarkFixtures.objectStreamDocument(containedObjectCount: 1_000)
   let decodedStreamBytes = Data((0..<(8 * 1_024 * 1_024)).map { UInt8(truncatingIfNeeded: $0) })
   let flateStream = try! PDFParsingBenchmarkFixtures.streamDocument(
@@ -38,6 +39,18 @@ let benchmarks: @Sendable () -> Void = {
   registerOpen("Header and Tail Scan", data: small, configuration: configuration)
   registerOpen("10,000-Object Classic XRef", data: classic, configuration: configuration)
   registerOpen("10,000-Object XRef Stream", data: stream, configuration: configuration)
+
+  Benchmark("10,000-Object Recovery Scan", configuration: configuration) { benchmark in
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+      let document = try await PDFDocument(
+        source: PDFDataInputSource(recovery),
+        options: .init(recovery: .init())
+      )
+      blackHole(document.recoveryReport)
+      await document.close()
+    }
+  }
 
   Benchmark("Repeated Lazy Root Lookup", configuration: configuration) { benchmark in
     let document = try await PDFDocument(source: PDFDataInputSource(classic))

@@ -20,6 +20,8 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
   public let catalog: PDFDocumentCatalog
   /// The effective version after applying the catalog's optional `/Version`.
   public var effectiveVersion: PDFFileVersion { catalog.effectiveVersion }
+  /// Repairs used to open this document, or `nil` when strict parsing succeeded.
+  public let recoveryReport: PDFRecoveryReport?
 
   let resolver: PDFDocumentResolver<Source.Session>
   private let structure: PDFDocumentStructure<Source.Session>
@@ -38,7 +40,25 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     do {
       let reader = try await PDFSourceReader(session: session, options: options)
       let openedSourceLength = try await reader.length()
-      let index = try await PDFCrossReferenceParser(reader: reader, options: options).parse()
+      let index: PDFCrossReferenceIndex
+      do {
+        let strictIndex = try await PDFCrossReferenceParser(reader: reader, options: options).parse()
+        if options.recovery != nil {
+          try await PDFRecoveryStrictPreflight.validate(
+            index: strictIndex,
+            reader: reader,
+            limits: options.limits
+          )
+        }
+        index = strictIndex
+      } catch let strictError as PDFParsingError {
+        guard let recovery = options.recovery, Self.isRecoverable(strictError) else { throw strictError }
+        index = try await PDFRecoveryCoordinator(options: recovery).recover(
+          reader: reader,
+          strictError: strictError,
+          parsingOptions: options
+        )
+      }
       let securityContext = try await PDFSecurityContext.open(
         reader: reader,
         index: index,
@@ -51,11 +71,12 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
       identifier = index.identifier
       revisions = index.revisions
       security = securityContext?.security
+      recoveryReport = index.recoveryReport
       let documentResolver = PDFDocumentResolver(
         reader: reader,
         index: index,
         options: options,
-        externalStreamProvider: externalStreamProvider,
+        externalStreamProvider: index.recoveryReport == nil ? externalStreamProvider : nil,
         securityContext: securityContext,
         openedSourceLength: openedSourceLength
       )
@@ -123,6 +144,15 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
       await interactiveStructure.close()
       await structure.close()
       await resolver.close()
+    }
+  }
+
+  private static func isRecoverable(_ error: PDFParsingError) -> Bool {
+    switch error {
+    case .malformed, .truncated, .unresolvedReference, .referenceCycle:
+      true
+    default:
+      false
     }
   }
 
@@ -414,7 +444,8 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     signature: PDFSignature,
     options: PDFSignatureValidationOptions = .init()
   ) async throws -> PDFSignatureValidationResult {
-    try await authenticity.validate(signature, in: latestRevision.identifier, options: options)
+    let result = try await authenticity.validate(signature, in: latestRevision.identifier, options: options)
+    return applyingRecoveryAuthority(to: result)
   }
 
   /// Validates a signature and its later modifications as of a selected revision.
@@ -423,7 +454,8 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     in revision: PDFRevisionIdentifier,
     options: PDFSignatureValidationOptions = .init()
   ) async throws -> PDFSignatureValidationResult {
-    try await authenticity.validate(signature, in: revision, options: options)
+    let result = try await authenticity.validate(signature, in: revision, options: options)
+    return applyingRecoveryAuthority(to: result)
   }
 
   /// Produces an authenticity report for the latest document revision.
@@ -442,7 +474,8 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     var results = [PDFSignatureValidationResult]()
     results.reserveCapacity(signatures.count)
     for signature in signatures {
-      results.append(try await authenticity.validate(signature, in: revision, options: options))
+      let result = try await authenticity.validate(signature, in: revision, options: options)
+      results.append(applyingRecoveryAuthority(to: result))
     }
     return PDFDocumentAuthenticityReport(
       revision: revision,
@@ -450,6 +483,31 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
       validationResults: results,
       documentPermissions: security?.effectivePermissions,
       diagnostics: results.flatMap(\.diagnostics)
+    )
+  }
+
+  private func applyingRecoveryAuthority(
+    to result: PDFSignatureValidationResult
+  ) -> PDFSignatureValidationResult {
+    guard let records = recoveryReport?.records, !records.isEmpty else { return result }
+    let changedObjects: [PDFObjectReference] = switch result.modifications {
+    case .unchanged: []
+    case .permitted(let objects), .prohibited(let objects), .indeterminate(let objects, _): objects
+    }
+    return PDFSignatureValidationResult(
+      signature: result.signature,
+      coverage: result.coverage,
+      integrity: result.integrity,
+      trust: result.trust,
+      revocation: result.revocation,
+      timestamp: result.timestamp,
+      modifications: .indeterminate(
+        changedObjects: changedObjects,
+        reason: "PDF recovery affected revision or object provenance."
+      ),
+      certificateChain: result.certificateChain,
+      diagnostics: result.diagnostics,
+      authority: .limitedByRecovery(records.map(\.identifier))
     )
   }
 

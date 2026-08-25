@@ -8,17 +8,21 @@ public struct PDFParsingOptions: Sendable, Hashable {
   public var decodedStreamChunkByteCount: Int
   /// Whether compatibility aliases are accepted in ordinary stream dictionaries.
   public var acceptsStreamFilterAbbreviations: Bool
+  /// Optional malformed-document recovery, attempted only after strict parsing fails.
+  public var recovery: PDFRecoveryOptions?
 
   /// Creates PDF parsing options.
   public init(
     limits: PDFParsingLimits = .init(),
     sourceWindowByteCount: Int = 64 * 1_024,
     decodedStreamChunkByteCount: Int = 64 * 1_024,
-    acceptsStreamFilterAbbreviations: Bool = false
+    acceptsStreamFilterAbbreviations: Bool = false,
+    recovery: PDFRecoveryOptions? = nil
   ) {
     self.limits = limits
     self.sourceWindowByteCount = sourceWindowByteCount
     self.decodedStreamChunkByteCount = decodedStreamChunkByteCount
     self.acceptsStreamFilterAbbreviations = acceptsStreamFilterAbbreviations
+    self.recovery = recovery
   }
 }

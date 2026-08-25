@@ -8,6 +8,15 @@ extension PDFDocument {
     options: PDFIncrementalWritingOptions = .init()
   ) async throws -> PDFIncrementalUpdateResult<Sink.Session.Output>
   where Sink.Session.Output: Sendable {
+    if let recoveryReport {
+      guard case .eligible = recoveryReport.incrementalWriting else {
+        let reason = switch recoveryReport.incrementalWriting {
+        case .eligible: ""
+        case .ineligible(let reason): reason
+        }
+        throw PDFIncrementalUpdateError.recoveredDocument(reason: reason)
+      }
+    }
     let form = try await acroForm()
     guard let form else { throw PDFIncrementalUpdateError.missingAcroForm }
     let fieldValues = try await formFields()

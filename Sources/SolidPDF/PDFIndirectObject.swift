@@ -10,6 +10,8 @@ public struct PDFIndirectObject: Sendable, Hashable {
   public let provenance: PDFObjectProvenance
   /// The revision in which the effective object definition was introduced.
   public let definitionRevision: PDFRevisionIdentifier?
+  /// Repairs contributing to this resolved object, if recovery was required.
+  public let recoveryProvenance: PDFRecoveryProvenance?
 
   /// Creates a resolved indirect object.
   public init(
@@ -17,13 +19,15 @@ public struct PDFIndirectObject: Sendable, Hashable {
     value: PDFResolvedObject,
     sourceRange: PDFSourceRange?,
     provenance: PDFObjectProvenance,
-    definitionRevision: PDFRevisionIdentifier? = nil
+    definitionRevision: PDFRevisionIdentifier? = nil,
+    recoveryProvenance: PDFRecoveryProvenance? = nil
   ) {
     self.reference = reference
     self.value = value
     self.sourceRange = sourceRange
     self.provenance = provenance
     self.definitionRevision = definitionRevision
+    self.recoveryProvenance = recoveryProvenance
   }
 }
 

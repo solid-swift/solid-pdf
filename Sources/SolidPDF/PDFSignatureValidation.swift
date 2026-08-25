@@ -138,6 +138,8 @@ public struct PDFSignatureValidationResult: Sendable, Hashable {
   public let certificateChain: [PDFCertificate]
   /// Nonfatal validation diagnostics.
   public let diagnostics: [PDFParsingDiagnostic]
+  /// Whether coverage and modification conclusions remain authoritative.
+  public let authority: PDFSignatureValidationAuthority
 
   /// Creates a validation result.
   public init(
@@ -149,7 +151,8 @@ public struct PDFSignatureValidationResult: Sendable, Hashable {
     timestamp: PDFSignatureTimestampStatus,
     modifications: PDFSignatureModificationStatus,
     certificateChain: [PDFCertificate] = [],
-    diagnostics: [PDFParsingDiagnostic] = []
+    diagnostics: [PDFParsingDiagnostic] = [],
+    authority: PDFSignatureValidationAuthority = .authoritative
   ) {
     self.signature = signature
     self.coverage = coverage
@@ -160,5 +163,6 @@ public struct PDFSignatureValidationResult: Sendable, Hashable {
     self.modifications = modifications
     self.certificateChain = certificateChain
     self.diagnostics = diagnostics
+    self.authority = authority
   }
 }

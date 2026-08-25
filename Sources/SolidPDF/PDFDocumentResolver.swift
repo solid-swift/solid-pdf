@@ -294,18 +294,38 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
         limits: options.limits,
         enclosingObject: reference
       )
-      let raw = try await parser.parseRawIndirectObject { lengthReference in
-        let lengthObject = try await self.resolve(lengthReference, in: revision, stack: stack)
-        guard case .value(.number(.integer(let length))) = lengthObject.value else {
+      let raw: PDFRawIndirectObject
+      if let boundary = index.recoveredObjectBoundaries[reference.objectNumber],
+        boundary.reference == reference,
+        boundary.requiresRecoveredParsing
+      {
+        let header = try await parser.parseIndirectHeader()
+        let value = try await parser.parseObject()
+        guard header.reference == reference else {
           throw PDFParsingError.malformed(
-            .init(
-              offset: offset,
-              object: reference,
-              message: "An indirect stream Length must resolve to an integer."
-            )
+            .init(offset: offset, object: reference, message: "A recovered object header changed.")
           )
         }
-        return length
+        raw = PDFRawIndirectObject(
+          reference: reference,
+          value: value,
+          sourceRange: boundary.sourceRange,
+          streamRange: boundary.streamRange
+        )
+      } else {
+        raw = try await parser.parseRawIndirectObject { lengthReference in
+          let lengthObject = try await self.resolve(lengthReference, in: revision, stack: stack)
+          guard case .value(.number(.integer(let length))) = lengthObject.value else {
+            throw PDFParsingError.malformed(
+              .init(
+                offset: offset,
+                object: reference,
+                message: "An indirect stream Length must resolve to an integer."
+              )
+            )
+          }
+          return length
+        }
       }
       guard raw.reference == reference else {
         throw PDFParsingError.malformed(
@@ -316,21 +336,22 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
           )
         )
       }
-      let rawValue: PDFObject
+      let decryptedValue: PDFObject
       if let securityContext,
         securityContext.encryptionReference != reference,
         !Self.isCrossReferenceDictionary(raw.value)
       {
         do {
-          rawValue = try PDFObjectDecrypter.decrypt(raw.value, in: reference, using: securityContext)
+          decryptedValue = try PDFObjectDecrypter.decrypt(raw.value, in: reference, using: securityContext)
         } catch {
           throw PDFParsingError.malformed(
             .init(offset: offset, object: reference, message: "An encrypted object is malformed.")
           )
         }
       } else {
-        rawValue = raw.value
+        decryptedValue = raw.value
       }
+      let rawValue = index.recoveredValueOverrides[reference.objectNumber] ?? decryptedValue
       let value: PDFResolvedObject
       if let streamRange = raw.streamRange {
         guard case .dictionary(let dictionary) = rawValue else {
@@ -343,7 +364,8 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
             dictionary: dictionary,
             encodedRange: streamRange,
             objectReference: reference,
-            revision: revision
+            revision: revision,
+            recoveryProvenance: index.recoveryProvenance
           )
         )
       } else {
@@ -354,7 +376,8 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
         value: value,
         sourceRange: raw.sourceRange,
         provenance: .file,
-        definitionRevision: indexed.definitionRevision
+        definitionRevision: indexed.definitionRevision,
+        recoveryProvenance: index.recoveryProvenance
       )
     case .compressed(let objectStreamNumber, let objectIndex):
       guard reference.generationNumber == 0 else {
@@ -425,7 +448,8 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
           value: .value(value),
           sourceRange: nil,
           provenance: .objectStream(container: containerReference, index: objectIndex),
-          definitionRevision: indexed.definitionRevision
+          definitionRevision: indexed.definitionRevision,
+          recoveryProvenance: index.recoveryProvenance
         )
       } catch {
         await objectReader.close()
