@@ -83,7 +83,8 @@ fixture-local device scan-conversion differences under PLRM section 6.1. No exte
 no global raster tolerance was widened.
 
 Passing this suite closes the planned PostScript implementation gate. The portable graphics event contract is frozen
-as `GraphicsSemanticContractVersion.v1`; native PDF parsing and text-processing work is the next product stage. New
+as `GraphicsSemanticContractVersion.v2`; native PDF parsing and text processing extend that boundary with exact PDF
+text styling while retaining the version 1 defaults. New
 conformance discrepancies remain tracked against the same ledger.
 
 Appendix C accounting is authoritative: display/source/image reservations are shared across contexts in an

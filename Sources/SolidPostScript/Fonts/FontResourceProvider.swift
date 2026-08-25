@@ -56,6 +56,11 @@ public protocol FontResourceProvider: Sendable {
   func open(_ asset: FontAsset) async throws -> FontProviderFace?
   /// Whether this provider can execute FontType 14 Chameleon fonts.
   var supportsChameleonFonts: Bool { get }
+  /// Proves that a substituted face preserves one CID collection and CID/GID selection semantics.
+  func isCompatible(
+    with systemInfo: FontCIDSystemInfo,
+    face: FontProviderFace
+  ) async throws -> Bool
 }
 
 extension FontResourceProvider {
@@ -67,4 +72,10 @@ extension FontResourceProvider {
 
   /// Providers do not support Chameleon fonts unless they opt in explicitly.
   public var supportsChameleonFonts: Bool { false }
+
+  /// Providers reject CID substitution unless they opt in with affirmative evidence.
+  public func isCompatible(
+    with systemInfo: FontCIDSystemInfo,
+    face: FontProviderFace
+  ) async throws -> Bool { false }
 }

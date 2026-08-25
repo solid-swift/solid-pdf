@@ -1,20 +1,21 @@
 {
   "schemaVersion": 1,
-  "contractVersion": 1,
+  "contractVersion": 4,
   "coordinateSpaces": {
     "authoritative": "device",
     "page": "default-user-space-points",
     "currentUserSpace": "captured-ctm"
   },
   "operationCases": {
-    "root": ["state", "transform", "path", "clip", "paint", "page"],
+    "root": ["state", "transform", "path", "clip", "paint", "content", "page"],
     "state": [
       "save", "restore", "restoreAll", "initialize", "clipSave", "clipRestore",
       "setGraphicsState", "setLineWidth", "setLineCap", "setLineJoin", "setMiterLimit",
       "setDash", "setFlatness", "setStrokeAdjustment", "setSmoothness", "setGray",
       "setRGB", "setCMYK", "setColorSpace", "setColor", "setColorRendering",
       "setOverprint", "setTransferFunctions", "setBlackGeneration", "setUndercolorRemoval",
-      "setHalftone", "setFont", "setTrappingParameters", "setTrappingZone"
+      "setHalftone", "setFont", "setTrappingParameters", "setTrappingZone",
+      "setTransparency"
     ],
     "transform": ["setMatrix", "translate", "scale", "rotate", "concatenate"],
     "path": [
@@ -24,20 +25,30 @@
     ],
     "clip": ["initialize", "intersect", "intersectRectangles"],
     "paint": [
-      "erasePage", "fill", "stroke", "fillRectangles", "strokeRectangles", "image",
-      "userPathFill", "userPathStroke", "shading", "form", "text"
+      "erasePage", "fill", "stroke", "fillAndStroke", "fillRectangles", "strokeRectangles",
+      "image", "userPathFill", "userPathStroke", "shading", "form", "transparencyGroup",
+      "text"
     ],
+    "content": ["markedContent"],
     "page": ["show", "copy"]
   },
   "effectCases": [
-    "fill", "stroke", "userPathFill", "userPathStroke", "erase", "fillRectangles",
-    "strokeRectangles", "image", "shading", "form", "text"
+    "fill", "stroke", "fillAndStroke", "userPathFill", "userPathStroke", "erase",
+    "fillRectangles", "strokeRectangles", "image", "shading", "form",
+    "transparencyGroup", "text", "markedContent"
   ],
   "requiredMetadata": [
     "graphics-state-before-and-after", "device-space-geometry", "page-coordinate-mapping",
     "source-color-and-realization", "resource-identity", "image-source-description",
     "text-source-bytes", "glyph-source-range", "glyph-selector", "font-and-descendant-identity",
-    "glyph-metrics-and-transform", "unicode-provenance", "page-transmission", "device-snapshot"
+    "glyph-metrics-and-transform", "unicode-provenance", "page-transmission", "device-snapshot",
+    "optional-format-neutral-origin", "rendering-intent", "halftone-phase",
+    "shading-source-patches", "text-rendering-mode", "independent-text-fill-and-stroke",
+    "pdf-unicode-provenance", "font-substitution-evidence", "marked-content-path",
+    "resolved-content-visibility", "logical-replacement-text", "blend-mode",
+    "constant-alpha", "alpha-source", "soft-mask", "text-knockout",
+    "transparency-group-isolation", "transparency-group-knockout",
+    "atomic-fill-and-stroke", "independent-text-fill-and-stroke-transparency"
   ],
   "imageTransaction": ["event", "begin", "ordered-color-rows", "ordered-mask-rows", "end-or-abandon"],
   "compatibility": {

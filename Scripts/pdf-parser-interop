@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+for tool in qpdf mutool pdfinfo pdftoppm; do
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    echo "error: ${tool} is required for PDF parser interoperability validation" >&2
+    exit 69
+  fi
+done
+
+WORK_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/solidpdf-parser-interop.XXXXXX")"
+trap 'rm -rf "${WORK_DIRECTORY}"' EXIT
+
+cd "${ROOT_DIRECTORY}"
+BENCHMARK_ENABLE=1 swift run --disable-automatic-resolution \
+  --scratch-path "${SOLIDPDF_SCRATCH_PATH:-.build}" \
+  SolidPDFInteropFixtures "${WORK_DIRECTORY}"
+
+for input in "${WORK_DIRECTORY}"/*.pdf; do
+  name="$(basename "${input}" .pdf)"
+  qpdf --check "${input}"
+  mutool clean -d "${input}" "${WORK_DIRECTORY}/${name}-clean.pdf"
+  qpdf --check "${WORK_DIRECTORY}/${name}-clean.pdf"
+done
+
+for input in "${WORK_DIRECTORY}"/writer-*.pdf; do
+  name="$(basename "${input}" .pdf)"
+  pdfinfo "${input}" >/dev/null
+  pdftoppm -f 1 -singlefile -png "${input}" "${WORK_DIRECTORY}/${name}" >/dev/null
+  test -s "${WORK_DIRECTORY}/${name}.png"
+done
+
+qpdf --show-object=3 --filtered-stream-data "${WORK_DIRECTORY}/mixed-filter.pdf" \
+  >"${WORK_DIRECTORY}/mixed-filter.actual"
+cmp "${WORK_DIRECTORY}/mixed-filter.expected" "${WORK_DIRECTORY}/mixed-filter.actual"

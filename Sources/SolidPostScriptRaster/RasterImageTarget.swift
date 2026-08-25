@@ -89,6 +89,13 @@ where
         try fill(event.before.path, rule: rule, state: event.before)
       case .paint(.stroke):
         try stroke(event.before.path, matrix: event.before.matrix, state: event.before)
+      case .paint(.fillAndStroke(let rule)):
+        try fillAndStroke(
+          event.before.path,
+          rule: rule,
+          fillState: event.before,
+          strokeState: event.after
+        )
       case .paint(.userPathFill(let rule)):
         try fill(event.before.path, rule: rule, state: event.before)
       case .paint(.userPathStroke):
@@ -106,6 +113,8 @@ where
         try paintShading(shading, clip: event.before.clip, state: event.before)
       case .paint(.form(let form)):
         try paintForm(form, depth: 0)
+      case .paint(.transparencyGroup(let group)):
+        try paintTransparencyGroup(group, state: event.before, depth: 0)
       case .paint(.text(let run)):
         try paintText(run, state: event.before, depth: 0)
       case .page(.show), .page(.copy):
@@ -380,6 +389,12 @@ where
     }
 
     private func fill(_ path: GraphicsPath, rule: GraphicsFillRule, state: GraphicsStateSnapshot) throws {
+      if state.transparency != .opaque {
+        try compositeTransparencyObject(state.transparency) {
+          try fill(path, rule: rule, state: state.replacingTransparency(.opaque))
+        }
+        return
+      }
       if case .pattern(let pattern) = state.paint {
         try paintPattern(pattern, through: path, rule: rule, clip: state.clip, state: state, depth: 0)
         return
@@ -402,6 +417,12 @@ where
       matrix: GraphicsMatrix,
       state: GraphicsStateSnapshot
     ) throws {
+      if state.transparency != .opaque {
+        try compositeTransparencyObject(state.transparency) {
+          try stroke(path, matrix: matrix, state: state.replacingTransparency(.opaque))
+        }
+        return
+      }
       if case .pattern = state.paint {
         let outline = try GraphicsPathGeometry.strokeOutline(path: path, state: state, matrix: matrix)
         try fill(outline, rule: .winding, state: state)
@@ -479,12 +500,54 @@ where
       }
     }
 
+    private func fillAndStroke(
+      _ path: GraphicsPath,
+      rule: GraphicsFillRule,
+      fillState: GraphicsStateSnapshot,
+      strokeState: GraphicsStateSnapshot
+    ) throws {
+      let outer = GraphicsTransparencyState(
+        blendMode: fillState.transparency.blendMode,
+        softMask: fillState.transparency.softMask,
+        textKnockout: fillState.transparency.textKnockout
+      )
+      let fillTransparency = GraphicsTransparencyState(
+        constantAlpha: fillState.transparency.constantAlpha,
+        alphaIsShape: fillState.transparency.alphaIsShape,
+        textKnockout: fillState.transparency.textKnockout
+      )
+      let strokeTransparency = GraphicsTransparencyState(
+        constantAlpha: strokeState.transparency.constantAlpha,
+        alphaIsShape: strokeState.transparency.alphaIsShape,
+        textKnockout: strokeState.transparency.textKnockout
+      )
+      try compositeTransparencyObject(outer) {
+        try fill(path, rule: rule, state: fillState.replacingTransparency(fillTransparency))
+        try stroke(path, matrix: strokeState.matrix, state: strokeState.replacingTransparency(strokeTransparency))
+      }
+    }
+
+    private func paintTransparencyGroup(
+      _ group: GraphicsTransparencyGroup,
+      state: GraphicsStateSnapshot,
+      depth: Int
+    ) throws {
+      guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      try compositeTransparencyObject(state.transparency) {
+        for effect in group.displayList.effects {
+          try replayFormEffect(effect, depth: depth + 1)
+        }
+      }
+    }
+
     private func replayFormEffect(_ effect: GraphicsEffect, depth: Int) throws {
       switch effect {
       case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
         try fill(path, rule: rule, state: state)
       case .stroke(let path, let state):
         try stroke(path, matrix: state.matrix, state: state)
+      case .fillAndStroke(let path, let rule, let fillState, let strokeState):
+        try fillAndStroke(path, rule: rule, fillState: fillState, strokeState: strokeState)
       case .userPathStroke(let outline, let state):
         try fill(outline, rule: .winding, state: state)
       case .erase(let state):
@@ -520,8 +583,12 @@ where
         try paintShading(shading, clip: state.clip, state: state)
       case .form(let nested, _):
         try paintForm(nested, depth: depth)
+      case .transparencyGroup(let group, let state):
+        try paintTransparencyGroup(group, state: state, depth: depth)
       case .text(let run, let state):
         try paintText(run, state: state, depth: depth)
+      case .markedContent:
+        break
       }
     }
 
@@ -571,34 +638,16 @@ where
           deviceRendering: imageState.deviceRendering
         )
         do {
-          try converter.write(GraphicsImageRows(
-            startRow: 0,
-            rowCount: image.completedRowCount,
-            components: image.components,
-            sourceComponents: image.sourceComponents,
-            rawSamples: image.rawSamples
-          ))
-          var state = imageState
-          state = GraphicsStateSnapshot(
-            matrix: state.matrix,
-            path: state.path,
-            clip: combinedClip,
-            paint: state.paint,
-            colorSpace: state.colorSpace,
-            colorComponents: state.colorComponents,
-            overprint: state.overprint,
-            lineWidth: state.lineWidth,
-            lineCap: state.lineCap,
-            lineJoin: state.lineJoin,
-            miterLimit: state.miterLimit,
-            dash: state.dash,
-            flatness: state.flatness,
-            strokeAdjustment: state.strokeAdjustment,
-            smoothness: state.smoothness,
-            pathBoundingBox: state.pathBoundingBox,
-            device: state.device,
-            deviceRendering: state.deviceRendering
+          try converter.write(
+            GraphicsImageRows(
+              startRow: 0,
+              rowCount: image.completedRowCount,
+              components: image.components,
+              sourceComponents: image.sourceComponents,
+              rawSamples: image.rawSamples
+            )
           )
+          let state = imageState.replacingClip(combinedClip)
           try draw(
             converter.finish(),
             descriptor: descriptor,
@@ -649,6 +698,8 @@ where
       let effectRule: GraphicsFillRule
       let effectState: GraphicsStateSnapshot
       switch effect {
+      case .markedContent:
+        return
       case .form(let form, _):
         guard depth < 16 else { throw SolidPostScript.Error.ioError }
         for nested in form.displayList.effects {
@@ -662,6 +713,40 @@ where
             depth: depth + 1
           )
         }
+        return
+      case .transparencyGroup(let group, _):
+        guard depth < 16 else { throw SolidPostScript.Error.ioError }
+        for nested in group.displayList.effects {
+          try replay(
+            nested,
+            translatedBy: translation,
+            underlying: underlying,
+            through: paintedPath,
+            rule: paintedRule,
+            clip: clip,
+            depth: depth + 1
+          )
+        }
+        return
+      case .fillAndStroke(let path, let rule, let fillState, let strokeState):
+        try replay(
+          .fill(path: path, rule: rule, state: fillState),
+          translatedBy: translation,
+          underlying: underlying,
+          through: paintedPath,
+          rule: paintedRule,
+          clip: clip,
+          depth: depth
+        )
+        try replay(
+          .stroke(path: path, state: strokeState),
+          translatedBy: translation,
+          underlying: underlying,
+          through: paintedPath,
+          rule: paintedRule,
+          clip: clip,
+          depth: depth
+        )
         return
       case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
         effectPath = path.transformed(by: translation)
@@ -768,14 +853,66 @@ where
 
     private func paintText(_ run: GraphicsGlyphRun, state: GraphicsStateSnapshot, depth: Int) throws {
       guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      let sourceTransparency = run.style?.fillTransparency ?? state.transparency
+      let outerTransparency = GraphicsTransparencyState(
+        blendMode: sourceTransparency.blendMode,
+        alphaIsShape: sourceTransparency.alphaIsShape,
+        softMask: sourceTransparency.softMask,
+        textKnockout: sourceTransparency.textKnockout
+      )
+      if outerTransparency != .opaque {
+        try compositeTransparencyObject(outerTransparency) {
+          try paintTextGlyphs(run, state: state.replacingTransparency(.opaque), depth: depth)
+        }
+        return
+      }
+      try paintTextGlyphs(run, state: state, depth: depth)
+    }
+
+    private func paintTextGlyphs(
+      _ run: GraphicsGlyphRun,
+      state: GraphicsStateSnapshot,
+      depth: Int
+    ) throws {
+      let fillState =
+        run.style.map {
+          state.replacingColor(with: $0.fill)
+            .replacingTransparency(
+              GraphicsTransparencyState(
+                constantAlpha: $0.fillTransparency.constantAlpha,
+                alphaIsShape: $0.fillTransparency.alphaIsShape,
+                textKnockout: $0.fillTransparency.textKnockout
+              )
+            )
+        } ?? state
+      let strokeState =
+        run.style.map {
+          state.replacingColor(with: $0.stroke)
+            .replacingTransparency(
+              GraphicsTransparencyState(
+                constantAlpha: $0.strokeTransparency.constantAlpha,
+                alphaIsShape: $0.strokeTransparency.alphaIsShape,
+                textKnockout: $0.strokeTransparency.textKnockout
+              )
+            )
+        } ?? state
       for placement in run.glyphs {
         switch placement.glyph.program {
         case .outline(let path):
-          try fill(path.transformed(by: placement.transform), rule: .winding, state: state)
+          let outline = path.transformed(by: placement.transform)
+          if run.renderingMode.fills {
+            try fill(outline, rule: .winding, state: fillState)
+          }
+          if run.renderingMode.strokes {
+            try stroke(outline, matrix: state.matrix, state: strokeState)
+          }
         case .displayList(let list):
+          guard run.renderingMode != .invisible else { continue }
           for effect in list.effects { try replayFormEffect(effect, depth: depth + 1) }
         case .bitmap(let bitmap):
-          try paintGlyphBitmap(bitmap, placement: placement, state: state)
+          if run.renderingMode.fills {
+            try paintGlyphBitmap(bitmap, placement: placement, state: fillState)
+          }
         case .empty, .missing:
           break
         }
@@ -836,11 +973,22 @@ where
       clip: GraphicsClip,
       state: GraphicsStateSnapshot
     ) throws {
+      if state.transparency != .opaque {
+        try compositeTransparencyObject(state.transparency) {
+          try paintShading(
+            shading,
+            clip: clip,
+            state: state.replacingTransparency(.opaque)
+          )
+        }
+        return
+      }
       let effectiveClip = GraphicsClip(
         imageableBounds: clip.imageableBounds,
-        constraints: clip.constraints + (shading.clipPath.map {
-          [GraphicsClipConstraint(path: $0, rule: .winding)]
-        } ?? [])
+        constraints: clip.constraints
+          + (shading.clipPath.map {
+            [GraphicsClipConstraint(path: $0, rule: .winding)]
+          } ?? [])
       )
       let paints = shading.mesh.triangles.flatMap {
         [$0.first.paint, $0.second.paint, $0.third.paint]
@@ -963,6 +1111,17 @@ where
       state: GraphicsStateSnapshot,
       mask: RasterMask? = nil
     ) throws {
+      if state.transparency != .opaque {
+        try compositeTransparencyObject(state.transparency) {
+          try draw(
+            image,
+            descriptor: descriptor,
+            state: state.replacingTransparency(.opaque),
+            mask: mask
+          )
+        }
+        return
+      }
       let renderedHeight = image.height
       guard descriptor.width > 0,
         renderedHeight > 0,
@@ -1035,6 +1194,123 @@ where
         return consume current
       }
       return try Self.makePage(pixelWidth: pixelWidth, pixelHeight: pixelHeight, background: background)
+    }
+
+    private func compositeTransparencyObject(
+      _ transparency: GraphicsTransparencyState,
+      draw: () throws -> Void
+    ) throws {
+      guard renderingEnabled else { return }
+      let backdrop = try takeCanvas()
+      canvas = try Self.makePage(
+        pixelWidth: pixelWidth,
+        pixelHeight: pixelHeight,
+        background: RasterColor(red: 0, green: 0, blue: 0, alpha: 0)
+      )
+      let source: RasterImage
+      do {
+        try draw()
+        let sourceCanvas = try takeCanvas()
+        source = try sourceCanvas.finish()
+      } catch {
+        canvas = consume backdrop
+        throw error
+      }
+      canvas = consume backdrop
+      let mask = try transparency.softMask.map {
+        try rasterSoftMask($0, kind: transparency.alphaIsShape ? .shape : .opacity)
+      }
+      do {
+        try withCanvas { canvas in
+          try canvas.composite(
+            source,
+            parameters: RasterCompositingParameters(
+              blendMode: transparency.blendMode,
+              constantAlpha: transparency.constantAlpha,
+              alphaIsShape: transparency.alphaIsShape
+            ),
+            softMask: mask
+          )
+        }
+      } catch is RasterError {
+        throw SolidPostScript.Error.ioError
+      }
+    }
+
+    private func rasterSoftMask(
+      _ mask: GraphicsSoftMask,
+      kind: RasterSoftMaskKind
+    ) throws -> RasterSoftMaskPlane {
+      let backdrop = try takeCanvas()
+      canvas = try Self.makePage(
+        pixelWidth: pixelWidth,
+        pixelHeight: pixelHeight,
+        background: RasterColor(red: 0, green: 0, blue: 0, alpha: 0)
+      )
+      let image: RasterImage
+      do {
+        if mask.subtype == .luminosity, let paint = softMaskBackdropPaint(mask) {
+          try withCanvas { canvas in
+            try canvas.fill(
+              GraphicsPath.rectangle(mask.group.bounds).transformed(by: rasterMatrix).rasterPath,
+              rule: .winding,
+              paint: try colorSession.resolve(paint)
+            )
+          }
+        }
+        for effect in mask.group.displayList.effects { try replayFormEffect(effect, depth: 1) }
+        let maskCanvas = try takeCanvas()
+        image = try maskCanvas.finish()
+      } catch {
+        canvas = consume backdrop
+        throw error
+      }
+      canvas = consume backdrop
+      var samples: [UInt16] = []
+      samples.reserveCapacity(pixelWidth * pixelHeight)
+      for offset in stride(from: 0, to: image.data.count, by: 4) {
+        let alpha = Double(image.data[offset + 3]) / 255
+        var value: Double
+        switch mask.subtype {
+        case .alpha:
+          value = alpha
+        case .luminosity:
+          let red = Double(image.data[offset]) / 255
+          let green = Double(image.data[offset + 1]) / 255
+          let blue = Double(image.data[offset + 2]) / 255
+          value = alpha * (0.3 * red + 0.59 * green + 0.11 * blue)
+        }
+        if let transfer = mask.transferFunction { value = transfer.evaluate(value) }
+        samples.append(UInt16((min(1, max(0, value)) * Double(UInt16.max)).rounded()))
+      }
+      do {
+        return try RasterSoftMaskPlane(
+          width: pixelWidth,
+          height: pixelHeight,
+          kind: kind,
+          samples: samples
+        )
+      } catch {
+        throw SolidPostScript.Error.ioError
+      }
+    }
+
+    private func softMaskBackdropPaint(_ mask: GraphicsSoftMask) -> GraphicsPaint? {
+      switch mask.group.colorSpace {
+      case .deviceGray where mask.backdrop.count == 1:
+        .deviceGray(mask.backdrop[0])
+      case .deviceRGB where mask.backdrop.count == 3:
+        .deviceRGB(red: mask.backdrop[0], green: mask.backdrop[1], blue: mask.backdrop[2])
+      case .deviceCMYK where mask.backdrop.count == 4:
+        .deviceCMYK(
+          cyan: mask.backdrop[0],
+          magenta: mask.backdrop[1],
+          yellow: mask.backdrop[2],
+          black: mask.backdrop[3]
+        )
+      default:
+        nil
+      }
     }
 
     private func rasterClip(_ clip: GraphicsClip) throws(RasterError) -> RasterClip {

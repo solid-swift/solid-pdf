@@ -51,6 +51,8 @@ struct PDFFontUsageCatalog {
       switch effect {
       case .form(let form, _):
         try collect(form.displayList.effects, depth: depth + 1)
+      case .transparencyGroup(let group, _):
+        try collect(group.displayList.effects, depth: depth + 1)
       case .text(let run, _):
         for placement in run.glyphs {
           let font = placement.font ?? run.rootFont
@@ -78,12 +80,16 @@ struct PDFFontUsageCatalog {
   }
 
   private mutating func collectPaint(from effect: GraphicsEffect, depth: Int) throws {
-    let state: GraphicsStateSnapshot = switch effect {
-    case .fill(_, _, let state), .stroke(_, let state), .userPathFill(_, _, let state),
-      .userPathStroke(_, let state), .erase(let state), .fillRectangles(_, let state),
-      .strokeRectangles(_, _, let state), .image(_, let state), .shading(_, let state),
-      .form(_, let state), .text(_, let state): state
-    }
+    let state: GraphicsStateSnapshot =
+      switch effect {
+      case .fill(_, _, let state), .stroke(_, let state), .userPathFill(_, _, let state),
+        .userPathStroke(_, let state), .erase(let state), .fillRectangles(_, let state),
+        .strokeRectangles(_, _, let state), .image(_, let state), .shading(_, let state),
+        .form(_, let state), .transparencyGroup(_, let state), .text(_, let state),
+        .markedContent(_, let state):
+        state
+      case .fillAndStroke(_, _, let fillState, _): fillState
+      }
     if case .pattern(.tiling(let pattern, _)) = state.paint {
       try collect(pattern.displayList.effects, depth: depth + 1)
     }

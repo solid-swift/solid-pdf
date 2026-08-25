@@ -41,6 +41,8 @@ public struct GraphicsFontDescription: Sendable, Hashable {
   public let strokeWidth: Double
   /// The identity of this immutable language-visible font instance.
   public let resourceIdentifier: GraphicsResourceIdentifier
+  /// Provider-substitution evidence for a PDF font, when applicable.
+  public let substitution: GraphicsFontSubstitution?
 
   /// Creates a portable font description.
   public init(
@@ -55,7 +57,8 @@ public struct GraphicsFontDescription: Sendable, Hashable {
     fontType: Int? = nil,
     paintType: Int = 0,
     strokeWidth: Double = 0,
-    resourceIdentifier: GraphicsResourceIdentifier = .anonymous
+    resourceIdentifier: GraphicsResourceIdentifier = .anonymous,
+    substitution: GraphicsFontSubstitution? = nil
   ) {
     self.identifier = identifier
     self.resourceName = resourceName
@@ -69,6 +72,7 @@ public struct GraphicsFontDescription: Sendable, Hashable {
     self.paintType = paintType
     self.strokeWidth = strokeWidth
     self.resourceIdentifier = resourceIdentifier
+    self.substitution = substitution
   }
 
   /// The invalid font installed in a new graphics state.

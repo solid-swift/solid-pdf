@@ -1,13 +1,13 @@
 # PostScript Semantic Graphics Contract
 
-`GraphicsSemanticContractVersion.v1` is the stable document-processing boundary emitted by
+`GraphicsSemanticContractVersion.v4` is the stable document-processing boundary emitted by
 SolidPostScript. `SemanticGraphicsTarget` is the bounded streaming interface;
 `RecordingGraphicsTarget` is its materialized counterpart. Neither interface exposes PostScript VM
 objects, executable callbacks, renderer sessions, or platform-native handles.
 
 The contract is frozen at the PostScript graphics closeout milestone. Native PDF parsing is the next
 product stage. A parser may consume this contract and the shared SolidImage products, but it may not
-change version 1 coordinate, identity, ordering, text, or lifetime semantics without the major-version
+change version 4 coordinate, identity, ordering, text, or lifetime semantics without the major-version
 process described below.
 
 ## Coordinates
@@ -39,6 +39,47 @@ optional extraction metadata paired with an explicit provenance; they never affe
 positioning, callbacks, or rendering. Styling is the placement plus the captured graphics state,
 including paint, original color space and components, color realization, overprint, device-rendering
 controls, clipping, CTM, and device snapshot.
+
+Version 2 adds the exact PDF text rendering mode and independent nonstroking and stroking paints to
+each run. It also records PDF Encoding, CMap, and `/ToUnicode` provenance and any provider
+substitution evidence. These values reproduce PDF fill, stroke, fill-stroke, invisible, and clipping
+text without using Unicode or a platform layout engine to select or position glyphs. Version 1
+symbols and default initializers remain available for legacy producers.
+
+Every event may additionally identify a format-neutral source origin. An origin correlates a source
+resource and one or more exact byte segments without changing operation semantics. PDF content uses
+this additive metadata to retain page, content-stream, and nested-resource provenance. Captured
+graphics state also preserves rendering intent and device-rendering state preserves halftone phase;
+legacy producers receive the documented defaults.
+
+Version 3 adds ordered marked-content boundaries and points, binary-safe property values,
+content-stream-scoped identifiers, replacement text, artifact metadata, and evaluated content
+visibility. Semantic and recording targets retain hidden paint for analysis. Visual targets execute
+its state and path transitions but omit hidden painting operations and image transfers. Nested
+visibility is conjunctive: content is visible only when every enclosing optional-content scope is
+visible.
+
+Version 4 adds the PDF transparent imaging model. Graphics state retains the standard blend mode,
+separate stroking and nonstroking constant alpha, alpha-source selection, soft mask, and text
+knockout. A transparency group preserves its isolated and knockout flags, blend color space,
+backdrop color, transfer function, bounds, and immutable nested display list. Shape and opacity are
+separate throughout portable realization. Combined fill-and-stroke painting is one atomic effect so
+the common interior is composited once, while its fill and stroke paints remain independently
+observable. Soft masks and groups carry stable resource identity and never retain PDF objects or
+target-native storage. PDF text styling retains independent fill and stroke transparency so a
+fill-stroke text operation preserves both `ca` and `CA` without splitting glyph selection or
+placement metadata.
+
+The native PDF extraction layer may expose either physical content-stream order or structure-tree
+order. Each extracted span retains its glyph runs, marked-content and structure paths, optional
+visibility, and device/page bounds. `/ActualText` replaces the complete associated marked-content
+or structure-element contents once; it does not alter glyph selection, placement, or stored
+physical runs.
+
+Type 6 and Type 7 shadings retain their exact reconstructed source patches, including the original
+continuation flags, ordered control points, and corner components before function or color-space
+realization. The accompanying triangle mesh is a deterministic portable fallback and does not
+replace the authoritative patch representation.
 
 ## Streaming order
 

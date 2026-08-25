@@ -1,6 +1,6 @@
 # Linux development
 
-The Linux scripts run SolidPDF in a persistent official Swift container without mixing Linux artifacts into the host `.build` directory. The repository is mounted read-only at `/workspace`; SwiftPM dependencies and products live in Docker volumes mounted at `/build` and `/root/.cache`. Benchmark baselines use a writable volume mounted over `/workspace/.benchmarkBaselines`. An ignored writable copy of `Package.resolved` is mounted over the source file so conditional Linux-only dependencies can resolve without modifying the checkout.
+The Linux scripts run SolidPDF in a persistent official Swift container without mixing Linux artifacts into the host `.build` directory. Before each command, the checkout is synchronized into an ignored writable workspace for the selected platform. That workspace is mounted at `/workspace`, while SwiftPM dependencies and products live in Docker volumes mounted at `/build` and `/root/.cache`. Benchmark baselines use a writable volume mounted over `/workspace/.benchmarkBaselines`. This staging keeps the source checkout untouched while allowing SwiftPM to update `Package.resolved` when conditional Linux-only dependencies change.
 
 The container is created and started automatically by either wrapper:
 
@@ -18,6 +18,7 @@ ENABLE_LINT=1 Scripts/linux-build
 Scripts/linux-benchmark-raster.sh --filter "Flat Fill"
 Scripts/linux-benchmark-raster-comparison.sh
 Scripts/linux-conformance
+Scripts/linux-pdf-parser-interop
 ```
 
 Use `linux-container` to inspect or control the reusable environment:
@@ -29,7 +30,7 @@ Scripts/linux-container stop
 Scripts/linux-container remove
 ```
 
-Each checkout and target platform has one stable container identity. A matching container is reused and restarted as needed. Changing the Swift image, dependency generation, script schema, or expected mounts replaces that stable container in place while preserving its build, dependency, and benchmark volumes. Lifecycle operations are serialized per checkout and platform so concurrent build, test, benchmark, and shell invocations cannot create competing containers.
+Each checkout and target platform has one stable container identity. A matching container is reused and restarted as needed. Changing the Swift image, dependency generation, script schema, or expected mounts replaces that stable container in place while preserving its build, dependency, and benchmark volumes. Lifecycle operations are serialized per checkout and platform so concurrent build, test, benchmark, and shell invocations cannot create competing containers. A changed checkout is never synchronized while a command is active in the container; unchanged concurrent invocations may continue sharing the staged snapshot.
 
 The first invocation after this lifecycle change removes inactive legacy containers for the exact checkout and platform. It never migrates containers for another worktree, platform, or temporary benchmark checkout, and it refuses to replace a container with an active Docker exec session. Legacy volumes are deliberately preserved; inspect them with `docker volume ls` and remove them manually after confirming they are no longer needed.
 
@@ -42,7 +43,7 @@ SOLIDPDF_LINUX_PLATFORM=linux/amd64 Scripts/linux-build
 SOLIDPDF_LINUX_SWIFT_IMAGE=swift:6.3.3-jammy Scripts/linux-test
 ```
 
-Each checkout and target platform receives distinct stable container and volume names, so worktrees and cross-architecture builds do not share incompatible products or baselines. Swift-image and script updates reuse those volumes after replacing the container. The writable `Package.resolved` mount is refreshed whenever the checkout copy changes. Container creation also installs the FreeType and Fontconfig development packages required by `SolidPostScriptFreeType`, qpdf, MuPDF, and Poppler for generated-PDF interoperability checks, and the compiler utilities needed by the independent conformance reference.
+Each checkout and target platform receives distinct stable container and volume names, so worktrees and cross-architecture builds do not share incompatible products or baselines. Swift-image and script updates reuse those volumes after replacing the container. The staged workspace refreshes `Package.resolved` and every tracked source input whenever the checkout changes, while excluding `.git`, host build products, caches, benchmark baselines, and `Reference/`. Container creation also installs the FreeType and Fontconfig development packages required by `SolidPostScriptFreeType`, qpdf, MuPDF, Poppler, and ExifTool for generated-PDF interoperability checks, and the compiler utilities needed by the independent conformance reference.
 
 # PostScript conformance
 
@@ -73,3 +74,27 @@ A deliberate public API change requires
 `Scripts/check-graphics-api update`, review of the resulting diff, and an explicit semantic-contract
 version decision. Linux baselines are generated and checked through the reusable container so C
 system-module availability matches supported Linux builds.
+
+# PDF parser interoperability
+
+`Scripts/pdf-parser-interop` generates deterministic PDF 1.7, PDF 2.0, and object-stream fixtures,
+then validates them with qpdf, MuPDF, and Poppler. Run `Scripts/linux-pdf-parser-interop` when those
+tools are not installed on the host; the reusable Linux container includes all required commands.
+
+# PDF text interoperability
+
+`Scripts/pdf-text-interop` validates the project-authored searchable-text fixture with qpdf, MuPDF,
+Poppler font inventory and extraction, and a 144-dpi raster render. Run
+`Scripts/linux-pdf-text-interop` to use the same reusable Linux container and its pinned tool set.
+
+# PDF assets and authenticity
+
+`Scripts/generate-pdf-authenticity-fixtures SOURCE_PDF OUTPUT_DIRECTORY` creates project-only
+test credentials and a detached CMS signature, then verifies it independently with OpenSSL. The
+output directory must remain outside production resources. SolidPDF signature validation is offline
+and capability-bound: neither this script nor the library grants attachments, actions, certificates,
+or revocation metadata permission to open host files or access the network.
+
+`Scripts/pdf-authenticity-interop [SOURCE_PDF]` checks the generated CMS container and source PDF
+with OpenSSL, qpdf, MuPDF, Poppler `pdfsig`, and ExifTool. Use
+`Scripts/linux-pdf-authenticity-interop` for the reproducible reusable-container tool set.

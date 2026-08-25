@@ -508,38 +508,71 @@ extension Operators {
         } else {
           elements.append(contentsOf: path.elements)
         }
+      case .fillAndStroke(let path, _, _, let strokeState):
+        elements.append(contentsOf: path.elements)
+        if strokeToOutline {
+          elements.append(
+            contentsOf:
+              try GraphicsPathGeometry.strokeOutline(
+                path: path,
+                state: strokeState
+              )
+              .elements
+          )
+        }
       case .userPathStroke(let outline, _):
         elements.append(contentsOf: outline.elements)
       case .fillRectangles(let paths, _):
         for path in paths { elements.append(contentsOf: path.elements) }
       case .strokeRectangles(let paths, let matrix, let state):
         for path in paths {
-          elements.append(contentsOf: try GraphicsPathGeometry.strokeOutline(
-            path: path, state: state, matrix: matrix
-          ).elements)
+          elements.append(
+            contentsOf:
+              try GraphicsPathGeometry.strokeOutline(
+                path: path,
+                state: state,
+                matrix: matrix
+              )
+              .elements
+          )
         }
       case .form(let form, _):
-        elements.append(contentsOf: try characterPath(
-          form.displayList,
-          strokeToOutline: strokeToOutline,
-          depth: depth + 1
-        ).elements)
+        elements.append(
+          contentsOf: try characterPath(
+            form.displayList,
+            strokeToOutline: strokeToOutline,
+            depth: depth + 1
+          )
+          .elements
+        )
+      case .transparencyGroup(let group, _):
+        elements.append(
+          contentsOf: try characterPath(
+            group.displayList,
+            strokeToOutline: strokeToOutline,
+            depth: depth + 1
+          )
+          .elements
+        )
       case .text(let run, _):
         for placement in run.glyphs {
           switch placement.glyph.program {
           case .outline(let path):
             elements.append(contentsOf: path.transformed(by: placement.transform).elements)
           case .displayList(let nested):
-            elements.append(contentsOf: try characterPath(
-              nested,
-              strokeToOutline: strokeToOutline,
-              depth: depth + 1
-            ).elements)
+            elements.append(
+              contentsOf: try characterPath(
+                nested,
+                strokeToOutline: strokeToOutline,
+                depth: depth + 1
+              )
+              .elements
+            )
           case .bitmap, .empty, .missing:
             break
           }
         }
-      case .erase, .image, .shading:
+      case .erase, .image, .shading, .markedContent:
         break
       }
     }

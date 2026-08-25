@@ -134,15 +134,27 @@ public struct GraphicsGlyphRun: Sendable, Hashable {
   public let glyphs: [GraphicsGlyphPlacement]
   /// The complete source bytes consumed by this run, when it originated from a string.
   public let sourceBytes: Data?
+  /// The PDF text rendering mode, or fill for legacy and PostScript producers.
+  public let renderingMode: GraphicsTextRenderingMode
+  /// Independent PDF nonstroking and stroking paint metadata, when available.
+  public let style: GraphicsTextStyle?
+  /// Logical replacement text that applies to this run, when independently scoped.
+  public let textReplacement: GraphicsTextReplacement?
 
   /// Creates a glyph run.
   public init(
     rootFont: GraphicsFontDescription,
     glyphs: [GraphicsGlyphPlacement],
-    sourceBytes: Data? = nil
+    sourceBytes: Data? = nil,
+    renderingMode: GraphicsTextRenderingMode = .fill,
+    style: GraphicsTextStyle? = nil,
+    textReplacement: GraphicsTextReplacement? = nil
   ) {
     self.rootFont = rootFont
     self.glyphs = glyphs
     self.sourceBytes = sourceBytes
+    self.renderingMode = renderingMode
+    self.style = style
+    self.textReplacement = textReplacement
   }
 }

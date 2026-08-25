@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: Scripts/pdf-form-update-interop UPDATED.pdf" >&2
+  exit 64
+fi
+
+readonly DOCUMENT="$1"
+if [[ ! -r "${DOCUMENT}" ]]; then
+  echo "error: unreadable PDF: ${DOCUMENT}" >&2
+  exit 66
+fi
+
+for tool in qpdf mutool pdfinfo pdfsig pdftotext; do
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    echo "error: ${tool} is required for PDF form-update interoperability validation" >&2
+    exit 69
+  fi
+done
+
+readonly WORK_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/solidpdf-form-update-interop.XXXXXX")"
+trap 'rm -rf "${WORK_DIRECTORY}"' EXIT
+
+qpdf --check "${DOCUMENT}"
+mutool clean "${DOCUMENT}" "${WORK_DIRECTORY}/cleaned.pdf"
+pdfinfo "${DOCUMENT}" >"${WORK_DIRECTORY}/pdfinfo.txt"
+pdfsig -nocert "${DOCUMENT}" >"${WORK_DIRECTORY}/pdfsig.txt"
+pdftotext "${DOCUMENT}" "${WORK_DIRECTORY}/text.txt"

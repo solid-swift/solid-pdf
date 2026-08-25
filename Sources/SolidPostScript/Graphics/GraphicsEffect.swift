@@ -6,6 +6,13 @@ public enum GraphicsEffect: Sendable, Hashable {
   case fill(path: GraphicsPath, rule: GraphicsFillRule, state: GraphicsStateSnapshot)
   /// A path-stroke effect.
   case stroke(path: GraphicsPath, state: GraphicsStateSnapshot)
+  /// One atomic PDF object that fills and strokes the same path.
+  case fillAndStroke(
+    path: GraphicsPath,
+    rule: GraphicsFillRule,
+    fillState: GraphicsStateSnapshot,
+    strokeState: GraphicsStateSnapshot
+  )
   /// A user-path fill effect.
   case userPathFill(path: GraphicsPath, rule: GraphicsFillRule, state: GraphicsStateSnapshot)
   /// A reduced user-path stroke-outline effect.
@@ -22,6 +29,10 @@ public enum GraphicsEffect: Sendable, Hashable {
   case shading(GraphicsShading, state: GraphicsStateSnapshot)
   /// A reusable Type 1 form effect.
   case form(GraphicsForm, state: GraphicsStateSnapshot)
+  /// A bounded transparency group composited as one object.
+  case transparencyGroup(GraphicsTransparencyGroup, state: GraphicsStateSnapshot)
   /// A semantic text effect with portable glyph fallbacks.
   case text(GraphicsGlyphRun, state: GraphicsStateSnapshot)
+  /// An ordered marked-content boundary or point retained by recordings.
+  case markedContent(GraphicsMarkedContentOperation, state: GraphicsStateSnapshot)
 }

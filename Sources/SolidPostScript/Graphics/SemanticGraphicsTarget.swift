@@ -10,6 +10,8 @@ public struct SemanticGraphicsTarget<Sink: GraphicsSemanticSink>: GraphicsTarget
 
     /// Semantic targets do not retain materialized pages.
     public var pages: [Never] { [] }
+    /// Semantic sinks receive hidden events with explicit visibility metadata.
+    public var preservesHiddenSemanticContent: Bool { true }
 
     private let session: Sink.Session
     private var imageActive = false
@@ -151,6 +153,6 @@ public struct SemanticGraphicsTarget<Sink: GraphicsSemanticSink>: GraphicsTarget
 
   /// Creates a renderer dedicated to one semantic stream.
   public func makeRenderer() throws -> sending Renderer {
-    try Renderer(session: sink.makeSession(contractVersion: .v1))
+    try Renderer(session: sink.makeSession(contractVersion: .current))
   }
 }

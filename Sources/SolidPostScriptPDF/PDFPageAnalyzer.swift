@@ -16,15 +16,22 @@ enum PDFPageAnalyzer {
     case .fill(_, _, let value), .stroke(_, let value), .userPathFill(_, _, let value),
       .userPathStroke(_, let value), .erase(let value), .fillRectangles(_, let value),
       .strokeRectangles(_, _, let value), .image(_, let value), .shading(_, let value),
-      .form(_, let value), .text(_, let value):
+      .form(_, let value), .transparencyGroup(_, let value), .text(_, let value),
+      .markedContent(_, let value):
+      state = value
+    case .fillAndStroke(_, _, let value, _):
       state = value
     }
-    let unsupportedState = state.deviceRendering != .continuousTone || state.strokeAdjustment
+    let unsupportedState =
+      state.deviceRendering != .continuousTone || state.strokeAdjustment
       || requiresFallback(state.paint)
     if unsupportedState { return state.overprint || addressesNamedColorants(state.paint) ? .page : .localized }
     switch effect {
     case .form(let form, _):
       let nested = disposition(for: form.displayList.effects)
+      return nested == .vector ? .vector : (state.overprint ? .page : .localized)
+    case .transparencyGroup(let group, _):
+      let nested = disposition(for: group.displayList.effects)
       return nested == .vector ? .vector : (state.overprint ? .page : .localized)
     case .text(let run, _):
       let unsupported = run.glyphs.contains { placement in

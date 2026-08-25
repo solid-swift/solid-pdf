@@ -54,6 +54,8 @@ public struct GraphicsShading: Sendable, Hashable {
   public let geometry: GraphicsShadingGeometry
   /// The portable fallback geometry and colors.
   public let mesh: GraphicsShadingMesh
+  /// Exact reconstructed source patches for Type 6 and Type 7 shadings.
+  public let sourcePatches: [GraphicsShadingPatch]
 
   /// Creates a semantic shading.
   public init(
@@ -68,6 +70,35 @@ public struct GraphicsShading: Sendable, Hashable {
     mesh: GraphicsShadingMesh,
     resourceIdentifier: GraphicsResourceIdentifier = .anonymous
   ) {
+    self.init(
+      type: type,
+      colorSpace: colorSpace,
+      colorRealization: colorRealization,
+      background: background,
+      bounds: bounds,
+      clipPath: clipPath,
+      antialias: antialias,
+      geometry: geometry,
+      mesh: mesh,
+      sourcePatches: [],
+      resourceIdentifier: resourceIdentifier
+    )
+  }
+
+  /// Creates a semantic shading while retaining reconstructed patch source data.
+  public init(
+    type: Int,
+    colorSpace: GraphicsColorSpaceDescription,
+    colorRealization: GraphicsColorSpaceRealization? = nil,
+    background: GraphicsPaint? = nil,
+    bounds: GraphicsRect? = nil,
+    clipPath: GraphicsPath? = nil,
+    antialias: Bool = false,
+    geometry: GraphicsShadingGeometry,
+    mesh: GraphicsShadingMesh,
+    sourcePatches: [GraphicsShadingPatch],
+    resourceIdentifier: GraphicsResourceIdentifier = .anonymous
+  ) {
     self.resourceIdentifier = resourceIdentifier
     self.type = type
     self.colorSpace = colorSpace
@@ -78,5 +109,6 @@ public struct GraphicsShading: Sendable, Hashable {
     self.antialias = antialias
     self.geometry = geometry
     self.mesh = mesh
+    self.sourcePatches = sourcePatches
   }
 }

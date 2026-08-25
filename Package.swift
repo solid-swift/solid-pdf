@@ -19,7 +19,7 @@ let imageDependency: Package.Dependency =
   } else {
     .package(
       url: "https://github.com/solid-swift/solid-image.git",
-      revision: "bd810d1d8e1c409d008a91f4791db0526242ab92"
+      revision: "49e8c1a81a628807e371aeb8f5479497f1c5dc6b"
     )
   }
 
@@ -33,6 +33,7 @@ let package = Package(
   ],
   products: [
     .library(name: "SolidPDF", targets: ["SolidPDF"]),
+    .library(name: "SolidPDFGraphics", targets: ["SolidPDFGraphics"]),
     .library(name: "SolidFont", targets: ["SolidFont"]),
     .library(name: "SolidPostScript", targets: ["SolidPostScript"]),
     .library(name: "SolidPostScriptDocument", targets: ["SolidPostScriptDocument"]),
@@ -47,6 +48,9 @@ let package = Package(
   dependencies: [
     foundationDependency,
     imageDependency,
+    .package(url: "https://github.com/apple/swift-asn1.git", .upToNextMajor(from: "1.7.1")),
+    .package(url: "https://github.com/apple/swift-certificates.git", .upToNextMajor(from: "1.19.4")),
+    .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "4.2.0")),
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.0"),
     .package(url: "https://github.com/StarLard/SwiftFormatPlugins.git", from: "1.1.1"),
   ],
@@ -54,13 +58,47 @@ let package = Package(
     .target(
       name: "SolidPDF",
       dependencies: [
+        .product(name: "SolidImageIO", package: "solid-image"),
         .product(name: "SolidIO", package: "solid-foundation"),
+        .product(name: "Crypto", package: "swift-crypto"),
+        .product(name: "CryptoExtras", package: "swift-crypto"),
+        .product(name: "SwiftASN1", package: "swift-asn1"),
+        .product(name: "X509", package: "swift-certificates"),
       ],
       plugins: lintPlugins
     ),
     .testTarget(
       name: "SolidPDFTests",
-      dependencies: ["SolidPDF"],
+      dependencies: [
+        "SolidPDF",
+        .product(name: "SolidImageIO", package: "solid-image"),
+        .product(name: "SolidIO", package: "solid-foundation"),
+      ],
+      plugins: lintPlugins
+    ),
+    .target(
+      name: "SolidPDFGraphics",
+      dependencies: [
+        "SolidPDF",
+        "SolidPostScript",
+        .product(name: "SolidColor", package: "solid-image"),
+        .product(name: "SolidImageIO", package: "solid-image"),
+      ],
+      resources: [.process("Resources")],
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidPDFGraphicsTests",
+      dependencies: [
+        "SolidFont",
+        "SolidPDF",
+        "SolidPDFGraphics",
+        "SolidPostScript",
+        "SolidPostScriptCoreGraphics",
+        "SolidPostScriptPDF",
+        "SolidPostScriptPlutoVG",
+        "SolidPostScriptRaster",
+      ],
       plugins: lintPlugins
     ),
     .target(
@@ -377,6 +415,51 @@ if benchmarkEnabled {
         .plugin(name: "BenchmarkPlugin", package: "benchmark")
       ]
     ),
+    .target(
+      name: "SolidPDFParsingBenchmarkSupport",
+      dependencies: ["SolidPDF"],
+      path: "Benchmarks/SolidPDFParsingBenchmarkSupport"
+    ),
+    .executableTarget(
+      name: "SolidPDFParsingBenchmark",
+      dependencies: [
+        "SolidPDF",
+        "SolidPDFParsingBenchmarkSupport",
+        .product(name: "Benchmark", package: "benchmark"),
+      ],
+      path: "Benchmarks/SolidPDFParsingBenchmark",
+      plugins: [
+        .plugin(name: "BenchmarkPlugin", package: "benchmark")
+      ]
+    ),
+    .target(
+      name: "SolidPDFTextBenchmarkSupport",
+      dependencies: ["SolidPDF", "SolidPDFGraphics", "SolidPostScript"],
+      path: "Benchmarks/SolidPDFTextBenchmarkSupport"
+    ),
+    .executableTarget(
+      name: "SolidPDFTextBenchmark",
+      dependencies: [
+        "SolidPDF",
+        "SolidPDFGraphics",
+        "SolidPDFTextBenchmarkSupport",
+        "SolidPostScript",
+        .product(name: "Benchmark", package: "benchmark"),
+      ],
+      path: "Benchmarks/SolidPDFTextBenchmark",
+      plugins: [
+        .plugin(name: "BenchmarkPlugin", package: "benchmark")
+      ]
+    ),
+    .executableTarget(
+      name: "SolidPDFInteropFixtures",
+      dependencies: [
+        "SolidPDF",
+        "SolidPDFParsingBenchmarkSupport",
+        .product(name: "SolidIO", package: "solid-foundation"),
+      ],
+      path: "Utilities/SolidPDFInteropFixtures"
+    ),
     .testTarget(
       name: "SolidRasterBenchmarkSupportTests",
       dependencies: [
@@ -393,6 +476,12 @@ if benchmarkEnabled {
       name: "SolidFontBenchmarkSupportTests",
       dependencies: ["SolidFont", "SolidFontBenchmarkSupport"],
       path: "Tests/SolidFontBenchmarkSupportTests",
+      plugins: lintPlugins
+    ),
+    .testTarget(
+      name: "SolidPDFParsingBenchmarkSupportTests",
+      dependencies: ["SolidPDF", "SolidPDFParsingBenchmarkSupport"],
+      path: "Tests/SolidPDFParsingBenchmarkSupportTests",
       plugins: lintPlugins
     ),
   ]

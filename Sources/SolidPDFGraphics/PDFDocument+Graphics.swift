@@ -1,0 +1,483 @@
+import SolidPDF
+import SolidPostScript
+
+extension PDFDocument {
+  /// Interprets one page from the latest revision through `target`.
+  public func render<Target: GraphicsTarget>(
+    page index: Int,
+    to target: Target,
+    options: PDFGraphicsInterpretationOptions = .init(),
+    fontEnvironment: PDFGraphicsFontEnvironment = .portable
+  ) async throws -> PDFGraphicsRenderResult<Target.Output> {
+    try await render(
+      selection: .indices([index]), in: latestRevision.identifier, to: target,
+      options: options, fontEnvironment: fontEnvironment
+    )
+  }
+
+  /// Interprets selected pages from the latest revision through `target`.
+  public func render<Target: GraphicsTarget>(
+    selection: PDFGraphicsPageSelection = .all,
+    to target: Target,
+    options: PDFGraphicsInterpretationOptions = .init(),
+    fontEnvironment: PDFGraphicsFontEnvironment = .portable
+  ) async throws -> PDFGraphicsRenderResult<Target.Output> {
+    try await render(
+      selection: selection, in: latestRevision.identifier, to: target,
+      options: options, fontEnvironment: fontEnvironment
+    )
+  }
+
+  /// Interprets selected pages from one document revision through `target`.
+  public func render<Target: GraphicsTarget>(
+    selection: PDFGraphicsPageSelection,
+    in revision: PDFRevisionIdentifier,
+    to target: Target,
+    options: PDFGraphicsInterpretationOptions = .init(),
+    fontEnvironment: PDFGraphicsFontEnvironment = .portable
+  ) async throws -> PDFGraphicsRenderResult<Target.Output> {
+    try checkPermission(options.accessPurpose)
+    let selected = try await selectedPageIndices(selection, revision: revision)
+    let pageDevice = try target.pageDeviceProvider.makeSession(for: target.deviceDescriptor)
+    let color = try target.colorEngine.makeSession(for: target.deviceDescriptor)
+    let deviceRendering = try target.deviceRenderingEngine.makeSession(for: target.deviceDescriptor)
+    let font = try target.fontEngine.makeSession(for: target.deviceDescriptor)
+    let trapping = try target.trappingEngine.makeSession(for: target.deviceDescriptor)
+    let renderer = try target.makeRenderer(
+      colorSession: color,
+      deviceRenderingSession: deviceRendering,
+      fontSession: font,
+      trappingSession: trapping
+    )
+    let output = PDFGraphicsRendererOutput(renderer: renderer)
+    var rendered: [PDFRenderedPage] = []
+    var diagnostics: [PDFGraphicsDiagnostic] = []
+    do {
+      for (ordinal, pageIndex) in selected.enumerated() {
+        try Task.checkCancellation()
+        let page = try await page(at: pageIndex, in: revision)
+        let boundary = pageBoundary(options.pageBoundary, geometry: page.geometry)
+        let pageSize = orientedPageSize(boundary, geometry: page.geometry)
+        let initial = pageDevice.initialConfiguration
+        let negotiation = try pageDevice.negotiate(GraphicsPageDeviceRequest(
+          pageSize: pageSize,
+          resolution: .init(
+            width: initial.descriptor.horizontalResolution,
+            height: initial.descriptor.verticalResolution
+          ),
+          imagingBoundingBox: nil,
+          numberOfCopies: 1,
+          colorants: initial.colorants,
+          trappingEnabled: false,
+          trappingDetails: initial.trappingDetails,
+          usesCIEColor: false,
+          outputDevice: initial.outputDevice,
+          inputMedia: initial.inputMedia,
+          outputDestinations: initial.outputDestinations,
+          placement: .simplex,
+          delivery: .virtual
+        ))
+        guard negotiation.unsatisfiedParameters.isEmpty else {
+          throw PDFGraphicsError.targetFailure(
+            "Target rejected PDF page geometry: \(negotiation.unsatisfiedParameters.sorted().joined(separator: ", "))."
+          )
+        }
+        let descriptor = pdfDescriptor(
+          negotiation.configuration.descriptor,
+          boundary: boundary,
+          geometry: page.geometry
+        )
+        let device = GraphicsDeviceSnapshot(
+          identifier: negotiation.configuration.identifier,
+          outputDeviceIdentifier: negotiation.configuration.outputDeviceIdentifier,
+          kind: .page,
+          descriptor: descriptor,
+          pageNumber: ordinal,
+          numberOfCopies: 1,
+          trapping: .disabled,
+          usesCIEColor: false,
+          mediaSelection: negotiation.configuration.mediaSelection,
+          placement: negotiation.configuration.placement,
+          delivery: negotiation.configuration.delivery
+        )
+        try targetCall { try renderer.activateDevice(device) }
+        let resources = PDFGraphicsResourceResolver(
+          document: self,
+          revision: revision,
+          resources: page.resources.value,
+          limits: options.limits,
+          fontEnvironment: fontEnvironment,
+          strict: options.strict,
+          optionalContentSelection: options.optionalContentSelection,
+          optionalContentContext: options.optionalContentContext
+        )
+        let handler = PDFGraphicsInstructionHandler(
+          device: device,
+          resources: resources,
+          limits: options.limits,
+          output: output
+        )
+        let input = PDFContentInput(streams: page.contentStreams) { [self] stream in
+          try await decodedStream(of: stream)
+        }
+        let parser = PDFContentParser(
+          input: input,
+          revision: revision,
+          page: page,
+          maximumScratchBytes: options.limits.maximumScratchBytes
+        )
+        try await PDFContentExecutor(
+          parser: parser,
+          handler: handler,
+          maximumOperators: options.limits.maximumOperatorsPerPage
+        ).execute()
+        diagnostics.append(contentsOf: handler.diagnostics)
+        let annotationResult = try await renderAnnotations(
+          on: page,
+          revision: revision,
+          device: device,
+          resources: resources,
+          output: output,
+          options: options
+        )
+        diagnostics.append(contentsOf: annotationResult.diagnostics)
+        let snapshot = handler.currentSnapshot
+        let origin = GraphicsEventOrigin(
+          resourceIdentifier: GraphicsResourceIdentifier(
+            rawValue: "pdf:r\(revision.ordinal):o\(page.reference.objectNumber):\(page.reference.generationNumber)"
+          )
+        )
+        let event = GraphicsEvent(
+          operation: .page(.show),
+          before: snapshot,
+          after: snapshot,
+          origin: origin
+        )
+        try targetCall {
+          try renderer.transmitPage(event, transmission: GraphicsPageTransmission(
+            trigger: .showPage,
+            logicalOrdinal: ordinal + 1,
+            copies: 1,
+            mediaSelection: device.mediaSelection,
+            placement: device.placement,
+            delivery: device.delivery
+          ))
+          try renderer.deactivateDevice(device)
+        }
+        rendered.append(PDFRenderedPage(
+          revision: revision,
+          pageIndex: page.index,
+          pageReference: page.reference,
+          device: device,
+          coordinateMapping: GraphicsPageCoordinateMapping(device: descriptor),
+          transmittedOrdinal: ordinal,
+          renderedAnnotations: annotationResult.rendered
+        ))
+      }
+      return try PDFGraphicsRenderResult(
+        output: targetFinish(renderer),
+        pages: rendered,
+        diagnostics: diagnostics
+      )
+    } catch {
+      output.abortImage()
+      renderer.abort()
+      if error is CancellationError { throw error }
+      if let error = error as? PDFGraphicsError { throw error }
+      if let error = error as? PDFParsingError { throw error }
+      throw PDFGraphicsError.targetFailure(String(describing: error))
+    }
+  }
+
+  private func renderAnnotations(
+    on page: PDFPage,
+    revision: PDFRevisionIdentifier,
+    device: GraphicsDeviceSnapshot,
+    resources: PDFGraphicsResourceResolver<Source>,
+    output: PDFGraphicsEventOutput,
+    options: PDFGraphicsInterpretationOptions
+  ) async throws -> (rendered: [PDFAnnotationIdentifier], diagnostics: [PDFGraphicsDiagnostic]) {
+    guard options.annotationRenderingPolicy != .none else { return ([], []) }
+    let annotations = try await annotations(on: page, in: revision)
+    var rendered = [PDFAnnotationIdentifier]()
+    var diagnostics = [PDFGraphicsDiagnostic]()
+    for annotation in annotations where annotationIsEligible(annotation, options: options) {
+      var extractionVisibility = annotationExtractionVisibility(annotation)
+      if let optionalContent = annotation.optionalContent {
+        let visibility = try await optionalContentVisibility(
+          of: optionalContent,
+          selection: options.optionalContentSelection,
+          context: options.optionalContentContext,
+          in: revision
+        )
+        if !visibility.isVisible {
+          guard options.accessPurpose == .extraction || options.accessPurpose == .accessibilityExtraction else {
+            continue
+          }
+          extractionVisibility = pdfGraphicsContentVisibility(visibility, revision: revision)
+        }
+      }
+      if annotation.details.payload.action != nil {
+        diagnostics.append(.init(
+          identifier: "pdf.annotation.inert-action",
+          message: "Annotation action was retained as inert metadata and was not executed.",
+          severity: .information,
+          annotation: annotation.identifier
+        ))
+      }
+      guard let appearance = try await selectedAppearance(annotation, revision: revision) else {
+        if options.annotationAppearancePolicy == .generateMissingStandard,
+          annotation.appearances.normal == nil,
+          annotation.appearances.rollover == nil,
+          annotation.appearances.down == nil
+        {
+          let fields = try await formFields(in: revision)
+          let matchingFields = fields.filter { field in
+            field.widgets.contains { $0.annotationIdentifier == annotation.identifier }
+          }
+          let annotationOutput = PDFAnnotationEventOutput(
+            base: output,
+            annotation: annotation.identifier,
+            revision: revision,
+            visibility: extractionVisibility
+          )
+          let handler = PDFGraphicsInstructionHandler(
+            device: device,
+            resources: resources,
+            limits: options.limits,
+            output: annotationOutput
+          )
+          let generated = try await handler.generateAnnotationAppearance(
+            annotation,
+            field: matchingFields.count == 1 ? matchingFields[0] : nil,
+            page: page
+          )
+          if generated {
+            diagnostics.append(.init(
+              identifier: "pdf.annotation.generated-appearance",
+              message: "Generated a deterministic in-memory annotation appearance.",
+              severity: .information,
+              annotation: annotation.identifier
+            ))
+            diagnostics.append(contentsOf: handler.diagnostics)
+            rendered.append(annotation.identifier)
+          } else {
+            diagnostics.append(.init(
+              identifier: "pdf.annotation.semantic-only",
+              message: "The annotation remains semantic-only because no portable standard appearance is defined.",
+              severity: .warning,
+              annotation: annotation.identifier
+            ))
+          }
+          continue
+        }
+        if options.accessPurpose == .extraction || options.accessPurpose == .accessibilityExtraction {
+          diagnostics.append(.init(
+            identifier: "pdf.annotation.missing-appearance",
+            message: "No selected appearance was available for extraction; semantic annotation data remains available.",
+            severity: .warning,
+            annotation: annotation.identifier
+          ))
+          continue
+        }
+        throw PDFGraphicsError.malformedContent(
+          message: "An eligible annotation has no selected normal appearance.",
+          operatorName: "annotation-appearance",
+          location: annotationLocation(annotation, page: page)
+        )
+      }
+      let annotationOutput = PDFAnnotationEventOutput(
+        base: output,
+        annotation: annotation.identifier,
+        revision: revision,
+        visibility: extractionVisibility
+      )
+      let handler = PDFGraphicsInstructionHandler(
+        device: device,
+        resources: resources,
+        limits: options.limits,
+        output: annotationOutput
+      )
+      try await handler.paintAnnotationAppearance(
+        appearance,
+        annotation: annotation,
+        page: page,
+        resourceFallbackAllowed: effectiveVersion != .v2_0
+      )
+      diagnostics.append(contentsOf: handler.diagnostics)
+      rendered.append(annotation.identifier)
+    }
+    return (rendered, diagnostics)
+  }
+
+  private func annotationIsEligible(
+    _ annotation: PDFAnnotation,
+    options: PDFGraphicsInterpretationOptions
+  ) -> Bool {
+    let policy: PDFAnnotationRenderingPolicy = switch options.annotationRenderingPolicy {
+    case .purposeAware:
+      switch options.accessPurpose {
+      case .viewing: .view
+      case .printing, .highQualityPrinting: .print
+      case .extraction, .accessibilityExtraction: .none
+      }
+    case let policy: policy
+    }
+    switch policy {
+    case .none: return false
+    case .all: return true
+    case .view, .purposeAware:
+      return !annotation.flags.contains(.invisible)
+        && !annotation.flags.contains(.hidden)
+        && !annotation.flags.contains(.noView)
+    case .print:
+      return annotation.flags.contains(.print)
+        && !annotation.flags.contains(.invisible)
+        && !annotation.flags.contains(.hidden)
+    }
+  }
+
+  private func selectedAppearance(
+    _ annotation: PDFAnnotation,
+    revision: PDFRevisionIdentifier
+  ) async throws -> PDFStreamObject? {
+    guard let normal = annotation.appearances.normal else { return nil }
+    switch normal {
+    case .stream(let stream): return stream
+    case .states(let states):
+      if let state = annotation.appearanceState { return states[state] }
+      guard annotation.subtype == .widget else { return nil }
+      let fields = try await formFields(in: revision)
+      let matches = fields.filter { field in
+        field.widgets.contains { $0.annotationIdentifier == annotation.identifier }
+      }
+      guard matches.count == 1, case .name(let name)? = matches[0].value else { return nil }
+      return states[name]
+    }
+  }
+
+  private func annotationLocation(
+    _ annotation: PDFAnnotation,
+    page: PDFPage
+  ) -> PDFContentLocation {
+    PDFContentLocation(
+      revision: annotation.definingRevision,
+      pageIndex: page.index,
+      pageReference: page.reference,
+      decodedOffset: 0,
+      segments: [],
+      resourceStack: [annotation.identifier.reference]
+    )
+  }
+
+  private func annotationExtractionVisibility(
+    _ annotation: PDFAnnotation
+  ) -> GraphicsContentVisibility {
+    guard annotation.flags.contains(.hidden) || annotation.flags.contains(.invisible) else {
+      return .visible
+    }
+    return .hidden([GraphicsResourceIdentifier(
+      rawValue: "pdf:annotation-hidden:\(annotation.identifier.reference.objectNumber)"
+    )])
+  }
+
+  private func selectedPageIndices(
+    _ selection: PDFGraphicsPageSelection,
+    revision: PDFRevisionIdentifier
+  ) async throws -> [Int] {
+    switch selection {
+    case .all: return Array(0..<(try await pageCount(in: revision)))
+    case .indices(let indices):
+      let count = try await pageCount(in: revision)
+      guard let invalid = indices.first(where: { $0 < 0 || $0 >= count }) else { return indices }
+      throw PDFParsingError.pageIndexOutOfRange(invalid)
+    }
+  }
+
+  private func checkPermission(_ purpose: PDFGraphicsAccessPurpose) throws {
+    guard let security else { return }
+    let allowed = switch purpose {
+    case .viewing: true
+    case .extraction: security.effectivePermissions.contains(.extract)
+    case .accessibilityExtraction: security.effectivePermissions.contains(.accessibility)
+    case .printing: security.effectivePermissions.contains(.print)
+    case .highQualityPrinting:
+      security.effectivePermissions.contains(.print) && security.effectivePermissions.contains(.highQualityPrint)
+    }
+    guard allowed else { throw PDFGraphicsError.permissionDenied(purpose) }
+  }
+
+  private func pageBoundary(_ kind: PDFPageBoundaryKind, geometry: PDFPageGeometry) -> PDFRectangle {
+    switch kind {
+    case .media: geometry.mediaBox.effective
+    case .crop: geometry.cropBox.effective
+    case .bleed: geometry.bleedBox.effective
+    case .trim: geometry.trimBox.effective
+    case .art: geometry.artBox.effective
+    }
+  }
+
+  private func orientedPageSize(_ rect: PDFRectangle, geometry: PDFPageGeometry) -> GraphicsSize {
+    let width = (rect.maximumX - rect.minimumX) * geometry.userUnit.value
+    let height = (rect.maximumY - rect.minimumY) * geometry.userUnit.value
+    switch geometry.rotation.value {
+    case .degrees90, .degrees270: return .init(width: height, height: width)
+    case .degrees0, .degrees180: return .init(width: width, height: height)
+    }
+  }
+
+  private func pdfDescriptor(
+    _ descriptor: GraphicsDeviceDescriptor,
+    boundary: PDFRectangle,
+    geometry: PDFPageGeometry
+  ) -> GraphicsDeviceDescriptor {
+    let unit = geometry.userUnit.value
+    let x0 = boundary.minimumX * unit
+    let y0 = boundary.minimumY * unit
+    let x1 = boundary.maximumX * unit
+    let y1 = boundary.maximumY * unit
+    let pageMatrix: GraphicsMatrix = switch geometry.rotation.value {
+    case .degrees0: .init(a: unit, b: 0, c: 0, d: unit, tx: -x0, ty: -y0)
+    case .degrees90: .init(a: 0, b: -unit, c: unit, d: 0, tx: -y0, ty: x1)
+    case .degrees180: .init(a: -unit, b: 0, c: 0, d: -unit, tx: x1, ty: y1)
+    case .degrees270: .init(a: 0, b: unit, c: -unit, d: 0, tx: y1, ty: -x0)
+    }
+    return GraphicsDeviceDescriptor(
+      mediaBounds: descriptor.mediaBounds,
+      imageableBounds: descriptor.imageableBounds,
+      horizontalResolution: descriptor.horizontalResolution,
+      verticalResolution: descriptor.verticalResolution,
+      defaultMatrix: pageMatrix.concatenated(with: descriptor.defaultMatrix),
+      defaultFlatness: descriptor.defaultFlatness,
+      defaultStrokeAdjustment: descriptor.defaultStrokeAdjustment,
+      minimumSmoothness: descriptor.minimumSmoothness,
+      maximumSmoothness: descriptor.maximumSmoothness,
+      defaultSmoothness: descriptor.defaultSmoothness,
+      colorDevice: descriptor.colorDevice,
+      deviceRendering: descriptor.deviceRendering,
+      colorants: descriptor.colorants,
+      trapping: descriptor.trapping
+    )
+  }
+
+  private func targetCall(_ body: () throws -> Void) throws {
+    do { try body() } catch { throw PDFGraphicsError.targetFailure(String(describing: error)) }
+  }
+
+  private func targetFinish<Renderer: GraphicsRenderer>(_ renderer: Renderer) throws -> Renderer.Output {
+    do { return try renderer.finish() } catch { throw PDFGraphicsError.targetFailure(String(describing: error)) }
+  }
+}
+
+func pdfGraphicsContentVisibility(
+  _ visibility: PDFOptionalContentVisibility,
+  revision: PDFRevisionIdentifier
+) -> GraphicsContentVisibility {
+  visibility.isVisible
+    ? .visible
+    : .hidden(visibility.controllingGroups.map { group in
+      GraphicsResourceIdentifier(
+        rawValue: "pdf:r\(revision.ordinal):o\(group.reference.objectNumber):\(group.reference.generationNumber)"
+      )
+    })
+}

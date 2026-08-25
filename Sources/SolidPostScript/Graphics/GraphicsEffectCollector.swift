@@ -1,7 +1,7 @@
 import Foundation
 
-final class GraphicsEffectCollector {
-  private(set) var effects: [GraphicsEffect] = []
+package final class GraphicsEffectCollector {
+  package private(set) var effects: [GraphicsEffect] = []
   private var activeImage: (
     descriptor: GraphicsImageDescriptor,
     state: GraphicsStateSnapshot,
@@ -12,12 +12,23 @@ final class GraphicsEffectCollector {
     nextMaskRow: Int
   )?
 
-  func process(_ event: GraphicsEvent) {
+  package init() {}
+
+  package func process(_ event: GraphicsEvent) {
     switch event.operation {
     case .paint(.erasePage): effects.append(.erase(state: event.before))
     case .paint(.fill(let rule)):
       effects.append(.fill(path: event.before.path, rule: rule, state: event.before))
     case .paint(.stroke): effects.append(.stroke(path: event.before.path, state: event.before))
+    case .paint(.fillAndStroke(let rule)):
+      effects.append(
+        .fillAndStroke(
+          path: event.before.path,
+          rule: rule,
+          fillState: event.before,
+          strokeState: event.after
+        )
+      )
     case .paint(.userPathFill(let rule)):
       effects.append(.userPathFill(path: event.before.path, rule: rule, state: event.before))
     case .paint(.userPathStroke):
@@ -28,19 +39,23 @@ final class GraphicsEffectCollector {
       effects.append(.strokeRectangles(paths: paths, matrix: matrix, state: event.before))
     case .paint(.shading(let shading)): effects.append(.shading(shading, state: event.before))
     case .paint(.form(let form)): effects.append(.form(form, state: event.before))
+    case .paint(.transparencyGroup(let group)):
+      effects.append(.transparencyGroup(group, state: event.before))
     case .paint(.text(let run)): effects.append(.text(run, state: event.before))
+    case .content(.markedContent(let operation)):
+      effects.append(.markedContent(operation, state: event.before))
     default: break
     }
   }
 
-  func beginImage(_ event: GraphicsEvent) throws {
+  package func beginImage(_ event: GraphicsEvent) throws {
     guard activeImage == nil, case .paint(.image(let descriptor)) = event.operation else {
       throw Error.ioError
     }
     activeImage = (descriptor, event.before, [], [], Data(), [], 0)
   }
 
-  func writeImageRows(_ rows: GraphicsImageRows) throws {
+  package func writeImageRows(_ rows: GraphicsImageRows) throws {
     guard var image = activeImage else { throw Error.ioError }
     image.components.append(contentsOf: rows.components)
     if let source = rows.sourceComponents { image.sourceComponents.append(contentsOf: source) }
@@ -48,7 +63,7 @@ final class GraphicsEffectCollector {
     activeImage = image
   }
 
-  func writeImageMaskRows(_ rows: GraphicsImageMaskRows) throws {
+  package func writeImageMaskRows(_ rows: GraphicsImageMaskRows) throws {
     guard var image = activeImage,
       let dimensions = maskDimensions(for: image.descriptor),
       dimensions.width > 0,
@@ -64,7 +79,7 @@ final class GraphicsEffectCollector {
     activeImage = image
   }
 
-  func endImage() throws {
+  package func endImage() throws {
     guard let image = activeImage else { throw Error.ioError }
     if !image.components.isEmpty, image.descriptor.width > 0, image.descriptor.height > 0 {
       effects.append(.image(
@@ -83,9 +98,9 @@ final class GraphicsEffectCollector {
     activeImage = nil
   }
 
-  func abortImage() { activeImage = nil }
+  package func abortImage() { activeImage = nil }
 
-  func clear() {
+  package func clear() {
     activeImage = nil
     effects.removeAll(keepingCapacity: true)
   }

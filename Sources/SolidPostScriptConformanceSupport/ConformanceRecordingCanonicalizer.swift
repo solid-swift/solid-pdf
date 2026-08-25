@@ -35,6 +35,10 @@ private struct Writer {
   mutating func double(_ value: Double) { token(String(value.bitPattern, radix: 16)) }
   mutating func float(_ value: Float) { token(String(value.bitPattern, radix: 16)) }
 
+  mutating func optionalString(_ value: String?) {
+    if let value { token(value) } else { token("nil") }
+  }
+
   mutating func binary(_ value: Data?) {
     guard let value else {
       token("nil")
@@ -249,6 +253,35 @@ private struct Writer {
     deviceSnapshot(value.device)
     rendering(value.deviceRendering)
     font(value.font)
+    token(String(describing: value.renderingIntent))
+    transparency(value.transparency, depth: depth)
+  }
+
+  mutating func transparency(_ value: GraphicsTransparencyState, depth: Int) {
+    token(value.blendMode.rawValue)
+    double(value.constantAlpha)
+    boolean(value.alphaIsShape)
+    boolean(value.textKnockout)
+    guard let mask = value.softMask else {
+      token("nil")
+      return
+    }
+    token(mask.subtype == .alpha ? "alpha" : "luminosity")
+    resource(mask.resourceIdentifier)
+    doubles(mask.backdrop)
+    if let function = mask.transferFunction { componentFunction(function) } else { token("nil") }
+    transparencyGroup(mask.group, depth: depth + 1)
+  }
+
+  mutating func transparencyGroup(_ value: GraphicsTransparencyGroup, depth: Int) {
+    rectangle(value.bounds)
+    boolean(value.isolated)
+    boolean(value.knockout)
+    if let colorSpaceValue = value.colorSpace { colorSpace(colorSpaceValue) } else { token("nil") }
+    colorRealization(value.colorRealization)
+    resource(value.resourceIdentifier)
+    resource(value.displayList.resourceIdentifier)
+    effects(value.displayList.effects, depth: depth + 1)
   }
 
   mutating func colorRealization(_ value: GraphicsColorSpaceRealization?) {
@@ -446,6 +479,14 @@ private struct Writer {
     integer(value.paintType)
     double(value.strokeWidth)
     resource(value.resourceIdentifier)
+    if let substitution = value.substitution {
+      token(substitution.requestedName)
+      token(substitution.resolvedName ?? "nil")
+      token(substitution.providerIdentifier)
+      boolean(substitution.isCIDCompatible)
+    } else {
+      token("nil")
+    }
     if let asset = value.asset {
       token(String(describing: asset.format))
       integer(asset.faceIndex)
@@ -475,6 +516,12 @@ private struct Writer {
       token("stroke")
       path(pathValue)
       state(stateValue, depth: depth)
+    case .fillAndStroke(let pathValue, let rule, let fillState, let strokeState):
+      token("fillAndStroke")
+      path(pathValue)
+      token(rule == .winding ? "winding" : "evenOdd")
+      state(fillState, depth: depth)
+      state(strokeState, depth: depth)
     case .userPathFill(let pathValue, let rule, let stateValue):
       token("userPathFill")
       path(pathValue)
@@ -514,10 +561,42 @@ private struct Writer {
       resource(form.displayList.resourceIdentifier)
       effects(form.displayList.effects, depth: depth + 1)
       state(stateValue, depth: depth)
+    case .transparencyGroup(let group, let stateValue):
+      token("transparencyGroup")
+      transparencyGroup(group, depth: depth)
+      state(stateValue, depth: depth)
     case .text(let run, let stateValue):
       token("text")
       glyphRun(run, depth: depth)
       state(stateValue, depth: depth)
+    case .markedContent(let operation, let stateValue):
+      token("markedContent")
+      switch operation {
+      case .begin(let scope): token("begin"); markedContentScope(scope, depth: depth)
+      case .end(let scope): token("end"); markedContentScope(scope, depth: depth)
+      case .point(let scope): token("point"); markedContentScope(scope, depth: depth)
+      }
+      state(stateValue, depth: depth)
+    }
+  }
+
+  mutating func markedContentScope(_ value: GraphicsMarkedContentScope, depth: Int) {
+    resource(value.resourceIdentifier)
+    binary(value.tag)
+    if let identifier = value.properties.identifier {
+      resource(identifier.owner)
+      integer(identifier.value)
+    } else {
+      token("nil")
+    }
+    optionalString(value.properties.language)
+    optionalString(value.properties.replacement?.text)
+    optionalString(value.properties.alternateDescription)
+    optionalString(value.properties.expansion)
+    integer(value.properties.values.count)
+    for key in value.properties.values.keys.sorted(by: { $0.lexicographicallyPrecedes($1) }) {
+      binary(key)
+      token(String(describing: value.properties.values[key]!))
     }
   }
 
@@ -612,6 +691,18 @@ private struct Writer {
     if let clipPath = value.clipPath { path(clipPath) } else { token("nil") }
     boolean(value.antialias)
     shadingGeometry(value.geometry)
+    integer(value.sourcePatches.count)
+    for patch in value.sourcePatches {
+      integer(patch.type)
+      integer(patch.continuationFlag)
+      integer(patch.controlPoints.count)
+      patch.controlPoints.forEach { point($0) }
+      integer(patch.cornerComponents.count)
+      for components in patch.cornerComponents {
+        integer(components.count)
+        components.forEach { double($0) }
+      }
+    }
     integer(value.mesh.triangles.count)
     for triangle in value.mesh.triangles {
       for vertex in [triangle.first, triangle.second, triangle.third] {
@@ -666,6 +757,15 @@ private struct Writer {
   }
 
   mutating func glyphRun(_ value: GraphicsGlyphRun, depth: Int) {
+    integer(value.renderingMode.rawValue)
+    if let style = value.style {
+      textPaint(style.fill, depth: depth)
+      textPaint(style.stroke, depth: depth)
+      transparency(style.fillTransparency, depth: depth)
+      transparency(style.strokeTransparency, depth: depth)
+    } else {
+      token("nil")
+    }
     font(value.rootFont)
     binary(value.sourceBytes)
     integer(value.glyphs.count)
@@ -715,6 +815,14 @@ private struct Writer {
       case .missing: token("missing")
       }
     }
+  }
+
+  mutating func textPaint(_ value: GraphicsTextPaint, depth: Int) {
+    paint(value.paint, depth: depth)
+    colorSpace(value.colorSpace)
+    colorRealization(value.colorRealization)
+    doubles(value.components)
+    boolean(value.overprint)
   }
 
   mutating func glyphSelector(_ value: GraphicsGlyphSelector) {

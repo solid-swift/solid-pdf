@@ -74,16 +74,87 @@ struct PDFGraphicsTargetTests {
   func emitsTilingPatternsAsNativePDFPatterns() async throws {
     let result = try await Interpreter.render(
       content: """
-      /P << /PatternType 1 /PaintType 1 /TilingType 1
-        /BBox [0 0 5 5] /XStep 5 /YStep 5
-        /PaintProc { pop 0 setgray 0 0 2 2 rectfill }
-      >> matrix makepattern def
-      [/Pattern] setcolorspace P setcolor 0 0 20 20 rectfill showpage
-      """,
+        /P << /PatternType 1 /PaintType 1 /TilingType 1
+          /BBox [0 0 5 5] /XStep 5 /YStep 5
+          /PaintProc { pop 0 setgray 0 0 2 2 rectfill }
+        >> matrix makepattern def
+        [/Pattern] setcolorspace P setcolor 0 0 20 20 rectfill showpage
+        """,
       to: PDFDataGraphicsTarget(sink: PDFDataOutputSink())
     )
     #expect(result.output.data.containsASCII("/PatternType 1"))
     #expect(result.output.diagnostics.isEmpty)
+  }
+
+  @Test
+  func emitsAtomicTransparencyAndGroupResources() throws {
+    let renderer = PDFDataGraphicsTarget(
+      sink: PDFDataOutputSink(),
+      options: .init(compressionLevel: 0)
+    )
+    .makeRenderer()
+    let path = GraphicsPath(elements: [
+      .move(to: .init(x: 0, y: 0)),
+      .line(to: .init(x: 10, y: 0)),
+      .line(to: .init(x: 10, y: 10)),
+      .close,
+    ])
+    let base = GraphicsStateSnapshot.fixture(font: .invalid)
+    let fill = GraphicsStateSnapshot(
+      matrix: base.matrix,
+      path: path,
+      clip: base.clip,
+      paint: .deviceRGB(red: 1, green: 0, blue: 0),
+      lineWidth: 1,
+      lineCap: .butt,
+      lineJoin: .miter,
+      miterLimit: 10,
+      dash: .init(),
+      transparency: .init(blendMode: .multiply, constantAlpha: 0.25)
+    )
+    let stroke = GraphicsStateSnapshot(
+      matrix: base.matrix,
+      path: path,
+      clip: base.clip,
+      paint: .deviceRGB(red: 0, green: 0, blue: 1),
+      lineWidth: 1,
+      lineCap: .butt,
+      lineJoin: .miter,
+      miterLimit: 10,
+      dash: .init(),
+      transparency: .init(blendMode: .multiply, constantAlpha: 0.75)
+    )
+    try renderer.process(
+      .init(
+        operation: .paint(.fillAndStroke(.winding)),
+        before: fill,
+        after: stroke
+      )
+    )
+    let group = GraphicsTransparencyGroup(
+      bounds: .init(x: 0, y: 0, width: 10, height: 10),
+      isolated: true,
+      knockout: true,
+      colorSpace: .deviceRGB,
+      displayList: .init(effects: [.fill(path: path, rule: .winding, state: fill)])
+    )
+    try renderer.process(
+      .init(
+        operation: .paint(.transparencyGroup(group)),
+        before: fill,
+        after: fill
+      )
+    )
+    try renderer.transmitPage(.init(operation: .page(.show), before: fill, after: fill), copies: 1)
+    let output = try renderer.finish()
+
+    #expect(output.data.containsASCII("/BM /Multiply"))
+    #expect(output.data.containsASCII("/ca 0.25"))
+    #expect(output.data.containsASCII("/CA 0.75"))
+    #expect(output.data.containsASCII("/S /Transparency"))
+    #expect(output.data.containsASCII("/I true"))
+    #expect(output.data.containsASCII("/K true"))
+    #expect(output.data.containsASCII("/Tr1 Do"))
   }
 
   @Test
@@ -153,14 +224,17 @@ struct PDFGraphicsTargetTests {
       ),
       program: .outline(path)
     )
-    let run = GraphicsGlyphRun(rootFont: font, glyphs: [
-      .init(
-        glyph: glyph,
-        origin: .init(x: 20, y: 30),
-        transform: .init(a: 0.1, b: 0, c: 0, d: 0.1, tx: 20, ty: 30),
-        advance: .init(x: 60, y: 0)
-      ),
-    ])
+    let run = GraphicsGlyphRun(
+      rootFont: font,
+      glyphs: [
+        .init(
+          glyph: glyph,
+          origin: .init(x: 20, y: 30),
+          transform: .init(a: 0.1, b: 0, c: 0, d: 0.1, tx: 20, ty: 30),
+          advance: .init(x: 60, y: 0)
+        )
+      ]
+    )
     let state = GraphicsStateSnapshot.fixture(font: font)
     try renderer.process(.init(operation: .paint(.text(run)), before: state, after: state))
     try renderer.transmitPage(.init(operation: .page(.show), before: state, after: state), copies: 1)
@@ -189,15 +263,18 @@ struct PDFGraphicsTargetTests {
       program: .empty,
       resolvedGlyphIndex: 1
     )
-    let run = GraphicsGlyphRun(rootFont: font, glyphs: [
-      .init(
-        glyph: glyph,
-        origin: .init(x: 20, y: 30),
-        transform: .init(a: 0.012, b: 0, c: 0, d: 0.012, tx: 20, ty: 30),
-        advance: .init(x: 7.2, y: 0),
-        unicodeScalars: ["A".unicodeScalars.first!]
-      ),
-    ])
+    let run = GraphicsGlyphRun(
+      rootFont: font,
+      glyphs: [
+        .init(
+          glyph: glyph,
+          origin: .init(x: 20, y: 30),
+          transform: .init(a: 0.012, b: 0, c: 0, d: 0.012, tx: 20, ty: 30),
+          advance: .init(x: 7.2, y: 0),
+          unicodeScalars: ["A".unicodeScalars.first!]
+        )
+      ]
+    )
     let state = GraphicsStateSnapshot.fixture(font: font)
     try renderer.process(.init(operation: .paint(.text(run)), before: state, after: state))
     try renderer.transmitPage(.init(operation: .page(.show), before: state, after: state), copies: 1)

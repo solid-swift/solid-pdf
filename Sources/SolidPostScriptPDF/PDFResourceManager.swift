@@ -10,19 +10,50 @@ struct PDFFontSelection {
   let size: Double
 }
 
+private extension GraphicsBlendMode {
+  var pdfName: String {
+    switch self {
+    case .normal: "Normal"
+    case .multiply: "Multiply"
+    case .screen: "Screen"
+    case .overlay: "Overlay"
+    case .darken: "Darken"
+    case .lighten: "Lighten"
+    case .colorDodge: "ColorDodge"
+    case .colorBurn: "ColorBurn"
+    case .hardLight: "HardLight"
+    case .softLight: "SoftLight"
+    case .difference: "Difference"
+    case .exclusion: "Exclusion"
+    case .hue: "Hue"
+    case .saturation: "Saturation"
+    case .color: "Color"
+    case .luminosity: "Luminosity"
+    }
+  }
+}
+
 final class PDFResourceManager<Sink: PDFOutputSink> {
   private struct NamedReference {
     let name: PDFName
     let reference: PDFObjectReference
   }
 
+  private struct TransparencyKey: Hashable {
+    let state: GraphicsTransparencyState
+    let strokingAlpha: Double
+    let nonstrokingAlpha: Double
+  }
+
   private var images: [GraphicsImage: NamedReference] = [:]
   private var rasterImages: [RasterImage: NamedReference] = [:]
   private var forms: [GraphicsForm: NamedReference] = [:]
+  private var transparencyGroups: [GraphicsTransparencyGroup: NamedReference] = [:]
   private var patterns: [GraphicsPatternPaint: NamedReference] = [:]
   private var shadings: [GraphicsShading: NamedReference] = [:]
   private var colorSpaces: [GraphicsColorSpaceDescription: NamedReference] = [:]
   private var overprintStates: [Bool: NamedReference] = [:]
+  private var transparencyStates: [TransparencyKey: NamedReference] = [:]
   private var plannedGlyphs: [PDFFontGroupKey: [PDFFontGlyphKey: PDFFontSelection]] = [:]
   private var xObjects: [PDFName: PDFObjectReference] = [:]
   private var shadingObjects: [PDFName: PDFObjectReference] = [:]
@@ -404,22 +435,29 @@ final class PDFResourceManager<Sink: PDFOutputSink> {
     to reference: PDFObjectReference,
     writer: inout PDFDocumentWriter<Sink>
   ) throws {
-    let bounds = subset.metrics.bounds ?? FontBounds(
-      minimumX: 0, minimumY: subset.metrics.descent,
-      maximumX: Double(subset.unitsPerEm), maximumY: subset.metrics.ascent
-    )
-    try writer.write(.dictionary([
-      "Type": .name("FontDescriptor"), "FontName": .name(PDFName(subset.postScriptName)),
-      "Flags": .integer(4),
-      "FontBBox": .array([
-        .real(bounds.minimumX), .real(bounds.minimumY), .real(bounds.maximumX), .real(bounds.maximumY),
+    let bounds =
+      subset.metrics.bounds
+      ?? FontBounds(
+        minimumX: 0,
+        minimumY: subset.metrics.descent,
+        maximumX: Double(subset.unitsPerEm),
+        maximumY: subset.metrics.ascent
+      )
+    try writer.write(
+      .dictionary([
+        "Type": .name("FontDescriptor"), "FontName": .name(PDFName(subset.postScriptName)),
+        "Flags": .integer(4),
+        "FontBBox": .array([
+          .real(bounds.minimumX), .real(bounds.minimumY), .real(bounds.maximumX), .real(bounds.maximumY),
+        ]),
+        "ItalicAngle": .real(subset.metrics.italicAngle),
+        "Ascent": .real(subset.metrics.ascent == 0 ? Double(subset.unitsPerEm) * 0.8 : subset.metrics.ascent),
+        "Descent": .real(subset.metrics.descent == 0 ? -Double(subset.unitsPerEm) * 0.2 : subset.metrics.descent),
+        "CapHeight": .real(subset.metrics.capHeight ?? subset.metrics.ascent),
+        "StemV": .real(subset.metrics.stemV ?? 80), programKey: .reference(programReference),
       ]),
-      "ItalicAngle": .real(subset.metrics.italicAngle),
-      "Ascent": .real(subset.metrics.ascent == 0 ? Double(subset.unitsPerEm) * 0.8 : subset.metrics.ascent),
-      "Descent": .real(subset.metrics.descent == 0 ? -Double(subset.unitsPerEm) * 0.2 : subset.metrics.descent),
-      "CapHeight": .real(subset.metrics.capHeight ?? subset.metrics.ascent),
-      "StemV": .real(subset.metrics.stemV ?? 80), programKey: .reference(programReference),
-    ]), to: reference)
+      to: reference
+    )
   }
 
   private func type1PDFProgram(_ data: Data) throws -> Data {
@@ -690,6 +728,121 @@ final class PDFResourceManager<Sink: PDFOutputSink> {
       to: reference
     )
     return name
+  }
+
+  func ensureTransparencyGroup(
+    _ group: GraphicsTransparencyGroup,
+    writer: inout PDFDocumentWriter<Sink>
+  ) throws -> PDFName {
+    if let existing = transparencyGroups[group] { return existing.name }
+    let name = PDFName("Tr\(transparencyGroups.count + 1)")
+    let reference = try writer.reserveObject()
+    transparencyGroups[group] = NamedReference(name: name, reference: reference)
+    xObjects[name] = reference
+    let content = try PDFGraphicsContentEncoder.encode(
+      group.displayList.effects,
+      resources: self,
+      writer: &writer
+    )
+    let bounds = group.bounds
+    var groupDictionary: [PDFName: PDFObject] = [
+      "S": .name("Transparency"),
+      "I": .boolean(group.isolated),
+      "K": .boolean(group.knockout),
+    ]
+    if let colorSpace = group.colorSpace {
+      groupDictionary["CS"] = try pdfColorSpace(colorSpace, writer: &writer)
+    }
+    try writer.writeStream(
+      dictionary: [
+        "Type": .name("XObject"),
+        "Subtype": .name("Form"),
+        "FormType": .integer(1),
+        "BBox": .array([
+          .real(bounds.x), .real(bounds.y), .real(bounds.maxX), .real(bounds.maxY),
+        ]),
+        "Group": .dictionary(groupDictionary),
+        "Resources": .reference(resourcesReference),
+      ],
+      chunks: [content],
+      to: reference
+    )
+    return name
+  }
+
+  func ensureTransparency(
+    _ transparency: GraphicsTransparencyState,
+    strokingAlpha: Double? = nil,
+    nonstrokingAlpha: Double? = nil,
+    writer: inout PDFDocumentWriter<Sink>
+  ) throws -> PDFName {
+    let key = TransparencyKey(
+      state: transparency,
+      strokingAlpha: strokingAlpha ?? transparency.constantAlpha,
+      nonstrokingAlpha: nonstrokingAlpha ?? transparency.constantAlpha
+    )
+    if let existing = transparencyStates[key] { return existing.name }
+    let name = PDFName("GStr\(transparencyStates.count + 1)")
+    let reference = try writer.reserveObject()
+    transparencyStates[key] = NamedReference(name: name, reference: reference)
+    graphicsStates[name] = reference
+    var dictionary: [PDFName: PDFObject] = [
+      "Type": .name("ExtGState"),
+      "BM": .name(PDFName(transparency.blendMode.pdfName)),
+      "ca": .real(key.nonstrokingAlpha),
+      "CA": .real(key.strokingAlpha),
+      "AIS": .boolean(transparency.alphaIsShape),
+      "TK": .boolean(transparency.textKnockout),
+    ]
+    if let mask = transparency.softMask {
+      let groupName = try ensureTransparencyGroup(mask.group, writer: &writer)
+      guard let groupReference = xObjects[groupName] else { throw PDFError.invalidReference }
+      var maskDictionary: [PDFName: PDFObject] = [
+        "S": .name(mask.subtype == .alpha ? "Alpha" : "Luminosity"),
+        "G": .reference(groupReference),
+      ]
+      if !mask.backdrop.isEmpty { maskDictionary["BC"] = .array(mask.backdrop.map(PDFObject.real)) }
+      if let transfer = mask.transferFunction {
+        maskDictionary["TR"] = .reference(try sampledFunction(transfer, writer: &writer))
+      }
+      dictionary["SMask"] = .dictionary(maskDictionary)
+    } else {
+      dictionary["SMask"] = .name("None")
+    }
+    try writer.write(.dictionary(dictionary), to: reference)
+    return name
+  }
+
+  private func sampledFunction(
+    _ function: GraphicsComponentFunction,
+    writer: inout PDFDocumentWriter<Sink>
+  ) throws -> PDFObjectReference {
+    let reference = try writer.reserveObject()
+    let data = Data(function.samples.map { UInt8((min(1, max(0, $0)) * 255).rounded()) })
+    try writer.writeStream(
+      dictionary: [
+        "FunctionType": .integer(0),
+        "Domain": .array([.integer(0), .integer(1)]),
+        "Range": .array([.integer(0), .integer(1)]),
+        "Size": .array([.integer(function.samples.count)]),
+        "BitsPerSample": .integer(8),
+      ],
+      chunks: [data],
+      to: reference
+    )
+    return reference
+  }
+
+  private func pdfColorSpace(
+    _ space: GraphicsColorSpaceDescription,
+    writer: inout PDFDocumentWriter<Sink>
+  ) throws -> PDFObject {
+    switch space {
+    case .deviceGray: .name("DeviceGray")
+    case .deviceRGB: .name("DeviceRGB")
+    case .deviceCMYK: .name("DeviceCMYK")
+    default: .name(try ensureColorSpace(space, writer: &writer))
+    }
   }
 
   func ensureShading(

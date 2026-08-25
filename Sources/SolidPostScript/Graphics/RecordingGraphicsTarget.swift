@@ -12,6 +12,8 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
 
     /// Pages transmitted so far.
     public private(set) var pages: [RecordedGraphicsPage] = []
+    /// Recordings retain hidden effects for later semantic analysis.
+    public var preservesHiddenSemanticContent: Bool { true }
 
     private var descriptor: GraphicsDeviceDescriptor
     private var effects: [GraphicsEffect] = []
@@ -56,6 +58,8 @@ public struct RecordingGraphicsTarget: GraphicsTarget, Sendable {
         append(.form(form, state: event.before))
       case .paint(.text(let run)):
         append(.text(run, state: event.before))
+      case .content(.markedContent(let operation)):
+        append(.markedContent(operation, state: event.before))
       case .page(.show), .page(.copy):
         let transmission = GraphicsPageTransmission(
           trigger: event.operation == .page(.copy) ? .copyPage : .showPage,

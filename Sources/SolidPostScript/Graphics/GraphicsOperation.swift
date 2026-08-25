@@ -31,6 +31,7 @@ public enum GraphicsOperation: Sendable, Hashable {
     case setUndercolorRemoval
     case setHalftone
     case setFont(GraphicsFontDescription)
+    case setTransparency(GraphicsTransparencyState)
     case setTrappingParameters(GraphicsTrappingParameters)
     case setTrappingZone(GraphicsTrappingZone)
   }
@@ -83,6 +84,7 @@ public enum GraphicsOperation: Sendable, Hashable {
     case erasePage
     case fill(GraphicsFillRule)
     case stroke
+    case fillAndStroke(GraphicsFillRule)
     case fillRectangles([GraphicsPath])
     case strokeRectangles(paths: [GraphicsPath], matrix: GraphicsMatrix?)
     case image(GraphicsImageDescriptor)
@@ -90,6 +92,7 @@ public enum GraphicsOperation: Sendable, Hashable {
     case userPathStroke
     case shading(GraphicsShading)
     case form(GraphicsForm)
+    case transparencyGroup(GraphicsTransparencyGroup)
     case text(GraphicsGlyphRun)
   }
 
@@ -99,10 +102,16 @@ public enum GraphicsOperation: Sendable, Hashable {
     case copy
   }
 
+  /// A document-semantic operation that does not directly paint.
+  public enum Content: Sendable, Hashable {
+    case markedContent(GraphicsMarkedContentOperation)
+  }
+
   case state(State)
   case transform(Transform)
   case path(Path)
   case clip(Clip)
   case paint(Paint)
+  case content(Content)
   case page(Page)
 }

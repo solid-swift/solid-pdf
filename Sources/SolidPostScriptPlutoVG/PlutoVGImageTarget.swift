@@ -90,6 +90,13 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         try fill(event.before.path, rule: rule, state: event.before, in: canvas)
       case .paint(.stroke):
         try stroke(event.before.path, state: event.before, in: canvas)
+      case .paint(.fillAndStroke(let rule)):
+        try fillAndStroke(
+          event.before.path,
+          rule: rule,
+          fillState: event.before,
+          strokeState: event.after
+        )
       case .paint(.userPathFill(let rule)):
         try fill(event.before.path, rule: rule, state: event.before, in: canvas)
       case .paint(.userPathStroke):
@@ -107,6 +114,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         try paintShading(shading, clip: event.before.clip, state: event.before, in: canvas)
       case .paint(.form(let form)):
         try paintForm(form, in: canvas, depth: 0)
+      case .paint(.transparencyGroup(let group)):
+        try paintTransparencyGroup(group, state: event.before, depth: 0)
       case .paint(.text(let run)):
         try paintText(run, state: event.before, in: canvas, depth: 0)
       case .page(.show), .page(.copy):
@@ -319,7 +328,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
 
     private static func makePage(
       pixelWidth: Int,
-      pixelHeight: Int
+      pixelHeight: Int,
+      transparent: Bool = false
     ) throws -> (surface: OpaquePointer, canvas: OpaquePointer) {
       guard let surface = plutovg_surface_create(Int32(pixelWidth), Int32(pixelHeight)) else {
         throw SolidPostScript.Error.ioError
@@ -328,8 +338,11 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         plutovg_surface_destroy(surface)
         throw SolidPostScript.Error.ioError
       }
-      var white = plutovg_color_t(r: 1, g: 1, b: 1, a: 1)
-      plutovg_surface_clear(surface, &white)
+      var background =
+        transparent
+        ? plutovg_color_t(r: 0, g: 0, b: 0, a: 0)
+        : plutovg_color_t(r: 1, g: 1, b: 1, a: 1)
+      plutovg_surface_clear(surface, &background)
       return (surface, canvas)
     }
 
@@ -402,6 +415,12 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       state: GraphicsStateSnapshot,
       in canvas: OpaquePointer
     ) throws {
+      if state.transparency != .opaque {
+        try compositeTransparencyObject(state.transparency) { offscreen in
+          try fill(path, rule: rule, state: state.replacingTransparency(.opaque), in: offscreen)
+        }
+        return
+      }
       if case .pattern(let pattern) = state.paint {
         try fillPattern(pattern, through: path, rule: rule, state: state, in: canvas, depth: 0)
         return
@@ -430,6 +449,12 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       state: GraphicsStateSnapshot,
       in canvas: OpaquePointer
     ) throws {
+      if state.transparency != .opaque {
+        try compositeTransparencyObject(state.transparency) { offscreen in
+          try stroke(path, matrix: matrix, state: state.replacingTransparency(.opaque), in: offscreen)
+        }
+        return
+      }
       if case .pattern = state.paint {
         let outline = try GraphicsPathGeometry.strokeOutline(path: path, state: state, matrix: matrix)
         try fill(outline, rule: .winding, state: state, in: canvas)
@@ -506,12 +531,66 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       }
     }
 
+    private func paintTransparencyGroup(
+      _ group: GraphicsTransparencyGroup,
+      state: GraphicsStateSnapshot,
+      depth: Int
+    ) throws {
+      guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      try compositeTransparencyObject(state.transparency) { offscreen in
+        for effect in group.displayList.effects {
+          try replayFormEffect(effect, in: offscreen, depth: depth + 1)
+        }
+      }
+    }
+
+    private func fillAndStroke(
+      _ path: GraphicsPath,
+      rule: GraphicsFillRule,
+      fillState: GraphicsStateSnapshot,
+      strokeState: GraphicsStateSnapshot
+    ) throws {
+      let outer = GraphicsTransparencyState(
+        blendMode: fillState.transparency.blendMode,
+        softMask: fillState.transparency.softMask,
+        textKnockout: fillState.transparency.textKnockout
+      )
+      let fillTransparency = GraphicsTransparencyState(
+        constantAlpha: fillState.transparency.constantAlpha,
+        alphaIsShape: fillState.transparency.alphaIsShape,
+        textKnockout: fillState.transparency.textKnockout
+      )
+      let strokeTransparency = GraphicsTransparencyState(
+        constantAlpha: strokeState.transparency.constantAlpha,
+        alphaIsShape: strokeState.transparency.alphaIsShape,
+        textKnockout: strokeState.transparency.textKnockout
+      )
+      try compositeTransparencyObject(outer) { offscreen in
+        try fill(
+          path,
+          rule: rule,
+          state: fillState.replacingTransparency(fillTransparency),
+          in: offscreen
+        )
+        try stroke(
+          path,
+          matrix: strokeState.matrix,
+          state: strokeState.replacingTransparency(strokeTransparency),
+          in: offscreen
+        )
+      }
+    }
+
     private func replayFormEffect(_ effect: GraphicsEffect, in canvas: OpaquePointer, depth: Int) throws {
       switch effect {
+      case .markedContent:
+        break
       case .fill(let path, let rule, let state), .userPathFill(let path, let rule, let state):
         try fill(path, rule: rule, state: state, in: canvas)
       case .stroke(let path, let state):
         try stroke(path, state: state, in: canvas)
+      case .fillAndStroke(let path, let rule, let fillState, let strokeState):
+        try fillAndStroke(path, rule: rule, fillState: fillState, strokeState: strokeState)
       case .userPathStroke(let outline, let state):
         try fill(outline, rule: .winding, state: state, in: canvas)
       case .erase(let state):
@@ -552,6 +631,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         try paintShading(shading, clip: state.clip, state: state, in: canvas)
       case .form(let nested, _):
         try paintForm(nested, in: canvas, depth: depth)
+      case .transparencyGroup(let group, let state):
+        try paintTransparencyGroup(group, state: state, depth: depth)
       case .text(let run, let state):
         try paintText(run, state: state, in: canvas, depth: depth)
       }
@@ -564,11 +645,67 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       depth: Int
     ) throws {
       guard depth < 16 else { throw SolidPostScript.Error.ioError }
+      let sourceTransparency = run.style?.fillTransparency ?? state.transparency
+      let outerTransparency = GraphicsTransparencyState(
+        blendMode: sourceTransparency.blendMode,
+        alphaIsShape: sourceTransparency.alphaIsShape,
+        softMask: sourceTransparency.softMask,
+        textKnockout: sourceTransparency.textKnockout
+      )
+      if outerTransparency != .opaque {
+        try compositeTransparencyObject(outerTransparency) { offscreen in
+          try paintTextGlyphs(
+            run,
+            state: state.replacingTransparency(.opaque),
+            in: offscreen,
+            depth: depth
+          )
+        }
+        return
+      }
+      try paintTextGlyphs(run, state: state, in: canvas, depth: depth)
+    }
+
+    private func paintTextGlyphs(
+      _ run: GraphicsGlyphRun,
+      state: GraphicsStateSnapshot,
+      in canvas: OpaquePointer,
+      depth: Int
+    ) throws {
+      let fillState =
+        run.style.map {
+          state.replacingColor(with: $0.fill)
+            .replacingTransparency(
+              GraphicsTransparencyState(
+                constantAlpha: $0.fillTransparency.constantAlpha,
+                alphaIsShape: $0.fillTransparency.alphaIsShape,
+                textKnockout: $0.fillTransparency.textKnockout
+              )
+            )
+        } ?? state
+      let strokeState =
+        run.style.map {
+          state.replacingColor(with: $0.stroke)
+            .replacingTransparency(
+              GraphicsTransparencyState(
+                constantAlpha: $0.strokeTransparency.constantAlpha,
+                alphaIsShape: $0.strokeTransparency.alphaIsShape,
+                textKnockout: $0.strokeTransparency.textKnockout
+              )
+            )
+        } ?? state
       for placement in run.glyphs {
         switch placement.glyph.program {
         case .outline(let path):
-          try fill(path.transformed(by: placement.transform), rule: .winding, state: state, in: canvas)
+          let outline = path.transformed(by: placement.transform)
+          if run.renderingMode.fills {
+            try fill(outline, rule: .winding, state: fillState, in: canvas)
+          }
+          if run.renderingMode.strokes {
+            try stroke(outline, matrix: state.matrix, state: strokeState, in: canvas)
+          }
         case .displayList(let list):
+          guard run.renderingMode != .invisible else { continue }
           for effect in list.effects { try replayFormEffect(effect, in: canvas, depth: depth + 1) }
         case .bitmap, .empty, .missing:
           break
@@ -633,34 +770,19 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
           deviceRendering: imageState.deviceRendering
         )
         do {
-          try converter.write(GraphicsImageRows(
-            startRow: 0,
-            rowCount: image.completedRowCount,
-            components: image.components,
-            sourceComponents: image.sourceComponents
-          ))
-          let state = GraphicsStateSnapshot(
-            matrix: imageState.matrix,
-            path: imageState.path,
-            clip: GraphicsClip(
+          try converter.write(
+            GraphicsImageRows(
+              startRow: 0,
+              rowCount: image.completedRowCount,
+              components: image.components,
+              sourceComponents: image.sourceComponents
+            )
+          )
+          let state = imageState.replacingClip(
+            GraphicsClip(
               imageableBounds: imageState.clip.imageableBounds,
               constraints: translatedConstraints
-            ),
-            paint: imageState.paint,
-            colorSpace: imageState.colorSpace,
-            colorComponents: imageState.colorComponents,
-            overprint: imageState.overprint,
-            lineWidth: imageState.lineWidth,
-            lineCap: imageState.lineCap,
-            lineJoin: imageState.lineJoin,
-            miterLimit: imageState.miterLimit,
-            dash: imageState.dash,
-            flatness: imageState.flatness,
-            strokeAdjustment: imageState.strokeAdjustment,
-            smoothness: imageState.smoothness,
-            pathBoundingBox: imageState.pathBoundingBox,
-            device: imageState.device,
-            deviceRendering: imageState.deviceRendering
+            )
           )
           try draw(
             converter.finish(),
@@ -679,6 +801,8 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       let rule: GraphicsFillRule
       let state: GraphicsStateSnapshot
       switch effect {
+      case .markedContent:
+        return
       case .form(let form, _):
         guard depth < 16 else { throw SolidPostScript.Error.ioError }
         for nested in form.displayList.effects {
@@ -691,8 +815,36 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
           )
         }
         return
+      case .transparencyGroup(let group, _):
+        guard depth < 16 else { throw SolidPostScript.Error.ioError }
+        for nested in group.displayList.effects {
+          try replayPatternEffect(
+            nested,
+            translation: translation,
+            underlying: underlying,
+            in: canvas,
+            depth: depth + 1
+          )
+        }
+        return
+      case .fillAndStroke(let path, let fillRule, let fillState, let strokeState):
+        try replayPatternEffect(
+          .fill(path: path, rule: fillRule, state: fillState),
+          translation: translation,
+          underlying: underlying,
+          in: canvas,
+          depth: depth
+        )
+        try replayPatternEffect(
+          .stroke(path: path, state: strokeState),
+          translation: translation,
+          underlying: underlying,
+          in: canvas,
+          depth: depth
+        )
+        return
       case .fill(let value, let valueRule, let valueState),
-           .userPathFill(let value, let valueRule, let valueState):
+        .userPathFill(let value, let valueRule, let valueState):
         path = value.transformed(by: translation)
         rule = valueRule
         state = valueState
@@ -831,6 +983,17 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       state: GraphicsStateSnapshot,
       in canvas: OpaquePointer
     ) throws {
+      if state.transparency != .opaque {
+        try compositeTransparencyObject(state.transparency) { offscreen in
+          try paintShading(
+            shading,
+            clip: clip,
+            state: state.replacingTransparency(.opaque),
+            in: offscreen
+          )
+        }
+        return
+      }
       let paints = shading.mesh.triangles.flatMap {
         [$0.first.paint, $0.second.paint, $0.third.paint]
       }
@@ -860,31 +1023,25 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
         height: pixelHeight,
         kind: .color(.deviceRGB),
         imageToDevice: GraphicsMatrix(
-          a: 1, b: 0, c: 0, d: -1,
+          a: 1,
+          b: 0,
+          c: 0,
+          d: -1,
           tx: descriptor.mediaBounds.x,
           ty: descriptor.mediaBounds.maxY
         ),
         interpolate: true
       )
-      let shadingConstraints = shading.clipPath.map {
-        [GraphicsClipConstraint(path: $0, rule: .winding)]
-      } ?? []
+      let shadingConstraints =
+        shading.clipPath.map {
+          [GraphicsClipConstraint(path: $0, rule: .winding)]
+        } ?? []
       let baseClip = clip ?? GraphicsClip(imageableBounds: descriptor.imageableBounds)
-      let state = GraphicsStateSnapshot(
-        matrix: .identity,
-        path: .init(),
-        clip: GraphicsClip(
+      let state = state.replacingClip(
+        GraphicsClip(
           imageableBounds: baseClip.imageableBounds,
           constraints: baseClip.constraints + shadingConstraints
-        ),
-        paint: .deviceGray(0),
-        lineWidth: 1,
-        lineCap: .butt,
-        lineJoin: .miter,
-        miterLimit: 10,
-        dash: .init(),
-        device: state.device,
-        deviceRendering: state.deviceRendering
+        )
       )
       if let background = shading.background {
         plutovg_canvas_save(canvas)
@@ -950,6 +1107,18 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       mask: RasterMask? = nil,
       in canvas: OpaquePointer
     ) throws {
+      if state.transparency != .opaque {
+        try compositeTransparencyObject(state.transparency) { offscreen in
+          try draw(
+            image,
+            descriptor: descriptor,
+            state: state.replacingTransparency(.opaque),
+            mask: mask,
+            in: offscreen
+          )
+        }
+        return
+      }
       if let mask {
         if let masked = try alignedMaskedImage(image, mask: mask, descriptor: descriptor) {
           try draw(masked, descriptor: descriptor, state: state, in: canvas)
@@ -1210,6 +1379,169 @@ public struct PlutoVGImageTarget: GraphicsTarget, Sendable {
       }
       plutovg_canvas_new_path(canvas)
       plutovg_canvas_add_path(canvas, nativePath)
+    }
+
+    private func compositeTransparencyObject(
+      _ transparency: GraphicsTransparencyState,
+      draw: (OpaquePointer) throws -> Void
+    ) throws {
+      let source = try captureTransparent(draw)
+      let backdrop = try currentImage()
+      let mask = try transparency.softMask.map {
+        try rasterSoftMask($0, kind: transparency.alphaIsShape ? .shape : .opacity)
+      }
+      do {
+        var compositor = try RasterCanvas(image: backdrop)
+        try compositor.composite(
+          source,
+          parameters: RasterCompositingParameters(
+            blendMode: transparency.blendMode,
+            constantAlpha: transparency.constantAlpha,
+            alphaIsShape: transparency.alphaIsShape
+          ),
+          softMask: mask
+        )
+        try replaceCurrentSurface(with: compositor.finish())
+      } catch is RasterError {
+        throw SolidPostScript.Error.ioError
+      }
+    }
+
+    private func captureTransparent(
+      _ draw: (OpaquePointer) throws -> Void
+    ) throws -> RasterImage {
+      guard let savedSurface = surface.take(), let savedCanvas = canvas.take() else {
+        throw SolidPostScript.Error.ioError
+      }
+      let offscreen: (surface: OpaquePointer, canvas: OpaquePointer)
+      do {
+        offscreen = try Self.makePage(
+          pixelWidth: pixelWidth,
+          pixelHeight: pixelHeight,
+          transparent: true
+        )
+      } catch {
+        surface = savedSurface
+        canvas = savedCanvas
+        throw error
+      }
+      surface = offscreen.surface
+      canvas = offscreen.canvas
+      do {
+        try draw(offscreen.canvas)
+        let result = try snapshot(offscreen.surface)
+        releasePage()
+        surface = savedSurface
+        canvas = savedCanvas
+        return result
+      } catch {
+        releasePage()
+        surface = savedSurface
+        canvas = savedCanvas
+        throw error
+      }
+    }
+
+    private func currentImage() throws -> RasterImage {
+      guard let surface else { throw SolidPostScript.Error.ioError }
+      return try snapshot(surface)
+    }
+
+    private func replaceCurrentSurface(with image: RasterImage) throws {
+      guard image.width == pixelWidth,
+        image.height == pixelHeight,
+        image.pixelFormat == .rgba8Unorm,
+        let surface,
+        let destination = plutovg_surface_get_data(surface)
+      else { throw SolidPostScript.Error.ioError }
+      let stride = Int(plutovg_surface_get_stride(surface))
+      guard stride == image.bytesPerRow else { throw SolidPostScript.Error.ioError }
+      try image.data.withUnsafeBytes { bytes in
+        guard let source = bytes.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+          throw SolidPostScript.Error.ioError
+        }
+        plutovg_convert_rgba_to_argb(
+          destination,
+          source,
+          Int32(pixelWidth),
+          Int32(pixelHeight),
+          Int32(stride)
+        )
+      }
+    }
+
+    private func rasterSoftMask(
+      _ mask: GraphicsSoftMask,
+      kind: RasterSoftMaskKind
+    ) throws -> RasterSoftMaskPlane {
+      let image = try captureTransparent { offscreen in
+        if mask.subtype == .luminosity, let paint = softMaskBackdropPaint(mask) {
+          guard case .solid(let color) = try colorSession.resolve(paint) else {
+            throw SolidPostScript.Error.ioError
+          }
+          plutovg_canvas_save(offscreen)
+          try setMatrix(rasterMatrix, in: offscreen)
+          try addRect(mask.group.bounds, to: offscreen)
+          plutovg_canvas_set_rgba(
+            offscreen,
+            try float(color.red),
+            try float(color.green),
+            try float(color.blue),
+            try float(color.alpha)
+          )
+          plutovg_canvas_fill(offscreen)
+          plutovg_canvas_restore(offscreen)
+        }
+        for effect in mask.group.displayList.effects {
+          try replayFormEffect(effect, in: offscreen, depth: 1)
+        }
+      }
+      var samples: [UInt16] = []
+      samples.reserveCapacity(pixelWidth * pixelHeight)
+      for offset in stride(from: 0, to: image.data.count, by: 4) {
+        let alpha = Double(image.data[offset + 3]) / 255
+        var value: Double
+        switch mask.subtype {
+        case .alpha:
+          value = alpha
+        case .luminosity:
+          value =
+            alpha
+            * (0.3 * Double(image.data[offset]) / 255
+              + 0.59 * Double(image.data[offset + 1]) / 255
+              + 0.11 * Double(image.data[offset + 2]) / 255)
+        }
+        if let transfer = mask.transferFunction { value = transfer.evaluate(value) }
+        samples.append(UInt16((min(1, max(0, value)) * Double(UInt16.max)).rounded()))
+      }
+      do {
+        return try RasterSoftMaskPlane(
+          width: pixelWidth,
+          height: pixelHeight,
+          kind: kind,
+          samples: samples
+        )
+      } catch {
+        throw SolidPostScript.Error.ioError
+      }
+    }
+
+    private func softMaskBackdropPaint(_ mask: GraphicsSoftMask) -> GraphicsPaint? {
+      switch mask.group.colorSpace {
+      case .deviceGray where mask.backdrop.count == 1:
+        .deviceGray(mask.backdrop[0])
+      case .deviceRGB where mask.backdrop.count == 3:
+        .deviceRGB(red: mask.backdrop[0], green: mask.backdrop[1], blue: mask.backdrop[2])
+      case .deviceCMYK where mask.backdrop.count == 4:
+        .deviceCMYK(
+          cyan: mask.backdrop[0],
+          magenta: mask.backdrop[1],
+          yellow: mask.backdrop[2],
+          black: mask.backdrop[3]
+        )
+      default:
+        nil
+      }
     }
 
     private func setPaint(

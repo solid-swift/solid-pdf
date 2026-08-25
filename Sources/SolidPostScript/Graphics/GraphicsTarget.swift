@@ -204,6 +204,8 @@ public protocol GraphicsRenderer<PageOutput, Output>: GraphicsEventConsumer {
 
   /// Pages transmitted so far.
   var pages: [PageOutput] { get }
+  /// Whether the renderer retains hidden semantic paint for document analysis.
+  var preservesHiddenSemanticContent: Bool { get }
   /// Installs render-scoped Appendix C storage accounting before device activation.
   func installStorageAccounting(_ session: GraphicsStorageAccountingSession) throws
   /// Completes the render, discarding an untransmitted final page.
@@ -211,6 +213,8 @@ public protocol GraphicsRenderer<PageOutput, Output>: GraphicsEventConsumer {
 }
 
 extension GraphicsRenderer {
+  /// Visual renderers omit painting operations whose evaluated visibility is hidden.
+  public var preservesHiddenSemanticContent: Bool { false }
   /// Leaves renderer-owned storage outside Appendix C accounting for source compatibility.
   public func installStorageAccounting(_ session: GraphicsStorageAccountingSession) throws {}
 }

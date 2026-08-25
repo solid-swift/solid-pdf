@@ -1,4 +1,5 @@
 import Foundation
+import SolidColor
 
 /// An immutable snapshot of the canonical PostScript graphics state.
 public struct GraphicsStateSnapshot: Sendable, Hashable {
@@ -42,6 +43,10 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
   public let deviceRendering: GraphicsDeviceRenderingSnapshot
   /// The current language-visible font.
   public let font: GraphicsFontDescription
+  /// The current color-rendering intent.
+  public let renderingIntent: ColorRenderingIntent
+  /// The transparency parameters for the next elementary object.
+  public let transparency: GraphicsTransparencyState
 
   /// Creates a graphics-state snapshot.
   public init(
@@ -64,7 +69,9 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     pathBoundingBox: GraphicsRect? = nil,
     device: GraphicsDeviceSnapshot = .letter,
     deviceRendering: GraphicsDeviceRenderingSnapshot = .continuousTone,
-    font: GraphicsFontDescription = .invalid
+    font: GraphicsFontDescription = .invalid,
+    renderingIntent: ColorRenderingIntent = .relativeColorimetric,
+    transparency: GraphicsTransparencyState = .opaque
   ) {
     self.matrix = matrix
     self.path = path
@@ -86,6 +93,8 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
     self.device = device
     self.deviceRendering = deviceRendering
     self.font = font
+    self.renderingIntent = renderingIntent
+    self.transparency = transparency
   }
 
   /// Returns a copy using the caller's current device-owned lifecycle state.
@@ -110,7 +119,93 @@ public struct GraphicsStateSnapshot: Sendable, Hashable {
       pathBoundingBox: pathBoundingBox,
       device: device,
       deviceRendering: deviceRendering,
-      font: font
+      font: font,
+      renderingIntent: renderingIntent,
+      transparency: transparency
+    )
+  }
+
+  /// Returns a copy using one independently captured PDF text paint.
+  public func replacingColor(with textPaint: GraphicsTextPaint) -> Self {
+    Self(
+      matrix: matrix,
+      path: path,
+      clip: clip,
+      paint: textPaint.paint,
+      colorSpace: textPaint.colorSpace,
+      colorRealization: textPaint.colorRealization,
+      colorComponents: textPaint.components,
+      overprint: textPaint.overprint,
+      lineWidth: lineWidth,
+      lineCap: lineCap,
+      lineJoin: lineJoin,
+      miterLimit: miterLimit,
+      dash: dash,
+      flatness: flatness,
+      strokeAdjustment: strokeAdjustment,
+      smoothness: smoothness,
+      pathBoundingBox: pathBoundingBox,
+      device: device,
+      deviceRendering: deviceRendering,
+      font: font,
+      renderingIntent: renderingIntent,
+      transparency: transparency
+    )
+  }
+
+  /// Returns a copy with a replacement clipping region.
+  public func replacingClip(_ clip: GraphicsClip) -> Self {
+    Self(
+      matrix: matrix,
+      path: path,
+      clip: clip,
+      paint: paint,
+      colorSpace: colorSpace,
+      colorRealization: colorRealization,
+      colorComponents: colorComponents,
+      overprint: overprint,
+      lineWidth: lineWidth,
+      lineCap: lineCap,
+      lineJoin: lineJoin,
+      miterLimit: miterLimit,
+      dash: dash,
+      flatness: flatness,
+      strokeAdjustment: strokeAdjustment,
+      smoothness: smoothness,
+      pathBoundingBox: pathBoundingBox,
+      device: device,
+      deviceRendering: deviceRendering,
+      font: font,
+      renderingIntent: renderingIntent,
+      transparency: transparency
+    )
+  }
+
+  /// Returns a copy with replacement transparency parameters.
+  public func replacingTransparency(_ transparency: GraphicsTransparencyState) -> Self {
+    Self(
+      matrix: matrix,
+      path: path,
+      clip: clip,
+      paint: paint,
+      colorSpace: colorSpace,
+      colorRealization: colorRealization,
+      colorComponents: colorComponents,
+      overprint: overprint,
+      lineWidth: lineWidth,
+      lineCap: lineCap,
+      lineJoin: lineJoin,
+      miterLimit: miterLimit,
+      dash: dash,
+      flatness: flatness,
+      strokeAdjustment: strokeAdjustment,
+      smoothness: smoothness,
+      pathBoundingBox: pathBoundingBox,
+      device: device,
+      deviceRendering: deviceRendering,
+      font: font,
+      renderingIntent: renderingIntent,
+      transparency: transparency
     )
   }
 }

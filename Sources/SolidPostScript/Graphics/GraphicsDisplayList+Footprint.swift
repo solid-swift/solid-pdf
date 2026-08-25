@@ -44,8 +44,9 @@ package extension GraphicsDisplayList {
 private extension GraphicsEffect {
   func storageFootprint(depth: Int, maximumDepth: Int) -> GraphicsStorageFootprint? {
     switch self {
-    case .fill(let path, _, _), .stroke(let path, _), .userPathFill(let path, _, _),
-         .userPathStroke(let path, _):
+    case .fill(let path, _, _), .stroke(let path, _), .fillAndStroke(let path, _, _, _),
+      .userPathFill(let path, _, _),
+      .userPathStroke(let path, _):
       guard let elements = checkedProduct(path.elements.count, 56) else { return nil }
       return GraphicsStorageFootprint(displayBytes: elements + 256, sourceBytes: 0)
     case .fillRectangles(let paths, _), .strokeRectangles(let paths, _, _):
@@ -68,11 +69,24 @@ private extension GraphicsEffect {
       guard let triangles = checkedProduct(
         shading.mesh.triangles.count,
         MemoryLayout<GraphicsShadingTriangle>.stride
-      ) else { return nil }
-      return GraphicsStorageFootprint(displayBytes: triangles + 256, sourceBytes: 0)
+      ), let patches = shadingPatchBytes(shading.sourcePatches)
+      else { return nil }
+      let displayBytes = triangles.addingReportingOverflow(256)
+      guard !displayBytes.overflow else { return nil }
+      return GraphicsStorageFootprint(displayBytes: displayBytes.partialValue, sourceBytes: patches)
     case .form:
       // Cached form bodies are governed by MaxFormCache. A page display list retains only a reference.
       return GraphicsStorageFootprint(displayBytes: 128, sourceBytes: 0)
+    case .transparencyGroup(let group, _):
+      guard depth < maximumDepth else { return nil }
+      return group.displayList.effects.reduce(GraphicsStorageFootprint(displayBytes: 256, sourceBytes: 0)) {
+        partial,
+        effect in
+        guard let next = effect.storageFootprint(depth: depth + 1, maximumDepth: maximumDepth) else {
+          return GraphicsStorageFootprint(displayBytes: .max, sourceBytes: .max)
+        }
+        return partial.adding(next) ?? GraphicsStorageFootprint(displayBytes: .max, sourceBytes: .max)
+      }
     case .text(let run, _):
       var result = GraphicsStorageFootprint(displayBytes: 256, sourceBytes: 0)
       for placement in run.glyphs {
@@ -99,6 +113,8 @@ private extension GraphicsEffect {
         result = combined
       }
       return result
+    case .markedContent:
+      return GraphicsStorageFootprint(displayBytes: 128, sourceBytes: 0)
     case .erase:
       return GraphicsStorageFootprint(displayBytes: 128, sourceBytes: 0)
     }
@@ -106,8 +122,9 @@ private extension GraphicsEffect {
 
   func checkedFootprint(depth: Int, maximumDepth: Int) -> Int? {
     switch self {
-    case .fill(let path, _, _), .stroke(let path, _), .userPathFill(let path, _, _),
-         .userPathStroke(let path, _):
+    case .fill(let path, _, _), .stroke(let path, _), .fillAndStroke(let path, _, _, _),
+      .userPathFill(let path, _, _),
+      .userPathStroke(let path, _):
       guard let elementBytes = checkedProduct(path.elements.count, 56) else { return nil }
       let result = elementBytes.addingReportingOverflow(256)
       return result.overflow ? nil : result.partialValue
@@ -134,12 +151,18 @@ private extension GraphicsEffect {
       guard let triangleBytes = checkedProduct(
         shading.mesh.triangles.count,
         MemoryLayout<GraphicsShadingTriangle>.stride
-      ) else { return nil }
-      let result = triangleBytes.addingReportingOverflow(256)
+      ), let patchBytes = shadingPatchBytes(shading.sourcePatches)
+      else { return nil }
+      let retained = triangleBytes.addingReportingOverflow(patchBytes)
+      guard !retained.overflow else { return nil }
+      let result = retained.partialValue.addingReportingOverflow(256)
       return result.overflow ? nil : result.partialValue
     case .form(let form, _):
       guard depth < maximumDepth else { return nil }
       return form.displayList.checkedFootprint(depth: depth + 1, maximumDepth: maximumDepth)
+    case .transparencyGroup(let group, _):
+      guard depth < maximumDepth else { return nil }
+      return group.displayList.checkedFootprint(depth: depth + 1, maximumDepth: maximumDepth)
     case .text(let run, _):
       return run.glyphs.reduce(256) { partial, placement in
         let bytes: Int
@@ -157,6 +180,8 @@ private extension GraphicsEffect {
         let total = partial.addingReportingOverflow(bytes)
         return total.overflow ? .max : total.partialValue
       }
+    case .markedContent:
+      return 128
     case .erase:
       return 128
     }
@@ -165,5 +190,28 @@ private extension GraphicsEffect {
   func checkedProduct(_ lhs: Int, _ rhs: Int) -> Int? {
     let product = lhs.multipliedReportingOverflow(by: rhs)
     return product.overflow ? nil : product.partialValue
+  }
+
+  private func shadingPatchBytes(_ patches: [GraphicsShadingPatch]) -> Int? {
+    var result = 0
+    for patch in patches {
+      guard let points = checkedProduct(patch.controlPoints.count, MemoryLayout<GraphicsPoint>.stride)
+      else { return nil }
+      let components = patch.cornerComponents.reduce(0) { partial, values in
+        let product = values.count.multipliedReportingOverflow(by: MemoryLayout<Double>.stride)
+        guard !product.overflow else { return .max }
+        let sum = partial.addingReportingOverflow(product.partialValue)
+        return sum.overflow ? .max : sum.partialValue
+      }
+      guard components != .max else { return nil }
+      let retained = points.addingReportingOverflow(components)
+      guard !retained.overflow else { return nil }
+      let overhead = retained.partialValue.addingReportingOverflow(64)
+      guard !overhead.overflow else { return nil }
+      let total = result.addingReportingOverflow(overhead.partialValue)
+      guard !total.overflow else { return nil }
+      result = total.partialValue
+    }
+    return result
   }
 }

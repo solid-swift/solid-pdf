@@ -408,7 +408,7 @@ private extension GraphicsPoint {
 }
 
 extension GraphicsGlyphDescription {
-  init(_ glyph: FontGlyph, selector: GraphicsGlyphSelector) {
+  package init(_ glyph: FontGlyph, selector: GraphicsGlyphSelector) {
     let program: GraphicsGlyphProgram = switch glyph.program {
     case .outline(let outline): .outline(GraphicsPath(outline))
     case .bitmap(let bitmap): .bitmap(bitmap)
@@ -448,7 +448,7 @@ extension GraphicsGlyphDescription {
 }
 
 extension GraphicsPath {
-  init(_ outline: FontOutline) {
+  package init(_ outline: FontOutline) {
     var current = GraphicsPoint(x: 0, y: 0)
     var subpathStart = current
     var elements: [Element] = []
