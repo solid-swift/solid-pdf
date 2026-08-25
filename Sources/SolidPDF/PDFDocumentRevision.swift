@@ -18,6 +18,8 @@ public struct PDFDocumentRevision: Sendable, Hashable {
   public let fileIdentifier: [PDFString]?
   /// The encryption dictionary location effective for this revision.
   public let encryptionLocator: PDFEncryptionLocator?
+  /// Repairs contributing to this revision's recovered structure.
+  public let recoveryProvenance: PDFRecoveryProvenance?
 
   package let encryptionObject: PDFObject?
 
@@ -30,7 +32,8 @@ public struct PDFDocumentRevision: Sendable, Hashable {
     root: PDFObjectReference,
     info: PDFObjectReference?,
     fileIdentifier: [PDFString]?,
-    encryption: PDFObject?
+    encryption: PDFObject?,
+    recoveryProvenance: PDFRecoveryProvenance? = nil
   ) {
     self.identifier = identifier
     self.representation = representation
@@ -48,5 +51,6 @@ public struct PDFDocumentRevision: Sendable, Hashable {
     default: nil
     }
     encryptionObject = encryption
+    self.recoveryProvenance = recoveryProvenance
   }
 }

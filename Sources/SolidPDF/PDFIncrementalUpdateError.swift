@@ -24,6 +24,8 @@ public enum PDFIncrementalUpdateError: Error, Sendable, Hashable {
   case sourceChanged
   /// The staged revision failed strict validation.
   case validationFailed
+  /// Recovery did not preserve the byte-exact structure required for an incremental update.
+  case recoveredDocument(reason: String)
   /// The document was closed before the update completed.
   case documentClosed
   /// Output publication failed.

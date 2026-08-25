@@ -343,7 +343,8 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
             dictionary: dictionary,
             encodedRange: streamRange,
             objectReference: reference,
-            revision: revision
+            revision: revision,
+            recoveryProvenance: index.recoveryProvenance
           )
         )
       } else {
@@ -354,7 +355,8 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
         value: value,
         sourceRange: raw.sourceRange,
         provenance: .file,
-        definitionRevision: indexed.definitionRevision
+        definitionRevision: indexed.definitionRevision,
+        recoveryProvenance: index.recoveryProvenance
       )
     case .compressed(let objectStreamNumber, let objectIndex):
       guard reference.generationNumber == 0 else {
@@ -425,7 +427,8 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
           value: .value(value),
           sourceRange: nil,
           provenance: .objectStream(container: containerReference, index: objectIndex),
-          definitionRevision: indexed.definitionRevision
+          definitionRevision: indexed.definitionRevision,
+          recoveryProvenance: index.recoveryProvenance
         )
       } catch {
         await objectReader.close()

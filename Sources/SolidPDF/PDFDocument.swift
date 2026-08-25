@@ -20,6 +20,8 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
   public let catalog: PDFDocumentCatalog
   /// The effective version after applying the catalog's optional `/Version`.
   public var effectiveVersion: PDFFileVersion { catalog.effectiveVersion }
+  /// Repairs used to open this document, or `nil` when strict parsing succeeded.
+  public let recoveryReport: PDFRecoveryReport?
 
   let resolver: PDFDocumentResolver<Source.Session>
   private let structure: PDFDocumentStructure<Source.Session>
@@ -38,7 +40,17 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     do {
       let reader = try await PDFSourceReader(session: session, options: options)
       let openedSourceLength = try await reader.length()
-      let index = try await PDFCrossReferenceParser(reader: reader, options: options).parse()
+      let index: PDFCrossReferenceIndex
+      do {
+        index = try await PDFCrossReferenceParser(reader: reader, options: options).parse()
+      } catch let strictError as PDFParsingError {
+        guard let recovery = options.recovery, Self.isRecoverable(strictError) else { throw strictError }
+        index = try await PDFRecoveryCoordinator(options: recovery).recover(
+          reader: reader,
+          strictError: strictError,
+          parsingOptions: options
+        )
+      }
       let securityContext = try await PDFSecurityContext.open(
         reader: reader,
         index: index,
@@ -51,11 +63,12 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
       identifier = index.identifier
       revisions = index.revisions
       security = securityContext?.security
+      recoveryReport = index.recoveryReport
       let documentResolver = PDFDocumentResolver(
         reader: reader,
         index: index,
         options: options,
-        externalStreamProvider: externalStreamProvider,
+        externalStreamProvider: index.recoveryReport == nil ? externalStreamProvider : nil,
         securityContext: securityContext,
         openedSourceLength: openedSourceLength
       )
@@ -123,6 +136,15 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
       await interactiveStructure.close()
       await structure.close()
       await resolver.close()
+    }
+  }
+
+  private static func isRecoverable(_ error: PDFParsingError) -> Bool {
+    switch error {
+    case .malformed, .truncated, .unresolvedReference, .referenceCycle:
+      true
+    default:
+      false
     }
   }
 

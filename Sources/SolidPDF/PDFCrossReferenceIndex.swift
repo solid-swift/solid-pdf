@@ -15,6 +15,7 @@ struct PDFCrossReferenceIndex: Sendable {
   let version: PDFFileVersion
   let revisions: [PDFDocumentRevision]
   let snapshots: [PDFRevisionIdentifier: [Int: PDFIndexedCrossReferenceEntry]]
+  let recoveryReport: PDFRecoveryReport?
 
   var latestRevision: PDFDocumentRevision { revisions[revisions.count - 1] }
   var entries: [Int: PDFCrossReferenceEntry] {
@@ -25,6 +26,15 @@ struct PDFCrossReferenceIndex: Sendable {
   var root: PDFObjectReference { latestRevision.root }
   var info: PDFObjectReference? { latestRevision.info }
   var identifier: [PDFString]? { latestRevision.fileIdentifier }
+  var recoveryProvenance: PDFRecoveryProvenance? {
+    guard let records = recoveryReport?.records, !records.isEmpty else { return nil }
+    return PDFRecoveryProvenance(
+      records: records.map(\.identifier),
+      classification: records.contains(where: { $0.classification == .semanticInference })
+        ? .semanticInference
+        : .structuralRepair
+    )
+  }
 
   func entry(
     for objectNumber: Int,

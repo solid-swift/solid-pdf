@@ -3,12 +3,25 @@ import Foundation
 struct PDFCrossReferenceParser<Session: PDFInputSourceSession> {
   let reader: PDFSourceReader<Session>
   let options: PDFParsingOptions
+  var overrides: PDFCrossReferenceParsingOverrides? = nil
 
   func parse() async throws -> PDFCrossReferenceIndex {
-    var headerParser = PDFObjectParser(reader: reader, limits: options.limits)
+    var headerParser = PDFObjectParser(
+      reader: reader,
+      position: overrides?.headerOffset ?? 0,
+      limits: options.limits
+    )
     let version = try await headerParser.parseHeader()
+    if let overrides, version != overrides.version {
+      throw malformed(overrides.headerOffset, "The recovered PDF version changed during validation.")
+    }
     let length = try await reader.length()
-    let latestOffset = try await locateStartCrossReference(length: length)
+    let latestOffset: Int64
+    if let recovered = overrides?.latestCrossReferenceOffset {
+      latestOffset = recovered
+    } else {
+      latestOffset = try await locateStartCrossReference(length: length)
+    }
     var reverseSections = [Section]()
     var seenOffsets = Set<Int64>()
     var offset: Int64? = latestOffset
@@ -147,13 +160,26 @@ struct PDFCrossReferenceParser<Session: PDFInputSourceSession> {
         root: root,
         info: section.trailer.pdfReference(named: "Info"),
         fileIdentifier: fileIdentifier,
-        encryption: encryption
+        encryption: encryption,
+        recoveryProvenance: overrides?.recoveryReport.records.isEmpty == false
+          ? PDFRecoveryProvenance(
+            records: overrides?.recoveryReport.records.map(\.identifier) ?? [],
+            classification: overrides?.recoveryReport.records.contains(where: {
+              $0.classification == .semanticInference
+            }) == true ? .semanticInference : .structuralRepair
+          )
+          : nil
       )
       revisions.append(revision)
       snapshots[revisionIdentifier] = effective
     }
     guard !revisions.isEmpty else { throw malformed(0, "The document has no revisions.") }
-    return PDFCrossReferenceIndex(version: version, revisions: revisions, snapshots: snapshots)
+    return PDFCrossReferenceIndex(
+      version: version,
+      revisions: revisions,
+      snapshots: snapshots,
+      recoveryReport: overrides?.recoveryReport
+    )
   }
 
   private func validate(
@@ -427,14 +453,22 @@ struct PDFCrossReferenceParser<Session: PDFInputSourceSession> {
     try await parser.requireKeyword("startxref")
     try await requireWhitespace(using: &parser)
     let value = try await parser.parseUnsignedIntegerToken()
-    guard value == expectedStartOffset else {
+    guard value == expectedStartOffset || overrides?.acceptsMismatchedFooter == true else {
       throw malformed(parser.position, "A revision footer does not identify its cross-reference section.")
     }
     try await requireWhitespace(using: &parser)
-    guard try await parser.cursor.consume(Array("%%EOF".utf8)) else {
+    let hasEndOfFile: Bool
+    if overrides?.acceptsMissingEndOfFile == true,
+      fileLength - parser.position < Int64("%%EOF".utf8.count)
+    {
+      hasEndOfFile = false
+    } else {
+      hasEndOfFile = try await parser.cursor.consume(Array("%%EOF".utf8))
+    }
+    guard hasEndOfFile || overrides?.acceptsMissingEndOfFile == true else {
       throw malformed(parser.position, "A revision is missing its %%EOF marker.")
     }
-    let endOffset = parser.position
+    let endOffset = hasEndOfFile ? parser.position : min(parser.position, fileLength)
     if isLatest { try await validateTrailingWhitespace(from: endOffset, fileLength: fileLength) }
     return endOffset
   }
