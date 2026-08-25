@@ -33,6 +33,9 @@ package struct PDFRecoveryRegistry: Sendable {
         PDFEndOfFileRecoveryPass(),
         PDFStartCrossReferenceRecoveryPass(),
         PDFCrossReferenceReconstructionPass(),
+        PDFObjectBoundaryRecoveryPass(),
+        PDFStreamBoundaryRecoveryPass(),
+        PDFDocumentStructureRecoveryPass(),
       ])
     }
   }

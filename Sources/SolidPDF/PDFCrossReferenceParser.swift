@@ -179,7 +179,8 @@ struct PDFCrossReferenceParser<Session: PDFInputSourceSession> {
       revisions: revisions,
       snapshots: snapshots,
       recoveryReport: overrides?.recoveryReport,
-      recoveredObjectBoundaries: [:]
+      recoveredObjectBoundaries: [:],
+      recoveredValueOverrides: [:]
     )
   }
 

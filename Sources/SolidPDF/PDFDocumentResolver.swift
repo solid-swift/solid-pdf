@@ -297,7 +297,7 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
       let raw: PDFRawIndirectObject
       if let boundary = index.recoveredObjectBoundaries[reference.objectNumber],
         boundary.reference == reference,
-        !boundary.hasEndObject
+        boundary.requiresRecoveredParsing
       {
         let header = try await parser.parseIndirectHeader()
         let value = try await parser.parseObject()
@@ -336,21 +336,22 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
           )
         )
       }
-      let rawValue: PDFObject
+      let decryptedValue: PDFObject
       if let securityContext,
         securityContext.encryptionReference != reference,
         !Self.isCrossReferenceDictionary(raw.value)
       {
         do {
-          rawValue = try PDFObjectDecrypter.decrypt(raw.value, in: reference, using: securityContext)
+          decryptedValue = try PDFObjectDecrypter.decrypt(raw.value, in: reference, using: securityContext)
         } catch {
           throw PDFParsingError.malformed(
             .init(offset: offset, object: reference, message: "An encrypted object is malformed.")
           )
         }
       } else {
-        rawValue = raw.value
+        decryptedValue = raw.value
       }
+      let rawValue = index.recoveredValueOverrides[reference.objectNumber] ?? decryptedValue
       let value: PDFResolvedObject
       if let streamRange = raw.streamRange {
         guard case .dictionary(let dictionary) = rawValue else {

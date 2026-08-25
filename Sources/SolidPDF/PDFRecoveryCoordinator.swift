@@ -151,6 +151,7 @@ package struct PDFRecoveryCoordinator: Sendable {
           guard let candidates = proposalsByFact[fact], !candidates.isEmpty else { continue }
           let selected = try select(candidates, policy: options.policy)
           model.apply(selected.mutation)
+          model.appliedFacts.insert(selected.fact)
           changed = true
           if selected.classification != .byteExact {
             guard records.count < options.limits.maximumAppliedRecords else {

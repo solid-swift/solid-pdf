@@ -70,13 +70,6 @@ package struct PDFCrossReferenceReconstructionPass: PDFRecoveryPass {
       )
     }
     var trailer = chosenTrailer.1
-    guard let root = trailer.pdfReference(named: "Root"),
-      selected[root.objectNumber]?.boundary.reference == root
-    else {
-      return .unrecoverable(
-        .init(offset: chosenTrailer.0, message: "The recovered trailer lacks a resolvable Root reference.")
-      )
-    }
     let maximumObject = selected.keys.max() ?? 0
     let size = maximumObject + 1
     trailer["Size"] = .integer(size)
@@ -100,6 +93,7 @@ package struct PDFCrossReferenceReconstructionPass: PDFRecoveryPass {
       entries: entries,
       trailer: trailer,
       boundaries: boundaries,
+      valueOverrides: [:],
       startOffset: snapshot.model.startCrossReferenceOffset ?? chosenTrailer.0,
       endOffset: endOffset
     )

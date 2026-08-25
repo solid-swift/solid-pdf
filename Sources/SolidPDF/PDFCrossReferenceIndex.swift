@@ -17,6 +17,7 @@ struct PDFCrossReferenceIndex: Sendable {
   let snapshots: [PDFRevisionIdentifier: [Int: PDFIndexedCrossReferenceEntry]]
   let recoveryReport: PDFRecoveryReport?
   let recoveredObjectBoundaries: [Int: PDFRecoveredObjectBoundary]
+  let recoveredValueOverrides: [Int: PDFObject]
 
   var latestRevision: PDFDocumentRevision { revisions[revisions.count - 1] }
   var entries: [Int: PDFCrossReferenceEntry] {
@@ -87,7 +88,8 @@ struct PDFCrossReferenceIndex: Sendable {
       revisions: [revision],
       snapshots: [revisionIdentifier: snapshot],
       recoveryReport: report,
-      recoveredObjectBoundaries: plan.boundaries
+      recoveredObjectBoundaries: plan.boundaries,
+      recoveredValueOverrides: plan.valueOverrides
     )
   }
 

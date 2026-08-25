@@ -31,4 +31,6 @@ package enum PDFRecoveryMutation: Sendable, Hashable {
   case endOfFile(offset: Int64, acceptsMissingMarker: Bool)
   case startCrossReference(offset: Int64, acceptsMismatchedFooter: Bool)
   case reconstructedCrossReference(PDFRecoveredCrossReferencePlan)
+  case recordedFact(String)
+  case updatedCrossReference(PDFRecoveredCrossReferencePlan)
 }

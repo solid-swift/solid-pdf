@@ -444,7 +444,8 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     signature: PDFSignature,
     options: PDFSignatureValidationOptions = .init()
   ) async throws -> PDFSignatureValidationResult {
-    try await authenticity.validate(signature, in: latestRevision.identifier, options: options)
+    let result = try await authenticity.validate(signature, in: latestRevision.identifier, options: options)
+    return applyingRecoveryAuthority(to: result)
   }
 
   /// Validates a signature and its later modifications as of a selected revision.
@@ -453,7 +454,8 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     in revision: PDFRevisionIdentifier,
     options: PDFSignatureValidationOptions = .init()
   ) async throws -> PDFSignatureValidationResult {
-    try await authenticity.validate(signature, in: revision, options: options)
+    let result = try await authenticity.validate(signature, in: revision, options: options)
+    return applyingRecoveryAuthority(to: result)
   }
 
   /// Produces an authenticity report for the latest document revision.
@@ -472,7 +474,8 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
     var results = [PDFSignatureValidationResult]()
     results.reserveCapacity(signatures.count)
     for signature in signatures {
-      results.append(try await authenticity.validate(signature, in: revision, options: options))
+      let result = try await authenticity.validate(signature, in: revision, options: options)
+      results.append(applyingRecoveryAuthority(to: result))
     }
     return PDFDocumentAuthenticityReport(
       revision: revision,
@@ -480,6 +483,31 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
       validationResults: results,
       documentPermissions: security?.effectivePermissions,
       diagnostics: results.flatMap(\.diagnostics)
+    )
+  }
+
+  private func applyingRecoveryAuthority(
+    to result: PDFSignatureValidationResult
+  ) -> PDFSignatureValidationResult {
+    guard let records = recoveryReport?.records, !records.isEmpty else { return result }
+    let changedObjects: [PDFObjectReference] = switch result.modifications {
+    case .unchanged: []
+    case .permitted(let objects), .prohibited(let objects), .indeterminate(let objects, _): objects
+    }
+    return PDFSignatureValidationResult(
+      signature: result.signature,
+      coverage: result.coverage,
+      integrity: result.integrity,
+      trust: result.trust,
+      revocation: result.revocation,
+      timestamp: result.timestamp,
+      modifications: .indeterminate(
+        changedObjects: changedObjects,
+        reason: "PDF recovery affected revision or object provenance."
+      ),
+      certificateChain: result.certificateChain,
+      diagnostics: result.diagnostics,
+      authority: .limitedByRecovery(records.map(\.identifier))
     )
   }
 

@@ -64,8 +64,34 @@ struct PDFRecoveryTests {
       source: PDFDataInputSource(malformed),
       options: .init(recovery: .init())
     )
-    #expect(document.recoveryReport?.records.map(\.kind).contains(.crossReference) == true)
+    #expect(document.recoveryReport?.records.map(\.kind).contains(.indirectObject) == true)
     #expect(try await document.pageCount() == 0)
+    await document.close()
+  }
+
+  @Test
+  func recoversIncorrectStreamLengthAndBoundary() async throws {
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(streamFixture()),
+      options: .init(recovery: .init())
+    )
+    let page = try await document.page(at: 0)
+    let stream = try #require(page.contentStreams.first)
+    #expect(try await document.decodedBytes(of: stream) == Data("abc endstream xyz".utf8))
+    #expect(document.recoveryReport?.records.map(\.kind).contains(.streamBoundary) == true)
+    await document.close()
+  }
+
+  @Test
+  func recoversUniqueCatalogAndMissingTypes() async throws {
+    let document = try await PDFDocument(
+      source: PDFDataInputSource(structureFixture()),
+      options: .init(recovery: .init())
+    )
+    let expectedRoot = try PDFObjectReference(objectNumber: 1, generationNumber: 0)
+    #expect(document.root == expectedRoot)
+    #expect(try await document.pageCount() == 0)
+    #expect(document.recoveryReport?.records.map(\.kind).contains(.catalog) == true)
     await document.close()
   }
 
@@ -161,6 +187,40 @@ struct PDFRecoveryTests {
     data.append(Data(String(format: "%010d 00000 n \n", pagesOffset).utf8))
     data.append(Data("trailer\n<< /Size 3 /Root 1 0 R >>\n".utf8))
     data.append(Data("startxref\n\(xrefOffset + startCrossReferenceAdjustment)\n%%EOF\n".utf8))
+    return data
+  }
+
+  private func streamFixture() -> Data {
+    var data = Data("%PDF-1.7\n".utf8)
+    var offsets = [Int]()
+    offsets.append(data.count)
+    data.append(Data("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n".utf8))
+    offsets.append(data.count)
+    data.append(Data("2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n".utf8))
+    offsets.append(data.count)
+    data.append(Data("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] /Resources <<>> /Contents 4 0 R >>\nendobj\n".utf8))
+    offsets.append(data.count)
+    data.append(Data("4 0 obj\n<< /Length 3 >>\nstream\nabc endstream xyz\nendstream\nendobj\n".utf8))
+    let xrefOffset = data.count
+    data.append(Data("xref\n0 5\n0000000000 65535 f \n".utf8))
+    for offset in offsets {
+      data.append(Data(String(format: "%010d 00000 n \n", offset).utf8))
+    }
+    data.append(Data("trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n\(xrefOffset)\n%%EOF\n".utf8))
+    return data
+  }
+
+  private func structureFixture() -> Data {
+    var data = Data("%PDF-1.7\n".utf8)
+    let catalogOffset = data.count
+    data.append(Data("1 0 obj\n<< /Pages 2 0 R >>\nendobj\n".utf8))
+    let pagesOffset = data.count
+    data.append(Data("2 0 obj\n<< /Count 0 /Kids [] >>\nendobj\n".utf8))
+    let xrefOffset = data.count
+    data.append(Data("xref\n0 3\n0000000000 65535 f \n".utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", catalogOffset).utf8))
+    data.append(Data(String(format: "%010d 00000 n \n", pagesOffset).utf8))
+    data.append(Data("trailer\n<< /Size 3 >>\nstartxref\n\(xrefOffset)\n%%EOF\n".utf8))
     return data
   }
 }
