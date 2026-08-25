@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FIXTURE_DIRECTORY="${ROOT_DIRECTORY}/Tests/Fixtures/PDF/Recovery"
+
+for tool in qpdf mutool pdfinfo; do
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    echo "error: ${tool} is required for PDF recovery compatibility discovery" >&2
+    exit 69
+  fi
+done
+
+GHOSTSCRIPT_EXECUTABLE="${SOLIDPDF_GHOSTSCRIPT_EXECUTABLE:-}"
+if [[ -z "${GHOSTSCRIPT_EXECUTABLE}" ]]; then
+  if command -v gs >/dev/null 2>&1; then
+    GHOSTSCRIPT_EXECUTABLE="$(command -v gs)"
+  else
+    GHOSTSCRIPT_EXECUTABLE="${ROOT_DIRECTORY}/Scripts/prepare-ghostscript-reference"
+    GHOSTSCRIPT_EXECUTABLE="$(${GHOSTSCRIPT_EXECUTABLE})"
+  fi
+fi
+readonly GHOSTSCRIPT_EXECUTABLE
+
+WORK_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/solidpdf-recovery-interop.XXXXXX")"
+trap 'rm -rf "${WORK_DIRECTORY}"' EXIT
+
+cd "${ROOT_DIRECTORY}"
+swift test --disable-automatic-resolution \
+  --scratch-path "${SOLIDPDF_SCRATCH_PATH:-.build}" \
+  --filter PDFRecoveryCorpusTests
+
+for input in "${FIXTURE_DIRECTORY}"/*.pdf; do
+  name="$(basename "${input}" .pdf)"
+  qpdf --check "${input}" >"${WORK_DIRECTORY}/${name}.qpdf" 2>&1 || true
+  mutool clean "${input}" "${WORK_DIRECTORY}/${name}-clean.pdf" \
+    >"${WORK_DIRECTORY}/${name}.mutool" 2>&1 || true
+  pdfinfo "${input}" >"${WORK_DIRECTORY}/${name}.pdfinfo" 2>&1 || true
+  "${GHOSTSCRIPT_EXECUTABLE}" -dSAFER -dBATCH -dNOPAUSE -sDEVICE=nullpage "${input}" \
+    >"${WORK_DIRECTORY}/${name}.ghostscript" 2>&1 || true
+done
+
+echo "Compatibility discovery completed for $(find "${FIXTURE_DIRECTORY}" -name '*.pdf' | wc -l | tr -d ' ') owned fixtures."

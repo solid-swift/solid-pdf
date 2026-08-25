@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "corpusVersion": "2026-08-24",
+  "cases": [
+    {
+      "id": "displaced-header",
+      "source": "displaced-header.pdf",
+      "sha256": "797c36b1cae20a88850ae3a7d3c9170ce6bd0e0ca434c863de0ac9bf9e220085",
+      "minimumPolicy": "structural",
+      "passes": ["source.displaced-header", "xref.terminal-offset"],
+      "capabilities": ["read", "render"],
+      "expectedPageCount": 0
+    },
+    {
+      "id": "missing-endobj",
+      "source": "missing-endobj.pdf",
+      "sha256": "c7937939050707bf2b5503273206c232e42c996caf1d67a209e20717a4ce147e",
+      "minimumPolicy": "structural",
+      "passes": ["xref.reconstruct-index", "object.recover-boundary"],
+      "capabilities": ["read", "render"],
+      "expectedPageCount": 0
+    },
+    {
+      "id": "missing-root-and-types",
+      "source": "missing-root-and-types.pdf",
+      "sha256": "096877726b10591079be807dcdbab50cb9298674b4e4ce4392614ed880092ada",
+      "minimumPolicy": "structural",
+      "passes": ["xref.reconstruct-index", "structure.recover-catalog-types"],
+      "capabilities": ["read", "render"],
+      "expectedPageCount": 0
+    },
+    {
+      "id": "wrong-stream-length",
+      "source": "wrong-stream-length.pdf",
+      "sha256": "c9bbfa5873f99631291d967b836e4c236d5708d7d25917f841cdf4d55e4cc97c",
+      "minimumPolicy": "structural",
+      "passes": ["xref.reconstruct-index", "stream.recover-boundary"],
+      "capabilities": ["read", "render"],
+      "expectedPageCount": 1
+    },
+    {
+      "id": "missing-eof",
+      "source": "missing-eof.pdf",
+      "sha256": "f959466fa67970822a39de89874a60ea546e983620f514afb2aab925f668fd3e",
+      "minimumPolicy": "structural",
+      "passes": ["source.terminal-eof"],
+      "capabilities": ["read", "render"],
+      "expectedPageCount": 0
+    }
+  ]
+}

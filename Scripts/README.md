@@ -19,6 +19,7 @@ Scripts/linux-benchmark-raster.sh --filter "Flat Fill"
 Scripts/linux-benchmark-raster-comparison.sh
 Scripts/linux-conformance
 Scripts/linux-pdf-parser-interop
+Scripts/linux-pdf-recovery-interop
 ```
 
 Use `linux-container` to inspect or control the reusable environment:
@@ -86,6 +87,12 @@ tools are not installed on the host; the reusable Linux container includes all r
 `Scripts/pdf-text-interop` validates the project-authored searchable-text fixture with qpdf, MuPDF,
 Poppler font inventory and extraction, and a 144-dpi raster render. Run
 `Scripts/linux-pdf-text-interop` to use the same reusable Linux container and its pinned tool set.
+
+# PDF recovery compatibility
+
+`Scripts/pdf-recovery-interop` runs the owned malformed-PDF corpus and records how qpdf, MuPDF, Poppler, and
+Ghostscript respond to each fixture. External acceptance is discovery evidence only and never changes the checked-in
+recovery policy. Use `Scripts/linux-pdf-recovery-interop` for the reusable Linux tool set.
 
 # PDF assets and authenticity
 

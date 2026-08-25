@@ -3,6 +3,20 @@ import SolidPDF
 
 /// Deterministic PDF fixtures shared by parser benchmarks and interoperability checks.
 public enum PDFParsingBenchmarkFixtures {
+  /// Creates a classic document whose catalog cross-reference offset requires recovery.
+  public static func recoveryDocument(additionalObjectCount: Int = 10_000) throws -> Data {
+    var data = try document(version: .v1_7, additionalObjectCount: additionalObjectCount)
+    guard let catalogHeader = data.range(of: Data("1 0 obj".utf8)),
+      let entry = data.range(
+        of: Data(String(format: "%010d 00000 n", catalogHeader.lowerBound).utf8),
+        options: .backwards
+      )
+    else { preconditionFailure("The benchmark fixture lacks its catalog cross-reference entry.") }
+    let replacement = Data(String(format: "%010d 00000 n", catalogHeader.lowerBound + 3).utf8)
+    data.replaceSubrange(entry, with: replacement)
+    return data
+  }
+
   /// Creates a valid one-page document with additional independently resolvable objects.
   public static func document(version: PDFVersion, additionalObjectCount: Int = 0) throws -> Data {
     precondition(additionalObjectCount >= 0)
