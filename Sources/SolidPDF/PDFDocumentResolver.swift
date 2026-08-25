@@ -294,18 +294,38 @@ actor PDFDocumentResolver<Session: PDFInputSourceSession> {
         limits: options.limits,
         enclosingObject: reference
       )
-      let raw = try await parser.parseRawIndirectObject { lengthReference in
-        let lengthObject = try await self.resolve(lengthReference, in: revision, stack: stack)
-        guard case .value(.number(.integer(let length))) = lengthObject.value else {
+      let raw: PDFRawIndirectObject
+      if let boundary = index.recoveredObjectBoundaries[reference.objectNumber],
+        boundary.reference == reference,
+        !boundary.hasEndObject
+      {
+        let header = try await parser.parseIndirectHeader()
+        let value = try await parser.parseObject()
+        guard header.reference == reference else {
           throw PDFParsingError.malformed(
-            .init(
-              offset: offset,
-              object: reference,
-              message: "An indirect stream Length must resolve to an integer."
-            )
+            .init(offset: offset, object: reference, message: "A recovered object header changed.")
           )
         }
-        return length
+        raw = PDFRawIndirectObject(
+          reference: reference,
+          value: value,
+          sourceRange: boundary.sourceRange,
+          streamRange: boundary.streamRange
+        )
+      } else {
+        raw = try await parser.parseRawIndirectObject { lengthReference in
+          let lengthObject = try await self.resolve(lengthReference, in: revision, stack: stack)
+          guard case .value(.number(.integer(let length))) = lengthObject.value else {
+            throw PDFParsingError.malformed(
+              .init(
+                offset: offset,
+                object: reference,
+                message: "An indirect stream Length must resolve to an integer."
+              )
+            )
+          }
+          return length
+        }
       }
       guard raw.reference == reference else {
         throw PDFParsingError.malformed(

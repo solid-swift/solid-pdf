@@ -2,6 +2,7 @@ package struct PDFRecoverySnapshot: Sendable {
   package let source: PDFRecoverySource
   package let policy: PDFRecoveryPolicy
   package let limits: PDFRecoveryLimits
+  package let parsingLimits: PDFParsingLimits
   package let evidence: PDFRecoveryEvidence
   package let model: PDFRecoveryModel
   package let generation: Int
@@ -14,12 +15,15 @@ package struct PDFRecoveryModel: Sendable, Hashable {
   package var acceptsMissingEndOfFile = false
   package var startCrossReferenceOffset: Int64?
   package var acceptsMismatchedFooter = false
+  package var crossReferenceFailure: PDFParsingDiagnostic?
+  package var reconstructedCrossReference: PDFRecoveredCrossReferencePlan?
 
   package func contains(fact: String) -> Bool {
     switch fact {
     case "header": headerOffset != nil
     case "end-of-file": endOffset != nil
     case "startxref": startCrossReferenceOffset != nil
+    case "reconstructed-xref": reconstructedCrossReference != nil
     default: false
     }
   }
@@ -35,6 +39,8 @@ package struct PDFRecoveryModel: Sendable, Hashable {
     case .startCrossReference(let offset, let acceptsMismatchedFooter):
       startCrossReferenceOffset = offset
       self.acceptsMismatchedFooter = acceptsMismatchedFooter
+    case .reconstructedCrossReference(let plan):
+      reconstructedCrossReference = plan
     }
   }
 }

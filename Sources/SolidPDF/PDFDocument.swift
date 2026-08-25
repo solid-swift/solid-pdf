@@ -42,7 +42,15 @@ public final class PDFDocument<Source: PDFInputSource>: Sendable {
       let openedSourceLength = try await reader.length()
       let index: PDFCrossReferenceIndex
       do {
-        index = try await PDFCrossReferenceParser(reader: reader, options: options).parse()
+        let strictIndex = try await PDFCrossReferenceParser(reader: reader, options: options).parse()
+        if options.recovery != nil {
+          try await PDFRecoveryStrictPreflight.validate(
+            index: strictIndex,
+            reader: reader,
+            limits: options.limits
+          )
+        }
+        index = strictIndex
       } catch let strictError as PDFParsingError {
         guard let recovery = options.recovery, Self.isRecoverable(strictError) else { throw strictError }
         index = try await PDFRecoveryCoordinator(options: recovery).recover(

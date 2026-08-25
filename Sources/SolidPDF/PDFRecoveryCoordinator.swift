@@ -6,6 +6,7 @@ package struct PDFRecoveryCoordinator: Sendable {
     options: PDFRecoveryOptions,
     registry: PDFRecoveryRegistry? = nil
   ) throws {
+    try options.limits.validate()
     self.options = options
     self.registry = try registry ?? .builtIn
   }
@@ -24,12 +25,96 @@ package struct PDFRecoveryCoordinator: Sendable {
     var unresolved = [PDFParsingDiagnostic]()
     var proposalCount = 0
     var generation = 0
+    try await runPasses(
+      source: source,
+      evidence: evidence,
+      parsingLimits: parsingOptions.limits,
+      model: &model,
+      records: &records,
+      unresolved: &unresolved,
+      proposalCount: &proposalCount,
+      generation: &generation
+    )
+    guard let headerOffset = model.headerOffset,
+      let version = model.version,
+      model.endOffset != nil,
+      let startCrossReferenceOffset = model.startCrossReferenceOffset
+    else {
+      throw PDFParsingError.malformed(
+        unresolved.first ?? .init(offset: 0, message: "Recovery could not establish document framing.")
+      )
+    }
+    let strictOptions = PDFParsingOptions(
+      limits: parsingOptions.limits,
+      sourceWindowByteCount: parsingOptions.sourceWindowByteCount,
+      decodedStreamChunkByteCount: parsingOptions.decodedStreamChunkByteCount,
+      acceptsStreamFilterAbbreviations: parsingOptions.acceptsStreamFilterAbbreviations,
+      recovery: nil
+    )
+    let initialReport = makeReport(
+      strictFailure: strictFailure,
+      records: records,
+      unresolved: unresolved
+    )
+    let overrides = PDFCrossReferenceParsingOverrides(
+      headerOffset: headerOffset,
+      version: version,
+      latestCrossReferenceOffset: startCrossReferenceOffset,
+      acceptsMismatchedFooter: model.acceptsMismatchedFooter,
+      acceptsMissingEndOfFile: model.acceptsMissingEndOfFile,
+      recoveryReport: initialReport
+    )
+    do {
+      let index = try await PDFCrossReferenceParser(
+        reader: reader,
+        options: strictOptions,
+        overrides: overrides
+      ).parse()
+      try await PDFRecoveryStrictPreflight.validate(
+        index: index,
+        reader: reader,
+        limits: parsingOptions.limits
+      )
+      return index
+    } catch let crossReferenceError as PDFParsingError {
+      model.crossReferenceFailure = Self.diagnostic(from: crossReferenceError)
+      try await runPasses(
+        source: source,
+        evidence: evidence,
+        parsingLimits: parsingOptions.limits,
+        model: &model,
+        records: &records,
+        unresolved: &unresolved,
+        proposalCount: &proposalCount,
+        generation: &generation
+      )
+      guard let plan = model.reconstructedCrossReference else { throw crossReferenceError }
+      let report = makeReport(
+        strictFailure: strictFailure,
+        records: records,
+        unresolved: unresolved
+      )
+      return try PDFCrossReferenceIndex.recovered(plan: plan, report: report)
+    }
+  }
+
+  private func runPasses(
+    source: PDFRecoverySource,
+    evidence: PDFRecoveryEvidence,
+    parsingLimits: PDFParsingLimits,
+    model: inout PDFRecoveryModel,
+    records: inout [PDFRecoveryRecord],
+    unresolved: inout [PDFParsingDiagnostic],
+    proposalCount: inout Int,
+    generation: inout Int
+  ) async throws {
     while generation < options.limits.maximumPassGenerations {
       try Task.checkCancellation()
       let snapshot = PDFRecoverySnapshot(
         source: source,
         policy: options.policy,
         limits: options.limits,
+        parsingLimits: parsingLimits,
         evidence: evidence,
         model: model,
         generation: generation
@@ -44,6 +129,11 @@ package struct PDFRecoveryCoordinator: Sendable {
           case .noMatch:
             continue
           case .unrecoverable(let diagnostic):
+            guard unresolved.count < options.limits.maximumAmbiguities else {
+              throw PDFParsingError.limitExceeded(
+                .init(offset: diagnostic.offset, message: "Recovery retained too many unresolved ambiguities.")
+              )
+            }
             unresolved.append(diagnostic)
           case .proposals(let proposals):
             proposalCount += proposals.count
@@ -89,17 +179,15 @@ package struct PDFRecoveryCoordinator: Sendable {
         .init(offset: 0, message: "Recovery did not converge within its generation limit.")
       )
     }
-    guard let headerOffset = model.headerOffset,
-      let version = model.version,
-      model.endOffset != nil,
-      let startCrossReferenceOffset = model.startCrossReferenceOffset
-    else {
-      throw PDFParsingError.malformed(
-        unresolved.first ?? .init(offset: 0, message: "Recovery could not establish document framing.")
-      )
-    }
+  }
+
+  private func makeReport(
+    strictFailure: PDFParsingDiagnostic,
+    records: [PDFRecoveryRecord],
+    unresolved: [PDFParsingDiagnostic]
+  ) -> PDFRecoveryReport {
     let hasInference = records.contains { $0.classification == .semanticInference }
-    let report = PDFRecoveryReport(
+    return PDFRecoveryReport(
       policy: options.policy,
       strictFailure: strictFailure,
       records: records,
@@ -109,27 +197,8 @@ package struct PDFRecoveryCoordinator: Sendable {
         : .ineligible(reason: "Recovered framing requires strict staged validation before writing."),
       signatureValidation: hasInference
         ? .ineligible(reason: "Compatibility inference affected document structure.")
-        : .ineligible(reason: "Recovered revision framing is not byte-exact." )
+        : .ineligible(reason: "Recovered revision framing is not byte-exact.")
     )
-    let overrides = PDFCrossReferenceParsingOverrides(
-      headerOffset: headerOffset,
-      version: version,
-      latestCrossReferenceOffset: startCrossReferenceOffset,
-      acceptsMismatchedFooter: model.acceptsMismatchedFooter,
-      acceptsMissingEndOfFile: model.acceptsMissingEndOfFile,
-      recoveryReport: report
-    )
-    return try await PDFCrossReferenceParser(
-      reader: reader,
-      options: PDFParsingOptions(
-        limits: parsingOptions.limits,
-        sourceWindowByteCount: parsingOptions.sourceWindowByteCount,
-        decodedStreamChunkByteCount: parsingOptions.decodedStreamChunkByteCount,
-        acceptsStreamFilterAbbreviations: parsingOptions.acceptsStreamFilterAbbreviations,
-        recovery: nil
-      ),
-      overrides: overrides
-    ).parse()
   }
 
   private func select(

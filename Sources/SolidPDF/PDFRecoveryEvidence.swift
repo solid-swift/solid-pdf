@@ -6,11 +6,18 @@ package struct PDFRecoveryStartCrossReference: Sendable, Hashable {
   package let value: Int64
 }
 
+package struct PDFRecoveryIndirectObjectCandidate: Sendable, Hashable {
+  package let reference: PDFObjectReference
+  package let offset: Int64
+}
+
 package struct PDFRecoveryEvidence: Sendable {
   package let headerCandidates: [Int64]
   package let endOfFileCandidates: [Int64]
   package let startCrossReferences: [PDFRecoveryStartCrossReference]
   package let classicCrossReferenceCandidates: [Int64]
+  package let indirectObjectCandidates: [PDFRecoveryIndirectObjectCandidate]
+  package let trailerCandidates: [Int64]
 
   package static func collect(
     from source: PDFRecoverySource,
@@ -31,6 +38,8 @@ package struct PDFRecoveryEvidence: Sendable {
     var ends = Set<Int64>()
     var starts = [Int64: PDFRecoveryStartCrossReference]()
     var crossReferences = Set<Int64>()
+    var indirectObjects = Set<PDFRecoveryIndirectObjectCandidate>()
+    var trailers = Set<Int64>()
     var offset: Int64 = 0
     var carry = Data()
     while offset < source.length {
@@ -47,14 +56,17 @@ package struct PDFRecoveryEvidence: Sendable {
         headers: &headers,
         ends: &ends,
         starts: &starts,
-        crossReferences: &crossReferences
+        crossReferences: &crossReferences,
+        indirectObjects: &indirectObjects,
+        trailers: &trailers
       )
       carry = Data(data.suffix(min(overlap, data.count)))
       offset += Int64(length)
     }
     guard starts.count <= limits.maximumCandidateRevisions,
       ends.count <= limits.maximumCandidateRevisions,
-      crossReferences.count <= limits.maximumCandidateRevisions
+      crossReferences.count <= limits.maximumCandidateRevisions,
+      indirectObjects.count <= limits.maximumCandidateObjects
     else {
       throw PDFParsingError.limitExceeded(
         .init(offset: 0, message: "The recovery framing candidates exceed their limit.")
@@ -65,6 +77,9 @@ package struct PDFRecoveryEvidence: Sendable {
       endOfFileCandidates: ends.sorted(),
       startCrossReferences: starts.values.sorted { $0.keywordRange.offset < $1.keywordRange.offset },
       classicCrossReferenceCandidates: crossReferences.sorted()
+      ,
+      indirectObjectCandidates: indirectObjects.sorted { $0.offset < $1.offset },
+      trailerCandidates: trailers.sorted()
     )
   }
 
@@ -75,7 +90,9 @@ package struct PDFRecoveryEvidence: Sendable {
     headers: inout Set<Int64>,
     ends: inout Set<Int64>,
     starts: inout [Int64: PDFRecoveryStartCrossReference],
-    crossReferences: inout Set<Int64>
+    crossReferences: inout Set<Int64>,
+    indirectObjects: inout Set<PDFRecoveryIndirectObjectCandidate>,
+    trailers: inout Set<Int64>
   ) {
     find(Data("%PDF-".utf8), in: data).forEach { index in
       let absolute = base + Int64(index)
@@ -117,6 +134,80 @@ package struct PDFRecoveryEvidence: Sendable {
       )
       starts[absolute] = .init(keywordRange: keyword, valueRange: valueRange, value: value)
     }
+    find(Data("trailer".utf8), in: data).forEach { index in
+      let absolute = base + Int64(index)
+      guard absolute >= 0, absolute < sourceLength,
+        isTokenBoundary(before: index, in: data),
+        isTokenBoundary(after: index + 7, in: data)
+      else { return }
+      trailers.insert(absolute)
+    }
+    scanIndirectObjectHeaders(
+      data,
+      base: base,
+      sourceLength: sourceLength,
+      into: &indirectObjects
+    )
+  }
+
+  private static func scanIndirectObjectHeaders(
+    _ data: Data,
+    base: Int64,
+    sourceLength: Int64,
+    into candidates: inout Set<PDFRecoveryIndirectObjectCandidate>
+  ) {
+    var index = data.startIndex
+    while index < data.endIndex {
+      guard (0x31...0x39).contains(data[index]), isTokenBoundary(before: index, in: data) else {
+        index += 1
+        continue
+      }
+      let start = index
+      guard let objectNumber = decimal(in: data, index: &index), objectNumber <= Int64(Int.max),
+        consumeWhitespace(in: data, index: &index),
+        let generation = decimal(in: data, index: &index), generation <= 65_535,
+        consumeWhitespace(in: data, index: &index),
+        data[index...].starts(with: Data("obj".utf8)),
+        isTokenBoundary(after: index + 3, in: data)
+      else {
+        index = start + 1
+        continue
+      }
+      let absolute = base + Int64(start)
+      if absolute >= 0, absolute < sourceLength {
+        candidates.insert(
+          .init(
+            reference: .init(
+              uncheckedObjectNumber: Int(objectNumber),
+              generationNumber: Int(generation)
+            ),
+            offset: absolute
+          )
+        )
+      }
+      index += 3
+    }
+  }
+
+  private static func decimal(in data: Data, index: inout Int) -> Int64? {
+    let start = index
+    var value: Int64 = 0
+    while index < data.endIndex, (0x30...0x39).contains(data[index]) {
+      let (scaled, overflow1) = value.multipliedReportingOverflow(by: 10)
+      let (next, overflow2) = scaled.addingReportingOverflow(Int64(data[index] - 0x30))
+      guard !overflow1, !overflow2 else { return nil }
+      value = next
+      index += 1
+    }
+    return index > start ? value : nil
+  }
+
+  private static func consumeWhitespace(in data: Data, index: inout Int) -> Bool {
+    let start = index
+    while index < data.endIndex, PDFObjectParser<PDFDataInputSource.Session>.isWhitespace(data[index]) {
+      index += 1
+    }
+    return index > start
   }
 
   private static func find(_ pattern: Data, in data: Data) -> [Int] {

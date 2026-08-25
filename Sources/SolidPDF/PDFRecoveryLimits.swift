@@ -45,4 +45,22 @@ public struct PDFRecoveryLimits: Sendable, Hashable {
     self.maximumAmbiguities = maximumAmbiguities
     self.maximumPassGenerations = maximumPassGenerations
   }
+
+  package func validate() throws {
+    guard maximumScanBytes >= 0,
+      maximumCandidateObjects > 0,
+      maximumCandidateRevisions > 0,
+      maximumResynchronizationBytes > 0,
+      maximumStreamBoundarySearchBytes > 0,
+      maximumScratchBytes >= 256,
+      maximumAppliedRecords > 0,
+      maximumProposals > 0,
+      maximumAmbiguities > 0,
+      maximumPassGenerations > 0
+    else {
+      throw PDFParsingError.limitExceeded(
+        .init(offset: 0, message: "PDF recovery limits must be positive and internally consistent.")
+      )
+    }
+  }
 }

@@ -10,8 +10,20 @@ package struct PDFStartCrossReferenceRecoveryPass: PDFRecoveryPass {
   package func evaluate(_ snapshot: PDFRecoverySnapshot) async throws -> PDFRecoveryPassResult {
     guard !snapshot.model.contains(fact: "startxref") else { return .noMatch }
     let declared = snapshot.evidence.startCrossReferences.last
+    var streamCandidates = [Int64]()
+    for candidate in snapshot.evidence.indirectObjectCandidates {
+      guard let parsed = try await PDFRecoveryObjectCandidateParser.parse(candidate, snapshot: snapshot),
+        case .dictionary(let dictionary) = parsed.value,
+        dictionary.pdfName(named: "Type") == PDFName("XRef"),
+        parsed.boundary.streamRange != nil
+      else { continue }
+      streamCandidates.append(candidate.offset)
+    }
+    let availableCandidates = Array(
+      Set(snapshot.evidence.classicCrossReferenceCandidates + streamCandidates)
+    ).sorted()
     if let declared,
-      snapshot.evidence.classicCrossReferenceCandidates.contains(declared.value)
+      availableCandidates.contains(declared.value)
     {
       return .proposals([
         proposal(
@@ -23,7 +35,7 @@ package struct PDFStartCrossReferenceRecoveryPass: PDFRecoveryPass {
         )
       ])
     }
-    let candidates = snapshot.evidence.classicCrossReferenceCandidates
+    let candidates = availableCandidates
     guard !candidates.isEmpty else {
       return .unrecoverable(
         .init(offset: declared?.valueRange.offset ?? 0, message: "Recovery found no cross-reference section.")
